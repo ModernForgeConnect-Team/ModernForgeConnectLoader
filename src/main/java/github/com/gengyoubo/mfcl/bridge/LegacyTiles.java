@@ -82,6 +82,11 @@ public final class LegacyTiles {
         entity.getField("field_70170_p").set(actor, world);
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()); entity.getField("field_70161_v").setDouble(actor, placer.z());
         entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
+        // Range/ray-trace helpers read the player's bounding box; the allocated actor has none, so build one directly.
+        Object box = loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a", double.class, double.class, double.class, double.class, double.class, double.class)
+                .invoke(null, placer.x() - 0.3, placer.y(), placer.z() - 0.3, placer.x() + 0.3, placer.y() + 1.8, placer.z() + 0.3);
+        var bbox = entity.getDeclaredField("field_70121_D"); bbox.setAccessible(true); bbox.set(actor, box);
+        entity.getField("field_70130_N").setFloat(actor, 0.6f); entity.getField("field_70131_O").setFloat(actor, 1.8f);
         var potions = loader.loadClass("net.minecraft.entity.EntityLivingBase").getDeclaredField("field_70713_bf"); potions.setAccessible(true); potions.set(actor,new HashMap<>());
         return actor;
     }

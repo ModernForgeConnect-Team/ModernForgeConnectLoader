@@ -202,6 +202,18 @@ public final class GenericSemanticsProbe {
             throw new AssertionError("Private GL display list lost original commands");
         privateGl.getMethod("glDeleteLists", int.class, int.class).invoke(null, displayList, 1);
         report.put("genericDisplayListCaptureVerified", true);
+        Object useIdentity = new Object();
+        Object useWorld = services.worlds().bind(useIdentity, new Host());
+        try {
+            var useBridge = new LegacyItemUse(services);
+            var bow = services.items().catalog().stream().filter(s -> s.key().equals("minecraft:bow")).findFirst().orElseThrow();
+            var usePlacer = new LegacyTiles.Placer(new java.util.UUID(7,7), "Probe", 0, 0, 0, 0, 0, true, false);
+            var useResult = useBridge.rightClick(useWorld, usePlacer, bow);
+            if (!useResult.used() || useResult.useDuration() != 72000)
+                throw new AssertionError("Legacy onItemRightClick did not open a held use");
+            useBridge.usingTick(useWorld, usePlacer, bow, 70000);
+        } finally { services.worlds().unbind(useIdentity); }
+        report.put("genericItemUseCallbackVerified", true);
     }
     private static Class<?> fixture(ClassLoader loader) throws Exception {
         String name = "mfcl/fixture/Gui"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

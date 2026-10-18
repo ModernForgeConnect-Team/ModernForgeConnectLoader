@@ -26,7 +26,9 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
     private final ModernContentBridge bridge;
     private final String itemKey;
     private final String blockKey;
-    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> guiFits = new java.util.IdentityHashMap<>();
+    // Bounds depend on whether the isometric block rotation applies, so the two cases are cached separately.
+    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> blockGuiFits = new java.util.IdentityHashMap<>();
+    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> nativeGuiFits = new java.util.IdentityHashMap<>();
     public LegacyItemRenderer(ModernContentBridge bridge, String itemKey) {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         this.bridge = bridge; this.itemKey = itemKey;
@@ -55,11 +57,14 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
         // Host item space centers on the slot; the original IItemRenderer geometry is replayed with the base matrix
         // the old pipeline supplied for its ItemRenderType, rather than the ISBRH block display transform.
         pose.translate(0.5, 0.5, 0.5);
+        boolean firstPerson = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || context == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
         if ("EQUIPPED".equals(foundType)) {
             // The third-person base would place the item from the arm end; the first-person hand pose differs.
-            if (context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || context == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND)
-                applyLegacyFirstPersonTransform(pose);
-            else applyLegacyEquippedTransform(pose);
+            if (firstPerson) applyLegacyFirstPersonTransform(pose);
+            else LegacyItemTransformBridge.equipped(pose, blockKey != null);
+        } else if ("INVENTORY".equals(foundType) && (context == ItemDisplayContext.GUI || context == ItemDisplayContext.FIXED)) {
+            // Original inventory geometry already carries the renderer's own view; only the caller base is restored.
+            LegacyItemTransformBridge.inventory(pose);
         } else applyDefaultItemTransform(context, pose, primitives, foundType != null);
         var atlas = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS);
         Map<String, List<LegacyVertexStream.Primitive>> byTexture = new LinkedHashMap<>();
@@ -89,38 +94,17 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
         pose.translate(0.0f, -0.15f, 0.0f);
         pose.scale(0.375f, 0.375f, 0.375f);
     }
-    /**
-     * The base matrix RenderBiped.func_77029_c establishes before invoking an ItemRenderType.EQUIPPED callback.
-     * The captured geometry holds only the callback's own transform, so the old caller-supplied transform is
-     * re-applied here to land in the same hand coordinates the old client used.
-     */
-    private void applyLegacyEquippedTransform(PoseStack pose) {
-        // bipedRightArm.postRender(0.0625) lands on the arm end; this is RenderBiped's grip offset from there.
-        pose.translate(-0.0625f, 0.4375f, 0.0625f);
-        if (blockKey != null) {
-            // ItemBlock branch (banners and other 3D block items held by an IItemRenderer).
-            pose.translate(0f, 0.1875f, -0.3125f);
-            pose.mulPose(Axis.XP.rotationDegrees(20));
-            pose.mulPose(Axis.YP.rotationDegrees(45));
-            pose.scale(0.375f, -0.375f, -0.375f);
-        } else {
-            // Plain custom-renderer item branch (wands, thaumometer, filled jars).
-            pose.translate(0.25f, 0.1875f, -0.1875f);
-            pose.scale(0.375f, 0.375f, 0.375f);
-            pose.mulPose(Axis.ZP.rotationDegrees(60));
-            pose.mulPose(Axis.XP.rotationDegrees(-90));
-            pose.mulPose(Axis.ZP.rotationDegrees(20));
-        }
-    }
-    /** Host display transforms for centered ISBRH block captures and the inventory IItemRenderer snapshot. */
+    /** Host display transforms for centered ISBRH block captures. */
     private void applyDefaultItemTransform(ItemDisplayContext context, PoseStack pose, List<LegacyVertexStream.Primitive> primitives, boolean originalRenderer) {
         switch (context) {
             case GUI -> {
-                var fit = guiFits.computeIfAbsent(primitives, LegacyItemLayout::fitGui);
-                pose.translate(fit.x(), fit.y(), 0); pose.scale((float)fit.scale(), (float)fit.scale(), (float)fit.scale());
+                boolean blockRotation = !originalRenderer;
                 // The old IItemRenderer already orients its own inventory view; only ISBRH block captures need the
                 // isometric block rotation, otherwise the face is turned away from the camera.
-                if (!originalRenderer) { pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); }
+                var fits = blockRotation ? blockGuiFits : nativeGuiFits;
+                var fit = fits.computeIfAbsent(primitives, geometry -> LegacyItemLayout.fitGui(geometry, blockRotation));
+                pose.translate(fit.x(), fit.y(), 0); pose.scale((float)fit.scale(), (float)fit.scale(), (float)fit.scale());
+                if (blockRotation) { pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); }
                 pose.scale(0.625f, 0.625f, 0.625f);
             }
             case GROUND -> { pose.translate(0, 0.1875, 0); pose.scale(0.25f, 0.25f, 0.25f); }

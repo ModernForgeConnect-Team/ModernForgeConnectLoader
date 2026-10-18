@@ -12,10 +12,17 @@ public final class LegacyItemLayout {
             return new Bounds(bounds.minX()*scale+x, bounds.minY()*scale+y, bounds.maxX()*scale+x, bounds.maxY()*scale+y);
         }
     }
-    public static Bounds guiBounds(List<LegacyVertexStream.Primitive> primitives) {
+    public static Bounds guiBounds(List<LegacyVertexStream.Primitive> primitives) { return guiBounds(primitives, true); }
+    /**
+     * {@code blockRotation} must mirror the matrix actually applied by the renderer: ISBRH block captures get the
+     * isometric block rotation, while an original IItemRenderer already supplies its own inventory orientation.
+     */
+    public static Bounds guiBounds(List<LegacyVertexStream.Primitive> primitives, boolean blockRotation) {
         double[] matrix = LegacyVertexStream.identity();
-        LegacyVertexStream.rotate(matrix, 30, 1, 0, 0);
-        LegacyVertexStream.rotate(matrix, 225, 0, 1, 0);
+        if (blockRotation) {
+            LegacyVertexStream.rotate(matrix, 30, 1, 0, 0);
+            LegacyVertexStream.rotate(matrix, 225, 0, 1, 0);
+        }
         LegacyVertexStream.scale(matrix, .625, .625, .625);
         double minX = Double.POSITIVE_INFINITY, minY = minX, maxX = -minX, maxY = maxX;
         for (var primitive : primitives) for (var vertex : primitive.vertices()) {
@@ -25,8 +32,9 @@ public final class LegacyItemLayout {
         }
         return Double.isFinite(minX) ? new Bounds(minX, minY, maxX, maxY) : new Bounds(0, 0, 0, 0);
     }
-    public static GuiFit fitGui(List<LegacyVertexStream.Primitive> primitives) {
-        Bounds bounds = guiBounds(primitives);
+    public static GuiFit fitGui(List<LegacyVertexStream.Primitive> primitives) { return fitGui(primitives, true); }
+    public static GuiFit fitGui(List<LegacyVertexStream.Primitive> primitives, boolean blockRotation) {
+        Bounds bounds = guiBounds(primitives, blockRotation);
         if (bounds.minX() >= -.5 && bounds.minY() >= -.5 && bounds.maxX() <= .5 && bounds.maxY() <= .5)
             return GuiFit.IDENTITY;
         // Leave a small slot margin; translate in projected space so asymmetric old origins do not drift.

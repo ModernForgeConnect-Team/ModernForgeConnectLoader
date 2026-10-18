@@ -35,6 +35,7 @@ public final class ModernContentBridge {
     private final LegacyContent declarations;
     private final LegacyBlockRendering blockRendering;
     private final LegacyBlockShapes blockShapes;
+    private final LegacyItemUse itemUse;
     private final Set<String> legacyBlockKeys;
     private final ThreadLocal<PlacementTransaction> placement = new ThreadLocal<>();
     private final Map<String, Block> blocks = new LinkedHashMap<>();
@@ -51,6 +52,7 @@ public final class ModernContentBridge {
             declarations = new LegacyContent(services.items());
             blockShapes = new LegacyBlockShapes(services);
             blockRendering = new LegacyBlockRendering(services, declarations);
+            itemUse = new LegacyItemUse(services);
             var registry = services.loader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
             legacyBlockKeys = Set.copyOf((Set<String>)registry.getClass().getMethod("func_148742_b").invoke(registry));
         }
@@ -192,9 +194,38 @@ public final class ModernContentBridge {
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public InteractionResult useOn(UseOnContext context) { return useLegacyItem(context); }
+        @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
+            ItemStack stack = player.getItemInHand(hand);
+            try {
+                var result = itemUse.rightClick(services.worlds().bound(level), placer(player), snapshot(stack));
+                if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(stack);
+                if (result.useDuration() > 0) player.startUsingItem(hand);
+                return net.minecraft.world.InteractionResultHolder.consume(stack);
+            } catch (Exception failure) {
+                LogUtils.getLogger().error("MFCL legacy item use failed for {}", entry.key(), failure);
+                return net.minecraft.world.InteractionResultHolder.fail(stack);
+            }
+        }
+        @Override public int getUseDuration(ItemStack stack) {
+            try { return itemUse.useDuration(snapshot(stack)); }
+            catch (Exception failure) { return 0; }
+        }
+        @Override public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remaining) {
+            if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
+            try { itemUse.usingTick(services.worlds().bound(level), placer(player), snapshot(stack), remaining); }
+            catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy using tick failed for {}", entry.key(), failure); }
+        }
+        @Override public void releaseUsing(ItemStack stack, Level level, LivingEntity living, int timeLeft) {
+            if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
+            try { itemUse.release(services.worlds().bound(level), placer(player), snapshot(stack), timeLeft); }
+            catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy release failed for {}", entry.key(), failure); }
+        }
         @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
         }
+    }
+    private static LegacyTiles.Placer placer(net.minecraft.world.entity.player.Player player) {
+        return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
     }
     /** Item's constructor invokes this before the subclass sets its entry, so the key is resolved lazily. */
     private net.minecraftforge.client.extensions.common.IClientItemExtensions customRenderer(java.util.function.Supplier<String> key) {

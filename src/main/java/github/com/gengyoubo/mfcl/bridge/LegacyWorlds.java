@@ -148,6 +148,15 @@ public final class LegacyWorlds implements AutoCloseable {
         constant(writer, "func_72904_c", "(IIIIII)Z", 1);
         var sound = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72908_a","(DDDLjava/lang/String;FF)V",null,null);
         sound.visitCode(); sound.visitInsn(Opcodes.RETURN); sound.visitMaxs(0,10); sound.visitEnd();
+        // WorldClient/Vanilla sounds reach for client singletons the facade does not own.
+        var sound2 = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72980_b","(DDDLjava/lang/String;FFZ)V",null,null);
+        sound2.visitCode(); sound2.visitInsn(Opcodes.RETURN); sound2.visitMaxs(0,10); sound2.visitEnd();
+        // Entity/ray queries must answer without a live world; an empty list and a miss keep item logic running.
+        var entities = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;",null,null);
+        entities.visitCode(); entities.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList"); entities.visitInsn(Opcodes.DUP);
+        entities.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false); entities.visitInsn(Opcodes.ARETURN); entities.visitMaxs(2,3); entities.visitEnd();
+        var ray = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_147447_a","(Lnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;ZZZ)Lnet/minecraft/util/MovingObjectPosition;",null,null);
+        ray.visitCode(); ray.visitInsn(Opcodes.ACONST_NULL); ray.visitInsn(Opcodes.ARETURN); ray.visitMaxs(1,6); ray.visitEnd();
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }
