@@ -65,6 +65,11 @@ public final class GenericSemanticsProbe {
                     ||capture.commands().stream().noneMatch(LegacyGuiGraphics.Text.class::isInstance))throw new AssertionError("Generic old GUI drawing did not cross the render boundary");
             Class<?> keyboard=loader.loadClass("org.lwjgl.input.Keyboard");
             if(!(Boolean)keyboard.getMethod("isKeyDown",int.class).invoke(null,29)||!(Integer.valueOf(19).equals(keyboard.getMethod("getKeyIndex",String.class).invoke(null,"R"))))throw new AssertionError("Legacy keyboard semantics were not preserved");
+            Object sound=loader.loadClass("net.minecraft.client.audio.PositionedSoundRecord").getMethod("func_147674_a",loader.loadClass("net.minecraft.util.ResourceLocation"),float.class)
+                    .invoke(null,loader.loadClass("net.minecraft.util.ResourceLocation").getConstructor(String.class).newInstance("gui.button.press"),1f);
+            Object soundHandler=mc.getMethod("func_147118_V").invoke(client);
+            soundHandler.getClass().getMethod("func_147682_a",loader.loadClass("net.minecraft.client.audio.ISound")).invoke(soundHandler,sound);
+            if(!capture.hasClickSound())throw new AssertionError("Old button sound did not reach the host boundary");
             try{gl.getMethod("glClear",int.class).invoke(null,0);throw new AssertionError("Unsupported native draw operation was silently accepted");}
             catch(InvocationTargetException expected){if(!(expected.getCause() instanceof UnsupportedOperationException))throw expected;}
         }

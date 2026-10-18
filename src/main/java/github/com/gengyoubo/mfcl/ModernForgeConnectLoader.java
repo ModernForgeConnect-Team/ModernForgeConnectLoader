@@ -26,7 +26,10 @@ public final class ModernForgeConnectLoader {
             if (diagnostic.error()) LOGGER.error("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
             else LOGGER.warn("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
         }
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModListScreen.install(result, runtimeService.loadedModIds()));
+        var catalog = github.com.gengyoubo.mfcl.legacy.LegacyModCatalog.from(result, runtimeService.loadedModIds());
+        github.com.gengyoubo.mfcl.legacy.RuntimeModAccounting.install(catalog);
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModBranding.install(catalog));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModListScreen.install(catalog));
         if (result.legacyFmlStarted() && runtimeService.runtime() != null) {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientWorldBridge.install(runtimeService.runtime().services()));
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContainerBridge.install(runtimeService.runtime().services()));

@@ -28,6 +28,8 @@ MFCL 使用 Forge 的 `FMLPaths.GAMEDIR`，自动建立 `mods/1.7.10`，只读�
 
 Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。选择旧模组后显示“游戏版本：1.7.10”、来源 JAR 及实际加载状态；仅扫描到文件的条目不会标为已加载。该展示不向现代 FML 的容器和注册表插入旧模组。
 
+启动完成提示和主菜单计数使用同一份运行时目录，只统计旧 FML 实际完成加载的模组。当前测试环境应为 5 个：现代环境 3 个，加上 1.7.10 的 CodeChickenCore 和 NEI；CodeChickenLib 依赖库及旧 FML 内置组件不重复计数。主菜单同时标明两个游戏版本的数量。旧模组仍属于隔离的旧 FML，现代 `ModList` 的查询和网络握手不因此包含旧模组。启动提示和主菜单品牌缓存适配当前 Forge 47 的内部字段，升级 Forge 时需重新验证。
+
 运行时报告为 `<游戏目录>/logs/mfcl/runtime-1.7.10.json`，记录真实 FML 阶段、转换器和适配器结果。成功时发现报告为 `CLIENT_DATA_AVAILABLE`，`legacyFmlStarted=true`；`legacyClientReady=false` 仍保留，以免将当前浏览功能误报为完整旧客户端支持。
 
 ## 构建与检查

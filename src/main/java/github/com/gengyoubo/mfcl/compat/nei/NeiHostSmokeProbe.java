@@ -56,6 +56,19 @@ public final class NeiHostSmokeProbe {
                     LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_GUI_DRAW_PASS: {} captured commands on actual host inventory",commands.size());
                     net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-original-nei-overlay.png",mc.getMainRenderTarget(),c->screenshotSaved=true);stage=21;
                 } else if(stage==21 && screenshotSaved) {
+                    Object next=NeiClientUi.activeBridge().data().loader().loadClass("codechicken.nei.LayoutManager").getField("next").get(null);
+                    int x=next.getClass().getField("x").getInt(next)+4,y=next.getClass().getField("y").getInt(next)+4;
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,x,y,0));
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre(mc.screen,x,y,0));stage=30;frames=0;
+                } else if(stage==30&&++frames>8) {
+                    Object panel=NeiClientUi.activeBridge().data().loader().loadClass("codechicken.nei.LayoutManager").getField("itemPanel").get(null);
+                    if(!Integer.valueOf(2).equals(panel.getClass().getMethod("getPage").invoke(panel)))throw new IllegalStateException("Original next-page button failed");
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseScrolled.Pre(mc.screen,panel.getClass().getField("x").getInt(panel)+4,panel.getClass().getField("y").getInt(panel)+4,1));stage=31;frames=0;
+                } else if(stage==31&&++frames>8) {
+                    Object panel=NeiClientUi.activeBridge().data().loader().loadClass("codechicken.nei.LayoutManager").getField("itemPanel").get(null);
+                    if(!Integer.valueOf(1).equals(panel.getClass().getMethod("getPage").invoke(panel)))throw new IllegalStateException("Original item-panel wheel paging failed");
+                    github.com.gengyoubo.mfcl.client.ClientContainerBridge.active().commands(mc.screen);
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_GUI_PAGING_PASS");
                     Object search=NeiClientUi.activeBridge().data().loader().loadClass("codechicken.nei.LayoutManager").getField("searchField").get(null);
                     int x=search.getClass().getField("x").getInt(search)+4,y=search.getClass().getField("y").getInt(search)+4;
                     MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,x,y,1));

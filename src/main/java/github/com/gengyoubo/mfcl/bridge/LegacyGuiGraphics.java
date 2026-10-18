@@ -65,6 +65,13 @@ public final class LegacyGuiGraphics {
     public static boolean key(int key) { return CURRENT.get() != null && frame().keys.contains(key); }
     public static void showScreen(Object screen) { Frame f=frame();f.requestedScreen=screen;f.screenRequested=true; }
     public static void clickSound() { frame().clickSound=true; }
+    public static void sound(Object sound) {
+        try {
+            String id=sound.getClass().getMethod("func_147650_b").invoke(sound).toString();
+            if(id.equals("minecraft:gui.button.press")){clickSound();return;}
+            throw new UnsupportedOperationException("Unmapped legacy GUI sound: "+id);
+        } catch(ReflectiveOperationException failure){throw new IllegalArgumentException("Invalid legacy GUI sound",failure);}
+    }
     public static int mouseX() { return frame().mouseX; }
     public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }
     public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy GUI backend does not support " + name); }

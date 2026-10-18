@@ -8,7 +8,7 @@
   "checks": {
     "errors": 0,
     "failures": 0,
-    "tests": 21,
+    "tests": 24,
     "skipped": 0
   },
   "legacyRuntime": {
@@ -19,28 +19,57 @@
     "legacyClientReady": false,
     "fmlStage": "AVAILABLE",
     "legacyFmlStarted": true,
-    "registrationSealed": true
+    "registrationSealed": true,
+    "genericGuiCaptureWithoutNei": true
   },
   "hostSmoke": {
-    "task": "runClient -PmfclRunDir=build/nei-smoke/game -PmfclNeiWorldSmokeTest",
-    "unsupportedModernRecipes": 335,
+    "task": "test build runClient -PmfclNeiWorldSmokeTest (with original NEI reference inputs)",
+    "log": "build/nei-investigation/original-gui-acceptance.log",
+    "marker": "MFCL_ORIGINAL_NEI_GUI_SMOKE_PASS",
+    "realWorldJoined": true,
+    "originalNeiLayoutOnHostInventory": true,
+    "independentBrowserUsed": false,
+    "originalSearchInput": true,
+    "originalButtonAndWheelPaging": true,
+    "originalRecipeScreen": "codechicken.nei.recipe.GuiCraftingRecipe",
+    "originalUsageScreen": "codechicken.nei.recipe.GuiUsageRecipe",
+    "legacyPausePolicyPreserved": true,
+    "screenResize": true,
     "returnedToInventory": true,
+    "worldDisconnected": true,
     "exitedNormally": true,
     "projectedModernRecipes": 839,
-    "worldDisconnected": true,
-    "search": true,
-    "realWorldJoined": true,
-    "inventoryButton": true,
-    "screenshot": "build/nei-smoke/game/screenshots/mfcl-nei-smoke.png",
-    "log": "build/nei-investigation/refactor-world-smoke.log",
-    "originalNeiRecipeAndUsageQueries": true,
-    "marker": "MFCL_NEI_WORLD_SMOKE_PASS"
+    "unsupportedModernRecipes": 335,
+    "actionMode": "RECIPE_ONLY",
+    "screenshot": "run/screenshots/mfcl-original-nei-overlay.png",
+    "recipeScreenshot": "run/screenshots/mfcl-original-nei-recipe.png"
   },
   "remaining": [
-    "General World semantics beyond time and basic block access",
-    "Legacy custom GUI rendering and OpenGL capture",
-    "Complex NBT and special recipes",
-    "Inventory mutation, cheat actions and network operations",
-    "Broader mod compatibility and reload coverage"
-  ]
+    "General World/WorldProvider semantics beyond the current subset",
+    "Arbitrary custom GUI rendering, complete matrix/GL semantics and resource reload coverage",
+    "Complex NBT slots, special recipes and complete host item catalog interoperability",
+    "Legacy inventory writes, give/time/weather actions and network operations",
+    "Broader mod compatibility"
+  ],
+  "modListSmoke": {
+    "log": "build/nei-investigation/mod-count-client.log",
+    "legacyGameVersionLabel": "1.7.10",
+    "loadStatusFromActualFml": true,
+    "searchAndSort": true,
+    "marker": "MFCL_MOD_LIST_SMOKE_PASS"
+  },
+  "modCountSmoke": {
+    "log": "build/nei-investigation/mod-count-client.log",
+    "marker": "MFCL_MOD_COUNT_SMOKE_PASS",
+    "modern": 3,
+    "legacy": 2,
+    "total": 5,
+    "startupCompletionUpdated": true,
+    "brandingReloadChecked": true,
+    "screenshot": "run/screenshots/mfcl-mod-count.png"
+  },
+  "artifact": {
+    "path": "build/libs/mfcl-0.1.0.jar",
+    "sha256": "4996f5d19de54c4f5f93a18316c8508577bdc46bb214b381c5745a5969a2a811"
+  }
 }

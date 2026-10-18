@@ -76,6 +76,8 @@ public final class LegacyClientData {
             setField(mcType, client, "field_71466_p", font); setField(mcType, client, "field_71464_q", font);
             setField(mcType, client, "field_71446_o", unsafe.getClass().getMethod("allocateInstance", Class.class)
                     .invoke(unsafe, loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")));
+            setField(mcType, client, "field_147127_av", unsafe.getClass().getMethod("allocateInstance", Class.class)
+                    .invoke(unsafe, loader.loadClass("net.minecraft.client.audio.SoundHandler")));
             setField(mcType, client, "field_135017_as", loader.loadClass("net.minecraft.client.resources.LanguageManager")
                     .getConstructor(loader.loadClass("net.minecraft.client.resources.data.IMetadataSerializer"), String.class).newInstance(null, "en_US"));
             Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale"); Object locale = localeType.getConstructor().newInstance();

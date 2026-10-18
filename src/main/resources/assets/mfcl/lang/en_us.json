@@ -5,5 +5,6 @@
   "mfcl.mods.loaded": "Loaded",
   "mfcl.mods.discovered": "Discovered; loading has not completed",
   "mfcl.mods.loader": "Loader: Forge 1.7.10 (via MFCL)",
-  "mfcl.mods.file": "File: %s"
+  "mfcl.mods.file": "File: %s",
+  "mfcl.mods.total_loaded": "%s mods loaded (%s: %s, %s: %s)"
 }
