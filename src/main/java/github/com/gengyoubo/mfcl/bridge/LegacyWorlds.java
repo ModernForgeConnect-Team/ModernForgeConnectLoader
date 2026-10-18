@@ -32,6 +32,7 @@ public final class LegacyWorlds implements AutoCloseable {
         Object provider = loader.loadClass("net.minecraft.world.WorldProviderSurface").getConstructor().newInstance();
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73011_w", provider);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72995_K", host.clientSide());
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
         Object info = loader.loadClass("net.minecraft.world.storage.WorldInfo").getConstructor(loader.loadClass("net.minecraft.nbt.NBTTagCompound"))
                 .newInstance(loader.loadClass("net.minecraft.nbt.NBTTagCompound").getConstructor().newInstance());
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72986_A", info);
@@ -60,6 +61,16 @@ public final class LegacyWorlds implements AutoCloseable {
         } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
     public static int metadata(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).metadata(); }
+    public static boolean metadata(Object world, int x, int y, int z, int metadata, int flags) {
+        var host = binding(world).host; var old = host.block(x, y, z);
+        return host.setBlock(x, y, z, new HostWorldAccess.Block(old.legacyKey(), metadata), flags);
+    }
+    public static Object tile(Object world, int x, int y, int z) { return binding(world).host.tileEntity(x, y, z); }
+    public static void tile(Object world, int x, int y, int z, Object tile) { binding(world).host.setTileEntity(x, y, z, tile); }
+    public static void removeTile(Object world, int x, int y, int z) { binding(world).host.removeTileEntity(x, y, z); }
+    public static void dirty(Object world, int x, int y, int z, Object tile) { binding(world).host.markTileDirty(x, y, z, tile); }
+    public static void updated(Object world, int x, int y, int z) { binding(world).host.blockUpdated(x, y, z); }
+    public static boolean air(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).legacyKey().equals("minecraft:air"); }
     public static boolean setBlock(Object world, int x, int y, int z, Object oldBlock, int metadata, int flags) {
         Binding binding = binding(world);
         try {
@@ -92,6 +103,13 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_147439_a", "(III)Lnet/minecraft/block/Block;", "block", "(Ljava/lang/Object;III)Ljava/lang/Object;", "net/minecraft/block/Block");
         forward(writer, bridge, "func_72805_g", "(III)I", "metadata", "(Ljava/lang/Object;III)I", null);
         forward(writer, bridge, "func_147465_d", "(IIILnet/minecraft/block/Block;II)Z", "setBlock", "(Ljava/lang/Object;IIILjava/lang/Object;II)Z", null);
+        forward(writer, bridge, "func_72921_c", "(IIIII)Z", "metadata", "(Ljava/lang/Object;IIIII)Z", null);
+        forward(writer, bridge, "func_147438_o", "(III)Lnet/minecraft/tileentity/TileEntity;", "tile", "(Ljava/lang/Object;III)Ljava/lang/Object;", "net/minecraft/tileentity/TileEntity");
+        forward(writer, bridge, "func_147455_a", "(IIILnet/minecraft/tileentity/TileEntity;)V", "tile", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);
+        forward(writer, bridge, "func_147475_p", "(III)V", "removeTile", "(Ljava/lang/Object;III)V", null);
+        forward(writer, bridge, "func_147476_b", "(IIILnet/minecraft/tileentity/TileEntity;)V", "dirty", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);
+        for (String method : List.of("func_147471_g", "func_147479_m")) forward(writer, bridge, method, "(III)V", "updated", "(Ljava/lang/Object;III)V", null);
+        forward(writer, bridge, "func_147437_c", "(III)Z", "air", "(Ljava/lang/Object;III)Z", null);
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }

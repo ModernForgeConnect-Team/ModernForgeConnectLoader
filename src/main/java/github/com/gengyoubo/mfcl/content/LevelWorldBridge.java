@@ -41,6 +41,27 @@ public final class LevelWorldBridge {
             @Override public boolean setBlock(int x, int y, int z, Block block, int flags) {
                 check(); return level.setBlock(new BlockPos(x, y, z), content.modernBlock(block), flags);
             }
+            @Override public Object tileEntity(int x, int y, int z) {
+                check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
+                if (tile == null) return null;
+                if (tile instanceof LegacyBlockEntity legacy) return legacy.legacy();
+                throw new UnsupportedOperationException("Modern block entity has no old representation: " + tile.getType());
+            }
+            @Override public void setTileEntity(int x, int y, int z, Object old) {
+                check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
+                if (!(tile instanceof LegacyBlockEntity legacy)) throw new UnsupportedOperationException("No legacy tile envelope at requested position");
+                legacy.replace(old); legacy.synchronize();
+            }
+            @Override public void removeTileEntity(int x, int y, int z) { check(); level.removeBlockEntity(new BlockPos(x, y, z)); }
+            @Override public void markTileDirty(int x, int y, int z, Object old) {
+                check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
+                if (!(tile instanceof LegacyBlockEntity legacy) || legacy.legacy() != old) throw new IllegalStateException("Legacy tile identity mismatch");
+                legacy.synchronize();
+            }
+            @Override public void blockUpdated(int x, int y, int z) {
+                check(); BlockPos pos = new BlockPos(x, y, z); var state = level.getBlockState(pos);
+                level.sendBlockUpdated(pos, state, state, 3);
+            }
         };
     }
 }

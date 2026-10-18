@@ -56,7 +56,7 @@ public final class LegacyContentPack {
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
     }
     private Map<String, Object> itemModel(LegacyContent.Item item, LegacyContent.Variant variant) throws Exception {
-        if (item.blockKey() != null && content.blocks().stream().anyMatch(b -> b.key().equals(item.blockKey()) && b.simple())) {
+        if (item.blockKey() != null && content.blocks().stream().anyMatch(b -> b.key().equals(item.blockKey()) && ModernContentBridge.canPlace(b))) {
             var id = ModernContentBridge.id(item.blockKey());
             return new LinkedHashMap<>(Map.of("parent", id.getNamespace() + ":block/" + id.getPath() + "_" + (variant.metadata() & 15)));
         }
@@ -105,8 +105,14 @@ public final class LegacyContentPack {
                 }
             }
         }
-        languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "Other 1.7.10 items", "mfcl.content.special_block_pending", "This block needs a legacy tile entity or special renderer; placement is not available yet."));
-        languages.computeIfAbsent("zh_cn", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "其他 1.7.10 物品", "mfcl.content.special_block_pending", "此方块需要旧版方块实体或特殊渲染桥，暂不支持放置。"));
+        languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "Other 1.7.10 items",
+                "mfcl.content.special_block_pending", "This block needs special rendering or placement support, which is not available yet.",
+                "mfcl.content.machine_logic_pending", "Placement and saved data are supported. Machine operation and interaction are pending.",
+                "mfcl.content.placement_failed", "This block could not be initialized. Details are in the game log."));
+        languages.computeIfAbsent("zh_cn", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "其他 1.7.10 物品",
+                "mfcl.content.special_block_pending", "此方块需要特殊渲染或放置支持，暂不能放置。",
+                "mfcl.content.machine_logic_pending", "已支持放置和保存数据；机器运行与交互尚未接通。",
+                "mfcl.content.placement_failed", "无法初始化此方块，详细信息见游戏日志。"));
         for (var entry : languages.entrySet()) json("assets/mfcl/lang/" + entry.getKey() + ".json", entry.getValue());
     }
     private void json(String resource, Object value) throws IOException {

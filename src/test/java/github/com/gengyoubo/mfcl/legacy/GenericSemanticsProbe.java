@@ -56,6 +56,20 @@ public final class GenericSemanticsProbe {
         Object copiedNbt = services.items().materialize(services.items().snapshot(nbtStack));
         if (copiedNbt.getClass().getField("field_77990_d").get(copiedNbt) == nbt) throw new AssertionError("Legacy NBT aliases across stack copies");
         report.put("genericFreshNbtRoundTripVerified", true);
+        Class<?> tabFixture = creativeFixture(loader);
+        var tabConstructor = tabFixture.getConstructor(String.class, loader.loadClass("net.minecraft.item.ItemStack"), List.class);
+        tabConstructor.newInstance("mfcl_test_category_a", nbtStack, List.of(nbtStack, second));
+        tabConstructor.newInstance("mfcl_test_category_b", second, List.of(second, nbtStack));
+        var originalTabs = LegacyCreativeTabs.read(services.items(), Set.of());
+        var tabA = originalTabs.stream().filter(tab -> tab.label().equals("mfcl_test_category_a")).findFirst().orElseThrow();
+        var tabB = originalTabs.stream().filter(tab -> tab.label().equals("mfcl_test_category_b")).findFirst().orElseThrow();
+        if (tabA.key().equals(tabB.key()) || !tabA.nameKey().equals("itemGroup.mfcl_test_category_a")
+                || !tabB.nameKey().equals("itemGroup.mfcl_test_category_b") || tabA.builtin() || tabB.builtin()
+                || !tabA.icon().equals(services.items().snapshot(nbtStack)) || !tabB.icon().equals(services.items().snapshot(second))
+                || !tabA.contents().equals(List.of(services.items().snapshot(nbtStack), services.items().snapshot(second)))
+                || !tabB.contents().equals(List.of(services.items().snapshot(second), services.items().snapshot(nbtStack))))
+            throw new AssertionError("Original creative tab callbacks, category isolation, icon metadata/NBT or ordering were lost");
+        report.put("genericOriginalCreativeTabsVerified", true);
         final class Host implements HostWorldAccess {
             long time = 100; Block value = new Block("minecraft:dirt", 0);
             public String dimensionKey() { return "mfcl:test"; } public int legacyDimensionId() { return 7; } public boolean clientSide() { return true; }
@@ -136,6 +150,32 @@ public final class GenericSemanticsProbe {
             mv.visitFieldInsn(Opcodes.GETFIELD, name, method[2], "I"); mv.visitInsn(Opcodes.ICONST_1); mv.visitInsn(Opcodes.IADD); mv.visitFieldInsn(Opcodes.PUTFIELD, name, method[2], "I");
             mv.visitInsn(Opcodes.RETURN); mv.visitMaxs(3, 4); mv.visitEnd();
         }
+        writer.visitEnd(); byte[] bytes = writer.toByteArray();
+        return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
+    }
+    private static Class<?> creativeFixture(ClassLoader loader) throws Exception {
+        String name = "mfcl/fixture/CreativeCategory", stack = "Lnet/minecraft/item/ItemStack;";
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, "net/minecraft/creativetab/CreativeTabs", null);
+        writer.visitField(Opcodes.ACC_PRIVATE, "icon", stack, null, null).visitEnd();
+        writer.visitField(Opcodes.ACC_PRIVATE, "contents", "Ljava/util/List;", null, null).visitEnd();
+        var constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(Ljava/lang/String;" + stack + "Ljava/util/List;)V", null, null);
+        constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0); constructor.visitVarInsn(Opcodes.ALOAD, 1);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/creativetab/CreativeTabs", "<init>", "(Ljava/lang/String;)V", false);
+        constructor.visitVarInsn(Opcodes.ALOAD, 0); constructor.visitVarInsn(Opcodes.ALOAD, 2); constructor.visitFieldInsn(Opcodes.PUTFIELD, name, "icon", stack);
+        constructor.visitVarInsn(Opcodes.ALOAD, 0); constructor.visitVarInsn(Opcodes.ALOAD, 3); constructor.visitFieldInsn(Opcodes.PUTFIELD, name, "contents", "Ljava/util/List;");
+        constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(3, 4); constructor.visitEnd();
+        for (String method : List.of("func_151244_d", "func_78016_d")) {
+            var mv = writer.visitMethod(Opcodes.ACC_PUBLIC, method, "()" + (method.equals("func_151244_d") ? stack : "Lnet/minecraft/item/Item;"), null, null);
+            mv.visitCode(); mv.visitVarInsn(Opcodes.ALOAD, 0); mv.visitFieldInsn(Opcodes.GETFIELD, name, "icon", stack);
+            if (method.equals("func_78016_d")) mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/item/ItemStack", "func_77973_b", "()Lnet/minecraft/item/Item;", false);
+            mv.visitInsn(Opcodes.ARETURN); mv.visitMaxs(1, 1); mv.visitEnd();
+        }
+        var contents = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_78018_a", "(Ljava/util/List;)V", null, null);
+        contents.visitCode(); contents.visitVarInsn(Opcodes.ALOAD, 1); contents.visitVarInsn(Opcodes.ALOAD, 0);
+        contents.visitFieldInsn(Opcodes.GETFIELD, name, "contents", "Ljava/util/List;");
+        contents.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/List", "addAll", "(Ljava/util/Collection;)Z", true);
+        contents.visitInsn(Opcodes.POP); contents.visitInsn(Opcodes.RETURN); contents.visitMaxs(2, 2); contents.visitEnd();
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }

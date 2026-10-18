@@ -16,6 +16,11 @@ import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.*;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.RegisterEvent;
@@ -34,6 +39,7 @@ public final class ModernContentBridge {
     private final LegacyContentPack pack;
     private final CreativeTabBridge creative;
     private boolean blocksRegistered, itemsRegistered;
+    private BlockEntityType<LegacyBlockEntity> tileType;
 
     private ModernContentBridge(LegacyServices services) throws Exception {
         this.services = services; declarations = new LegacyContent(services.items());
@@ -60,6 +66,8 @@ public final class ModernContentBridge {
     public Map<String, Block> blocks() { return Collections.unmodifiableMap(blocks); }
     public Map<String, Item> items() { return Collections.unmodifiableMap(items); }
     public boolean registered() { return blocksRegistered && itemsRegistered; }
+    public BlockEntityType<LegacyBlockEntity> tileType() { return Objects.requireNonNull(tileType, "Legacy block entity registry window"); }
+    public static boolean canPlace(LegacyContent.Block entry) { return entry.renderType() == 0; }
     public static ResourceLocation id(String key) {
         var parsed = ResourceLocation.tryParse(key);
         return parsed != null ? parsed : new ResourceLocation("mfcl", "legacy/" + HexFormat.of().formatHex(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
@@ -73,7 +81,8 @@ public final class ModernContentBridge {
             if (blocksRegistered) throw new IllegalStateException("Legacy block registration repeated");
             for (var entry : declarations.blocks()) {
                 if (BuiltInRegistries.BLOCK.containsKey(id(entry.key()))) throw new IllegalStateException("Host already owns block ID " + entry.key());
-                var block = new MirroredBlock(entry); registry.register(id(entry.key()), block); blocks.put(entry.key(), block);
+                var block = entry.tileEntity() ? new MirroredTileBlock(entry) : new MirroredBlock(entry);
+                registry.register(id(entry.key()), block); blocks.put(entry.key(), block);
             }
             blocksRegistered = true;
         });
@@ -92,6 +101,13 @@ public final class ModernContentBridge {
             LogUtils.getLogger().info("MFCL_CONTENT_REGISTRATION_PASS: blocks={} items={}", blocks.size(), items.size());
         });
         event.register(Registries.CREATIVE_MODE_TAB, creative::register);
+        event.register(Registries.BLOCK_ENTITY_TYPE, registry -> {
+            var supported = declarations.blocks().stream().filter(LegacyContent.Block::tileEntity).map(entry -> blocks.get(entry.key())).toArray(Block[]::new);
+            if (supported.length != 0) {
+                tileType = BlockEntityType.Builder.of((pos, state) -> new LegacyBlockEntity(this, pos, state), supported).build(null);
+                registry.register(ResourceLocation.tryParse("mfcl:legacy_tile_1_7_10"), tileType);
+            }
+        });
     }
     public ItemStack mapStack(LegacyClientData.Stack old) {
         return items.containsKey(old.key()) ? stack(old.key(), old.metadata(), old.count(), old.tag()) : HostStackMapping.renderStack(old);
@@ -127,7 +143,7 @@ public final class ModernContentBridge {
     public BlockState modernBlock(HostWorldAccess.Block old) {
         Block block = blocks.get(old.legacyKey());
         if (block != null) {
-            if (!((MirroredBlock) block).entry.simple()) throw new UnsupportedOperationException("Legacy tile entity/special rendering bridge is pending: " + old.legacyKey());
+            if (!canPlace(((MirroredBlock) block).entry)) throw new UnsupportedOperationException("Legacy special rendering/placement bridge is pending: " + old.legacyKey());
             if (old.metadata() < 0 || old.metadata() > 15) throw new IllegalArgumentException("Legacy block metadata outside 0..15");
             return block.defaultBlockState().setValue(METADATA, old.metadata());
         }
@@ -144,8 +160,10 @@ public final class ModernContentBridge {
     }
     private void tooltip(LegacyContent.Item entry, ItemStack stack, List<Component> lines) {
         lines.add(Component.literal("1.7.10 · " + entry.key() + " @ " + metadata(stack)).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
-        if (entry.blockKey() != null && blocks.get(entry.blockKey()) instanceof MirroredBlock block && !block.entry.simple())
-            lines.add(Component.translatable("mfcl.content.special_block_pending").withStyle(net.minecraft.ChatFormatting.YELLOW));
+        if (entry.blockKey() != null && blocks.get(entry.blockKey()) instanceof MirroredBlock block) {
+            if (!canPlace(block.entry)) lines.add(Component.translatable("mfcl.content.special_block_pending").withStyle(net.minecraft.ChatFormatting.YELLOW));
+            else if (block.entry.tileEntity()) lines.add(Component.translatable("mfcl.content.machine_logic_pending").withStyle(net.minecraft.ChatFormatting.YELLOW));
+        }
     }
     private final class MirroredItem extends Item {
         private final LegacyContent.Item entry;
@@ -159,19 +177,30 @@ public final class ModernContentBridge {
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public InteractionResult useOn(UseOnContext context) {
-            if (!((MirroredBlock) getBlock()).entry.simple()) {
+            if (!ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry)) {
                 if (context.getPlayer() != null && context.getLevel().isClientSide) context.getPlayer().displayClientMessage(Component.translatable("mfcl.content.special_block_pending"), true);
                 return InteractionResult.FAIL;
             }
             if (!context.getItemInHand().isDamageableItem() && (metadata(context.getItemInHand()) < 0 || metadata(context.getItemInHand()) > 15)) return InteractionResult.FAIL;
             return super.useOn(context);
         }
+        @Override public InteractionResult place(BlockPlaceContext context) {
+            if (!ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry)) return InteractionResult.FAIL;
+            BlockPos position = context.getClickedPos(); var before = context.getLevel().getBlockState(position);
+            try { return super.place(context); }
+            catch (Exception failure) {
+                context.getLevel().setBlock(position, before, 3);
+                LogUtils.getLogger().error("MFCL legacy block placement failed for {} at {}", entry.key(), position, failure);
+                if (context.getPlayer() != null) context.getPlayer().displayClientMessage(Component.translatable("mfcl.content.placement_failed"), true);
+                return InteractionResult.FAIL;
+            }
+        }
         @Override protected BlockState getPlacementState(BlockPlaceContext context) {
             BlockState state = super.getPlacementState(context);
             return state == null ? null : state.setValue(METADATA, metadata(context.getItemInHand()) & 15);
         }
     }
-    private final class MirroredBlock extends Block {
+    private class MirroredBlock extends Block {
         private final LegacyContent.Block entry;
         MirroredBlock(LegacyContent.Block entry) {
             super(properties(entry)); this.entry = entry; registerDefaultState(stateDefinition.any().setValue(METADATA, 0));
@@ -180,18 +209,40 @@ public final class ModernContentBridge {
         @Override public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
             return itemForBlock(entry.key(), state.getValue(METADATA));
         }
+        @Override public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
+            if (level.isClientSide) return;
+            try {
+                if (state.hasBlockEntity()) {
+                    if (!(level.getBlockEntity(pos) instanceof LegacyBlockEntity tile)) throw new IllegalStateException("Missing host tile envelope");
+                    tile.legacy();
+                }
+                LegacyTiles.Placer actor = placer == null ? null : new LegacyTiles.Placer(placer.getUUID(), placer.getName().getString(), placer.getX(), placer.getY(), placer.getZ(), placer.getYRot(), placer.getXRot());
+                services.tiles().placed(entry.key(), services.worlds().bound(level), pos.getX(), pos.getY(), pos.getZ(), actor, snapshot(stack));
+                if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.synchronize();
+            } catch (Exception error) { throw new IllegalStateException("Original onBlockPlacedBy failed for " + entry.key(), error); }
+        }
         @Override public List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
-            if (!entry.simple()) return List.of();
+            if (!canPlace(entry)) return List.of();
             try {
                 var result = new ArrayList<ItemStack>();
                 for (var drop : declarations.drops(entry.key(), state.getValue(METADATA), params.getLevel().random.nextLong())) {
-                    ItemStack mapped = stack(drop.key(), drop.metadata(), drop.count(), drop.tag());
+                    ItemStack mapped = mapStack(drop);
                     if (mapped.isEmpty()) throw new UnsupportedOperationException("Unmapped original block drop: " + drop.key());
                     result.add(mapped);
                 }
+                if (params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof LegacyBlockEntity tile)
+                    for (var drop : services.tiles().inventory(tile.legacy())) {
+                        ItemStack mapped = mapStack(drop);
+                        if (mapped.isEmpty()) throw new UnsupportedOperationException("Unmapped original inventory drop: " + drop.key());
+                        result.add(mapped);
+                    }
                 return result;
             } catch (Exception failure) { throw new IllegalStateException("Cannot execute original block drops for " + entry.key(), failure); }
         }
+    }
+    private final class MirroredTileBlock extends MirroredBlock implements EntityBlock {
+        MirroredTileBlock(LegacyContent.Block entry) { super(entry); }
+        @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new LegacyBlockEntity(ModernContentBridge.this, pos, state); }
     }
     public ItemStack itemForBlock(String key, int metadata) {
         for (var item : declarations.items()) if (key.equals(item.blockKey())) return stack(item.key(), metadata, 1, "");

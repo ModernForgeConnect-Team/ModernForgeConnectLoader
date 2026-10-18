@@ -46,6 +46,12 @@ public final class ClientWorldBridge {
                         return new Block(key, 0);
                     }
                     @Override public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new UnsupportedOperationException("Client world cannot change authoritative blocks"); }
+                    @Override public Object tileEntity(int x, int y, int z) {
+                        var tile = next.getBlockEntity(new BlockPos(x, y, z));
+                        if (tile == null) return null;
+                        if (tile instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity legacy) return legacy.legacy();
+                        throw new UnsupportedOperationException("Modern block entity has no old representation: " + tile.getType());
+                    }
                 });
                 current = next;
             }

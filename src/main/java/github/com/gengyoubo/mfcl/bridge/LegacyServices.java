@@ -10,6 +10,7 @@ public final class LegacyServices {
     private final LegacyWorlds worlds;
     private final LegacyScreens screens;
     private final LegacyContainers containers;
+    private final LegacyTiles tiles;
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
         this(gameDirectory, loader, new LegacyClientData(loader));
     }
@@ -20,6 +21,7 @@ public final class LegacyServices {
         this.items.loadRegistryCatalog();
         this.worlds = new LegacyWorlds(loader); this.screens = new LegacyScreens(loader);
         this.containers = new LegacyContainers(this);
+        this.tiles = new LegacyTiles(this);
     }
     public Path gameDirectory() { return gameDirectory; }
     public ClassLoader loader() { return loader; }
@@ -27,4 +29,5 @@ public final class LegacyServices {
     public LegacyWorlds worlds() { return worlds; }
     public LegacyScreens screens() { return screens; }
     public LegacyContainers containers() { return containers; }
+    public LegacyTiles tiles() { return tiles; }
 }

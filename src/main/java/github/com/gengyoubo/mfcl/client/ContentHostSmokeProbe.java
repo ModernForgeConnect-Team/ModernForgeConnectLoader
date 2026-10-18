@@ -29,6 +29,8 @@ final class ContentHostSmokeProbe {
     private String blockKey, itemKey, worldName;
     private Map<String, Object> proof;
     private volatile boolean screenshotSaved;
+    private record TileCheck(String key, BlockPos position, int metadata, byte[] nbt, Object serverIdentity) {}
+    private final List<TileCheck> tileChecks = new ArrayList<>();
     private ContentHostSmokeProbe(ModernContentBridge bridge) { this.bridge = bridge; }
     static void install(ModernContentBridge bridge) { MinecraftForge.EVENT_BUS.addListener(new ContentHostSmokeProbe(bridge)::tick); }
     private void tick(TickEvent.ClientTickEvent event) {
@@ -50,6 +52,14 @@ final class ContentHostSmokeProbe {
                 stage = 2; pending = mc.getSingleplayerServer().submit(() -> { try { verifyServer(); return true; } catch (Exception failure) { throw new IllegalStateException(failure); } });
             } else if (stage == 2 && pending.isDone()) {
                 pending.join();
+                for (var check : tileChecks) {
+                    var clientTile = mc.level.getBlockEntity(check.position());
+                    if (!(clientTile instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity tile)) return;
+                    Object old = tile.legacy();
+                    if (old == check.serverIdentity()) throw new IllegalStateException("Client and server share one mutable old TileEntity");
+                    if (!Arrays.equals(bridge.services().tiles().save(old), check.nbt())) return;
+                }
+                proof.put("clientTileStateSynchronized", true);
                 int checked = 0;
                 for (var item : bridge.declarations().items()) for (var variant : item.variants()) {
                     var stack = bridge.stack(item.key(), variant.metadata(), 1, "");
@@ -112,6 +122,18 @@ final class ContentHostSmokeProbe {
                     var stack = player.getInventory().getItem(0);
                     if (bridge.snapshot(stack) == null || ModernContentBridge.metadata(stack) != 7 || !"{mfcl_probe:1}".equals(bridge.snapshot(stack).tag()))
                         throw new IllegalStateException("Legacy stack metadata/NBT did not survive player save reload: " + stack);
+                    for (var check : tileChecks) {
+                        var stateAt = level.getBlockState(check.position());
+                        if (stateAt.getBlock() != bridge.blocks().get(check.key()) || stateAt.getValue(ModernContentBridge.METADATA) != check.metadata())
+                            throw new IllegalStateException("Placed tile block metadata did not persist: " + check.key());
+                        if (!(level.getBlockEntity(check.position()) instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity tile))
+                            throw new IllegalStateException("Tile envelope did not persist: " + check.key());
+                        try {
+                            Object old = tile.legacy();
+                            if (old == check.serverIdentity() || !Arrays.equals(bridge.services().tiles().save(old), check.nbt()))
+                                throw new IllegalStateException("Original TileEntity NBT did not persist: " + check.key());
+                        } catch (Exception error) { throw new IllegalStateException(error); }
+                    }
                     return true;
                 });
             } else if (stage == 7 && pending.isDone()) {
@@ -177,5 +199,47 @@ final class ContentHostSmokeProbe {
             ordinaryDrops.put(block.key(), generated.stream().map(drop -> bridge.snapshot(drop).key()).toList());
         }
         proof.put("ordinaryBlockDrops", ordinaryDrops);
+        var placements = new ArrayList<Object>(); int index = 0;
+        Class<?> oldInventory = bridge.services().loader().loadClass("net.minecraft.inventory.IInventory");
+        Class<?> oldTileType = bridge.services().loader().loadClass("net.minecraft.tileentity.TileEntity");
+        for (var declaration : bridge.declarations().blocks()) if (ModernContentBridge.canPlace(declaration)) {
+            BlockPos target = player.blockPosition().offset(3 + (index % 4) * 3, 0, 3 + (index / 4) * 3); index++;
+            if (target.equals(position)) throw new IllegalStateException("Placement fixtures overlap");
+            level.setBlockAndUpdate(target.below(), Blocks.STONE.defaultBlockState()); level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState());
+            var item = bridge.itemForBlock(declaration.key(), 0); if (item.isEmpty()) throw new IllegalStateException("No original block item for " + declaration.key());
+            item.setCount(2); player.setItemInHand(InteractionHand.MAIN_HAND, item); player.setYRot(90); player.getAbilities().instabuild = false;
+            var placeHit = new BlockHitResult(Vec3.atCenterOf(target.below()).add(0, .5, 0), Direction.UP, target.below(), false);
+            if (!item.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, placeHit)).consumesAction()
+                    || level.getBlockState(target).getBlock() != bridge.blocks().get(declaration.key()) || item.getCount() != 1)
+                throw new IllegalStateException("Original tile block could not be placed: " + declaration.key());
+            int metadata = level.getBlockState(target).getValue(ModernContentBridge.METADATA);
+            String tileClass = "";
+            if (declaration.tileEntity()) {
+                var envelope = (github.com.gengyoubo.mfcl.content.LegacyBlockEntity) level.getBlockEntity(target);
+                Object original = envelope.legacy(); tileClass = original.getClass().getName();
+                if ((int) oldTileType.getMethod("func_145832_p").invoke(original) != metadata)
+                    throw new IllegalStateException("Original tile cached metadata disagrees with host block state: " + declaration.key());
+                try {
+                    Object owner = original.getClass().getMethod("getPlacerName").invoke(original);
+                    if (!player.getName().getString().equals(owner)) throw new IllegalStateException("Original placement callback lost the player name: " + declaration.key());
+                } catch (NoSuchMethodException ignored) { }
+                Object throughWorld = old.getClass().getMethod("func_147438_o", int.class, int.class, int.class).invoke(old, target.getX(), target.getY(), target.getZ());
+                if (original != throughWorld || envelope.legacy() != original) throw new IllegalStateException("Original tile identity was not stable");
+                if (oldInventory.isInstance(original) && (int) oldInventory.getMethod("func_70302_i_").invoke(original) > 0) {
+                    Object content = bridge.services().items().materialize(new LegacyClientData.Stack(itemKey, 2, 3, "", "{mfcl_inventory:1}"));
+                    oldInventory.getMethod("func_70299_a", int.class, bridge.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(original, 0, content);
+                    var dropStacks = net.minecraft.world.level.block.Block.getDrops(level.getBlockState(target), level, target, envelope);
+                    if (dropStacks.stream().noneMatch(drop -> bridge.snapshot(drop) != null && bridge.snapshot(drop).tag().contains("mfcl_inventory")))
+                        throw new IllegalStateException("Original tile inventory NBT missing from block drops: " + declaration.key());
+                }
+                oldTileType.getMethod("func_70296_d").invoke(original);
+                tileChecks.add(new TileCheck(declaration.key(), target, metadata, bridge.services().tiles().save(original), original));
+            }
+            placements.add(Map.of("key", declaration.key(), "metadata", metadata, "oldTileClass", tileClass));
+        }
+        player.getInventory().setItem(0, stack); player.getAbilities().instabuild = true;
+        server.saveEverything(false, true, true);
+        proof.put("allSupportedBlockPlacements", placements); proof.put("originalTilesPersisted", tileChecks.size());
+        proof.put("tileCachedMetadataAndPlacer", true);
     }
 }

@@ -56,7 +56,7 @@ public final class LegacyCreativeTabs {
         for (var stack : contents) if (stack.key() != null && stack.key().contains(":") && !stack.key().startsWith("minecraft:")) namespaces.add(stack.key().split(":", 2)[0]);
         if (namespaces.size() == 1) return namespaces.iterator().next();
         var code = source.getClass().getProtectionDomain().getCodeSource();
-        if (code != null && code.getLocation().getProtocol().equals("file")) {
+        if (code != null && code.getLocation() != null && code.getLocation().getProtocol().equals("file")) {
             var file = java.nio.file.Path.of(code.getLocation().toURI()).toFile().getCanonicalFile();
             Class<?> loader = data.loader().loadClass("cpw.mods.fml.common.Loader");
             Class<?> container = data.loader().loadClass("cpw.mods.fml.common.ModContainer");
