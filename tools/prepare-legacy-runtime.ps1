@@ -60,17 +60,28 @@ try {
     $installedMods = Join-Path $GameDirectory 'mods/1.7.10'
     [IO.Directory]::CreateDirectory($installedRuntime) | Out-Null
     [IO.Directory]::CreateDirectory($installedMods) | Out-Null
-    foreach ($input in Get-ChildItem -LiteralPath $runtimeRoot -Filter '*.jar' -File) {
-        if ($input.Name -match '^forge-1.7.10-' -or $input.Name -eq 'commons-lang3-3.1.jar') { continue }
-        $destination = Join-Path $installedRuntime $input.Name
-        if (!(Test-Path -LiteralPath $destination) -or (Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $input.FullName).Hash) {
-            [IO.File]::Copy($input.FullName, $destination, $true)
-        }
+    $allowedLibraries = [Collections.Generic.HashSet[string]]::new()
+    $allowedLibraries.Add('minecraft-forge-1.7.10-srg.jar') | Out-Null
+    $reference = Get-Content -LiteralPath (Join-Path $workspaceRoot 'docs/nei-reference-inputs.json') -Raw | ConvertFrom-Json
+    foreach ($dependency in $reference.dependencies) { if ($dependency.directory -eq 'runtime') { $allowedLibraries.Add($dependency.file) | Out-Null } }
+    foreach ($library in $metadata.libraries) {
+        if ($library.downloads.artifact -and $library.name -notmatch 'guava|log4j|commons-lang3') { $allowedLibraries.Add([IO.Path]::GetFileName($library.downloads.artifact.path)) | Out-Null }
     }
-    foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $workspaceRoot 'build/nei-smoke/game/mods/1.7.10') -Filter '*.jar' -File) {
-        $destination = Join-Path $installedMods $mod.Name
-        if (!(Test-Path -LiteralPath $destination)) { [IO.File]::Copy($mod.FullName, $destination, $false) }
-        elseif ((Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $mod.FullName).Hash) { throw "Existing mod differs: $destination" }
+    $installedInputs = @()
+    foreach ($runtimeInput in Get-ChildItem -LiteralPath $runtimeRoot -Filter '*.jar' -File) {
+        if (!$allowedLibraries.Contains($runtimeInput.Name) -or $runtimeInput.Name -match '^forge-1.7.10-') { continue }
+        $destination = Join-Path $installedRuntime $runtimeInput.Name
+        if (!(Test-Path -LiteralPath $destination) -or (Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $runtimeInput.FullName).Hash) {
+            [IO.File]::Copy($runtimeInput.FullName, $destination, $true)
+        }
+        $installedInputs += @{file=$runtimeInput.Name; sha256=(Get-FileHash -LiteralPath $destination).Hash.ToLowerInvariant()}
+    }
+    [IO.File]::WriteAllText((Join-Path $installedRuntime 'runtime-manifest.json'), (@{minecraft='1.7.10'; forge='10.13.4.1614'; inputs=$installedInputs} | ConvertTo-Json -Depth 5))
+    foreach ($name in @($reference.nei.file, 'CodeChickenCore-1.7.10-1.0.7.47-universal.jar', 'CodeChickenLib-1.7.10-1.1.3.138-universal.jar')) {
+        $source = Join-Path (Join-Path $workspaceRoot 'build/nei-smoke/game/mods/1.7.10') $name
+        $destination = Join-Path $installedMods $name
+        if (!(Test-Path -LiteralPath $destination)) { [IO.File]::Copy($source, $destination, $false) }
+        elseif ((Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $source).Hash) { throw "Existing mod differs: $destination" }
     }
     Write-Output "Installed private Java 17 runtime: $installedRuntime"
     if ($Boot) {

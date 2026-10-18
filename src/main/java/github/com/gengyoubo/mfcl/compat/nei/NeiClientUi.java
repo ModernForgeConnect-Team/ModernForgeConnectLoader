@@ -1,6 +1,9 @@
-package github.com.gengyoubo.mfcl.client;
+package github.com.gengyoubo.mfcl.compat.nei;
 
-import github.com.gengyoubo.mfcl.bridge.NeiDataBridge;
+import github.com.gengyoubo.mfcl.client.ModernRecipeProjection;
+import github.com.gengyoubo.mfcl.client.ModernItemMapping;
+
+import github.com.gengyoubo.mfcl.bridge.LegacyClientData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -19,12 +22,12 @@ import java.util.*;
 
 /** Modern presentation of data returned by the original NEI ItemList and recipe handlers. */
 public final class NeiClientUi {
-    private static NeiDataBridge activeBridge;
-    static NeiDataBridge activeBridge() { return activeBridge; }
+    private static NeiBackend activeBridge;
+    static NeiBackend activeBridge() { return activeBridge; }
     private NeiClientUi() {}
-    public static void install(NeiDataBridge bridge) {
+    public static void install(NeiBackend bridge) {
         activeBridge = bridge;
-        ModernRecipeProjection.install(bridge);
+        ModernRecipeProjection.install(bridge.data());
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> {
             if (event.getScreen() instanceof AbstractContainerScreen<?> screen) {
                 event.addListener(Button.builder(Component.literal("NEI"), b -> Minecraft.getInstance().setScreen(new Browser(screen, bridge)))
@@ -40,20 +43,20 @@ public final class NeiClientUi {
 
     public static final class Browser extends Screen {
         private final Screen parent;
-        private final NeiDataBridge bridge;
-        private List<NeiDataBridge.Stack> entries = List.of();
-        private List<NeiDataBridge.Recipe> recipes = List.of();
+        private final NeiBackend bridge;
+        private List<LegacyClientData.Stack> entries = List.of();
+        private List<LegacyClientData.Recipe> recipes = List.of();
         private final List<Hit> hits = new ArrayList<>();
         private EditBox search;
         private String expression = "", error = "";
         private int page, recipePage;
         private boolean usages;
-        private NeiDataBridge.Stack selected;
+        private LegacyClientData.Stack selected;
         int renderedFrames;
-        private record Hit(int x, int y, NeiDataBridge.Stack stack) {
+        private record Hit(int x, int y, LegacyClientData.Stack stack) {
             boolean contains(double mx, double my) { return mx >= x && mx < x + 18 && my >= y && my < y + 18; }
         }
-        public Browser(Screen parent, NeiDataBridge bridge) { super(Component.literal("NEI · 1.7.10")); this.parent = parent; this.bridge = bridge; }
+        public Browser(Screen parent, NeiBackend bridge) { super(Component.literal("NEI · 1.7.10")); this.parent = parent; this.bridge = bridge; }
         @Override protected void init() {
             search = addRenderableWidget(new EditBox(font, 10, 25, Math.max(100, width / 2 - 20), 20, Component.literal("Search")));
             search.setMaxLength(256); search.setValue(expression);
@@ -68,8 +71,11 @@ public final class NeiClientUi {
         }
         private int columns() { return Math.max(1, (width / 2 - 20) / 20); }
         private int rows() { return Math.max(1, (height - 85) / 20); }
-        private void query(NeiDataBridge.Stack stack, boolean usages) {
-            try { recipes = bridge.recipes(stack, usages); selected = stack; this.usages = usages; recipePage = 0; error = ""; }
+        private void query(LegacyClientData.Stack stack, boolean usages) {
+            try {
+                if (minecraft.level != null && ModernRecipeProjection.lastResult() == null) throw new IllegalStateException("Current world's recipes are unavailable");
+                recipes = bridge.recipes(stack, usages); selected = stack; this.usages = usages; recipePage = 0; error = "";
+            }
             catch (Exception failure) { error = failure.toString(); recipes = List.of(); }
         }
         @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -102,7 +108,7 @@ public final class NeiClientUi {
             hits.stream().filter(h -> h.contains(mouseX, mouseY)).findFirst().ifPresent(hit -> graphics.renderComponentTooltip(font,
                     List.of(Component.literal(hit.stack().name()), Component.literal("R: recipes   U: uses")), mouseX, mouseY));
         }
-        private void drawStack(GuiGraphics graphics, NeiDataBridge.Stack stack, int x, int y) {
+        private void drawStack(GuiGraphics graphics, LegacyClientData.Stack stack, int x, int y) {
             graphics.fill(x, y, x + 18, y + 18, 0x88333333);
             ItemStack modern = ModernItemMapping.renderStack(stack);
             if (modern.isEmpty()) graphics.drawString(font, "?", x + 5, y + 4, 0xffbb77);

@@ -266,7 +266,7 @@ tasks.named('test', Test).configure {
         systemProperty 'mfcl.test.neiJar', file(project.property('neiJar')).absolutePath
     }
     if (project.hasProperty('legacySupportDir')) {
-        inputs.dir(file(project.property('legacySupportDir')))
+        inputs.files(fileTree(file(project.property('legacySupportDir'))) { include '*.jar', 'runtime/*.jar', 'runtime/runtime-manifest.json' })
         systemProperty 'mfcl.test.legacySupportDir', file(project.property('legacySupportDir')).absolutePath
     }
 }

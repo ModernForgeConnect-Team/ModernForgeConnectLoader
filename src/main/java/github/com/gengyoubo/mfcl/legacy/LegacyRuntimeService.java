@@ -32,10 +32,11 @@ public final class LegacyRuntimeService {
                 var stages = runtime.boot();
                 writeReport(gameDirectory.resolve("logs/mfcl/runtime-1.7.10.json"), stages);
                 started = Boolean.TRUE.equals(stages.get("legacyFmlStarted"));
-                clientDataReady = started && Boolean.TRUE.equals(stages.get("neiDataReady"));
+                clientDataReady = started && stages.get("adapters") instanceof java.util.Map<?, ?> reports
+                        && !reports.isEmpty() && reports.values().stream().allMatch(v -> v instanceof java.util.Map<?, ?> details && "READY".equals(details.get("status")));
                 state = clientDataReady ? State.CLIENT_DATA_AVAILABLE : started ? State.FML_AVAILABLE : State.RUNTIME_FAILED;
                 if (!started) diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", stages.get("stage") + ": " + stages.get("failure")));
-                else if (!clientDataReady) diagnostics.add(LegacyDiagnostic.notice("LEGACY_CLIENT_DATA_FAILED", String.valueOf(stages.get("neiDataFailure"))));
+                else if (!clientDataReady) diagnostics.add(LegacyDiagnostic.notice("LEGACY_CLIENT_DATA_FAILED", String.valueOf(stages.get("adapters"))));
             }
         } catch (Throwable failure) {
             state = State.RUNTIME_FAILED;
@@ -70,7 +71,7 @@ public final class LegacyRuntimeService {
                 : archives.isEmpty() ? State.NO_LEGACY_MODS : State.RUNTIME_NOT_READY;
         if (state == State.RUNTIME_NOT_READY) {
             diagnostics.add(LegacyDiagnostic.notice("LEGACY_RUNTIME_NOT_READY",
-                    "Legacy archives were inspected. Embedded Forge 1.7.10 lifecycle and NEI client rendering are not yet available; these mods are not running."));
+                    "Legacy archives were inspected only. This inspection did not start the embedded runtime; see runtime-1.7.10.json for an actual boot result."));
         }
         Report report = new Report("1.20.1", "1.7.10", paths.modDirectory().toString(), paths.reportFile().toString(),
                 state, false, false, archives, diagnostics);

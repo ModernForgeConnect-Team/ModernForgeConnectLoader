@@ -1,6 +1,6 @@
 package github.com.gengyoubo.mfcl.client;
 
-import github.com.gengyoubo.mfcl.bridge.NeiDataBridge;
+import github.com.gengyoubo.mfcl.bridge.LegacyClientData;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -20,7 +20,7 @@ public final class ModernItemMapping {
             Map.entry("hardened_clay", "terracotta"), Map.entry("double_plant", "sunflower"), Map.entry("deadbush", "dead_bush"),
             Map.entry("golden_rail", "powered_rail"), Map.entry("slime_ball", "slime_ball"), Map.entry("web", "cobweb"));
     private ModernItemMapping() {}
-    public static ItemStack renderStack(NeiDataBridge.Stack old) {
+    public static ItemStack renderStack(LegacyClientData.Stack old) {
         String key = old.key(); int meta = old.metadata();
         if (key.startsWith("mfcl_host:")) key = key.substring(10).replaceFirst("/", ":");
         else if (key.startsWith("minecraft:")) {

@@ -27,19 +27,20 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                 "net.minecraftforge.classloading.", "net.minecraftforge.transformers.")) addTransformerExclusion(prefix);
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ModernJavaTransformer");
     }
-    @Override public byte[] getClassBytes(String name) throws IOException {
-        return SrgNamespaceAdapter.adapt(name, super.getClassBytes(name));
+    private final List<LegacyBytecodeAdapter> bytecodeAdapters = new ArrayList<LegacyBytecodeAdapter>();
+    public void registerBytecodeAdapter(String name) throws Exception {
+        bytecodeAdapters.add((LegacyBytecodeAdapter) root.loadClass(name).getConstructor().newInstance());
     }
     @Override public Class<?> findClass(String name) throws ClassNotFoundException {
-        if (name.equals("codechicken.lib.asm.ObfMapping") || name.equals("codechicken.core.asm.MCPDeobfuscationTransformer")
-                || name.equals("codechicken.core.asm.DelegatedTransformer")) {
-            try {
-                byte[] bytes = SrgNamespaceAdapter.adapt(name, super.getClassBytes(name));
-                if (bytes == null) throw new ClassNotFoundException(name);
-                return defineClass(name, bytes, 0, bytes.length);
-            } catch (IOException e) { throw new ClassNotFoundException(name, e); }
-        }
-        return super.findClass(name);
+        boolean adapted = false;
+        for (LegacyBytecodeAdapter adapter : bytecodeAdapters) if (adapter.targets(name)) adapted = true;
+        if (!adapted) return super.findClass(name);
+        try {
+            byte[] bytes = super.getClassBytes(name);
+            if (bytes == null) throw new ClassNotFoundException(name);
+            for (LegacyBytecodeAdapter adapter : bytecodeAdapters) if (adapter.targets(name)) bytes = adapter.adapt(name, bytes);
+            return defineClass(name, bytes, 0, bytes.length);
+        } catch (IOException error) { throw new ClassNotFoundException(name, error); }
     }
     public Class<?> defineLegacyClass(String name, byte[] bytes, int offset, int length) {
         return defineClass(name, bytes, offset, length);

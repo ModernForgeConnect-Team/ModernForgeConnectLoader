@@ -14,7 +14,10 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     private final Path gameDirectory, forge;
     private final List<File> mods;
     private final Map<Path, String> originalHashes = new LinkedHashMap<>();
-    private github.com.gengyoubo.mfcl.bridge.NeiDataBridge nei;
+    private github.com.gengyoubo.mfcl.bridge.LegacyServices services;
+    private final List<github.com.gengyoubo.mfcl.bridge.LegacyModAdapter> adapters = new ArrayList<>();
+    public github.com.gengyoubo.mfcl.bridge.LegacyServices services() { return Objects.requireNonNull(services, "Runtime has not booted"); }
+    public List<github.com.gengyoubo.mfcl.bridge.LegacyModAdapter> adapters() { return List.copyOf(adapters); }
 
     public EmbeddedLegacyRuntime(Path gameDirectory, Path supportDirectory, LegacyRuntimeService.Report report) throws Exception {
         this.gameDirectory = gameDirectory.toAbsolutePath().normalize();
@@ -23,14 +26,17 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         if (!Files.isRegularFile(runtime)) throw new FileNotFoundException("Prepared Forge 1.7.10 runtime missing: " + runtime);
         forge = runtime;
         var inputs = new ArrayList<URL>(); inputs.add(runtime.toUri().toURL());
-        try (var stream = Files.list(supportDirectory)) {
-            for (Path path : stream.filter(p -> p.toString().endsWith(".jar")).sorted().toList()) {
-                if (path.equals(runtime) || path.getFileName().toString().startsWith("forge-1.7.10-")) continue;
-                inputs.add(path.toUri().toURL());
-            }
+        for (Path path : runtimeInputs(supportDirectory)) {
+            if (path.equals(runtime) || path.getFileName().toString().startsWith("forge-1.7.10-")) continue;
+            inputs.add(path.toUri().toURL());
         }
         Path helper = extractHelper(this.gameDirectory);
         inputs.add(0, helper.toUri().toURL());
+        Set<String> modIds = new HashSet<>();
+        for (var archive : report.archives()) for (var mod : archive.mods()) modIds.add(mod.id());
+        for (var adapter : ServiceLoader.load(github.com.gengyoubo.mfcl.bridge.LegacyModAdapter.class, getClass().getClassLoader())) {
+            if (adapter.supports(Set.copyOf(modIds))) adapters.add(adapter);
+        }
         mods = new ArrayList<>();
         for (var archive : report.archives()) {
             Path path = Path.of(archive.file());
@@ -43,6 +49,23 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         legacy = (URLClassLoader) root.loadClass("github.com.gengyoubo.mfcl.legacy1710.boot.LegacyLaunchLoader")
                 .getConstructor(URL[].class, ClassLoader.class).newInstance(urls, root);
     }
+    private static List<Path> runtimeInputs(Path directory) throws Exception {
+        Path manifest = directory.resolve("runtime-manifest.json");
+        if (!Files.exists(manifest)) {
+            try (var stream = Files.list(directory)) { return stream.filter(p -> p.toString().endsWith(".jar")).sorted().toList(); }
+        }
+        var inputs = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject().getAsJsonArray("inputs");
+        var paths = new ArrayList<Path>(); var names = new HashSet<String>();
+        for (var entry : inputs) {
+            var value = entry.getAsJsonObject(); String name = value.get("file").getAsString();
+            if (!Path.of(name).getFileName().toString().equals(name) || !name.endsWith(".jar") || !names.add(name)) throw new IOException("Invalid runtime manifest entry: " + name);
+            Path path = directory.resolve(name);
+            if (!LegacyDiscovery.sha256(path).equalsIgnoreCase(value.get("sha256").getAsString())) throw new IOException("Runtime input checksum differs: " + name);
+            paths.add(path);
+        }
+        if (!names.contains("minecraft-forge-1.7.10-srg.jar")) throw new IOException("Runtime manifest omits prepared Minecraft/Forge");
+        return paths;
+    }
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> boot() throws Exception {
@@ -53,6 +76,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             Object logContext = root.loadClass("org.apache.logging.log4j.LogManager").getMethod("getContext", boolean.class).invoke(null, false);
             logContext.getClass().getMethod("setConfigLocation", URI.class).invoke(logContext,
                     Objects.requireNonNull(getClass().getResource("/mfcl/legacy-probe-log4j2.xml")).toURI());
+            for (var adapter : adapters) adapter.beforeBoot(legacy);
             Class<?> launch = root.loadClass("net.minecraft.launchwrapper.Launch");
             launch.getField("classLoader").set(null, legacy);
             launch.getField("minecraftHome").set(null, gameDirectory.toFile());
@@ -69,67 +93,26 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             Class<?> driver = legacy.loadClass("github.com.gengyoubo.mfcl.legacy1710.RuntimeDriver");
             Map<String, Object> result = (Map<String, Object>) driver.getMethod("boot", File.class, File.class, List.class)
                     .invoke(driver.getConstructor().newInstance(), gameDirectory.toFile(), forge.toFile(), mods);
-            if (Boolean.TRUE.equals(result.get("legacyFmlStarted")) && Boolean.TRUE.equals(result.get("neiClientHandlerLoaded"))) {
-                try {
-                    nei = new github.com.gengyoubo.mfcl.bridge.NeiDataBridge(legacy);
-                    result.put("neiData", nei.initialize(gameDirectory));
-                    result.put("neiDataReady", true);
-                    var craftingTable = nei.search("crafting").stream().filter(s -> s.key().equals("minecraft:crafting_table")).findFirst().orElseThrow();
-                    result.put("neiCraftingTableRecipes", nei.recipes(craftingTable, false).size());
-                    result.put("neiCraftingTableUsages", nei.recipes(craftingTable, true).size());
-                    var diamond = nei.search("diamond").stream().filter(s -> s.key().equals("minecraft:diamond")).findFirst().orElseThrow();
-                    var projected = new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostRecipe("mfcl:projection_verification", "shapeless", 0, 0, List.of(List.of(diamond)), craftingTable);
-                    // A separate verification entry point exercises mutation; normal embedded boot retains actual recipes.
-                    if (Boolean.getBoolean("mfcl.test.verifyRecipeProjection")) {
-                        nei.projectHostRecipes(List.of(projected));
-                        var recipes = nei.recipes(craftingTable, false);
-                        if (recipes.size() != 1 || recipes.get(0).ingredients().stream().flatMap(i -> i.alternatives().stream()).noneMatch(s -> s.key().equals("minecraft:diamond")))
-                            throw new IllegalStateException("Original NEI did not consume projected host recipe");
-                        if (nei.recipes(diamond, true).isEmpty()) throw new IllegalStateException("Original NEI usage handler did not consume projected ingredient");
-                        nei.projectHostRecipes(List.of(projected));
-                        if (nei.recipes(craftingTable, false).size() != 1) throw new IllegalStateException("Recipe reload duplicated projected recipes");
-                        try {
-                            nei.projectHostRecipes(List.of(new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostRecipe("mfcl:invalid", "unknown", 0, 0, List.of(), craftingTable)));
-                            throw new IllegalStateException("Invalid recipe projection was accepted");
-                        } catch (IllegalArgumentException expected) {
-                            if (nei.recipes(craftingTable, false).size() != 1) throw new IllegalStateException("Failed projection changed live recipes");
-                        }
-                        result.put("recipeProjectionVerified", true);
-                        nei.importHostItems(List.of(new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostItem("mfcl:probe_a", "MFCL probe A", 64, 0),
-                                new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostItem("mfcl:probe_b", "MFCL probe B", 64, 0)));
-                        var imported = nei.search("");
-                        var a = imported.stream().filter(s -> s.key().equals("mfcl_host:mfcl/probe_a")).findFirst().orElseThrow();
-                        var b = imported.stream().filter(s -> s.key().equals("mfcl_host:mfcl/probe_b")).findFirst().orElseThrow();
-                        nei.projectHostRecipes(List.of(new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostRecipe("mfcl:facade_identity", "shapeless", 0, 0, List.of(List.of(a)), b)));
-                        if (nei.recipes(b, false).size() != 1 || nei.recipes(a, true).isEmpty() || !nei.recipes(b, true).isEmpty())
-                            throw new IllegalStateException("Host item facades lost identity in original NEI handlers");
-                        result.put("hostItemIdentityVerified", true);
+            if (Boolean.TRUE.equals(result.get("legacyFmlStarted"))) {
+                services = new github.com.gengyoubo.mfcl.bridge.LegacyServices(gameDirectory, legacy);
+                var reports = new LinkedHashMap<String, Object>();
+                for (var adapter : adapters) {
+                    try { reports.put(adapter.id(), adapter.initialize(services)); }
+                    catch (Throwable failure) {
+                        StringWriter trace = new StringWriter(); failure.printStackTrace(new PrintWriter(trace));
+                        reports.put(adapter.id(), Map.of("status", "FAILED", "failure", trace.toString()));
                     }
-                } catch (Throwable error) {
-                    result.put("neiDataReady", false);
-                    StringWriter trace = new StringWriter(); error.printStackTrace(new PrintWriter(trace)); result.put("neiDataFailure", trace.toString());
                 }
+                result.put("adapters", reports);
             }
             try { legacy.loadClass("net.minecraft.world.level.Level"); throw new IllegalStateException("Modern Minecraft leaked into legacy domain"); }
             catch (ClassNotFoundException expected) { result.put("modernClassIsolationVerified", true); }
-            if (Boolean.getBoolean("mfcl.test.verifyRecipeProjection")) {
-                Class<?> data = legacy.loadClass("cpw.mods.fml.common.registry.GameData");
-                Method getMain = data.getDeclaredMethod("getMain"); getMain.setAccessible(true);
-                Class<?> item = legacy.loadClass("net.minecraft.item.Item"); var constructor = item.getDeclaredConstructor(); constructor.setAccessible(true);
-                Method register = data.getDeclaredMethod("registerItem", item, String.class); register.setAccessible(true);
-                try { register.invoke(getMain.invoke(null), constructor.newInstance(), "mfcl:late_attempt"); throw new IllegalStateException("Registration barrier accepted a late item"); }
-                catch (InvocationTargetException expected) {
-                    if (!(expected.getCause() instanceof IllegalStateException) || !expected.getCause().getMessage().contains("registration barrier")) throw expected;
-                    result.put("lateRegistrationRejected", true);
-                }
-            }
             for (var input : originalHashes.entrySet()) {
                 if (!LegacyDiscovery.sha256(input.getKey()).equals(input.getValue())) throw new IOException("Original mod JAR changed during boot: " + input.getKey());
             }
             return result;
         } finally { thread.setContextClassLoader(before); if (System.out != stdout) System.setOut(stdout); if (System.err != stderr) System.setErr(stderr); }
     }
-    public Optional<github.com.gengyoubo.mfcl.bridge.NeiDataBridge> nei() { return nei != null && nei.ready() ? Optional.of(nei) : Optional.empty(); }
     private static void set(Class<?> owner, String name, Object value) throws Exception {
         Field field = owner.getDeclaredField(name); field.setAccessible(true); field.set(null, value);
     }
@@ -159,7 +142,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             Path output = game.resolve("logs/mfcl/runtime-1.7.10.json"); Files.createDirectories(output.getParent());
             Files.writeString(output, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(result));
             System.out.println("MFCL_RUNTIME_RESULT=" + new com.google.gson.Gson().toJson(result));
-            if (!Boolean.TRUE.equals(result.get("legacyFmlStarted")) || result.containsKey("neiDataReady") && !Boolean.TRUE.equals(result.get("neiDataReady"))) System.exit(1);
+            if (!Boolean.TRUE.equals(result.get("legacyFmlStarted"))) System.exit(1);
         }
     }
 }

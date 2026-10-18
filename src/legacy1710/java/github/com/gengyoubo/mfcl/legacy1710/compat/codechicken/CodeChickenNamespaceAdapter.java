@@ -1,11 +1,15 @@
-package github.com.gengyoubo.mfcl.legacy1710.boot;
+package github.com.gengyoubo.mfcl.legacy1710.compat.codechicken;
+import github.com.gengyoubo.mfcl.legacy1710.boot.*;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
 /** CCC assumes a named-class development environment also has MCP member names. Our cache uses SRG members. */
-final class SrgNamespaceAdapter {
-    static byte[] adapt(String name, byte[] bytes) {
+public final class CodeChickenNamespaceAdapter implements LegacyBytecodeAdapter {
+    @Override public boolean targets(String name) {
+        return name.equals("codechicken.lib.asm.ObfMapping") || name.equals("codechicken.core.asm.MCPDeobfuscationTransformer") || name.equals("codechicken.core.asm.DelegatedTransformer");
+    }
+    @Override public byte[] adapt(String name, byte[] bytes) {
         if (bytes == null) return null;
         boolean mappings = name.equals("codechicken.lib.asm.ObfMapping");
         boolean devRemapper = name.equals("codechicken.core.asm.MCPDeobfuscationTransformer");

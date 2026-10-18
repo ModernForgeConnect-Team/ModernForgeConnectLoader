@@ -2,7 +2,7 @@ package github.com.gengyoubo.mfcl;
 
 import com.mojang.logging.LogUtils;
 import github.com.gengyoubo.mfcl.legacy.LegacyRuntimeService;
-import github.com.gengyoubo.mfcl.client.HostSmokeProbe;
+
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
@@ -26,12 +26,9 @@ public final class ModernForgeConnectLoader {
             if (diagnostic.error()) LOGGER.error("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
             else LOGGER.warn("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
         }
-        if (runtimeService.runtime() != null) {
-            runtimeService.runtime().nei().ifPresent(bridge -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> github.com.gengyoubo.mfcl.client.NeiClientUi.install(bridge)));
+        if (result.state() == LegacyRuntimeService.State.CLIENT_DATA_AVAILABLE && runtimeService.runtime() != null) {
+            for (var adapter : runtimeService.runtime().adapters()) DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> adapter::installClient);
         }
-        if (Boolean.getBoolean("mfcl.test.exitAtTitleScreen")) {
-            DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> HostSmokeProbe::install);
-        }
+
     }
 }

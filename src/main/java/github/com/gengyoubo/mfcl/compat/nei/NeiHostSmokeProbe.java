@@ -1,4 +1,7 @@
-package github.com.gengyoubo.mfcl.client;
+package github.com.gengyoubo.mfcl.compat.nei;
+
+import github.com.gengyoubo.mfcl.client.ModernRecipeProjection;
+import github.com.gengyoubo.mfcl.client.ModernItemMapping;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
@@ -7,14 +10,14 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 
 /** Opt-in developer smoke check; never enabled during a normal game launch. */
-public final class HostSmokeProbe {
+public final class NeiHostSmokeProbe {
     private static boolean completed;
     private static int stage, frames;
     private static volatile boolean screenshotSaved;
     private static NeiClientUi.Browser browser;
-    private HostSmokeProbe() {}
+    private NeiHostSmokeProbe() {}
 
-    public static void install() { MinecraftForge.EVENT_BUS.addListener(HostSmokeProbe::tick); }
+    public static void install() { MinecraftForge.EVENT_BUS.addListener(NeiHostSmokeProbe::tick); }
 
     private static void tick(TickEvent.ClientTickEvent event) {
         if (completed || event.phase != TickEvent.Phase.END) return;

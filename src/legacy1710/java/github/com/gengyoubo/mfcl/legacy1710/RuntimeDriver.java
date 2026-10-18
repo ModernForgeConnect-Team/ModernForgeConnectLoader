@@ -96,10 +96,6 @@ public final class RuntimeDriver {
             List<String> modIds = new ArrayList<String>();
             for (cpw.mods.fml.common.ModContainer mod : Loader.instance().getActiveModList()) modIds.add(mod.getModId());
             result.put("loadedMods", modIds);
-            if (modIds.contains("NotEnoughItems")) {
-                Field instance = loader.loadClass("codechicken.nei.ClientHandler").getDeclaredField("instance"); instance.setAccessible(true);
-                result.put("neiClientHandlerLoaded", instance.get(null) != null);
-            }
             result.put("legacyFmlStarted", true);
             result.put("stage", "AVAILABLE");
         } catch (Throwable failure) {

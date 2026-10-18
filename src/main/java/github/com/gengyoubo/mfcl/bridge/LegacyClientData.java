@@ -1,14 +1,13 @@
 package github.com.gengyoubo.mfcl.bridge;
 
-import java.io.File;
 import java.lang.reflect.*;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.regex.Pattern;
+import java.util.function.Consumer;
 
-/** Reflective endpoint: all live legacy stacks and handlers stay in their defining domain. */
-public final class NeiDataBridge {
+/** Forge 1.7.10 Item/ItemStack semantics. Owns identity, copies, variant/NBT snapshots and host recipe publication. */
+public final class LegacyClientData {
     public record Stack(String key, int metadata, int count, String name, String tag) {}
     public record Ingredient(int x, int y, List<Stack> alternatives) { public Ingredient { alternatives = List.copyOf(alternatives); } }
     public record Recipe(String handler, String name, List<Ingredient> ingredients, Stack result, List<Ingredient> other) {
@@ -32,7 +31,8 @@ public final class NeiDataBridge {
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
 
-    public NeiDataBridge(ClassLoader loader) throws Exception {
+    private final List<Consumer<List<Object>>> catalogListeners = new ArrayList<>();
+    public LegacyClientData(ClassLoader loader) throws Exception {
         this.loader = loader;
         stackType = loader.loadClass("net.minecraft.item.ItemStack"); itemType = loader.loadClass("net.minecraft.item.Item");
         registry = itemType.getField("field_150901_e").get(null);
@@ -41,9 +41,9 @@ public final class NeiDataBridge {
         itemByName = registry.getClass().getMethod("func_82594_a", String.class);
     }
 
-    public synchronized Map<String, Object> initialize(Path gameDir) throws Exception {
-        return inLegacy(() -> {
-            if (ready) throw new IllegalStateException("NEI bridge already initialized");
+    public ClassLoader loader() { return loader; }
+    public synchronized void initializeContext(Path gameDir, List<String> languageResources) throws Exception {
+        inLegacy(() -> {
             // A typed old client context supplies settings and data; it never starts an old window or game loop.
             Class<?> mcType = loader.loadClass("net.minecraft.client.Minecraft");
             Field unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); unsafeField.setAccessible(true);
@@ -74,31 +74,45 @@ public final class NeiDataBridge {
             setField(mcType, client, "field_71466_p", font); setField(mcType, client, "field_71464_q", font);
             Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale"); Object locale = localeType.getConstructor().newInstance();
             Method loadLanguage = localeType.getDeclaredMethod("func_135021_a", java.io.InputStream.class); loadLanguage.setAccessible(true);
-            for (String resource : List.of("assets/minecraft/lang/en_US.lang", "assets/nei/lang/en_US.lang")) {
+            for (String resource : languageResources) {
                 try (var in = loader.getResourceAsStream(resource)) { if (in != null) loadLanguage.invoke(locale, in); }
                 try (var in = loader.getResourceAsStream(resource)) { if (in != null) loader.loadClass("net.minecraft.util.StringTranslate").getMethod("inject", java.io.InputStream.class).invoke(null, in); }
             }
             setField(loader.loadClass("net.minecraft.client.resources.I18n"), null, "field_135054_a", locale);
             prepareIconMetadata();
-            Class<?> config = loader.loadClass("codechicken.nei.NEIClientConfig");
-            config.getMethod("loadWorld", String.class).invoke(null, "mfcl");
-            Class<?> itemList = loader.loadClass("codechicken.nei.ItemList");
-            itemList.getMethod("loadItems").invoke(null);
-            Object task = itemList.getField("loadItems").get(null);
-            Class<?> taskType = loader.loadClass("codechicken.nei.RestartableTask");
-            Field workerField = taskType.getDeclaredField("thread"); workerField.setAccessible(true);
-            Thread worker = (Thread) workerField.get(task);
-            if (worker != null) {
-                worker.join(15000);
-                if (worker.isAlive()) { taskType.getMethod("stop").invoke(task); throw new IllegalStateException("NEI item enumeration timed out"); }
-            }
-            catalog = new ArrayList<>((List<?>) itemList.getField("items").get(null));
-            if (catalog.isEmpty()) throw new IllegalStateException("Original NEI ItemList produced no entries");
-            ready = true;
-            return Map.of("catalogSize", catalog.size(), "craftingHandlers", handlers(false).size(), "usageHandlers", handlers(true).size());
+            return null;
         });
     }
-
+    public synchronized void loadRegistryCatalog() throws Exception {
+        inLegacy(() -> {
+            var values = new ArrayList<Object>();
+            Class<?> tab = loader.loadClass("net.minecraft.creativetab.CreativeTabs");
+            Method variants = itemType.getMethod("func_150895_a", itemType, tab, List.class);
+            for (Object item : (Iterable<?>) registry) {
+                var entries = new ArrayList<Object>(); variants.invoke(item, item, null, entries);
+                if (entries.isEmpty()) entries.add(stackType.getConstructor(itemType, int.class, int.class).newInstance(item, 1, 0));
+                values.addAll(entries);
+            }
+            replaceCatalog(values); return null;
+        });
+    }
+    public synchronized void replaceCatalog(List<?> values) {
+        for (Object value : values) if (!stackType.isInstance(value)) throw new IllegalArgumentException("Stack belongs to a different runtime");
+        catalog = new ArrayList<>(values); catalogSnapshots = null; ready = true;
+    }
+    public synchronized void onCatalogChanged(Consumer<List<Object>> listener) { catalogListeners.add(Objects.requireNonNull(listener)); }
+    public synchronized List<Stack> catalog() throws Exception {
+        requireReady();
+        return inLegacy(() -> {
+            if (catalogSnapshots == null) {
+                var values = new ArrayList<Stack>(); for (Object value : catalog) values.add(snapshot(value));
+                catalogSnapshots = List.copyOf(values);
+            }
+            return catalogSnapshots;
+        });
+    }
+    public synchronized boolean ready() { return ready; }
+    public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
     private void prepareIconMetadata() throws Exception {
         Class<?> icon = loader.loadClass("net.minecraft.util.IIcon"), register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");
         Map<String, Object> icons = new HashMap<>();
@@ -122,52 +136,6 @@ public final class NeiDataBridge {
         loader.loadClass("github.com.gengyoubo.mfcl.legacy1710.ModernEnumSupport")
                 .getMethod("setFailsafeFieldValue", Field.class, Object.class, Object.class).invoke(null, owner.getDeclaredField(name), target, value);
     }
-    public synchronized List<Stack> search(String expression) throws Exception {
-        requireReady();
-        return inLegacy(() -> {
-            Pattern pattern = (Pattern) loader.loadClass("codechicken.nei.SearchField").getMethod("getPattern", String.class).invoke(null, expression.toLowerCase(Locale.ROOT));
-            var result = new ArrayList<Stack>();
-            if (catalogSnapshots == null) {
-                var snapshots = new ArrayList<Stack>(); for (Object value : catalog) snapshots.add(snapshot(value));
-                catalogSnapshots = List.copyOf(snapshots);
-            }
-            for (Stack stack : catalogSnapshots) {
-                if (pattern == null || pattern.matcher(stack.name().toLowerCase(Locale.ROOT)).find() || pattern.matcher(stack.key().toLowerCase(Locale.ROOT)).find()) result.add(stack);
-            }
-            return List.copyOf(result);
-        });
-    }
-    public synchronized List<Recipe> recipes(Stack selected, boolean usages) throws Exception {
-        requireReady();
-        return inLegacy(() -> {
-            Object query = originals.get(selected);
-            if (query == null) {
-                Object item = itemByName.invoke(registry, selected.key());
-                if (item == null) return List.of();
-                query = stackType.getConstructor(itemType, int.class, int.class).newInstance(item, selected.count(), selected.metadata());
-            }
-            query = copyStack.invoke(query);
-            var recipes = new ArrayList<Recipe>();
-            for (Object handler : List.copyOf(handlers(usages))) {
-                Object derived;
-                try {
-                    derived = handler.getClass().getMethod(usages ? "getUsageHandler" : "getRecipeHandler", String.class, Object[].class)
-                            .invoke(handler, "item", new Object[]{copyStack.invoke(query)});
-                } catch (InvocationTargetException error) {
-                    throw new IllegalStateException("NEI handler failed: " + handler.getClass().getName(), error.getCause());
-                }
-                int count = (Integer) derived.getClass().getMethod("numRecipes").invoke(derived);
-                if (count > 10000) throw new IllegalStateException("NEI handler produced too many recipes: " + count);
-                String name = (String) derived.getClass().getMethod("getRecipeName").invoke(derived);
-                for (int i = 0; i < count; i++) recipes.add(new Recipe(derived.getClass().getName(), name,
-                        ingredients((List<?>) derived.getClass().getMethod("getIngredientStacks", int.class).invoke(derived, i)),
-                        positionedResult(derived.getClass().getMethod("getResultStack", int.class).invoke(derived, i)),
-                        ingredients((List<?>) derived.getClass().getMethod("getOtherStacks", int.class).invoke(derived, i))));
-            }
-            return List.copyOf(recipes);
-        });
-    }
-    public synchronized boolean ready() { return ready; }
     public synchronized int importHostItems(List<HostItem> items) throws Exception {
         requireReady();
         return inLegacy(() -> {
@@ -183,7 +151,7 @@ public final class NeiDataBridge {
             }
             catalog = List.copyOf(next);
             catalogSnapshots = null;
-            loader.loadClass("codechicken.nei.ItemList").getField("items").set(null, new ArrayList<>(catalog));
+            for (var listener : catalogListeners) listener.accept(List.copyOf(catalog));
             return imported;
         });
     }
@@ -205,9 +173,9 @@ public final class NeiDataBridge {
             var replacement = new ArrayList<>(ownCrafting);
             var furnace = new LinkedHashMap<Object, Object>();
             for (HostRecipe recipe : recipes) {
-                Object output = legacyStack(recipe.result());
+                Object output = materialize(recipe.result());
                 if (recipe.kind().equals("smelting")) {
-                    for (Stack ingredient : recipe.ingredients().get(0)) furnace.put(legacyStack(ingredient), copyStack.invoke(output));
+                    for (Stack ingredient : recipe.ingredients().get(0)) furnace.put(materialize(ingredient), copyStack.invoke(output));
                 } else if (recipe.kind().equals("shaped")) {
                     if (recipe.width() < 1 || recipe.width() > 3 || recipe.height() < 1 || recipe.height() > 3 || recipe.ingredients().size() != recipe.width() * recipe.height())
                         throw new IllegalArgumentException("Invalid crafting grid: " + recipe.id());
@@ -232,12 +200,13 @@ public final class NeiDataBridge {
             return recipes.size();
         });
     }
+    private void requireReady() { if (!ready) throw new IllegalStateException("Legacy item catalog is not ready"); }
     private Object alternatives(List<Stack> values) throws Exception {
         if (values.isEmpty()) return null;
-        if (values.size() == 1) return legacyStack(values.get(0));
-        var result = new ArrayList<Object>(); for (Stack value : values) result.add(legacyStack(value)); return result;
+        if (values.size() == 1) return materialize(values.get(0));
+        var result = new ArrayList<Object>(); for (Stack value : values) result.add(materialize(value)); return result;
     }
-    private Object legacyStack(Stack value) throws Exception {
+    public synchronized Object materialize(Stack value) throws Exception {
         Object existing = originals.get(value);
         if (existing == null) existing = originals.entrySet().stream().filter(e -> e.getKey().key().equals(value.key())
                 && e.getKey().metadata() == value.metadata() && e.getKey().tag().equals(value.tag())).map(Map.Entry::getValue).findFirst().orElse(null);
@@ -252,25 +221,7 @@ public final class NeiDataBridge {
         }
         stackType.getField("field_77994_a").setInt(result, value.count()); return result;
     }
-    public synchronized List<String> diagnostics() { return List.copyOf(diagnostics); }
-    private void requireReady() { if (!ready) throw new IllegalStateException("Original NEI client data is not ready"); }
-    private List<?> handlers(boolean usages) throws Exception {
-        return (List<?>) loader.loadClass(usages ? "codechicken.nei.recipe.GuiUsageRecipe" : "codechicken.nei.recipe.GuiCraftingRecipe")
-                .getField(usages ? "usagehandlers" : "craftinghandlers").get(null);
-    }
-    private List<Ingredient> ingredients(List<?> positioned) throws Exception {
-        var result = new ArrayList<Ingredient>();
-        for (Object p : positioned) {
-            var alternatives = new ArrayList<Stack>();
-            for (Object item : (Object[]) p.getClass().getField("items").get(p)) alternatives.add(snapshot(item));
-            result.add(new Ingredient(p.getClass().getField("relx").getInt(p), p.getClass().getField("rely").getInt(p), alternatives));
-        }
-        return result;
-    }
-    private Stack positionedResult(Object positioned) throws Exception {
-        return positioned == null ? null : snapshot(positioned.getClass().getField("item").get(positioned));
-    }
-    private Stack snapshot(Object value) throws Exception {
+    public synchronized Stack snapshot(Object value) throws Exception {
         Object item = itemOfStack.invoke(value);
         Object nbt = stackType.getField("field_77990_d").get(value);
         HostItem host = hostItems.get(item);
@@ -280,7 +231,7 @@ public final class NeiDataBridge {
         if (!originals.containsKey(stack)) originals.put(stack, copyStack.invoke(value));
         return stack;
     }
-    private <T> T inLegacy(Callable<T> work) throws Exception {
+    public <T> T inLegacy(Callable<T> work) throws Exception {
         Thread thread = Thread.currentThread(); ClassLoader before = thread.getContextClassLoader();
         try { thread.setContextClassLoader(loader); return work.call(); }
         finally { thread.setContextClassLoader(before); }
