@@ -78,9 +78,12 @@ public final class RuntimeDriver {
             completed.add(stage); stage = "FORGE_INITIALIZATION";
             IFMLSidedHandler sided = (IFMLSidedHandler) Proxy.newProxyInstance(loader, new Class<?>[]{IFMLSidedHandler.class},
                     new InvocationHandler() {
-                        @Override public Object invoke(Object proxy, Method method, Object[] args) {
+                        @Override public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                             String n = method.getName();
                             if (n.equals("getSide")) return Side.CLIENT;
+                            if (n.equals("showGuiScreen")) {
+                                loader.loadClass("github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics").getMethod("showScreen",Object.class).invoke(null,args[0]);return null;
+                            }
                             if (n.equals("stripSpecialChars")) return ((String) args[0]).replaceAll("(?i)\u00a7[0-9A-FK-OR]", "");
                             if (n.equals("getAdditionalBrandingInformation")) return Collections.emptyList();
                             if (n.equals("toString")) return "MFCL embedded client sided handler";

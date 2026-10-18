@@ -4,11 +4,12 @@ import java.util.*;
 
 /** Thread-confined GUI command capture. No legacy OpenGL context or native input library is entered. */
 public final class LegacyGuiGraphics {
-    public sealed interface Command permits Rect, Text, Texture, Item {}
+    public sealed interface Command permits Rect, Text, Texture, Item, Mesh {}
     public record Rect(int x1, int y1, int x2, int y2, int top, int bottom) implements Command {}
-    public record Text(String text, int x, int y, int color, boolean shadow) implements Command {}
-    public record Texture(String resource, int x, int y, int u, int v, int width, int height) implements Command {}
-    public record Item(Object stack, int x, int y, boolean overlay, String label) implements Command {}
+    public record Text(String text, int x, int y, int color, boolean shadow, double sx, double sy) implements Command {}
+    public record Texture(String resource, int x, int y, int u, int v, int width, int height, double sx, double sy) implements Command {}
+    public record Item(Object stack, int x, int y, boolean overlay, String label, double sx, double sy) implements Command {}
+    public record Mesh(List<LegacyVertexStream.Primitive> primitives) implements Command {}
     private record Matrix(double x, double y, double sx, double sy) {}
     private static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
     private LegacyGuiGraphics() {}
@@ -24,40 +25,44 @@ public final class LegacyGuiGraphics {
         private final Deque<Matrix> matrices = new ArrayDeque<>();
         private Matrix matrix = new Matrix(0, 0, 1, 1);
         private String texture;
+        private final LegacyWorldGraphics.Frame geometry=LegacyWorldGraphics.active()?null:LegacyWorldGraphics.begin();
         private Object requestedScreen;
-        private boolean screenRequested, clickSound;
+        private boolean screenRequested, clickSound, tooltip;
         private Frame(int width, int height, int x, int y, Set<Integer> keys) {
             this.width = width; this.height = height; mouseX = x; mouseY = y; this.keys = Set.copyOf(keys);
         }
-        public List<Command> commands() { check(); return List.copyOf(commands); }
+        private void flushGeometry() { if(geometry!=null) {var mesh=geometry.takePrimitives();if(!mesh.isEmpty())commands.add(new Mesh(mesh));} }
+        public List<Command> commands() { check();flushGeometry();return List.copyOf(commands); }
         public Object requestedScreen() { check(); return requestedScreen; }
         public boolean hasScreenRequest() { check(); return screenRequested; }
         public boolean hasClickSound() { check(); return clickSound; }
+        public boolean hasTooltip() { check(); return tooltip; }
         private void check() { if (Thread.currentThread() != owner || CURRENT.get() != this) throw new IllegalStateException("Expired or foreign GUI capture"); }
-        @Override public void close() { check(); CURRENT.remove(); if (!matrices.isEmpty()) throw new IllegalStateException("Unbalanced legacy GUI matrix stack"); }
+        @Override public void close() { check();CURRENT.remove();try {if(geometry!=null)geometry.close();} finally {if (!matrices.isEmpty()) throw new IllegalStateException("Unbalanced legacy GUI matrix stack");} }
         private int x(double value) { return (int)Math.round(matrix.x + matrix.sx * value); }
         private int y(double value) { return (int)Math.round(matrix.y + matrix.sy * value); }
     }
     private static Frame frame() { return Objects.requireNonNull(CURRENT.get(), "Legacy GUI operation outside a host frame"); }
     public static boolean capturing() { return CURRENT.get() != null; }
+    public static void tooltip(List<?> lines) { if (!lines.isEmpty()) frame().tooltip = true; }
     public static void rect(int x1, int y1, int x2, int y2, int color) { gradient(x1, y1, x2, y2, color, color); }
     public static void gradient(int x1, int y1, int x2, int y2, int a, int b) {
-        Frame f = frame(); f.commands.add(new Rect(f.x(x1), f.y(y1), f.x(x2), f.y(y2), a, b));
+        Frame f = frame();f.flushGeometry();f.commands.add(new Rect(f.x(x1), f.y(y1), f.x(x2), f.y(y2), a, b));
     }
     public static void bind(Object resource) {
         if (resource == null) return; // RenderItem may defer its actual atlas binding until the item pass.
         Frame f = CURRENT.get();
         if (f != null) f.texture = resource.toString();
-        else LegacyWorldGraphics.texture(resource.toString());
+        LegacyWorldGraphics.texture(resource.toString());
     }
     public static void texture(int x, int y, int u, int v, int width, int height) {
-        Frame f = frame(); f.commands.add(new Texture(Objects.requireNonNull(f.texture, "Unbound legacy texture"), f.x(x), f.y(y), u, v, width, height));
+        Frame f = frame();f.flushGeometry();f.commands.add(new Texture(Objects.requireNonNull(f.texture, "Unbound legacy texture"), f.x(x), f.y(y), u, v, width, height,f.matrix.sx,f.matrix.sy));
     }
     public static int text(String text, int x, int y, int color, boolean shadow) {
-        Frame f = frame(); if (text != null) f.commands.add(new Text(text, f.x(x), f.y(y), color, shadow)); return x + (text == null ? 0 : text.length() * 6);
+        Frame f = frame();f.flushGeometry();if (text != null) f.commands.add(new Text(text, f.x(x), f.y(y), color, shadow,f.matrix.sx,f.matrix.sy)); return x + (text == null ? 0 : text.length() * 6);
     }
     public static void item(Object stack, int x, int y, boolean overlay, String label) {
-        Frame f = frame(); if (stack != null) f.commands.add(new Item(stack, f.x(x), f.y(y), overlay, label));
+        Frame f = frame();f.flushGeometry();if (stack != null) f.commands.add(new Item(stack, f.x(x), f.y(y), overlay, label,f.matrix.sx,f.matrix.sy));
     }
     public static void push() { Frame f = frame(); f.matrices.push(f.matrix); }
     public static void pop() { Frame f = frame(); f.matrix = f.matrices.pop(); }
@@ -69,6 +74,7 @@ public final class LegacyGuiGraphics {
         throw new UnsupportedOperationException("Unsupported legacy GL integer query: "+value);
     }
     public static boolean key(int key) { return CURRENT.get() != null && frame().keys.contains(key); }
+    public static boolean button(int button) { return CURRENT.get()!=null&&frame().keys.contains(1000+button); }
     public static void showScreen(Object screen) { Frame f=frame();f.requestedScreen=screen;f.screenRequested=true; }
     public static void clickSound() { frame().clickSound=true; }
     public static void sound(Object sound) {

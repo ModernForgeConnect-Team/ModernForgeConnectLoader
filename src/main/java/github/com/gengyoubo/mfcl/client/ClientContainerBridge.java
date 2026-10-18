@@ -23,7 +23,9 @@ public final class ClientContainerBridge {
         if(!LegacyScreens.guiBridgeEnabled())return;
         var bridge=new ClientContainerBridge(services);active=bridge;
         MinecraftForge.EVENT_BUS.addListener(bridge::init);
+        MinecraftForge.EVENT_BUS.addListener(bridge::capture);
         MinecraftForge.EVENT_BUS.addListener(bridge::render);
+        MinecraftForge.EVENT_BUS.addListener(bridge::tooltip);
         MinecraftForge.EVENT_BUS.addListener(bridge::mouse);
         MinecraftForge.EVENT_BUS.addListener(bridge::release);
         MinecraftForge.EVENT_BUS.addListener(bridge::scroll);
@@ -34,9 +36,30 @@ public final class ClientContainerBridge {
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RecipesUpdatedEvent event)->bridge.reverse=null);
     }
     private ClientContainerBridge(LegacyServices services){this.services=services;renderer=new LegacyGuiRenderer(services);}
+    public static LegacyItemUse.Result useItem(java.util.concurrent.Callable<LegacyItemUse.Result> action) throws Exception {
+        var mc=Minecraft.getInstance();Object requested;boolean opened;LegacyItemUse.Result result;
+        if(active!=null)active.services.items().language(mc.options.languageCode);
+        try(var frame=LegacyGuiGraphics.begin(mc.getWindow().getGuiScaledWidth(),mc.getWindow().getGuiScaledHeight(),0,0,keys())) {
+            result=action.call();requested=frame.requestedScreen();opened=frame.hasScreenRequest();
+        }
+        if(opened) {
+            if(active==null)throw new UnsupportedOperationException("Legacy GUI bridge is disabled");
+            active.transition(mc.screen,requested);
+            return new LegacyItemUse.Result(true,result.useDuration(),result.prompt(),result.messages());
+        }
+        return result;
+    }
+    public static void receive(LegacyPackets.Message message) {
+        try {
+            if(active==null||Minecraft.getInstance().player==null)return;
+            active.services.containers().preparePlayer();LegacyPackets.receiveClient(active.services,message);
+        } catch(Exception failure) {LogUtils.getLogger().error("MFCL old client packet failed: {}:{}",message.channel(),message.discriminator(),failure);}
+    }
     private static final class Bound {
         final Object gui;final LegacyScreens.Session session;
         List<LegacyGuiGraphics.Command> commands=List.of();Throwable failure;
+        boolean tooltipReady;
+        net.minecraft.client.gui.GuiGraphics graphics;
         Bound(Object gui,LegacyScreens.Session session){this.gui=gui;this.session=session;}
     }
     private void init(ScreenEvent.Init.Post event) {
@@ -63,12 +86,24 @@ public final class ClientContainerBridge {
         if(old==null)return null; // an unknown host item leaves its mirror slot empty instead of failing the container
         return new LegacyClientData.Stack(old.key(),value.isDamageableItem()?value.getDamageValue():old.metadata(),value.getCount(),old.name(),old.tag());
     }
-    private void render(ScreenEvent.Render.Post event) {
+    private void capture(ScreenEvent.Render.Pre event) {
         Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
+        bound.tooltipReady=false;bound.graphics=event.getGuiGraphics();
         try(var frame=LegacyGuiGraphics.begin(event.getScreen().width,event.getScreen().height,event.getMouseX(),event.getMouseY(),keys())) {
             bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());bound.commands=frame.commands();
-            renderer.draw(event.getGuiGraphics(),bound.commands);
+            bound.tooltipReady=frame.hasTooltip();
         } catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI drawing failed",failure);}
+    }
+    private void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Pre event) {
+        Bound bound=bindings.get(Minecraft.getInstance().screen);
+        // Keep the host fallback unless this frame actually captured a replacement from the old GUI.
+        if(bound!=null&&bound.failure==null&&bound.tooltipReady&&bound.graphics==event.getGraphics()&&!event.getItemStack().isEmpty())event.setCanceled(true);
+    }
+    private void render(ScreenEvent.Render.Post event) {
+        Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
+        try {renderer.draw(event.getGuiGraphics(),bound.commands);}
+        catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI replay failed",failure);}
+        finally {bound.tooltipReady=false;bound.graphics=null;}
     }
     private void tick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
@@ -97,7 +132,7 @@ public final class ClientContainerBridge {
     private final class HostedScreen extends Screen {
         private final Screen parent;private final Object old;
         HostedScreen(Screen parent,Object old){super(net.minecraft.network.chat.Component.empty());this.parent=parent;this.old=old;}
-        @Override protected void init(){try(var frame=LegacyGuiGraphics.begin(width,height,0,0,keys())){bindings.put(this,new Bound(old,services.screens().open(old,width,height)));origins.put(old,this);}catch(Exception failure){throw new IllegalStateException("Cannot open original legacy screen",failure);}}
+        @Override protected void init(){try(var frame=LegacyGuiGraphics.begin(width,height,0,0,keys())){services.items().language(Minecraft.getInstance().options.languageCode);bindings.put(this,new Bound(old,services.screens().open(old,width,height)));origins.put(old,this);}catch(Exception failure){throw new IllegalStateException("Cannot open original legacy screen",failure);}}
         @Override public void render(net.minecraft.client.gui.GuiGraphics graphics,int x,int y,float partialTick){renderBackground(graphics);}
         @Override public boolean isPauseScreen(){try{return (Boolean)old.getClass().getMethod("func_73868_f").invoke(old);}catch(Exception failure){throw new IllegalStateException("Cannot read legacy GUI pause policy",failure);}}
         @Override public boolean mouseClicked(double x,double y,int button){return dispatch(this,(int)x,(int)y,b->{b.session.mousePressed((int)x,(int)y,button);return true;});}
@@ -107,7 +142,7 @@ public final class ClientContainerBridge {
         @Override public void onClose(){Minecraft.getInstance().setScreen(parent);}
     }
     private void close(ScreenEvent.Closing event){Bound bound=bindings.remove(event.getScreen());if(bound!=null)try{bound.session.close();}catch(Exception failure){LogUtils.getLogger().error("MFCL legacy GUI close failed",failure);}}
-    private static Set<Integer> keys(){var result=new HashSet<Integer>();if(Screen.hasControlDown())result.add(29);if(Screen.hasShiftDown())result.add(42);if(Screen.hasAltDown())result.add(56);return result;}
+    private static Set<Integer> keys(){var result=new HashSet<Integer>();if(Screen.hasControlDown())result.add(29);if(Screen.hasShiftDown())result.add(42);if(Screen.hasAltDown())result.add(56);for(int button=0;button<3;button++)if(GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().getWindow(),button)==GLFW.GLFW_PRESS)result.add(1000+button);return result;}
     public List<LegacyGuiGraphics.Command> commands(Screen screen){var bound=bindings.get(screen);if(bound==null)throw new IllegalStateException("No old GUI binding");if(bound.failure!=null)throw new IllegalStateException("Old GUI failed",bound.failure);return bound.commands;}
     public Object legacyScreen(Screen screen){return bindings.get(screen).gui;}
 }

@@ -247,7 +247,11 @@ public final class ModernContentBridge {
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
             ItemStack stack = player.getItemInHand(hand);
             try {
-                var result = itemUse.rightClick(services.worlds().bound(level), placer(player), snapshot(stack));
+                var result = level.isClientSide
+                        ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(services.worlds().bound(level),placer(player),snapshot(stack)))
+                        : itemUse.rightClick(services.worlds().bound(level), placer(player), snapshot(stack));
+                if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)
+                    result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
                 if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(stack);
                 if (result.useDuration() > 0) player.startUsingItem(hand);
                 if (result.prompt() != null && level.isClientSide) player.displayClientMessage(Component.literal(result.prompt()), true);

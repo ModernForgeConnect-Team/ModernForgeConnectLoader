@@ -62,9 +62,10 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
                 } else if (method.equals("glLoadIdentity")) call(m,DISPATCH,"loadIdentity","()V");
                 else if (method.equals("glGetInteger") && desc.equals("(I)I")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0)); call(m,DISPATCH,"integer","(I)I"); }
                 else if (WORLD_METHODS.contains(method+desc)) routeWorld(m);
-                else if (method.matches("gl(Enable|Disable|BlendFunc|DepthMask|DepthFunc|ColorMask|ShadeModel|AlphaFunc|LineWidth|PushAttrib|PopAttrib|MatrixMode|ColorMaterial|DepthRange)")) { }
+                else if (method.matches("gl(Enable|Disable|BlendFunc|DepthMask|DepthFunc|ColorMask|ShadeModel|AlphaFunc|LineWidth|PushAttrib|PopAttrib|MatrixMode|ColorMaterial|DepthRange|Hint)")) { }
                 else { unsupported(m,name+"."+method+desc); continue; }
             } else if (name.endsWith("Keyboard") && method.equals("isKeyDown")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0)); call(m,"key","(I)Z"); }
+            else if (name.endsWith("Mouse") && method.equals("isButtonDown")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0));call(m,"button","(I)Z"); }
             else if (name.endsWith("Mouse") && method.equals("getX")) call(m,"mouseX","()I");
             else if (name.endsWith("Mouse") && method.equals("getY")) call(m,"mouseY","()I");
             else if (method.equals("isCreated")) m.instructions.add(new InsnNode(Opcodes.ICONST_1));

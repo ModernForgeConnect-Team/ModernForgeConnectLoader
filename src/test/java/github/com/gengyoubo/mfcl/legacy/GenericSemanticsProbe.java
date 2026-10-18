@@ -197,6 +197,14 @@ public final class GenericSemanticsProbe {
             Object soundHandler=mc.getMethod("func_147118_V").invoke(client);
             soundHandler.getClass().getMethod("func_147682_a",loader.loadClass("net.minecraft.client.audio.ISound")).invoke(soundHandler,sound);
             if(!capture.hasClickSound())throw new AssertionError("Old button sound did not reach the host boundary");
+            var screenType=loader.loadClass("net.minecraft.client.gui.GuiScreen");Object tooltipScreen=screenType.getConstructor().newInstance();
+            screenType.getMethod("func_146280_a",mc,int.class,int.class).invoke(tooltipScreen,client,320,240);
+            var hovering=screenType.getDeclaredMethod("func_146283_a",List.class,int.class,int.class);hovering.setAccessible(true);
+            hovering.invoke(tooltipScreen,List.of(),12,34);
+            if(capture.hasTooltip())throw new AssertionError("Empty old tooltip incorrectly replaced the host tooltip");
+            hovering.invoke(tooltipScreen,List.of("Original item details"),12,34);
+            if(!capture.hasTooltip()||capture.commands().stream().noneMatch(command->command instanceof LegacyGuiGraphics.Text text&&text.text().equals("Original item details")))
+                throw new AssertionError("Original tooltip replacement was not captured");
             try{gl.getMethod("glClear",int.class).invoke(null,0);throw new AssertionError("Unsupported native draw operation was silently accepted");}
             catch(InvocationTargetException expected){if(!(expected.getCause() instanceof UnsupportedOperationException))throw expected;}
         }

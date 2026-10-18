@@ -63,12 +63,15 @@ public final class LegacyTiles {
     }
     public Object actor(Object world, Placer placer, LegacyClientData.Stack stack) throws Exception {
         if (placer == null) return null;
-        Class<?> actorType = loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP");
+        boolean client = worldType.getField("field_72995_K").getBoolean(world);
+        Class<?> actorType = loader.loadClass(client ? "net.minecraft.client.entity.EntityClientPlayerMP" : "net.minecraft.entity.player.EntityPlayerMP");
         Field field = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); field.setAccessible(true); Object unsafe = field.get(null);
         Object actor = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, actorType);
-        Object movement = loader.loadClass("net.minecraft.util.MovementInput").getConstructor().newInstance();
-        movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
-        actorType.getField("field_71158_b").set(actor,movement);
+        if(client) {
+            Object movement = loader.loadClass("net.minecraft.util.MovementInput").getConstructor().newInstance();
+            movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
+            actorType.getField("field_71158_b").set(actor,movement);
+        }
         Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
         var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);
         profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));

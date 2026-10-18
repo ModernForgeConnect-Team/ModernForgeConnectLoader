@@ -8,15 +8,37 @@ import org.objectweb.asm.tree.*;
 public final class GuiCaptureTransformer implements IClassTransformer {
     private static final String API = "github/com/gengyoubo/mfcl/bridge/LegacyGuiGraphics";
     public byte[] transform(String name,String transformedName,byte[] bytes) {
-        if (bytes == null || !(name.equals("net.minecraft.client.gui.Gui") || name.equals("net.minecraft.client.gui.FontRenderer")
+        if (bytes == null || !(name.equals("net.minecraft.client.gui.Gui") || name.equals("net.minecraft.client.gui.GuiScreen") || name.equals("net.minecraft.client.gui.FontRenderer")
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
                 || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer") || name.equals("net.minecraft.entity.player.EntityPlayer")
                 || name.equals("net.minecraft.client.entity.EntityPlayerSP") || name.equals("net.minecraft.client.entity.EntityClientPlayerMP")
                 || name.equals("net.minecraft.client.gui.GuiButton")
+                || name.equals("cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (name.endsWith(".SimpleNetworkWrapper")) {
+                String packets="github/com/gengyoubo/mfcl/bridge/LegacyPackets";
+                if(m.name.equals("<init>")) {
+                    for(AbstractInsnNode instruction:m.instructions.toArray())if(instruction.getOpcode()==Opcodes.RETURN){
+                        InsnList register=new InsnList();register.add(new VarInsnNode(Opcodes.ALOAD,0));register.add(new VarInsnNode(Opcodes.ALOAD,1));
+                        register.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"channel","(Ljava/lang/Object;Ljava/lang/String;)V",false));m.instructions.insertBefore(instruction,register);
+                    }
+                } else if(m.name.equals("registerMessage")&&m.desc.startsWith("(Lcpw/mods/fml/common/network/simpleimpl/IMessageHandler;")) {
+                    InsnList register=new InsnList();register.add(new VarInsnNode(Opcodes.ALOAD,0));register.add(new VarInsnNode(Opcodes.ALOAD,1));register.add(new VarInsnNode(Opcodes.ALOAD,2));register.add(new VarInsnNode(Opcodes.ILOAD,3));register.add(new VarInsnNode(Opcodes.ALOAD,4));
+                    register.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"register","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Class;ILjava/lang/Object;)V",false));m.instructions.insert(register);
+                } else if(m.name.equals("sendTo")) {
+                    InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,0));send.add(new VarInsnNode(Opcodes.ALOAD,1));send.add(new VarInsnNode(Opcodes.ALOAD,2));
+                    send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendTo","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);
+                }
+                continue;
+            }
+            if (name.endsWith(".GuiScreen") && m.name.equals("drawHoveringText") && m.desc.equals("(Ljava/util/List;IILnet/minecraft/client/gui/FontRenderer;)V")) {
+                InsnList tooltip = new InsnList(); tooltip.add(new VarInsnNode(Opcodes.ALOAD,1));
+                tooltip.add(new MethodInsnNode(Opcodes.INVOKESTATIC,API,"tooltip","(Ljava/util/List;)V",false));
+                m.instructions.insert(tooltip); continue;
+            }
             if (m.name.equals("func_145747_a") && (m.access & Opcodes.ACC_ABSTRACT) == 0) {
                 InsnList chat = new InsnList(); LabelNode original = new LabelNode();
                 chat.add(new VarInsnNode(Opcodes.ALOAD,1));
@@ -41,7 +63,8 @@ public final class GuiCaptureTransformer implements IClassTransformer {
             }
             InsnList code = new InsnList(); String target=null, descriptor=null;
             int ret=Opcodes.RETURN;
-            if (name.endsWith(".Gui") && m.name.equals("func_73734_a")) { load(code,Opcodes.ILOAD,0,5); target="rect"; descriptor="(IIIII)V"; }
+            if(name.endsWith(".Minecraft")&&(m.name.equals("func_71381_h")||m.name.equals("func_71364_i"))) { /* Host screen transitions own mouse focus. */ }
+            else if (name.endsWith(".Gui") && m.name.equals("func_73734_a")) { load(code,Opcodes.ILOAD,0,5); target="rect"; descriptor="(IIIII)V"; }
             else if (name.endsWith(".Minecraft") && m.name.equals("func_147108_a")) { code.add(new VarInsnNode(Opcodes.ALOAD,1)); target="showScreen";descriptor="(Ljava/lang/Object;)V"; }
             else if (name.endsWith(".GuiButton") && m.name.equals("func_146113_a")) { target="clickSound";descriptor="()V"; }
             else if (name.endsWith(".SoundHandler") && m.name.equals("func_147682_a")) { code.add(new VarInsnNode(Opcodes.ALOAD,1));target="sound";descriptor="(Ljava/lang/Object;)V"; }

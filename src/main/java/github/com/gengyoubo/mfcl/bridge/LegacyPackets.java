@@ -1,0 +1,70 @@
+package github.com.gengyoubo.mfcl.bridge;
+
+import java.util.*;
+
+/** Carries registered old SimpleNetworkWrapper client messages over the host connection. */
+public final class LegacyPackets {
+    public record Message(String channel, int discriminator, byte[] payload) {}
+    private record Handler(Object instance, Class<?> type, int discriminator, String side) {}
+    private static final class Channel {
+        final String name; final List<Handler> handlers = new ArrayList<>();
+        Channel(String name) { this.name = name; }
+    }
+    private static final Map<Object,Channel> CHANNELS = Collections.synchronizedMap(new IdentityHashMap<>());
+    private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
+    private LegacyPackets() {}
+    public static void channel(Object wrapper, String name) { CHANNELS.put(wrapper,new Channel(name)); }
+    public static void register(Object wrapper, Object handler, Class<?> message, int discriminator, Object side) {
+        CHANNELS.get(wrapper).handlers.add(new Handler(handler,message,discriminator,side.toString()));
+    }
+    public static Scope capture(UUID recipient) { return new Scope(recipient); }
+    public static final class Scope implements AutoCloseable {
+        private final UUID recipient;
+        private final List<Message> messages = new ArrayList<>();
+        private Scope(UUID recipient) {
+            if (CURRENT.get()!=null) throw new IllegalStateException("Nested old packet capture");
+            this.recipient=recipient;CURRENT.set(this);
+        }
+        public List<Message> messages() { return List.copyOf(messages); }
+        @Override public void close() { CURRENT.remove(); }
+    }
+    public static boolean sendTo(Object wrapper, Object message, Object player) throws Exception {
+        Scope scope=CURRENT.get();if(scope==null)return false;
+        var loader=message.getClass().getClassLoader();
+        var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+        Object profile=playerType.getMethod("func_146103_bH").invoke(player);
+        if(!scope.recipient.equals(profile.getClass().getMethod("getId").invoke(profile)))
+            throw new UnsupportedOperationException("Old item callback sent a packet to another player");
+        Channel channel=Objects.requireNonNull(CHANNELS.get(wrapper),"Unregistered old network channel");
+        Handler handler=channel.handlers.stream().filter(h->h.side.equals("CLIENT")&&h.type==message.getClass()).findFirst().orElseThrow();
+        Class<?> bufferType=loader.loadClass("io.netty.buffer.ByteBuf");
+        Object buffer=loader.loadClass("io.netty.buffer.Unpooled").getMethod("buffer").invoke(null);
+        try {
+            loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessage").getMethod("toBytes",bufferType).invoke(message,buffer);
+            int size=(int)bufferType.getMethod("readableBytes").invoke(buffer);
+            if(size>1024*1024)throw new IllegalArgumentException("Old client packet exceeds host limit");
+            byte[] payload=new byte[size];bufferType.getMethod("readBytes",byte[].class).invoke(buffer,(Object)payload);
+            scope.messages.add(new Message(channel.name,handler.discriminator,payload));return true;
+        } finally {bufferType.getMethod("release").invoke(buffer);}
+    }
+    public static void receiveClient(LegacyServices services, Message message) throws Exception {
+        services.items().inLegacy(()->{
+            var loader=services.loader();
+            Channel channel=CHANNELS.entrySet().stream().filter(e->e.getKey().getClass().getClassLoader()==loader&&e.getValue().name.equals(message.channel())).map(Map.Entry::getValue).findFirst().orElseThrow();
+            Handler handler=channel.handlers.stream().filter(h->h.side.equals("CLIENT")&&h.discriminator==message.discriminator()).findFirst().orElseThrow();
+            Class<?> bufferType=loader.loadClass("io.netty.buffer.ByteBuf");
+            Object buffer=loader.loadClass("io.netty.buffer.Unpooled").getMethod("wrappedBuffer",byte[].class).invoke(null,(Object)message.payload());
+            try {
+                Object packet=handler.type.getConstructor().newInstance();
+                Class<?> messageType=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessage");
+                messageType.getMethod("fromBytes",bufferType).invoke(packet,buffer);
+                Class<?> contextType=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.MessageContext"),sideType=loader.loadClass("cpw.mods.fml.relauncher.Side");
+                var constructor=contextType.getDeclaredConstructor(loader.loadClass("net.minecraft.network.INetHandler"),sideType);constructor.setAccessible(true);
+                Object context=constructor.newInstance(null,sideType.getField("CLIENT").get(null));
+                Object reply=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessageHandler").getMethod("onMessage",messageType,contextType).invoke(handler.instance,packet,context);
+                if(reply!=null)throw new UnsupportedOperationException("Old client handler needs a server reply bridge");
+                return null;
+            } finally {bufferType.getMethod("release").invoke(buffer);}
+        });
+    }
+}

@@ -9,7 +9,9 @@ import java.util.*;
  * other per-player state survive across the begin/tick/stop sequence the modern engine drives.
  */
 public final class LegacyItemUse {
-    public record Result(boolean used, int useDuration, String prompt) {}
+    public record Result(boolean used, int useDuration, String prompt, List<LegacyPackets.Message> messages) {
+        public Result(boolean used,int useDuration,String prompt) { this(used,useDuration,prompt,List.of()); }
+    }
     /** A finished legacy scan, ready to be replayed against the authoritative player. */
     public record Scan(byte type, int id, int meta, String phenomena) {}
     private final LegacyServices services;
@@ -26,13 +28,17 @@ public final class LegacyItemUse {
             Object stack = services.items().materialize(snapshot);
             Object item = stackType.getMethod("func_77973_b").invoke(stack);
             Object player = actor(world, placer, snapshot);
-            Object returned = itemType.getMethod("func_77659_a", stackType, worldType, playerType).invoke(item, stack, world, player);
+            Object returned; List<LegacyPackets.Message> messages;
+            try(var packets=LegacyPackets.capture(placer.id())) {
+                returned = itemType.getMethod("func_77659_a", stackType, worldType, playerType).invoke(item, stack, world, player);
+                messages=packets.messages();
+            }
             int duration = (int) itemType.getMethod("func_77626_a", stackType).invoke(item, stack);
-            boolean used = duration > 0 || !services.items().snapshot(returned).equals(snapshot);
+            boolean used = duration > 0 || !messages.isEmpty() || returned==null || !services.items().snapshot(returned).equals(snapshot);
             String prompt = scanPrompt(item, loader);
             boolean remote = loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world);
             LogUtils.getLogger().info("MFCL legacy use {}@{}: remote={}, duration={}, target={}", snapshot.key(), snapshot.metadata(), remote, duration, prompt);
-            return new Result(used, duration, prompt);
+            return new Result(used, duration, prompt, messages);
         });
     }
     /**
@@ -144,15 +150,22 @@ public final class LegacyItemUse {
             Class<?> mc = loader.loadClass("net.minecraft.client.Minecraft");
             Object instance = mc.getMethod("func_71410_x").invoke(null);
             Object client = mc.getField("field_71439_g").get(instance);
-            if (client != null) { refresh(client, world, placer, snapshot); return client; }
+            if (client != null) { refresh(client, world, placer, snapshot);mc.getField("field_71451_h").set(instance,client);return client; }
         }
         String key = System.identityHashCode(world) + "|" + placer.id();
         Object actor = actors.get(key);
-        if (actor == null) { actor = services.tiles().actor(world, placer, snapshot); actors.put(key, actor); }
+        if (actor == null) {
+            actor = services.tiles().actor(world, placer, snapshot);
+            github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.initialize(loader,actor);
+            actors.put(key, actor);
+        }
         else refresh(actor, world, placer, snapshot);
         return actor;
     }
     private void refresh(Object actor, Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot) throws Exception {
+        var playerType=services.loader().loadClass("net.minecraft.entity.player.EntityPlayer");
+        var profile=playerType.getDeclaredField("field_146106_i");profile.setAccessible(true);
+        profile.set(actor,services.loader().loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(placer.id(),placer.name()));
         Class<?> entity = services.loader().loadClass("net.minecraft.entity.Entity");
         entity.getField("field_70170_p").set(actor, world);
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()); entity.getField("field_70161_v").setDouble(actor, placer.z());

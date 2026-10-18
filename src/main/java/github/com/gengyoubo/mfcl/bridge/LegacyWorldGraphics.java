@@ -51,6 +51,7 @@ public final class LegacyWorldGraphics {
         private final Deque<LegacyVertexStream.RenderState> attributes = new ArrayDeque<>();
 
         public List<LegacyVertexStream.Primitive> primitives() { check(); return List.copyOf(primitives); }
+        public List<LegacyVertexStream.Primitive> takePrimitives() { check();var result=List.copyOf(primitives);primitives.clear();return result; }
         private void check() { if (Thread.currentThread() != owner || CURRENT.get() != this) throw new IllegalStateException("Expired or foreign legacy world capture"); }
         @Override public void close() {
             check();
