@@ -82,7 +82,10 @@
     "Item icon/name/color lookups now fall back to the item's base unlocalized name instead of failing the freeze.",
     "LegacyContent.Block now records the metadata that actually carry a TileEntity; blockCosmeticSolid and blockHole report hasTileEntity but create no tile for metadata 0, so tile creation is only forced where the old block really supplies one.",
     "LegacyTiles.create returns null for technical blocks that expose no tile instead of throwing, and block drops only read inventories when an old tile exists.",
-    "The content smoke probe only requires mapped drops for blocks whose original drop methods actually return an item."
+    "The content smoke probe only requires mapped drops for blocks whose original drop methods actually return an item.",
+    "Block items now resolve their icon from the linked block's getIcon(side, metadata); ItemBlock.getIconFromDamage ignores metadata and previously made every variant share the metadata-0 texture (for example all custom ores showed cinnabar).",
+    "Block inventory models are chosen from the original render type: cube-like blocks (ores, logs, fluids, devices) render as cubes with their per-face textures, while crosses, crops, doors, fibres and candles stay flat sprites.",
+    "The content smoke world deadline was raised to ten minutes and failures are written to the smoke report so the acceptance script can detect them reliably."
   ],
   "remaining": [
     "Modern registration covers blocks/items and simple or tile-backed placement; Thaumcraft's wands, alchemy, vis network, research and custom rendering are not functional yet.",

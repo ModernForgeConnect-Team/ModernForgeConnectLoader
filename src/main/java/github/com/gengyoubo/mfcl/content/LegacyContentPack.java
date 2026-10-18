@@ -56,8 +56,10 @@ public final class LegacyContentPack {
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
     }
     private Map<String, Object> itemModel(LegacyContent.Item item, LegacyContent.Variant variant) throws Exception {
-        if (item.blockKey() != null && content.blocks().stream().anyMatch(b -> b.key().equals(item.blockKey()) && ModernContentBridge.canPlace(b))) {
-            var id = ModernContentBridge.id(item.blockKey());
+        var block = item.blockKey() == null ? null : content.blocks().stream()
+                .filter(b -> b.key().equals(item.blockKey())).findFirst().orElse(null);
+        if (block != null && block.blockModel()) {
+            var id = ModernContentBridge.id(block.key());
             return new LinkedHashMap<>(Map.of("parent", id.getNamespace() + ":block/" + id.getPath() + "_" + (variant.metadata() & 15)));
         }
         return new LinkedHashMap<>(Map.of("parent", "minecraft:item/generated", "textures", Map.of("layer0", texture(variant.icon(), "items"))));

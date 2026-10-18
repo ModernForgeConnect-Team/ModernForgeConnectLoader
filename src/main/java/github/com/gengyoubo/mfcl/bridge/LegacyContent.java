@@ -9,6 +9,8 @@ public final class LegacyContent {
     public record Item(String key, String blockKey, int stackLimit, int maxDamage, boolean creative, List<Variant> variants) {
         public Item { variants = List.copyOf(variants); }
     }
+    /** Render types whose inventory form is a flat sprite rather than a cube: crosses, crops, doors, stems, vines and candles. */
+    private static final Set<Integer> FLAT_RENDER_TYPES = Set.of(1, 6, 7, 19, 20, 31, 50, 55);
     public record Block(String key, float hardness, float resistance, int light, boolean opaque,
                         boolean tileEntity, int renderType, List<List<String>> faces, List<Integer> tileMetas) {
         public Block {
@@ -17,6 +19,8 @@ public final class LegacyContent {
         }
         public boolean simple() { return renderType == 0 && !tileEntity; }
         public boolean hasTile(int metadata) { return tileMetas.contains(metadata); }
+        /** Whether the original inventory model is a block cube instead of a flat sprite. */
+        public boolean blockModel() { return renderType == 0 || !FLAT_RENDER_TYPES.contains(renderType); }
     }
     private final LegacyClientData data;
     private final List<Item> items;
@@ -87,7 +91,15 @@ public final class LegacyContent {
                 String name; String texture; int color;
                 try {
                     name = (String) itemType.getMethod("func_77667_c", stackType).invoke(item, stack);
-                    Object icon = itemType.getMethod("getIcon", stackType, int.class).invoke(item, stack, 0);
+                    // ItemBlock's icon methods ignore metadata, so block items resolve the real block icon for
+                    // this metadata; ordinary items keep their stack-specific icon and only fall back to damage.
+                    Object block = linkedBlock == null ? null : oldBlocks.get(linkedBlock);
+                    Object icon;
+                    if (block != null) icon = blockType.getMethod("func_149691_a", int.class, int.class).invoke(block, 2, meta);
+                    else {
+                        icon = itemType.getMethod("getIcon", stackType, int.class).invoke(item, stack, 0);
+                        if (icon == null) icon = itemType.getMethod("func_77617_a", int.class).invoke(item, meta);
+                    }
                     texture = icon == null ? "" : (String) iconType.getMethod("func_94215_i").invoke(icon);
                     color = (int) itemType.getMethod("func_82790_a", stackType, int.class).invoke(item, stack, 0);
                     limit = Math.min(limit, (int) itemType.getMethod("getItemStackLimit", stackType).invoke(item, stack));

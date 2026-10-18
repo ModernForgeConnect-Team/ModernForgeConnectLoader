@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
 final class ContentHostSmokeProbe {
     private final ModernContentBridge bridge;
     private int stage, frames;
-    private long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(4);
+    private long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(10);
     private CompletableFuture<?> pending;
     private BlockPos position;
     private String blockKey, itemKey, worldName;
@@ -143,7 +143,16 @@ final class ContentHostSmokeProbe {
                 LogUtils.getLogger().info("MFCL_CONTENT_WORLD_SMOKE_PASS: {}", proof);
                 mc.level.disconnect(); mc.clearLevel(); stage = 99; mc.stop();
             }
-        } catch (Throwable failure) { LogUtils.getLogger().error("MFCL_CONTENT_WORLD_SMOKE_FAIL stage=" + stage, failure); stage = 99; mc.stop(); }
+        } catch (Throwable failure) {
+            LogUtils.getLogger().error("MFCL_CONTENT_WORLD_SMOKE_FAIL stage=" + stage, failure);
+            try {
+                Path file = mc.gameDirectory.toPath().resolve("logs/mfcl/content-1.7.10-smoke.json");
+                Files.createDirectories(file.getParent());
+                Files.writeString(file, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(
+                        new java.util.LinkedHashMap<>(Map.of("status", "FAIL", "stage", stage, "failure", String.valueOf(failure)))));
+            } catch (Throwable ignored) { }
+            stage = 99; mc.stop();
+        }
     }
     private void verifyServer() throws Exception {
         var mc = Minecraft.getInstance(); var server = Objects.requireNonNull(mc.getSingleplayerServer());

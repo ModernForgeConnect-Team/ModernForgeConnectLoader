@@ -58,6 +58,6 @@ if ($RunChecks) {
     } finally { $env:JAVA_HOME = $previousJavaHome; $ErrorActionPreference = $previousPreference; Pop-Location }
     if ($exitCode -ne 0) { throw "Thaumcraft checks failed: $exitCode" }
     if (!(Test-Path -LiteralPath $report)) { throw "Content smoke report missing: $report" }
-    if ((Get-Content -LiteralPath $report -Raw | ConvertFrom-Json).status -ne 'PASS') { throw "Content smoke did not pass: $report" }
+    if ((Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json).status -ne 'PASS') { throw "Content smoke did not pass: $report" }
     Write-Output 'Verified MFCL_CONTENT_WORLD_SMOKE_PASS'
 }
