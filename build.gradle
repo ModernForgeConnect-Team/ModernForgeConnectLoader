@@ -73,6 +73,9 @@ minecraft {
             // You can set various levels here.
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
             property 'forge.logging.console.level', 'debug'
+            if (project.hasProperty('mfclHostSmokeTest')) {
+                property 'mfcl.test.exitAtTitleScreen', 'true'
+            }
 
             mods {
                 "${mod_id}" {

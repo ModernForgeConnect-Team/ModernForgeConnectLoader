@@ -2,6 +2,9 @@ package github.com.gengyoubo.mfcl;
 
 import com.mojang.logging.LogUtils;
 import github.com.gengyoubo.mfcl.legacy.LegacyRuntimeService;
+import github.com.gengyoubo.mfcl.client.HostSmokeProbe;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
@@ -19,6 +22,9 @@ public final class ModernForgeConnectLoader {
         for (var diagnostic : result.diagnostics()) {
             if (diagnostic.error()) LOGGER.error("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
             else LOGGER.warn("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
+        }
+        if (Boolean.getBoolean("mfcl.test.exitAtTitleScreen")) {
+            DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> HostSmokeProbe::install);
         }
     }
 }

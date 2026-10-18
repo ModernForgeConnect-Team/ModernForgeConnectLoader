@@ -67,6 +67,7 @@ public final class LegacyCoremodProbe {
                 sideField.set(null, side.getField("CLIENT").get(null));
 
                 Class<?> pluginType = legacy.loadClass(selected.corePlugin());
+                if (pluginType.getClassLoader() != legacy) throw new IllegalStateException("Core plugin escaped the legacy domain");
                 Object plugin = pluginType.getDeclaredConstructor().newInstance();
                 Map<String, Object> data = new HashMap<>();
                 data.put("coremodLocation", Path.of(selected.file()).toFile());
@@ -79,7 +80,7 @@ public final class LegacyCoremodProbe {
                 String setup = (String) pluginType.getMethod("getSetupClass").invoke(plugin);
                 if (setup != null && !setup.isBlank()) {
                     Class<?> setupType = legacy.loadClass(setup);
-                    Object setupInstance = setupType.equals(pluginType) ? plugin : setupType.getDeclaredConstructor().newInstance();
+                    Object setupInstance = setupType.getDeclaredConstructor().newInstance();
                     setupType.getMethod("injectData", Map.class).invoke(setupInstance, data);
                     setupType.getMethod("call").invoke(setupInstance);
                 }
@@ -99,6 +100,12 @@ public final class LegacyCoremodProbe {
 
     public static void main(String[] args) throws Exception {
         if (args.length != 3) throw new IllegalArgumentException("Usage: LegacyCoremodProbe <game-dir> <runtime-support-dir> <legacy-mod-id>");
+        // This entry point always runs in its own diagnostic JVM. Do not mutate these properties in an embedded host.
+        System.setProperty("Log4jContextSelector", "org.apache.logging.log4j.core.selector.BasicContextSelector");
+        System.setProperty("log4j2.contextSelector", "org.apache.logging.log4j.core.selector.BasicContextSelector");
+        URL logConfig = LegacyCoremodProbe.class.getResource("/mfcl/legacy-probe-log4j2.xml");
+        if (logConfig == null) throw new IllegalStateException("Missing isolated probe logging configuration");
+        System.setProperty("log4j.configurationFile", logConfig.toExternalForm());
         var result = new LegacyCoremodProbe().probe(Path.of(args[0]), Path.of(args[1]), args[2]);
         System.out.println("MFCL_COREMOD_RESULT=" + new com.google.gson.Gson().toJson(result));
     }
