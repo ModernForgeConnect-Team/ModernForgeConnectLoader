@@ -205,6 +205,20 @@ public final class GenericSemanticsProbe {
             hovering.invoke(tooltipScreen,List.of("Original item details"),12,34);
             if(!capture.hasTooltip()||capture.commands().stream().noneMatch(command->command instanceof LegacyGuiGraphics.Text text&&text.text().equals("Original item details")))
                 throw new AssertionError("Original tooltip replacement was not captured");
+            gl.getMethod("glPushMatrix").invoke(null);gl.getMethod("glTranslatef",float.class,float.class,float.class).invoke(null,10f,20f,0f);
+            gl.getMethod("glBegin",int.class).invoke(null,7);
+            for(double[] vertex:new double[][]{{0,0},{0,4},{4,4},{4,0}})gl.getMethod("glVertex3d",double.class,double.class,double.class).invoke(null,vertex[0],vertex[1],0d);
+            gl.getMethod("glEnd").invoke(null);gl.getMethod("glPopMatrix").invoke(null);
+            font.getClass().getMethod("func_78276_b",String.class,int.class,int.class,int.class).invoke(font,"after mesh",0,0,0xffffff);
+            var drawing=capture.commands();int meshIndex=-1;
+            for(int index=0;index<drawing.size();index++)if(drawing.get(index) instanceof LegacyGuiGraphics.Mesh)meshIndex=index;
+            if(meshIndex<0||!(drawing.get(meshIndex+1) instanceof LegacyGuiGraphics.Text))throw new AssertionError("Mixed old GUI geometry/text order was lost");
+            var vertex=((LegacyGuiGraphics.Mesh)drawing.get(meshIndex)).primitives().get(0).vertices().get(0);
+            if(vertex.x()!=10||vertex.y()!=20)throw new AssertionError("Old GUI geometry lost its matrix transform");
+            int beforeSplit=capture.commands().size();
+            font.getClass().getMethod("func_78279_b",String.class,int.class,int.class,int.class,int.class).invoke(font,"A long original tooltip must wrap without native glyph rendering",3,7,65,0xffffff);
+            if(capture.commands().size()-beforeSplit<2||capture.commands().subList(beforeSplit,capture.commands().size()).stream().anyMatch(command->!(command instanceof LegacyGuiGraphics.Text)))
+                throw new AssertionError("Original wrapped font rendering escaped the GUI text boundary");
             try{gl.getMethod("glClear",int.class).invoke(null,0);throw new AssertionError("Unsupported native draw operation was silently accepted");}
             catch(InvocationTargetException expected){if(!(expected.getCause() instanceof UnsupportedOperationException))throw expected;}
         }

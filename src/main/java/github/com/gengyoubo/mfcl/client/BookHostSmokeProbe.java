@@ -25,6 +25,8 @@ final class BookHostSmokeProbe {
         try {
             if(System.nanoTime()>deadline)throw new IllegalStateException("Book acceptance timed out at stage "+stage);
             if(stage==0&&mc.screen instanceof TitleScreen&&mc.getOverlay()==null) {
+                org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());
+                mc.options.languageCode="zh_cn";
                 mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(2);stage=1;
                 mc.createWorldOpenFlows().createFreshLevel("mfcl-book-smoke-"+System.currentTimeMillis(),new LevelSettings("MFCL original book",GameType.CREATIVE,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),
                     new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
@@ -37,7 +39,7 @@ final class BookHostSmokeProbe {
                 pending.join();mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);stage=3;frames=0;
             } else if(stage==3&&mc.screen!=null&&++frames>25) {
                 Object old=ClientContainerBridge.active().legacyScreen(mc.screen);
-                if(!old.getClass().getName().equals("thaumcraft.client.gui.GuiResearchBrowser"))throw new IllegalStateException("Right click did not open original research browser");
+                if(!old.getClass().getName().equals("thaumcraft.client.gui.GuiResearchBrowser"))throw new IllegalStateException("Right click opened "+old.getClass().getName());
                 var commands=ClientContainerBridge.active().commands(mc.screen);
                 if(commands.stream().noneMatch(LegacyGuiGraphics.Texture.class::isInstance))throw new IllegalStateException("Research background was not drawn");
                 var completed=(Map<?,?>)old.getClass().getField("completedResearch").get(null);
@@ -46,6 +48,7 @@ final class BookHostSmokeProbe {
                 String name=(String)bridge.services().loader().loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class).invoke(null,"tc.research_name.ORE");
                 if(name.equals("tc.research_name.ORE"))throw new IllegalStateException("Original research language was not loaded");
                 proof.put("localizedResearchName",name);
+                hoverEntries(mc,old);
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-thaumonomicon.png",mc.getMainRenderTarget(),message->{});
                 openEntry(mc,old,(List<?>)completed.get(mc.player.getName().getString()));stage=10;frames=0;
             } else if(stage==10&&++frames>10) {
@@ -83,6 +86,23 @@ final class BookHostSmokeProbe {
             mc.screen.mouseClicked(x,y,0);mc.screen.mouseReleased(x,y,0);proof.put("openedResearchKey",key);return;
         }
         throw new IllegalStateException("No visible original initial research entry was unlocked");
+    }
+    private void hoverEntries(Minecraft mc,Object old) throws Exception {
+        var researchField=old.getClass().getDeclaredField("research");researchField.setAccessible(true);
+        int mapX=Math.max(number(old,"guiMapTop"),Math.min(number(old,"field_74117_m"),number(old,"guiMapBottom")-1));
+        int mapY=Math.max(number(old,"guiMapLeft"),Math.min(number(old,"field_74115_n"),number(old,"guiMapRight")-1)),count=0;
+        for(Object research:(Iterable<?>)researchField.get(old)) {
+            int x=research.getClass().getField("displayColumn").getInt(research)*24-mapX;
+            int y=research.getClass().getField("displayRow").getInt(research)*24-mapY;
+            if(x<0||x>210||y<0||y>180||(boolean)research.getClass().getMethod("isVirtual").invoke(research))continue;
+            x+=(mc.screen.width-256)/2+27;y+=(mc.screen.height-230)/2+28;
+            var graphics=new net.minecraft.client.gui.GuiGraphics(mc,mc.renderBuffers().bufferSource());
+            net.minecraftforge.client.ForgeHooksClient.drawScreen(mc.screen,graphics,x,y,0);graphics.flush();
+            var commands=ClientContainerBridge.active().commands(mc.screen);
+            if(commands.stream().anyMatch(command->command instanceof LegacyGuiGraphics.Text text&&text.text().contains("tc.research")))throw new IllegalStateException("Research hover contains untranslated language keys");
+            count++;
+        }
+        if(count==0)throw new IllegalStateException("No original research hover was checked");proof.put("originalResearchHoversChecked",count);
     }
     private int number(Object old,String name) throws Exception {
         var field=old.getClass().getDeclaredField(name);field.setAccessible(true);return (int)Math.floor(((Number)field.get(old)).doubleValue());

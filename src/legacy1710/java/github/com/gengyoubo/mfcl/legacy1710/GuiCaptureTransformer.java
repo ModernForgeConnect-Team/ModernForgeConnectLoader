@@ -70,8 +70,8 @@ public final class GuiCaptureTransformer implements IClassTransformer {
             else if (name.endsWith(".SoundHandler") && m.name.equals("func_147682_a")) { code.add(new VarInsnNode(Opcodes.ALOAD,1));target="sound";descriptor="(Ljava/lang/Object;)V"; }
             else if (name.endsWith(".Gui") && m.name.equals("func_73733_a")) { load(code,Opcodes.ILOAD,1,6); target="gradient"; descriptor="(IIIIII)V"; }
             else if (name.endsWith(".Gui") && m.name.equals("func_73729_b")) { load(code,Opcodes.ILOAD,1,6); target="texture"; descriptor="(IIIIII)V"; }
-            else if (name.endsWith("FontRenderer") && m.name.equals("func_85187_a")) {
-                code.add(new VarInsnNode(Opcodes.ALOAD,1)); load(code,Opcodes.ILOAD,2,4); target="text"; descriptor="(Ljava/lang/String;IIIZ)I"; ret=Opcodes.IRETURN;
+            else if (name.endsWith("FontRenderer") && (m.name.equals("func_85187_a")||m.name.equals("func_78258_a"))) {
+                code.add(new VarInsnNode(Opcodes.ALOAD,0));code.add(new VarInsnNode(Opcodes.ALOAD,1)); load(code,Opcodes.ILOAD,2,4); target="fontText"; descriptor="(Ljava/lang/Object;Ljava/lang/String;IIIZ)I"; ret=Opcodes.IRETURN;
             } else if (name.endsWith("TextureManager") && m.name.equals("func_110577_a")) { code.add(new VarInsnNode(Opcodes.ALOAD,1)); target="bind"; descriptor="(Ljava/lang/Object;)V"; }
             else if (name.endsWith("RenderItem") && (m.name.equals("func_82406_b") || m.name.equals("func_77015_a"))) {
                 code.add(new VarInsnNode(Opcodes.ALOAD,3)); load(code,Opcodes.ILOAD,4,2); code.add(new InsnNode(Opcodes.ICONST_0)); code.add(new InsnNode(Opcodes.ACONST_NULL));

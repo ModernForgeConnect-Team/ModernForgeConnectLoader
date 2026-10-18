@@ -21,6 +21,8 @@ final class RuntimeLogicSemanticsProbe {
         });
         try {
             if (!loader.loadClass("net.minecraft.world.WorldServer").isInstance(world)) throw new AssertionError("Server logic received a client-only world type");
+            Object actor=services.tiles().actor(world,new LegacyTiles.Placer(new UUID(1,2),"ServerActor",0,64,0,0,0),null);
+            if(!loader.loadClass("net.minecraft.entity.player.EntityPlayerMP").isInstance(actor))throw new AssertionError("Server item callbacks received a client player type");
             var oldWorld = loader.loadClass("net.minecraft.world.World"); var oldTile = loader.loadClass("net.minecraft.tileentity.TileEntity");
             var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String name = "mfcl/fixture/LogicTile";

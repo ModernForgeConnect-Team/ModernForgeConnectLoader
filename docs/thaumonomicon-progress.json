@@ -1,0 +1,28 @@
+{
+  "validatedAt": "2026-10-19T02:13:50+09:00",
+  "minecraft": "1.20.1",
+  "forge": "47.4.28",
+  "thaumcraft": "4.2.3.5",
+  "junit": {
+    "tests": 53,
+    "skipped": 4,
+    "failures": 0,
+    "errors": 0
+  },
+  "acceptance": {
+    "nativeRightClickOpenedOriginalBook": true,
+    "registeredResearchPacketDelivered": true,
+    "capturedCommands": 26,
+    "localizedResearchName": "矿石",
+    "originalResearchHoversChecked": 4,
+    "openedResearchKey": "ENCHANT",
+    "originalResearchEntryOpened": true,
+    "originalCategoryNavigation": true,
+    "originalCloseKey": true,
+    "status": "PASS"
+  },
+  "artifact": {
+    "path": "build/libs/mfcl-0.1.0.jar",
+    "sha256": "c4440c98da03e303b32273ca9b4588a4c1983dd06298a06f29c178c47073b0ba"
+  }
+}
