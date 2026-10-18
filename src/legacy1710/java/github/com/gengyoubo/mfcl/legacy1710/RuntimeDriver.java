@@ -1,0 +1,118 @@
+package github.com.gengyoubo.mfcl.legacy1710;
+
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.IFMLSidedHandler;
+import cpw.mods.fml.relauncher.*;
+import github.com.gengyoubo.mfcl.legacy1710.boot.LegacyLaunchLoader;
+import net.minecraft.launchwrapper.*;
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.jar.*;
+
+/** Runs in the legacy domain. No modern Minecraft or Forge type appears in this boundary. */
+public final class RuntimeDriver {
+    public Map<String, Object> boot(File gameDir, File forgeJar, List<File> mods) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        List<String> completed = new ArrayList<String>(); result.put("completed", completed);
+        String stage = "COREMODS";
+        try {
+            final LaunchClassLoader loader = Launch.classLoader;
+            Class<?> remapper = loader.loadClass("cpw.mods.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper");
+            Object mapper = remapper.getField("INSTANCE").get(null);
+            for (String map : Arrays.asList("rawFieldMaps", "rawMethodMaps", "fieldNameMaps", "methodNameMaps")) {
+                Field field = remapper.getDeclaredField(map); field.setAccessible(true); field.set(mapper, new HashMap<Object, Object>());
+            }
+            // CoreModManager is the actual 1614 implementation, including annotation exclusions, ordering and wrappers.
+            set(CoreModManager.class, "mcDir", gameDir);
+            set(CoreModManager.class, "deobfuscatedEnvironment", true);
+            set(CoreModManager.class, "loadPlugins", new ArrayList<Object>());
+            Method load = CoreModManager.class.getDeclaredMethod("loadCoreMod", LaunchClassLoader.class, String.class, File.class);
+            load.setAccessible(true);
+            for (String plugin : Arrays.asList("cpw.mods.fml.relauncher.FMLCorePlugin", "net.minecraftforge.classloading.FMLForgePlugin")) {
+                if (load.invoke(null, loader, plugin, forgeJar) == null) throw new IllegalStateException("Missing root plugin " + plugin);
+            }
+            Class<?> outerAT = CoreModManager.class.getClassLoader().loadClass("cpw.mods.fml.common.asm.transformers.ModAccessTransformer");
+            for (File mod : mods) {
+                try (JarFile jar = new JarFile(mod)) {
+                    outerAT.getMethod("addJar", JarFile.class).invoke(null, jar);
+                    Manifest manifest = jar.getManifest();
+                    String plugin = manifest == null ? null : manifest.getMainAttributes().getValue("FMLCorePlugin");
+                    if (plugin != null && load.invoke(null, loader, plugin, mod) == null) throw new IllegalStateException("Failed core plugin " + plugin);
+                }
+            }
+            Method sort = CoreModManager.class.getDeclaredMethod("sortCoreMods"); sort.setAccessible(true); sort.invoke(null);
+            Field pluginsField = CoreModManager.class.getDeclaredField("loadPlugins"); pluginsField.setAccessible(true);
+            @SuppressWarnings("unchecked") List<ITweaker> plugins = (List<ITweaker>) pluginsField.get(null);
+            // Skip only the root sanity hook (certificate/launcher checks). Its actual containers and transformers remain.
+            FMLInjectionData.containers.add("cpw.mods.fml.common.FMLContainer");
+            FMLInjectionData.containers.add("net.minecraftforge.common.ForgeModContainer");
+            Class<?> checker = loader.loadClass("cpw.mods.fml.common.asm.FMLSanityChecker"); set(checker, "fmlLocation", forgeJar);
+            Class<?> forgePlugin = loader.loadClass("net.minecraftforge.classloading.FMLForgePlugin"); set(forgePlugin, "forgeLocation", forgeJar);
+            set(forgePlugin, "RUNTIME_DEOBF", false);
+            for (ITweaker wrapper : plugins) {
+                Field name = wrapper.getClass().getDeclaredField("name"); name.setAccessible(true);
+                String n = (String) name.get(wrapper);
+                if (n.equals("FMLCorePlugin") || n.equals("FMLForgePlugin")) continue;
+                wrapper.injectIntoClassLoader(loader);
+            }
+            for (String transformer : Arrays.asList(
+                    "cpw.mods.fml.common.asm.transformers.MarkerTransformer",
+                    "cpw.mods.fml.common.asm.transformers.SideTransformer",
+                    "cpw.mods.fml.common.asm.transformers.EventSubscriptionTransformer",
+                    "cpw.mods.fml.common.asm.transformers.AccessTransformer",
+                    "net.minecraftforge.transformers.ForgeAccessTransformer",
+                    "cpw.mods.fml.common.asm.transformers.ModAccessTransformer",
+                    "cpw.mods.fml.common.asm.transformers.ItemStackTransformer")) loader.registerTransformer(transformer);
+            loader.registerTransformer("net.minecraftforge.classloading.FluidIdTransformer");
+            Field ats = CoreModManager.class.getDeclaredField("accessTransformers"); ats.setAccessible(true);
+            for (Object transformer : (List<?>) ats.get(null)) loader.registerTransformer((String) transformer);
+            completed.add(stage); stage = "VANILLA_BOOTSTRAP";
+            Loader.injectData(FMLInjectionData.data()); Loader.instance();
+            Class<?> bootstrap = loader.loadClass("net.minecraft.init.Bootstrap"); bootstrap.getMethod("func_151354_b").invoke(null);
+            completed.add(stage); stage = "FORGE_INITIALIZATION";
+            IFMLSidedHandler sided = (IFMLSidedHandler) Proxy.newProxyInstance(loader, new Class<?>[]{IFMLSidedHandler.class},
+                    new InvocationHandler() {
+                        @Override public Object invoke(Object proxy, Method method, Object[] args) {
+                            String n = method.getName();
+                            if (n.equals("getSide")) return Side.CLIENT;
+                            if (n.equals("stripSpecialChars")) return ((String) args[0]).replaceAll("(?i)\u00a7[0-9A-FK-OR]", "");
+                            if (n.equals("getAdditionalBrandingInformation")) return Collections.emptyList();
+                            if (n.equals("toString")) return "MFCL embedded client sided handler";
+                            if (method.getReturnType() == void.class && (n.equals("haltGame") || n.equals("displayMissingMods")))
+                                throw new IllegalStateException("Legacy sided handler failure: " + Arrays.toString(args));
+                            if (method.getReturnType() == void.class) return null;
+                            if (method.getReturnType() == boolean.class) return false;
+                            throw new UnsupportedOperationException("Legacy client service is not connected: " + method);
+                        }
+                    });
+            FMLCommonHandler.instance().beginLoading(sided);
+            completed.add(stage); stage = "CONSTRUCTING";
+            Loader.instance().loadMods(); completed.add(stage); stage = "PREINITIALIZATION";
+            Loader.instance().preinitializeMods(); completed.add(stage); stage = "INITIALIZATION_POSTINITIALIZATION";
+            Loader.instance().initializeMods(); completed.add(stage);
+            LegacyRegistrationSeal.seal(); result.put("registrationSealed", true);
+            List<String> modIds = new ArrayList<String>();
+            for (cpw.mods.fml.common.ModContainer mod : Loader.instance().getActiveModList()) modIds.add(mod.getModId());
+            result.put("loadedMods", modIds);
+            if (modIds.contains("NotEnoughItems")) {
+                Field instance = loader.loadClass("codechicken.nei.ClientHandler").getDeclaredField("instance"); instance.setAccessible(true);
+                result.put("neiClientHandlerLoaded", instance.get(null) != null);
+            }
+            result.put("legacyFmlStarted", true);
+            result.put("stage", "AVAILABLE");
+        } catch (Throwable failure) {
+            while (failure instanceof InvocationTargetException && failure.getCause() != null) failure = failure.getCause();
+            result.put("stage", stage); result.put("legacyFmlStarted", false);
+            result.put("failure", failure.toString());
+            StringWriter trace = new StringWriter(); failure.printStackTrace(new PrintWriter(trace)); result.put("stackTrace", trace.toString());
+        }
+        result.put("legacyClientReady", false);
+        result.put("transformations", ((LegacyLaunchLoader) Launch.classLoader).transformationAudit());
+        return result;
+    }
+    private static void set(Class<?> owner, String name, Object value) throws Exception {
+        Field field = owner.getDeclaredField(name); field.setAccessible(true); field.set(null, value);
+    }
+}
