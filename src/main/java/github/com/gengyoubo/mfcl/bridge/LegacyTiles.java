@@ -66,6 +66,9 @@ public final class LegacyTiles {
         Class<?> actorType = loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP");
         Field field = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); field.setAccessible(true); Object unsafe = field.get(null);
         Object actor = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, actorType);
+        Object movement = loader.loadClass("net.minecraft.util.MovementInput").getConstructor().newInstance();
+        movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
+        actorType.getField("field_71158_b").set(actor,movement);
         Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
         var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);
         profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));

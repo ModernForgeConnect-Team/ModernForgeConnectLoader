@@ -36,14 +36,18 @@ final class LogicHostSmokeProbe {
         try {
             if (System.nanoTime() > deadline) throw new IllegalStateException("Logic acceptance timed out at stage " + stage);
             if (stage == 0 && mc.screen instanceof TitleScreen && mc.getOverlay() == null) {
-                worldName = "mfcl-logic-smoke-"+System.currentTimeMillis(); mc.options.renderDistance().set(2);
+                worldName = "mfcl-logic-smoke-"+System.currentTimeMillis(); mc.options.renderDistance().set(2); mc.options.pauseOnLostFocus = false;
                 stage = 1;
                 mc.createWorldOpenFlows().createFreshLevel(worldName,new LevelSettings("MFCL original logic",GameType.CREATIVE,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),
                         new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access -> access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
                                 .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
             } else if (stage == 1 && mc.player != null && mc.level != null && mc.screen == null) {
                 pending = server(mc,() -> { setup(mc); return true; }); stage = 2;
+                mc.setScreen(new net.minecraft.client.gui.screens.Screen(net.minecraft.network.chat.Component.literal("MFCL logic acceptance")) {
+                    @Override public boolean isPauseScreen() { return false; }
+                });
             } else if (stage == 2 && pending.isDone()) {
+                if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) mc.setScreen(null);
                 pending.join();
                 pending = server(mc,() -> {
                     var level = mc.getSingleplayerServer().overworld();
@@ -97,6 +101,9 @@ final class LogicHostSmokeProbe {
         var unsided = furnaceTile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).orElseThrow(IllegalStateException::new);
         if (!unsided.insertItem(1,new ItemStack(Items.COAL),true).isEmpty() || !unsided.getStackInSlot(1).isEmpty()) throw new IllegalStateException("Simulated insert mutated the original inventory");
         if (!unsided.insertItem(1,new ItemStack(Items.COAL),false).isEmpty()) throw new IllegalStateException("Original furnace rejected native fuel");
+        if (!level.getBlockState(furnace).hasAnalogOutputSignal() || level.getBlockState(furnace).getAnalogOutputSignal(level,furnace) <= 0)
+            throw new IllegalStateException("Original inventory comparator output was not exposed to native redstone");
+        proof.put("originalComparatorOutput",true);
         var denied = furnaceTile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER,Direction.UP).orElseThrow(IllegalStateException::new);
         if (denied.getSlots() != 0) throw new IllegalStateException("Original furnace top-side restriction changed");
         level.setBlockAndUpdate(furnace.west(),Blocks.HOPPER.defaultBlockState().setValue(HopperBlock.FACING,Direction.EAST));
@@ -133,7 +140,9 @@ final class LogicHostSmokeProbe {
         var positions = List.of(furnace,alembic,tube,jar,valve,crucible);
         for (var pos : positions) {
             var tile = (LegacyBlockEntity)level.getBlockEntity(pos);
-            if (tile == null || tile.logicSuspended() || !reloaded && tile.successfulTicks() < 200) throw new IllegalStateException("Original tile did not keep ticking: "+pos);
+            if (tile == null || tile.logicSuspended()) throw new IllegalStateException("Original tile logic is missing or suspended: "+pos);
+            boolean active = (boolean)bridge.services().loader().loadClass("net.minecraft.tileentity.TileEntity").getMethod("canUpdate").invoke(tile.legacy());
+            if (!reloaded && active && tile.successfulTicks() < 200 || !active && tile.successfulTicks() != 0) throw new IllegalStateException("Original canUpdate/tick lifecycle was not respected: "+pos);
         }
         var filled = ((LegacyBlockEntity)level.getBlockEntity(jar)).legacy(); int amount = filled.getClass().getField("amount").getInt(filled);
         if (amount != 3) throw new IllegalStateException("Furnace/alembic/tube/jar chain lost or duplicated essentia: " + amount);

@@ -1,0 +1,44 @@
+{
+  "validatedAt": "2026-10-19T01:42:54+09:00",
+  "minecraft": "1.20.1",
+  "forge": "47.4.28",
+  "java": "17.0.18",
+  "junit": {
+    "tests": 53,
+    "skipped": 4,
+    "failures": 0,
+    "errors": 0
+  },
+  "originalMods": [
+    {
+      "name": "Baubles-1.7.10-1.0.1.10.jar",
+      "sha256": "05ae8f11b8f9012ebebbf179227b010829739c6284e30da5dd3db220ee682f8a"
+    },
+    {
+      "name": "Thaumcraft-1.7.10-4.2.3.5.jar",
+      "sha256": "3dba9786966974701578a658d1bb369bf35bdf5f363079f5ac9c4910a39113be"
+    }
+  ],
+  "runtimeAcceptance": {
+    "originalComparatorOutput": true,
+    "simulatedInventoryInsert": true,
+    "originalInventorySideRules": true,
+    "originalValveActivation": true,
+    "crucibleBucketExchange": true,
+    "failedCallbackInventoryAndWorldRollback": true,
+    "nativeHopperToOriginalFurnace": true,
+    "originalSmeltingAndEssentiaTransfer": true,
+    "essentiaConserved": 3,
+    "nativeRedstoneToOriginalValve": true,
+    "originalCrucibleHeating": true,
+    "minimumSuccessfulTicks": 200,
+    "clientEssentiaAmount": 3,
+    "logicStateSurvivedReload": true,
+    "status": "PASS",
+    "world": "mfcl-logic-smoke-1792341741605"
+  },
+  "artifact": {
+    "path": "build/libs/mfcl-0.1.0.jar",
+    "sha256": "598468e62e2b8fb96b354a9567177a0e8537605b7dae6ea253b1b005b410c97f"
+  }
+}

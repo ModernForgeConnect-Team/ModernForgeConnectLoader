@@ -333,14 +333,31 @@ public final class ModernContentBridge {
     }
     private class MirroredBlock extends Block {
         private final LegacyContent.Block entry;
+        private final boolean powerSource, comparatorSource;
         MirroredBlock(LegacyContent.Block entry) {
             super(properties(entry)); this.entry = entry; registerDefaultState(stateDefinition.any().setValue(METADATA, 0));
+            try { powerSource = services.logic().providesPower(entry.key()); comparatorSource = services.logic().hasComparator(entry.key()); }
+            catch (Exception failure) { throw new IllegalStateException("Cannot read original redstone declarations",failure); }
+        }
+        @Override public boolean isSignalSource(BlockState state) { return powerSource; }
+        @Override public boolean hasAnalogOutputSignal(BlockState state) { return comparatorSource; }
+        @Override public int getAnalogOutputSignal(BlockState state, Level level, BlockPos pos) {
+            try { return services.logic().comparator(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ()); }
+            catch (Exception failure) { LogUtils.getLogger().error("MFCL original comparator query failed at {}",pos,failure); return 0; }
+        }
+        @Override public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) { return power(state,level,pos,side,false); }
+        @Override public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) { return power(state,level,pos,side,true); }
+        private int power(BlockState state, BlockGetter level, BlockPos pos, Direction side, boolean direct) {
+            if (!powerSource) return 0;
+            try { return services.logic().signal(entry.key(),renderView(level,pos,state),side.get3DDataValue(),direct); }
+            catch (Exception failure) { LogUtils.getLogger().error("MFCL original power query failed at {}",pos,failure); return 0; }
         }
         @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(METADATA); }
         @Override public InteractionResult use(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
             if (level.isClientSide) return InteractionResult.SUCCESS;
             try {
                 var pendingInventory = new ArrayList<ItemStack>();
+                var pendingMessages = new ArrayList<String>();
                 int selected = player.getInventory().selected;
                 var outcome = logicTransaction(level,pos,() -> {
                     var inventory = new ArrayList<LegacyClientData.Stack>();
@@ -350,6 +367,7 @@ public final class ModernContentBridge {
                     var actor = new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
                     var result = services.logic().activate(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),actor,inventory,selected,hit.getDirection().get3DDataValue(),(float)point.x,(float)point.y,(float)point.z);
                     pendingInventory.addAll(result.inventory().stream().map(ModernContentBridge.this::gameplayStack).toList());
+                    pendingMessages.addAll(result.messages());
                     return result.handled() ? InteractionResult.CONSUME : InteractionResult.PASS;
                 },true);
                 if (!pendingInventory.isEmpty()) {
@@ -365,6 +383,7 @@ public final class ModernContentBridge {
                     }
                     player.getInventory().setChanged(); player.inventoryMenu.broadcastChanges();
                 }
+                pendingMessages.forEach(message -> player.displayClientMessage(Component.literal(message),false));
                 return outcome;
             } catch (Exception failure) {
                 LogUtils.getLogger().error("MFCL original block interaction failed for {} at {}",entry.key(),pos,failure);
@@ -529,6 +548,7 @@ public final class ModernContentBridge {
         void commit(boolean immediate) {
             for (var pos : before.keySet()) if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.captureChanges(immediate);
             committed = true;
+            placement.remove();
             effects.forEach(Runnable::run);
         }
         @Override public void close() {

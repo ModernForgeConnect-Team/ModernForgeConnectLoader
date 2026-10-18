@@ -20,6 +20,7 @@ final class RuntimeLogicSemanticsProbe {
             public void schedule(int x,int y,int z,String block,int delay) { notifications.add("schedule:"+block+":"+delay); }
         });
         try {
+            if (!loader.loadClass("net.minecraft.world.WorldServer").isInstance(world)) throw new AssertionError("Server logic received a client-only world type");
             var oldWorld = loader.loadClass("net.minecraft.world.World"); var oldTile = loader.loadClass("net.minecraft.tileentity.TileEntity");
             var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String name = "mfcl/fixture/LogicTile";

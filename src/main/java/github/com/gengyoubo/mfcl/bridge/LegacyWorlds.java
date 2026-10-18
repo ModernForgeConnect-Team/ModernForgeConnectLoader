@@ -10,7 +10,7 @@ public final class LegacyWorlds implements AutoCloseable {
     private static final Map<Object, Binding> DISPATCH = Collections.synchronizedMap(new IdentityHashMap<>());
     private final Map<Object, Binding> worlds = new IdentityHashMap<>();
     private final ClassLoader loader;
-    private Class<?> facade;
+    private Class<?> clientFacade, serverFacade;
     private static final class Binding {
         final Object world; final HostWorldAccess host; final Thread owner; final ClassLoader loader;
         Binding(Object world, HostWorldAccess host, ClassLoader loader) { this.world = world; this.host = host; this.loader = loader; owner = Thread.currentThread(); }
@@ -26,7 +26,14 @@ public final class LegacyWorlds implements AutoCloseable {
         Binding existing = worlds.get(hostIdentity);
         if (existing != null) { existing.check(); return existing.world; }
         Objects.requireNonNull(host, "Host world access");
-        if (facade == null) facade = defineFacade();
+        Class<?> facade;
+        if (host.clientSide()) {
+            if (clientFacade == null) clientFacade = defineFacade(true);
+            facade = clientFacade;
+        } else {
+            if (serverFacade == null) serverFacade = defineFacade(false);
+            facade = serverFacade;
+        }
         Object world = allocate(facade);
         Class<?> providerType = loader.loadClass("net.minecraft.world.WorldProvider");
         Object provider = loader.loadClass("net.minecraft.world.WorldProviderSurface").getConstructor().newInstance();
@@ -143,10 +150,10 @@ public final class LegacyWorlds implements AutoCloseable {
         loader.loadClass("github.com.gengyoubo.mfcl.legacy1710.ModernEnumSupport").getMethod("setFailsafeFieldValue", Field.class, Object.class, Object.class)
                 .invoke(null, owner.getDeclaredField(name), target, value);
     }
-    private Class<?> defineFacade() throws Exception {
-        String name = "github/com/gengyoubo/mfcl/legacy1710/HostWorldFacade", bridge = Type.getInternalName(LegacyWorlds.class);
+    private Class<?> defineFacade(boolean client) throws Exception {
+        String name = "github/com/gengyoubo/mfcl/legacy1710/"+(client ? "HostWorldFacade" : "HostServerWorldFacade"), bridge = Type.getInternalName(LegacyWorlds.class);
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, name, null, "net/minecraft/client/multiplayer/WorldClient", null);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, name, null, client ? "net/minecraft/client/multiplayer/WorldClient" : "net/minecraft/world/WorldServer", null);
         for (String method : List.of("func_82737_E", "func_72820_D")) {
             var mv = writer.visitMethod(Opcodes.ACC_PUBLIC, method, "()J", null, null); mv.visitCode(); mv.visitVarInsn(Opcodes.ALOAD, 0);
             mv.visitInsn(method.equals("func_82737_E") ? Opcodes.ICONST_1 : Opcodes.ICONST_0);

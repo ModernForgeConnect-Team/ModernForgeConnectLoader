@@ -1,0 +1,47 @@
+# 原始设备逻辑桥接
+
+更新：2026-10-19。目标为宿主 Forge 1.20.1 / Java 17，首批实测对象为未经修改的 Thaumcraft 4.2.3.5 与 Baubles 1.0.1.10。
+
+## 当前接入
+
+- 宿主的 `BlockEntityTicker` 调度原始 `TileEntity.updateEntity`，遵守 `canUpdate` 和失效状态；服务端世界使用真正继承旧 `WorldServer` 的类型，客户端预览使用旧 `WorldClient` 类型。
+- 设备继续使用原来的类、库存、NBT、配方和相邻设备对象。桥接没有另写一套炼金或源质分配算法。
+- 原始 `onBlockActivated` 在服务器线程执行，携带玩家身份、朝向、潜行状态、选中槽和 40 格旧版库存。原方法返回 `false` 后发生的库存变化也会保留。聊天消息在回调成功提交后交给宿主玩家。
+- 原始 `IInventory` / `ISidedInventory` 暴露为现代 `IItemHandler`，沿用旧版槽位、插入/取出限制和堆叠上限；支持真实漏斗以及不修改库存的模拟操作。
+- 旧世界查询读取真实宿主红石和区块加载状态；强弱信号、比较器、方块事件与计划更新由原始方法和宿主调度衔接。
+- 写入事务记录被访问/修改的设备 NBT 与方块状态。失败时回滚；方块事件、比较器通知和计划更新在提交后分发。缺失接口会记录完整异常，并暂停该设备的自动更新。
+- 每次成功更新保留可保存快照；变化按最多每 5 个游戏 tick 合并同步，交互和库存操作立即同步。客户端不运行服务端机器逻辑。
+
+实现入口：`LegacyBlockLogic`、`LegacyInventoryAccess`、`LegacyInventoryHandler`、`LegacyBlockEntity`、`LevelWorldBridge` 和 `ModernContentBridge.logicTransaction`。
+
+## 实测方式
+
+通用 JUnit 回归含独立旧运行时探针，核对真正的旧类型、`updateEntity`/失效生命周期、红石查询、方块事件、计划更新与旧熔炉库存接口。
+
+2026-10-19 验证结果：JUnit 共 53 项，49 项通过、4 项因缺少外部样本跳过，失败为 0；`test assemble` 成功。真实图形客户端验收报告为 `PASS`，6 个设备完成运行链检查，具有更新逻辑的设备各运行至少 200 tick，不更新的设备保持 0 次调用。3 根木棍经原始配方生成的 3 点源质进入罐子，客户端同样读取到 3 点，退出并重新进入世界后状态仍正确。报告归档见 [runtime-logic-progress.json](runtime-logic-progress.json)。
+
+本次构建和客户端验收分别使用独立输出目录与 Gradle project cache，避免改写正在运行的开发客户端类文件。
+
+图形客户端验收使用独立游戏目录，只放入原始 Thaumcraft 与 Baubles，自动新建平坦世界：
+
+```powershell
+./gradlew.bat runClient `
+  '-PmfclRunDir=build/item-context-smoke/game' `
+  '-PlegacyRuntimeDir=run/mfcl/runtime/1.7.10' `
+  -PmfclLogicSmokeTest --console=plain
+```
+
+探针检查：现代漏斗送料、原始炼金炉处理、蒸馏器/管道/罐子源质守恒、阀门右键和红石控制、坩埚的水桶交换及熔岩加热、失败回调回滚、客户端同步、保存后重新进入世界。报告写入该目录的 `logs/mfcl/logic-1.7.10-smoke.json`；只有报告为 `PASS` 才表示整条验收链通过。
+
+正常启动不启用测试参数，不创建或接管玩家的世界。
+
+## 明确的后续缺口
+
+- 完整旧 Container/GUI 的服务端槽位协议尚未接入。原版要求打开界面的操作会明确失败并回滚，避免消耗物品后没有可用界面。
+- 尚未自动分发旧 FML 世界/玩家 tick、全部 Forge 游戏事件、完整旧网络、区块生成和旧实体 AI。
+- 旧服务器单例、区块提供器以及原生方块实体的旧类型表示仍不完整；依赖这些接口的设备可能暂停，包括尚未验收的钻机、节点和复杂设备。
+- 尚未运行全部旧客户端 tick 和粒子引擎；客户端动画、特效及设备专用包不代表已全部兼容。
+- 未注册现代流体能力。库存中的未知宿主物品、或尚无明确转换规则的原生 NBT，会拒绝交换，保留原物品。
+- 随机方块更新、生长、实体碰撞和部分邻居回调仍需逐项补齐。
+
+这份记录只说明当前运行链的覆盖范围，不把可放置、能渲染或某一设备的成功推广为全部旧模组功能可用。

@@ -11,11 +11,19 @@ public final class GuiCaptureTransformer implements IClassTransformer {
         if (bytes == null || !(name.equals("net.minecraft.client.gui.Gui") || name.equals("net.minecraft.client.gui.FontRenderer")
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
                 || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer") || name.equals("net.minecraft.entity.player.EntityPlayer")
+                || name.equals("net.minecraft.client.entity.EntityPlayerSP") || name.equals("net.minecraft.client.entity.EntityClientPlayerMP")
                 || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (m.name.equals("func_145747_a") && (m.access & Opcodes.ACC_ABSTRACT) == 0) {
+                InsnList chat = new InsnList(); LabelNode original = new LabelNode();
+                chat.add(new VarInsnNode(Opcodes.ALOAD,1));
+                chat.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","chat","(Ljava/lang/Object;)Z",false));
+                chat.add(new JumpInsnNode(Opcodes.IFEQ,original)); chat.add(new InsnNode(Opcodes.RETURN));
+                chat.add(original); chat.add(new FrameNode(Opcodes.F_SAME,0,null,0,null)); m.instructions.insert(chat); continue;
+            }
             if (name.endsWith(".EntityPlayer") && m.name.equals("openGui")) {
                 m.instructions.insert(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","requireGuiBridge","()V",false));
                 continue;
