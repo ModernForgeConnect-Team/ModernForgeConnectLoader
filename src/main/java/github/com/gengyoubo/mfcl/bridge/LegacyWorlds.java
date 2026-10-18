@@ -71,6 +71,30 @@ public final class LegacyWorlds implements AutoCloseable {
     public static void dirty(Object world, int x, int y, int z, Object tile) { binding(world).host.markTileDirty(x, y, z, tile); }
     public static void updated(Object world, int x, int y, int z) { binding(world).host.blockUpdated(x, y, z); }
     public static boolean air(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).legacyKey().equals("minecraft:air"); }
+    public static Object biome(Object world, int x, int z) {
+        var binding = binding(world);
+        try { return binding.loader.loadClass("net.minecraft.world.biome.BiomeGenBase").getField("field_76772_c").get(null); }
+        catch (Exception error) { throw new IllegalStateException(error); }
+    }
+    public static boolean canPlace(Object world, Object target, int x, int y, int z, boolean ignoreCollision, int side, Object entity, Object stack) {
+        var binding = binding(world);
+        try {
+            var type = binding.loader.loadClass("net.minecraft.block.Block");
+            Object registry = type.getField("field_149771_c").get(null);
+            String key = (String)registry.getClass().getMethod("func_148750_c",Object.class).invoke(registry,target);
+            Object existing = block(world,x,y,z);
+            return (boolean)type.getMethod("isReplaceable",binding.loader.loadClass("net.minecraft.world.IBlockAccess"),int.class,int.class,int.class).invoke(existing,world,x,y,z)
+                    && binding.host.canPlaceBlock(new HostWorldAccess.Block(key,0),x,y,z)
+                    && (boolean)type.getMethod("func_149707_d",binding.loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class,int.class).invoke(target,world,x,y,z,side);
+        } catch (Exception error) { throw new IllegalStateException("Cannot evaluate old placement conditions",error); }
+    }
+    public static boolean removeBlock(Object world, int x, int y, int z) { return binding(world).host.setBlock(x,y,z,new HostWorldAccess.Block("minecraft:air",0),3); }
+    public static boolean solid(Object world, int x, int y, int z, Object direction, boolean fallback) {
+        var binding = binding(world);
+        try { return (boolean)binding.loader.loadClass("net.minecraft.block.Block").getMethod("isSideSolid",binding.loader.loadClass("net.minecraft.world.IBlockAccess"),int.class,int.class,int.class,binding.loader.loadClass("net.minecraftforge.common.util.ForgeDirection"))
+                .invoke(block(world,x,y,z),world,x,y,z,direction); }
+        catch (Exception error) { throw new IllegalStateException(error); }
+    }
     public static boolean setBlock(Object world, int x, int y, int z, Object oldBlock, int metadata, int flags) {
         Binding binding = binding(world);
         try {
@@ -110,8 +134,26 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_147476_b", "(IIILnet/minecraft/tileentity/TileEntity;)V", "dirty", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);
         for (String method : List.of("func_147471_g", "func_147479_m")) forward(writer, bridge, method, "(III)V", "updated", "(Ljava/lang/Object;III)V", null);
         forward(writer, bridge, "func_147437_c", "(III)Z", "air", "(Ljava/lang/Object;III)Z", null);
+        forward(writer, bridge, "func_147468_f", "(III)Z", "removeBlock", "(Ljava/lang/Object;III)Z", null);
+        forward(writer, bridge, "func_147472_a", "(Lnet/minecraft/block/Block;IIIZILnet/minecraft/entity/Entity;Lnet/minecraft/item/ItemStack;)Z", "canPlace", "(Ljava/lang/Object;Ljava/lang/Object;IIIZILjava/lang/Object;Ljava/lang/Object;)Z", null);
+        forward(writer, bridge, "isSideSolid", "(IIILnet/minecraftforge/common/util/ForgeDirection;Z)Z", "solid", "(Ljava/lang/Object;IIILjava/lang/Object;Z)Z", null);
+        forward(writer, bridge, "func_72807_a", "(II)Lnet/minecraft/world/biome/BiomeGenBase;", "biome", "(Ljava/lang/Object;II)Ljava/lang/Object;", "net/minecraft/world/biome/BiomeGenBase");
+        constant(writer, "func_72802_i", "(IIII)I", 0x00F000F0);
+        constant(writer, "func_72800_K", "()I", 256);
+        constant(writer, "func_72806_N", "()Z", 0);
+        constant(writer, "func_72879_k", "(IIII)I", 0);
+        constant(writer, "func_72849_a", "(IIIZ)I", 15);
+        constant(writer, "func_72864_z", "(III)Z", 0);
+        constant(writer, "func_72899_e", "(III)Z", 1);
+        constant(writer, "func_72904_c", "(IIIIII)Z", 1);
+        var sound = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72908_a","(DDDLjava/lang/String;FF)V",null,null);
+        sound.visitCode(); sound.visitInsn(Opcodes.RETURN); sound.visitMaxs(0,10); sound.visitEnd();
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
+    }
+    private static void constant(ClassWriter writer, String name, String descriptor, int value) {
+        var mv = writer.visitMethod(Opcodes.ACC_PUBLIC, name, descriptor, null, null); mv.visitCode();
+        mv.visitLdcInsn(value); mv.visitInsn(Opcodes.IRETURN); mv.visitMaxs(1, 6); mv.visitEnd();
     }
     private static void forward(ClassWriter writer, String bridge, String method, String descriptor, String callback, String targetDescriptor, String cast) {
         var mv = writer.visitMethod(Opcodes.ACC_PUBLIC, method, descriptor, null, null); mv.visitCode(); mv.visitVarInsn(Opcodes.ALOAD, 0);

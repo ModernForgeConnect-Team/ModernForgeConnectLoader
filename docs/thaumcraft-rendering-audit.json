@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-18",
+  "target": "Thaumcraft 1.7.10-4.2.3.5",
+  "jarSha256": "3dba9786966974701578a658d1bb369bf35bdf5f363079f5ac9c4910a39113be",
+  "sourceKind": "User-provided original JAR, locally decompiled with Vineflower 1.10.1; not an official source release",
+  "sourceFiles": 859,
+  "categories": [
+    {
+      "category": "client/fx",
+      "files": 37
+    },
+    {
+      "category": "client/gui",
+      "files": 20
+    },
+    {
+      "category": "client/lib",
+      "files": 8
+    },
+    {
+      "category": "other",
+      "files": 476
+    },
+    {
+      "category": "renderer/block",
+      "files": 22
+    },
+    {
+      "category": "renderer/entity",
+      "files": 41
+    },
+    {
+      "category": "renderer/item",
+      "files": 5
+    },
+    {
+      "category": "renderer/models",
+      "files": 48
+    },
+    {
+      "category": "renderer/tile",
+      "files": 49
+    },
+    {
+      "category": "semantics/blocks",
+      "files": 69
+    },
+    {
+      "category": "semantics/items",
+      "files": 84
+    }
+  ],
+  "registrations": {
+    "item": 8,
+    "block": 21,
+    "tile": 50,
+    "entity": 50
+  },
+  "completeRenderingCompatibility": false,
+  "checks": {
+    "tests": 47,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 4
+  },
+  "client": {
+    "status": "PASS",
+    "capturedInventoryVariants": 106,
+    "baselineCaptureFailures": 18,
+    "currentCaptureFailures": 1,
+    "remainingCaptureFailures": [
+      "capture failed Thaumcraft:blockTable@14 renderType=54: java.lang.NullPointerException: Cannot invoke \"net.minecraft.world.World.func_147439_a(int, int, int)\" because \"this.field_145850_b\" is null"
+    ],
+    "bannerVariants": 17,
+    "essentia": {
+      "variants": 48,
+      "distinctColors": 48
+    },
+    "wispEssence": {
+      "variants": 48,
+      "distinctColors": 48
+    },
+    "originalLootCrateIcons": 3,
+    "worldReload": true
+  },
+  "unresolved": [
+    "blockTable@14 nested item capture",
+    "transparent/additive blend and draw-order state",
+    "first-person/equipped/entity rendering contexts",
+    "uncatalogued NBT geometry and NBT-selected icons",
+    "code-driven animation snapshots",
+    "world/entity/particle/armor rendering integration",
+    "texture matrix, texgen and 3D GUI operations"
+  ],
+  "evidence": {
+    "sourceScan": "build/thaumcraft-investigation/source-render-audit.json",
+    "clientLog": "build/thaumcraft-investigation/render-audit-client-final.log",
+    "testsLog": "build/thaumcraft-investigation/render-audit-final-checks.log",
+    "report": "docs/thaumcraft-rendering-audit.md",
+    "artifact": "build/libs/mfcl-0.1.0.jar",
+    "artifactSha256": "3561fe2e5b0e742af8d00fad43bea09a73f0177751de01066d7132cb90b5e6d6"
+  }
+}

@@ -10,7 +10,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class LegacyBlockEntity extends BlockEntity {
     private final ModernContentBridge content;
     private Object legacy;
-    private byte[] saved = new byte[0];
+    private volatile byte[] saved = new byte[0];
+    public byte[] renderData() { return saved.clone(); }
     private String savedBlock;
     public LegacyBlockEntity(ModernContentBridge content, BlockPos position, BlockState state) {
         super(content.tileType(), position, state); this.content = content;
@@ -47,6 +48,9 @@ public final class LegacyBlockEntity extends BlockEntity {
         super.load(tag);
         if (legacy != null) invalidateLegacy();
         saved = tag.getByteArray("mfcl_legacy_nbt"); savedBlock = tag.contains("mfcl_legacy_block") ? tag.getString("mfcl_legacy_block") : null;
+        if (level != null && level.isClientSide) {
+            requestModelDataUpdate(); level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
     }
     @Override protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
@@ -57,6 +61,8 @@ public final class LegacyBlockEntity extends BlockEntity {
     @Override public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
     public void synchronize() {
+        try { if (legacy != null) saved = content.services().tiles().save(legacy); }
+        catch (Exception error) { throw new IllegalStateException("Cannot snapshot legacy tile for rendering", error); }
         setChanged();
         if (level != null && !level.isClientSide) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }

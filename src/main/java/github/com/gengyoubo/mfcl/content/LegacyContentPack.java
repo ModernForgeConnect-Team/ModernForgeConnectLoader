@@ -22,13 +22,30 @@ public final class LegacyContentPack {
     private final Map<String, String> textures = new HashMap<>();
     private final Set<String> missingIcons = new TreeSet<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
-    public LegacyContentPack(Path gameDirectory, LegacyContent content) throws Exception {
+    public LegacyContentPack(Path gameDirectory, LegacyContent content, github.com.gengyoubo.mfcl.bridge.LegacyBlockRendering worldRendering) throws Exception {
         this.content = content;
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
         directory = Files.createTempDirectory(parent, "content-1.7.10-");
+        // TESRs select additional skins and animation textures at runtime, beyond creative inventory snapshots.
+        if (content.loader() instanceof URLClassLoader urls) for (var url : urls.getURLs()) {
+            if (!url.getProtocol().equals("file")) continue;
+            Path archive = Path.of(url.toURI()); if (!Files.isRegularFile(archive)) continue;
+            try (var jar = new JarFile(archive.toFile())) {
+                for (var entries = jar.entries(); entries.hasMoreElements();) {
+                    var entry = entries.nextElement(); String path = entry.getName();
+                    if (entry.isDirectory() || !path.matches("assets/(?!minecraft/)[^/]+/textures/.*\\.(png|mcmeta)")) continue;
+                    Path target = directory.resolve(path).normalize();
+                    if (!target.startsWith(directory)) throw new IllegalArgumentException(path);
+                    Files.createDirectories(target.getParent()); try (var input = jar.getInputStream(entry)) { Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING); }
+                }
+            }
+        }
+        for (var primitive : worldRendering.tilePreviews()) if (primitive.texture().contains("textures/")) texturePath(primitive.texture());
         json("pack.mcmeta", Map.of("pack", Map.of("pack_format", 15, "description", "MFCL original 1.7.10 content resources")));
         // builtin/entity item models reference no texture, so their sprites must be stitched explicitly.
         json("assets/mfcl/atlases/blocks.json", Map.of("sources", List.of(Map.of("type", "minecraft:directory", "source", "block/legacy"))));
+        // Contextual world icons (e.g. connected glass) may never appear in an inventory capture.
+        for (String icon : content.registeredIcons()) if (!icon.isBlank() && !icon.startsWith("MISSING_ICON_")) texture(icon, "blocks");
         for (var block : content.blocks()) {
             var id = ModernContentBridge.id(block.key()); var variants = new LinkedHashMap<String, Object>();
             for (int meta = 0; meta < 16; meta++) {
@@ -67,7 +84,7 @@ public final class LegacyContentPack {
                 // IItemRenderer geometry keeps a full old texture path; ISBRH geometry keeps an icon name.
                 String id = source.contains("textures/") ? texturePath(source) : texture(source, "blocks");
                 if (id.isEmpty()) continue;
-                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), id, primitive.vertices()));
+                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), id, primitive.vertices(), primitive.state()));
             }
             geometry.put(entry.getKey(), List.copyOf(resolved));
         }
@@ -83,7 +100,9 @@ public final class LegacyContentPack {
             var id = ModernContentBridge.id(block.key());
             return new LinkedHashMap<>(Map.of("parent", id.getNamespace() + ":block/" + id.getPath() + "_" + (variant.metadata() & 15)));
         }
-        return new LinkedHashMap<>(Map.of("parent", "minecraft:item/generated", "textures", Map.of("layer0", texture(variant.icon(), "items"))));
+        var layers = new LinkedHashMap<String, String>();
+        for (int pass = 0; pass < variant.layers().size(); pass++) layers.put("layer" + pass, texture(variant.layers().get(pass).icon(), "items"));
+        return new LinkedHashMap<>(Map.of("parent", "minecraft:item/generated", "textures", layers));
     }
     /** Copies a whole old texture resource (for IItemRenderer models) and returns its standalone modern path. */
     private String texturePath(String resource) throws Exception {
@@ -164,6 +183,12 @@ public final class LegacyContentPack {
         Files.createDirectories(file.getParent()); Files.writeString(file, new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(value), StandardCharsets.UTF_8);
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
+    public String worldTexture(String icon) {
+        String value = textures.get("blocks:" + icon);
+        if (value == null) throw new IllegalArgumentException("World renderer referenced an unregistered icon: " + icon);
+        return value;
+    }
+    public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, resource); }
     public Path directory() { return directory; }
     public Set<String> missingIcons() { return Collections.unmodifiableSet(missingIcons); }
     public void findPacks(AddPackFindersEvent event) {

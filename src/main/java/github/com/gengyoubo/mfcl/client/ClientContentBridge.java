@@ -9,13 +9,25 @@ import net.minecraftforge.eventbus.api.IEventBus;
 public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
+        bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
+                event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge)));
+        bus.addListener((net.minecraftforge.client.event.ModelEvent.ModifyBakingResult event) -> {
+            for (var declaration : bridge.declarations().blocks()) for (var state : bridge.blocks().get(declaration.key()).getStateDefinition().getPossibleStates()) {
+                int metadata = state.getValue(ModernContentBridge.METADATA);
+                if (!bridge.blockRendering().supports(declaration.key(), metadata)) continue;
+                var location = net.minecraft.client.renderer.block.BlockModelShaper.stateToModelLocation(ModernContentBridge.id(declaration.key()), state);
+                event.getModels().computeIfPresent(location, (id, original) -> new LegacyBlockModel(original, bridge, declaration.key(), metadata));
+            }
+        });
         bus.addListener((FMLClientSetupEvent event) -> event.enqueueWork(() -> {
-            for (var entry : bridge.declarations().items()) ItemProperties.register(bridge.items().get(entry.key()), new ResourceLocation("mfcl", "metadata"),
+            for (var entry : bridge.declarations().items()) ItemProperties.register(bridge.items().get(entry.key()), ResourceLocation.fromNamespaceAndPath("mfcl", "metadata"),
                     (stack, level, entity, seed) -> ModernContentBridge.metadata(stack));
         }));
         bus.addListener((net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) -> {
-            for (var entry : bridge.declarations().items()) event.register((stack, tint) -> entry.variants().stream()
-                    .filter(variant -> variant.metadata() == ModernContentBridge.metadata(stack)).findFirst().orElse(entry.variants().get(0)).color(), bridge.items().get(entry.key()));
+            for (var entry : bridge.declarations().items()) event.register((stack, tint) -> {
+                try { return bridge.services().items().itemColor(bridge.snapshot(stack), tint); }
+                catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
+            }, bridge.items().get(entry.key()));
         });
         if (Boolean.getBoolean("mfcl.test.content")) ContentHostSmokeProbe.install(bridge);
     }

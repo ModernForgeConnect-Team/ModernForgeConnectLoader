@@ -52,20 +52,25 @@ public final class LegacyContainers {
     }
     public void position(Object gui,int left,int top) throws Exception { setGui(gui,"field_147003_i",left);setGui(gui,"field_147009_r",top); }
     private void setGui(Object target,String name,int value) throws Exception { Field field=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer").getDeclaredField(name);field.setAccessible(true);field.setInt(target,value); }
-    private void preparePlayer() throws Exception {
+    public void preparePlayer() throws Exception {
         Class<?> mc=loader.loadClass("net.minecraft.client.Minecraft");Object client=mc.getMethod("func_71410_x").invoke(null);
-        if(mc.getField("field_71439_g").get(client)!=null)return;
-        Object player=allocate(loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP"));
-        var type=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
-        var profile=type.getDeclaredField("field_146106_i");profile.setAccessible(true);profile.set(player,
-                loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(java.util.UUID.class,String.class).newInstance(new java.util.UUID(0,0),"MFCL"));
-        type.getField("field_71071_by").set(player,loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(type).newInstance(player));
-        type.getField("field_71075_bZ").set(player,loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance());
-        Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(loader.loadClass("net.minecraft.entity.Entity")).newInstance(player);
-        var field=loader.loadClass("net.minecraft.entity.Entity").getDeclaredField("field_70180_af");field.setAccessible(true);field.set(player,watcher);
-        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
-        mc.getField("field_71439_g").set(client,player);
-        mc.getField("field_71442_b").set(client,loader.loadClass("net.minecraft.client.multiplayer.PlayerControllerMP").getConstructor(mc,loader.loadClass("net.minecraft.client.network.NetHandlerPlayClient")).newInstance(client,null));
+        Object player=mc.getField("field_71439_g").get(client);
+        if(player==null) {
+            player=allocate(loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP"));
+            var type=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+            var profile=type.getDeclaredField("field_146106_i");profile.setAccessible(true);profile.set(player,
+                    loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(java.util.UUID.class,String.class).newInstance(new java.util.UUID(0,0),"MFCL"));
+            type.getField("field_71071_by").set(player,loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(type).newInstance(player));
+            type.getField("field_71075_bZ").set(player,loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance());
+            Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(loader.loadClass("net.minecraft.entity.Entity")).newInstance(player);
+            var field=loader.loadClass("net.minecraft.entity.Entity").getDeclaredField("field_70180_af");field.setAccessible(true);field.set(player,watcher);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
+            mc.getField("field_71439_g").set(client,player);
+            mc.getField("field_71442_b").set(client,loader.loadClass("net.minecraft.client.multiplayer.PlayerControllerMP").getConstructor(mc,loader.loadClass("net.minecraft.client.network.NetHandlerPlayClient")).newInstance(client,null));
+        }
+        // EntityLivingBase fields that old item tooltips and wand logic read must be present.
+        var potions=loader.loadClass("net.minecraft.entity.EntityLivingBase").getDeclaredField("field_70713_bf");potions.setAccessible(true);
+        if(potions.get(player)==null)potions.set(player,new java.util.HashMap<Object,Object>());
     }
     private Object allocate(Class<?> type) throws Exception { var field=Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");field.setAccessible(true);Object unsafe=field.get(null);return unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,type); }
     private void defineTypes() throws Exception {

@@ -29,8 +29,12 @@ final class ContentHostSmokeProbe {
     private String blockKey, itemKey, worldName;
     private Map<String, Object> proof;
     private volatile boolean screenshotSaved;
+    private int itemGallery;
+    private static final String[] GALLERY_ITEMS = {"Thaumcraft:ItemEssence", "Thaumcraft:ItemWispEssence", "Thaumcraft:blockLootCrate"};
+    private static final String[] GALLERY_IMAGES = {"essence", "wisp-essence", "loot-crates"};
     private record TileCheck(String key, BlockPos position, int metadata, byte[] nbt, Object serverIdentity) {}
     private final List<TileCheck> tileChecks = new ArrayList<>();
+    private BlockPos glassPosition;
     private ContentHostSmokeProbe(ModernContentBridge bridge) { this.bridge = bridge; }
     static void install(ModernContentBridge bridge) { MinecraftForge.EVENT_BUS.addListener(new ContentHostSmokeProbe(bridge)::tick); }
     private void tick(TickEvent.ClientTickEvent event) {
@@ -60,6 +64,7 @@ final class ContentHostSmokeProbe {
                     if (!Arrays.equals(bridge.services().tiles().save(old), check.nbt())) return;
                 }
                 proof.put("clientTileStateSynchronized", true);
+                verifySpecialBlockModels(mc);
                 int checked = 0;
                 for (var item : bridge.declarations().items()) for (var variant : item.variants()) {
                     var stack = bridge.stack(item.key(), variant.metadata(), 1, "");
@@ -72,6 +77,13 @@ final class ContentHostSmokeProbe {
                 }
                 proof.put("itemModelsChecked", checked); proof.put("missingIcons", bridge.pack().missingIcons());
                 proof.put("stitchedTexturesVerified", true);
+                verifyContainerMirrors(mc);
+                verifyStackRendering(mc);
+                proof.put("renderCaptureFailures", bridge.declarations().captureDiagnostics().stream()
+                        .filter(line -> line.contains("failed") || line.contains("unresolved") || line.contains("unavailable")).toList());
+                proof.put("capturedInventoryVariants", bridge.pack().geometry().size());
+                if (bridge.pack().missingIcons().stream().anyMatch(icon -> icon.contains("textures/atlas/")))
+                    throw new IllegalStateException("A legacy atlas was incorrectly copied as a standalone model texture");
                 CreativeModeTabs.tryRebuildTabContents(mc.player.connection.enabledFeatures(), true, mc.level.registryAccess());
                 if (net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.containsKey(net.minecraft.resources.ResourceLocation.tryParse("mfcl:legacy_1_7_10")))
                     throw new IllegalStateException("Loader-owned merged category must not replace original tabs");
@@ -109,7 +121,32 @@ final class ContentHostSmokeProbe {
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-content-creative.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
                 stage = 4;
             } else if (stage == 4 && screenshotSaved) {
-                mc.setScreen(null); mc.level.disconnect(); mc.clearLevel(); mc.setScreen(new TitleScreen()); stage = 5;
+                if (scrollToBannerVariants(mc)) { screenshotSaved = false; frames = 0; stage = 30; return; }
+                stage = 31;
+            } else if (stage == 30 && ++frames > 15) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-content-banners.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
+                stage = 31;
+            } else if (stage == 31 && screenshotSaved) {
+                while (itemGallery < GALLERY_ITEMS.length) {
+                    int index = itemGallery++;
+                    if (scrollToItem(mc, GALLERY_ITEMS[index])) { screenshotSaved = false; frames = 0; stage = 40; return; }
+                }
+                mc.setScreen(null);
+                if (glassPosition != null) {
+                    mc.player.setPos(glassPosition.getX()+.5, glassPosition.getY()-1, glassPosition.getZ()-5);
+                    mc.player.setYRot(0); mc.player.yRotO = 0; mc.player.setXRot(0); mc.player.xRotO = 0;
+                    mc.options.hideGui = true; screenshotSaved = false; frames = 0; stage = 50; return;
+                }
+                mc.level.disconnect(); mc.clearLevel(); mc.setScreen(new TitleScreen()); stage = 5;
+            } else if (stage == 40 && ++frames > 15) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-content-" + GALLERY_IMAGES[itemGallery - 1] + ".png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
+                stage = 31;
+            } else if (stage == 50 && ++frames > 60) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-warded-glass-world.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
+                stage = 51;
+            } else if (stage == 51 && screenshotSaved) {
+                mc.options.hideGui = false;
+                mc.level.disconnect(); mc.clearLevel(); mc.setScreen(new TitleScreen()); stage = 5;
             } else if (stage == 5 && mc.getSingleplayerServer() == null && mc.screen instanceof TitleScreen) {
                 stage = 6; mc.createWorldOpenFlows().loadLevel(mc.screen, worldName);
             } else if (stage == 6 && mc.player != null && mc.level != null && mc.screen == null) {
@@ -155,6 +192,177 @@ final class ContentHostSmokeProbe {
             stage = 99; mc.stop();
         }
     }
+    private void verifyContainerMirrors(Minecraft mc) throws Exception {
+        var inventory = new net.minecraft.world.SimpleContainer(27);
+        inventory.setItem(0, new ItemStack(Items.OAK_WOOD));
+        var tagged = new ItemStack(Items.COMPASS); tagged.getOrCreateTag().putString("mfcl_probe", "host-only");
+        inventory.setItem(1, tagged);
+        var menu = net.minecraft.world.inventory.ChestMenu.threeRows(0, mc.player.getInventory(), inventory);
+        var screen = new net.minecraft.client.gui.screens.inventory.ContainerScreen(menu, mc.player.getInventory(), net.minecraft.network.chat.Component.literal("MFCL container verification"));
+        mc.setScreen(screen);
+        ClientContainerBridge.active().commands(screen); // Requires successful initialization even with unmapped host items.
+        ClassLoader loader = bridge.services().loader();
+        Class<?> minecraft = loader.loadClass("net.minecraft.client.Minecraft");
+        Object player = minecraft.getField("field_71439_g").get(minecraft.getMethod("func_71410_x").invoke(null));
+        int tooltips = 0;
+        for (var tab : bridge.declarations().tabs()) for (var stack : tab.contents()) {
+            if (!stack.key().endsWith(":WandCasting")) continue;
+            Object old = bridge.services().items().materialize(stack);
+            var lines = (List<?>)old.getClass().getMethod("func_82840_a", loader.loadClass("net.minecraft.entity.player.EntityPlayer"), boolean.class).invoke(old, player, false);
+            if (lines.isEmpty()) throw new IllegalStateException("Original wand tooltip is empty");
+            tooltips++;
+        }
+        if (inventory.getItem(0).getItem() != Items.OAK_WOOD || !ItemStack.isSameItemSameTags(tagged, inventory.getItem(1)))
+            throw new IllegalStateException("Mirroring changed host inventory items");
+        proof.put("unmappedHostContainerVerified", true);
+        proof.put("originalWandTooltipsChecked", tooltips);
+        mc.setScreen(null);
+    }
+    private void verifySpecialBlockModels(Minecraft mc) throws Exception {
+        String key = "Thaumcraft:blockCosmeticOpaque";
+        if (!bridge.blocks().containsKey(key)) return;
+        if (!bridge.blockRendering().supports(key, 2)) throw new IllegalStateException("Warded glass world rendering is unavailable");
+        var rendering = bridge.blockRendering();
+        var isolated = rendering.isolated(key, 2);
+        if (isolated.size() != 1 || isolated.get(0).pass() != 1 || isolated.get(0).geometry().size() != 6)
+            throw new IllegalStateException("Warded glass must have six transparent faces");
+        int[][] offsets = {{-1,1},{0,1},{1,1},{-1,0},{1,0},{-1,-1},{0,-1},{1,-1}};
+        var connected = new ArrayList<Object>();
+        for (int side = 0; side < 6; side++) {
+            final int face = side; var icons = new HashSet<String>();
+            for (int mask = 0; mask < 256; mask++) {
+                final int bits = mask;
+                var layers = rendering.capture(key, 2, (x,y,z) -> {
+                    if (x == 0 && y == 0 && z == 0) return new HostWorldAccess.Block(key, 2);
+                    for (int i = 0; i < 8; i++) {
+                        int u = offsets[i][0], v = offsets[i][1];
+                        boolean matches = face < 2 ? x == u && y == 0 && z == v
+                                : face < 4 ? x == u && y == v && z == 0 : x == 0 && y == v && z == u;
+                        if (matches && (bits & 1 << i) != 0) return new HostWorldAccess.Block(key, 2);
+                    }
+                    return new HostWorldAccess.Block("minecraft:air", 0);
+                });
+                for (var layer : layers) for (var primitive : layer.geometry()) {
+                    boolean onFace = primitive.vertices().stream().allMatch(v -> Math.abs((face < 2 ? v.y() : face < 4 ? v.z() : v.x()) - (face % 2)) < .00001);
+                    if (onFace) icons.add(primitive.texture());
+                }
+            }
+            if (icons.size() != 47) throw new IllegalStateException("Connected glass lost texture variants on face " + face + ": " + icons.size());
+            for (String icon : icons) {
+                var sprite = mc.getTextureAtlas(net.minecraft.world.inventory.InventoryMenu.BLOCK_ATLAS).apply(net.minecraft.resources.ResourceLocation.parse(bridge.pack().worldTexture(icon)));
+                if (sprite.contents().name().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation()))
+                    throw new IllegalStateException("Missing connected glass sprite: " + icon);
+            }
+            connected.add(Map.of("face", face, "masks", 256, "textures", icons.size()));
+        }
+        var adjacent = rendering.capture(key, 2, (x,y,z) -> new HostWorldAccess.Block(x == 0 && y == 0 && (z == 0 || z == -1) ? key : "minecraft:air", 2));
+        if (adjacent.stream().mapToInt(l -> l.geometry().size()).sum() != 5) throw new IllegalStateException("Internal glass face was not culled");
+        if (!rendering.capture(key, 2, (x,y,z) -> new HostWorldAccess.Block(key, 2)).isEmpty()) throw new IllegalStateException("Enclosed glass emitted hidden faces");
+        var different = rendering.capture(key, 2, (x,y,z) -> new HostWorldAccess.Block(x == 0 && y == 0 && (z == 0 || z == -1) ? key : "minecraft:air", z == -1 ? 0 : 2));
+        if (different.stream().mapToInt(l -> l.geometry().size()).sum() != 6) throw new IllegalStateException("Different glass metadata incorrectly culled");
+        var state = mc.level.getBlockState(glassPosition);
+        var model = mc.getBlockRenderer().getBlockModel(state);
+        if (!(model instanceof LegacyBlockModel)) throw new IllegalStateException("World model wrapper missing");
+        var modelData = model.getModelData(mc.level, glassPosition, state, net.minecraftforge.client.model.data.ModelData.EMPTY);
+        var random = net.minecraft.util.RandomSource.create(0);
+        if (!model.getRenderTypes(state, random, modelData).contains(net.minecraft.client.renderer.RenderType.translucent())
+                || model.getQuads(state, null, random, modelData, net.minecraft.client.renderer.RenderType.translucent()).size() != 2)
+            throw new IllegalStateException("Connected wall was not baked into two transparent exterior faces");
+        var tooltip = bridge.itemForBlock(key, 2).getTooltipLines(mc.player, TooltipFlag.NORMAL);
+        if (tooltip.stream().anyMatch(line -> line.getString().contains("暂不能放置"))) throw new IllegalStateException("Supported glass still has the placement warning");
+        proof.put("wardedGlassConnectedTextures", connected);
+        proof.put("wardedGlassTransparencyAndFaceCulling", true);
+        proof.put("worldSpecialRenderSupport", rendering.supported());
+    }
+    private boolean scrollToBannerVariants(Minecraft mc) {
+        if (!(mc.screen instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen inventory)) return false;
+        var items = inventory.getMenu().items;
+        for (int i = 0; i < items.size(); i++) {
+            var old = bridge.snapshot(items.get(i));
+            if (old == null || !old.key().equals("Thaumcraft:blockWoodenDevice") || old.metadata() != 8) continue;
+            var variants = bridge.declarations().tabs().stream().flatMap(tab -> tab.contents().stream())
+                    .filter(s -> s.key().equals(old.key()) && s.metadata() == old.metadata()).toList();
+            var distinct = new HashSet<List<LegacyVertexStream.Primitive>>();
+            var boundsProof = new ArrayList<Object>();
+            for (var variant : variants) {
+                String key = LegacyContent.geometryKey(variant.key(), variant.metadata(), variant.tag());
+                var geometry = bridge.pack().geometry().get(key);
+                if (geometry == null || geometry.isEmpty()) throw new IllegalStateException("Missing banner variant geometry: " + key);
+                if (geometry.stream().noneMatch(p -> p.texture().contains("textures/"))) throw new IllegalStateException("Banner lost its standalone model texture: " + key);
+                distinct.add(geometry);
+                var fit = LegacyItemLayout.fitGui(geometry);
+                var bounds = fit.apply(LegacyItemLayout.guiBounds(geometry));
+                if (bounds.minX() < -.50001 || bounds.maxX() > .50001 || bounds.minY() < -.50001 || bounds.maxY() > .50001)
+                    throw new IllegalStateException("Banner overflows its inventory slot: " + key + " " + bounds);
+                boundsProof.add(Map.of("tag", variant.tag(), "fit", fit, "bounds", bounds));
+            }
+            if (distinct.size() != variants.size()) throw new IllegalStateException("Banner variants share the same captured appearance");
+            proof.put("bannerVariantsChecked", variants.size());
+            proof.put("bannerDistinctModels", distinct.size());
+            proof.put("bannerGuiBounds", boundsProof);
+            int rows = Math.max(1, (items.size() + 8) / 9 - 5);
+            inventory.getMenu().scrollTo(Math.min(1f, Math.max(0, i / 9 - 1) / (float)rows));
+            org.lwjgl.glfw.GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), 0, 0);
+            return true;
+        }
+        return false;
+    }
+    private boolean scrollToItem(Minecraft mc, String key) {
+        if (!(mc.screen instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen inventory)) return false;
+        var items = inventory.getMenu().items;
+        for (int i = 0; i < items.size(); i++) {
+            var old = bridge.snapshot(items.get(i));
+            if (old == null || !old.key().equals(key)) continue;
+            int rows = Math.max(1, (items.size() + 8) / 9 - 5);
+            inventory.getMenu().scrollTo(Math.min(1f, i / 9 / (float)rows));
+            return true;
+        }
+        return false;
+    }
+    private void verifyStackRendering(Minecraft mc) throws Exception {
+        for (String key : List.of("Thaumcraft:ItemEssence", "Thaumcraft:ItemWispEssence")) {
+            var declaration = bridge.declarations().items().stream().filter(item -> item.key().equals(key)).findFirst();
+            if (declaration.isEmpty()) continue;
+            var colors = new HashSet<Integer>(); int checked = 0;
+            for (var tab : bridge.declarations().tabs()) for (var old : tab.contents()) {
+                if (!old.key().equals(key) || old.tag().isEmpty()) continue;
+                var modern = bridge.mapStack(old);
+                int pass = key.endsWith(":ItemEssence") ? 1 : 0;
+                int expected = bridge.services().items().itemColor(old, pass) & 0xFFFFFF;
+                int actual = mc.getItemColors().getColor(modern, pass) & 0xFFFFFF;
+                if (expected != actual) throw new IllegalStateException("NBT item tint changed: " + old);
+                colors.add(actual); checked++;
+                if (pass == 1) {
+                    var model = mc.getItemRenderer().getModel(modern, mc.level, mc.player, 0);
+                    var layers = model.getQuads(null, null, net.minecraft.util.RandomSource.create()).stream().map(net.minecraft.client.renderer.block.model.BakedQuad::getTintIndex).collect(java.util.stream.Collectors.toSet());
+                    if (!layers.containsAll(Set.of(0, 1)) || (mc.getItemColors().getColor(modern, 0) & 0xFFFFFF) != 0xFFFFFF)
+                        throw new IllegalStateException("Phial glass and liquid must use separate tint layers");
+                }
+            }
+            if (colors.size() < 6) throw new IllegalStateException("Aspect item variants lost their colors: " + key);
+            proof.put(key + "Rendering", Map.of("variants", checked, "distinctColors", colors.size()));
+        }
+        var crate = bridge.declarations().blocks().stream().filter(block -> block.key().equals("Thaumcraft:blockLootCrate")).findFirst();
+        if (crate.isPresent()) {
+            if (crate.get().blockModel()) throw new IllegalStateException("Loot crate ignored original flat inventory renderer");
+            var icons = new HashSet<Object>();
+            for (int meta = 0; meta < 3; meta++) {
+                var stack = bridge.itemForBlock(crate.get().key(), meta);
+                var model = mc.getItemRenderer().getModel(stack, mc.level, mc.player, 0);
+                if (model.isGui3d()) throw new IllegalStateException("Loot crate became an invented cube inventory model");
+                icons.add(model.getParticleIcon().contents().name());
+            }
+            if (icons.size() != 3) throw new IllegalStateException("Loot crate variants share an inventory icon");
+            proof.put("originalLootCrateIcons", icons.size());
+        }
+        Class<?> translations = bridge.services().loader().loadClass("net.minecraft.util.StatCollector");
+        for (String key : List.of("item.ItemEssence.1.name", "tc.aspect.unknown")) {
+            String modern = net.minecraft.client.resources.language.I18n.get(key);
+            String original = (String)translations.getMethod("func_74838_a", String.class).invoke(null, key);
+            if (!modern.equals(original)) throw new IllegalStateException("Legacy tooltip language differs from host: " + key + " = " + original);
+        }
+        proof.put("legacyTooltipLanguageSynchronized", true);
+    }
     private void verifyServer() throws Exception {
         var mc = Minecraft.getInstance(); var server = Objects.requireNonNull(mc.getSingleplayerServer());
         var level = server.overworld(); var player = server.getPlayerList().getPlayers().get(0);
@@ -163,11 +371,11 @@ final class ContentHostSmokeProbe {
         blockKey = selected.key(); itemKey = bridge.snapshot(bridge.itemForBlock(blockKey, 0)).key();
         position = player.blockPosition().offset(4, 0, 4); level.setBlockAndUpdate(position.below(), Blocks.STONE.defaultBlockState());
         level.setBlockAndUpdate(position, Blocks.AIR.defaultBlockState());
-        ItemStack placing = bridge.stack(itemKey, 3, 2, ""); player.setItemInHand(InteractionHand.MAIN_HAND, placing); player.getAbilities().instabuild = false;
+        ItemStack placing = bridge.stack(itemKey, 0, 2, ""); player.setItemInHand(InteractionHand.MAIN_HAND, placing); player.getAbilities().instabuild = false;
         var hit = new BlockHitResult(Vec3.atCenterOf(position.below()).add(0, .5, 0), Direction.UP, position.below(), false);
         if (!placing.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, hit)).consumesAction()) throw new IllegalStateException("Actual BlockItem placement failed");
         if (placing.getCount() != 1 || level.getBlockState(position).getBlock() != bridge.blocks().get(blockKey)
-                || level.getBlockState(position).getValue(ModernContentBridge.METADATA) != 3) throw new IllegalStateException("Placement lost identity/metadata/count");
+                || level.getBlockState(position).getValue(ModernContentBridge.METADATA) != 0) throw new IllegalStateException("Placement lost identity/metadata/count");
         var worlds = bridge.services().worlds();
         // Verify the production binding installed by LevelEvent.Load, without creating a test-only world adapter.
         Object old = worlds.bound(level);
@@ -213,11 +421,15 @@ final class ContentHostSmokeProbe {
         var placements = new ArrayList<Object>(); int index = 0;
         Class<?> oldInventory = bridge.services().loader().loadClass("net.minecraft.inventory.IInventory");
         Class<?> oldTileType = bridge.services().loader().loadClass("net.minecraft.tileentity.TileEntity");
-        for (var declaration : bridge.declarations().blocks()) if (ModernContentBridge.canPlace(declaration)) {
+        var placementFailures = new ArrayList<String>();
+        for (var declaration : bridge.declarations().blocks()) for (int requestedMetadata : bridge.declarations().items().stream()
+                .filter(item -> declaration.key().equals(item.blockKey())).flatMap(item -> item.variants().stream()).mapToInt(LegacyContent.Variant::metadata).distinct().toArray()) {
+            if (!ModernContentBridge.canPlace(declaration, requestedMetadata)) continue;
+            try {
             BlockPos target = player.blockPosition().offset(3 + (index % 4) * 3, 0, 3 + (index / 4) * 3); index++;
             if (target.equals(position)) throw new IllegalStateException("Placement fixtures overlap");
             level.setBlockAndUpdate(target.below(), Blocks.STONE.defaultBlockState()); level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState());
-            var item = bridge.itemForBlock(declaration.key(), 0); if (item.isEmpty()) throw new IllegalStateException("No original block item for " + declaration.key());
+            var item = bridge.itemForBlock(declaration.key(), requestedMetadata); if (item.isEmpty()) throw new IllegalStateException("No original block item for " + declaration.key());
             item.setCount(2); player.setItemInHand(InteractionHand.MAIN_HAND, item); player.setYRot(90); player.getAbilities().instabuild = false;
             var placeHit = new BlockHitResult(Vec3.atCenterOf(target.below()).add(0, .5, 0), Direction.UP, target.below(), false);
             if (!item.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, placeHit)).consumesAction()
@@ -236,9 +448,14 @@ final class ContentHostSmokeProbe {
                         Object owner = original.getClass().getMethod("getPlacerName").invoke(original);
                         if (!player.getName().getString().equals(owner)) throw new IllegalStateException("Original placement callback lost the player name: " + declaration.key());
                     } catch (NoSuchMethodException ignored) { }
+                    if (declaration.key().equals("Thaumcraft:blockCosmeticOpaque") && requestedMetadata == 2
+                            && !player.getName().getString().equals(original.getClass().getField("owner").get(original)))
+                        throw new IllegalStateException("Warded glass lost its original owner");
                     Object throughWorld = old.getClass().getMethod("func_147438_o", int.class, int.class, int.class).invoke(old, target.getX(), target.getY(), target.getZ());
                     if (original != throughWorld || envelope.legacy() != original) throw new IllegalStateException("Original tile identity was not stable");
-                    if (oldInventory.isInstance(original) && (int) oldInventory.getMethod("func_70302_i_").invoke(original) > 0) {
+                    // Grates and active machines can eject/process writes immediately; placement verification
+                    // only injects inventory contents into the passive storage fixture used by this probe.
+                    if (declaration.key().equals("Thaumcraft:blockMagicBox") && oldInventory.isInstance(original) && (int) oldInventory.getMethod("func_70302_i_").invoke(original) > 0) {
                         Object content = bridge.services().items().materialize(new LegacyClientData.Stack(itemKey, 2, 3, "", "{mfcl_inventory:1}"));
                         oldInventory.getMethod("func_70299_a", int.class, bridge.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(original, 0, content);
                         var dropStacks = net.minecraft.world.level.block.Block.getDrops(level.getBlockState(target), level, target, envelope);
@@ -250,6 +467,22 @@ final class ContentHostSmokeProbe {
                 }
             }
             placements.add(Map.of("key", declaration.key(), "metadata", metadata, "oldTileClass", tileClass));
+            } catch (Exception failure) {
+                Throwable cause = failure; while (cause.getCause() != null) cause = cause.getCause();
+                placementFailures.add(declaration.key() + "@" + requestedMetadata + ": " + cause);
+                LogUtils.getLogger().error("MFCL placement fixture failed: {}@{}",declaration.key(),requestedMetadata,failure);
+            }
+        }
+        if (!placementFailures.isEmpty()) throw new IllegalStateException("Placement failures: " + placementFailures);
+        if (bridge.blockRendering().supports("Thaumcraft:blockCosmeticOpaque", 2)) {
+            glassPosition = player.blockPosition().offset(-5, 1, 6);
+            var glass = bridge.modernBlock(new HostWorldAccess.Block("Thaumcraft:blockCosmeticOpaque", 2));
+            for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) level.setBlockAndUpdate(glassPosition.offset(x,y,0), glass);
+            for (int x = -2; x <= 2; x++) for (int y = -1; y <= 1; y++)
+                level.setBlockAndUpdate(glassPosition.offset(x,y,2), ((x+y)%2 == 0 ? Blocks.ORANGE_CONCRETE : Blocks.BLUE_CONCRETE).defaultBlockState());
+            if (!net.minecraft.world.level.block.Block.isShapeFullBlock(glass.getCollisionShape(level, glassPosition)))
+                throw new IllegalStateException("Warded glass collision is not a full cube");
+            proof.put("wardedGlassCollision", true);
         }
         player.getInventory().setItem(0, stack); player.getAbilities().instabuild = true;
         server.saveEverything(false, true, true);

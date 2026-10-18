@@ -89,7 +89,11 @@
     "Static legacy block models are captured by executing the real old ISimpleBlockRenderingHandler (RenderingRegistry.renderInventoryBlock) inside a LegacyWorldGraphics capture, then replayed through a modern custom item renderer.",
     "Icon identity is recovered without running the old texture stitcher: IIcon proxies assign each texture a synthetic atlas cell, so a captured quad's UV range identifies its source icon, whose local UVs are remapped onto the modern block atlas sprite.",
     "Fixed texture sampling: TextureAtlasSprite.getU/getV expect a 0..16 icon coordinate, not 0..1; using 0..1 sampled a single pixel column (uniform gray).",
-    "Custom item models use builtin/entity registered through Item.initializeClient (Forge 47.4.28 has no RegisterClientExtensionsEvent), and the captured geometry is shifted by +0.5 because BlockRenderer.drawFaces centers it with glTranslatef(-0.5)."
+    "Custom item models use builtin/entity registered through Item.initializeClient (Forge 47.4.28 has no RegisterClientExtensionsEvent), and the captured geometry is shifted by +0.5 because BlockRenderer.drawFaces centers it with glTranslatef(-0.5).",
+    "Legacy display lists are now an ordered event stream of command and local-space geometry entries: GL_COMPILE records without touching the outer matrix, glCallList replays in order with recursive expansion, and glDrawArrays rejects nesting inside glBegin/glEnd.",
+    "The old Forge IItemRenderer path is captured by executing MinecraftForgeClient.getItemRenderer(INVENTORY) with the catalog stack's NBT, which is what makes wands (whose appearance depends on rod/cap NBT) render; the fake client now also provides Minecraft.timer and RenderManager.textureManager that these renderers read.",
+    "A host item with no legacy representation (for example modern oak_wood) now leaves its mirrored slot empty instead of throwing, so one unknown item can no longer abort legacy container initialization.",
+    "The fake client player now initializes EntityLivingBase.activePotionsMap, which old wand tooltips (WandManager.getTotalVisDiscount) read and previously crashed on."
   ],
   "remaining": [
     "Modern registration covers blocks/items and simple or tile-backed placement; Thaumcraft's wands, alchemy, vis network, research and custom rendering are not functional yet.",

@@ -33,6 +33,9 @@ public final class GuiCaptureTransformer implements IClassTransformer {
             } else if (name.endsWith("RenderItem") && m.name.equals("func_94148_a")) {
                 code.add(new VarInsnNode(Opcodes.ALOAD,3)); load(code,Opcodes.ILOAD,4,2); code.add(new InsnNode(Opcodes.ICONST_1)); code.add(new VarInsnNode(Opcodes.ALOAD,6));
                 target="item"; descriptor="(Ljava/lang/Object;IIZLjava/lang/String;)V";
+            } else if (name.endsWith("OpenGlHelper") && m.name.equals("func_77472_b") && m.desc.equals("(I)V")) {
+                code.add(new VarInsnNode(Opcodes.ILOAD,0));
+                code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyWorldGraphics","clientActiveTexture","(I)V",false));
             } else if ((name.endsWith("RenderHelper") || name.endsWith("OpenGlHelper")) && Type.getReturnType(m.desc).getSort()==Type.VOID && !m.name.startsWith("<")) { }
             else continue;
             if (target != null) code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,API,target,descriptor,false));

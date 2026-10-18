@@ -33,6 +33,7 @@ public final class ModernForgeConnectLoader {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModBranding.install(catalog));
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModListScreen.install(catalog));
         if (result.legacyFmlStarted() && runtimeService.runtime() != null) {
+            @SuppressWarnings("removal")
             var bus = net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
             var content = github.com.gengyoubo.mfcl.content.ModernContentBridge.install(runtimeService.runtime().services(), bus);
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContentBridge.install(content, bus));

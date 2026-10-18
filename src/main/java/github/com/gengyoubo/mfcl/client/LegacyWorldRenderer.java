@@ -16,15 +16,15 @@ public final class LegacyWorldRenderer {
         Matrix4f matrix = pose.last().pose();
         for (LegacyVertexStream.Primitive primitive : primitives) {
             var vertices = primitive.vertices();
-            for (int[] triangle : triangles(primitive.mode(), vertices.size())) {
-                for (int index : triangle) {
+            for (int[] quad : quads(primitive.mode(), vertices.size())) {
+                for (int index : quad) {
                     LegacyVertexStream.Vertex vertex = vertices.get(index);
                     consumer.vertex(matrix, (float) vertex.x(), (float) vertex.y(), (float) vertex.z())
                             .color(vertex.argb() >> 16 & 0xFF, vertex.argb() >> 8 & 0xFF, vertex.argb() & 0xFF, vertex.argb() >>> 24)
                             // TextureAtlasSprite.getU/getV take a 0..16 icon coordinate, not 0..1.
                             .uv(sprite.getU(vertex.u() * 16.0), sprite.getV(vertex.v() * 16.0))
                             .overlayCoords(packedOverlay).uv2(packedLight)
-                            .normal(vertex.nx(), vertex.ny(), vertex.nz())
+                            .normal(pose.last().normal(), vertex.nx(), vertex.ny(), vertex.nz())
                             .endVertex();
                 }
             }
@@ -35,31 +35,46 @@ public final class LegacyWorldRenderer {
         Matrix4f matrix = pose.last().pose();
         for (LegacyVertexStream.Primitive primitive : primitives) {
             var vertices = primitive.vertices();
-            for (int[] triangle : triangles(primitive.mode(), vertices.size())) {
-                for (int index : triangle) {
+            for (int[] quad : quads(primitive.mode(), vertices.size())) {
+                for (int index : quad) {
                     LegacyVertexStream.Vertex vertex = vertices.get(index);
                     consumer.vertex(matrix, (float) vertex.x(), (float) vertex.y(), (float) vertex.z())
                             .color(vertex.argb() >> 16 & 0xFF, vertex.argb() >> 8 & 0xFF, vertex.argb() & 0xFF, vertex.argb() >>> 24)
                             .uv(vertex.u(), vertex.v())
                             .overlayCoords(packedOverlay).uv2(packedLight)
-                            .normal(vertex.nx(), vertex.ny(), vertex.nz())
+                            .normal(pose.last().normal(), vertex.nx(), vertex.ny(), vertex.nz())
                             .endVertex();
                 }
             }
         }
     }
-    static int[][] triangles(int mode, int count) {
-        switch (mode) {
-            case LegacyVertexStream.GL_QUADS -> {
-                int quads = count / 4;
-                int[][] result = new int[quads * 2][];
-                for (int q = 0; q < quads; q++) {
-                    int base = q * 4;
-                    result[q * 2] = new int[]{base, base + 1, base + 2};
-                    result[q * 2 + 1] = new int[]{base, base + 2, base + 3};
-                }
-                return result;
+    /** Entity RenderTypes consume QUADS. Triangles use a repeated last vertex, never a six-vertex stream. */
+    static int[][] quads(int mode, int count) {
+        if (mode == LegacyVertexStream.GL_QUADS) {
+            int[][] result = new int[count / 4][];
+            for (int q = 0; q < result.length; q++) {
+                int base = q * 4;
+                result[q] = new int[]{base, base + 1, base + 2, base + 3};
             }
+            return result;
+        }
+        if (mode == LegacyVertexStream.GL_QUAD_STRIP) {
+            int[][] result = new int[Math.max(0, count / 2 - 1)][];
+            for (int q = 0; q < result.length; q++) {
+                int base = q * 2;
+                result[q] = new int[]{base, base + 1, base + 3, base + 2};
+            }
+            return result;
+        }
+        int[][] result = triangles(mode, count);
+        for (int i = 0; i < result.length; i++) {
+            int[] triangle = result[i];
+            result[i] = new int[]{triangle[0], triangle[1], triangle[2], triangle[2]};
+        }
+        return result;
+    }
+    private static int[][] triangles(int mode, int count) {
+        switch (mode) {
             case LegacyVertexStream.GL_TRIANGLES -> {
                 int[][] result = new int[count / 3][];
                 for (int t = 0; t < result.length; t++) result[t] = new int[]{t * 3, t * 3 + 1, t * 3 + 2};
@@ -73,11 +88,6 @@ public final class LegacyWorldRenderer {
             case LegacyVertexStream.GL_TRIANGLE_FAN, LegacyVertexStream.GL_POLYGON -> {
                 int[][] result = new int[Math.max(0, count - 2)][];
                 for (int i = 0; i + 2 < count; i++) result[i] = new int[]{0, i + 1, i + 2};
-                return result;
-            }
-            case LegacyVertexStream.GL_QUAD_STRIP -> {
-                int[][] result = new int[Math.max(0, count - 2)][];
-                for (int i = 0; i + 2 < count; i++) result[i] = (i & 1) == 0 ? new int[]{i, i + 1, i + 2} : new int[]{i + 1, i + 2, i + 3};
                 return result;
             }
             default -> { return new int[0][]; }

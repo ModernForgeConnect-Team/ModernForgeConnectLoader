@@ -5,7 +5,11 @@ import java.util.List;
 /** Pure legacy geometry and matrix math. No host OpenGL type or context is ever entered. */
 public final class LegacyVertexStream {
     public record Vertex(double x, double y, double z, float u, float v, float nx, float ny, float nz, int argb) {}
-    public record Primitive(int mode, String texture, List<Vertex> vertices) {
+    public record RenderState(boolean blend, int sourceBlend, int destinationBlend, boolean depthWrite, boolean cull) {
+        public static final RenderState OPAQUE = new RenderState(false, 770, 771, true, false);
+    }
+    public record Primitive(int mode, String texture, List<Vertex> vertices, RenderState state) {
+        public Primitive(int mode, String texture, List<Vertex> vertices) { this(mode, texture, vertices, RenderState.OPAQUE); }
         public Primitive { vertices = List.copyOf(vertices); }
     }
     /** Modern consumer of captured geometry: one primitive at a time, already in legacy world space. */
@@ -45,6 +49,24 @@ public final class LegacyVertexStream {
                 t * x * y - s * z, t * y * y + c, t * y * z + s * x, 0,
                 t * x * z + s * y, t * y * z - s * x, t * z * z + c, 0,
                 0, 0, 0, 1});
+    }
+    /** Inverse of an affine column-major matrix, used to store display-list geometry in local space. */
+    public static double[] invert(double[] m) {
+        double a00 = m[0], a01 = m[4], a02 = m[8];
+        double a10 = m[1], a11 = m[5], a12 = m[9];
+        double a20 = m[2], a21 = m[6], a22 = m[10];
+        double determinant = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20) + a02 * (a10 * a21 - a11 * a20);
+        if (determinant == 0) return identity();
+        double inv = 1.0 / determinant;
+        double b00 = (a11 * a22 - a12 * a21) * inv, b01 = (a02 * a21 - a01 * a22) * inv, b02 = (a01 * a12 - a02 * a11) * inv;
+        double b10 = (a12 * a20 - a10 * a22) * inv, b11 = (a00 * a22 - a02 * a20) * inv, b12 = (a02 * a10 - a00 * a12) * inv;
+        double b20 = (a10 * a21 - a11 * a20) * inv, b21 = (a01 * a20 - a00 * a21) * inv, b22 = (a00 * a11 - a01 * a10) * inv;
+        double tx = m[12], ty = m[13], tz = m[14];
+        return new double[]{
+                b00, b10, b20, 0,
+                b01, b11, b21, 0,
+                b02, b12, b22, 0,
+                -(b00 * tx + b01 * ty + b02 * tz), -(b10 * tx + b11 * ty + b12 * tz), -(b20 * tx + b21 * ty + b22 * tz), 1};
     }
     public static double[] transform(double[] matrix, double x, double y, double z) {
         return new double[]{

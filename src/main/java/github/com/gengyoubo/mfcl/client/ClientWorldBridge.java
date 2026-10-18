@@ -52,6 +52,17 @@ public final class ClientWorldBridge {
                         if (tile instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity legacy) return legacy.legacy();
                         throw new UnsupportedOperationException("Modern block entity has no old representation: " + tile.getType());
                     }
+                    @Override public void markTileDirty(int x, int y, int z, Object old) {
+                        // readCustomNBT may mark a client tile dirty while its host envelope is still loading.
+                        // This updates the local model only; it must not request server mutation or recurse into legacy().
+                        if (next.getBlockEntity(new BlockPos(x,y,z)) instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity tile) {
+                            tile.setChanged(); tile.requestModelDataUpdate();
+                        }
+                    }
+                    @Override public void blockUpdated(int x, int y, int z) {
+                        var pos = new BlockPos(x,y,z); var state = next.getBlockState(pos);
+                        next.sendBlockUpdated(pos,state,state,3);
+                    }
                 });
                 current = next;
             }

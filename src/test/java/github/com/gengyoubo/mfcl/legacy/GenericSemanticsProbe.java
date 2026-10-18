@@ -87,6 +87,30 @@ public final class GenericSemanticsProbe {
         if ((Long) time.invoke(world) != 321L || host.time != 321) throw new AssertionError("World writes are not synchronous");
         Object registry = loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
         Object stone = registry.getClass().getMethod("func_82594_a", String.class).invoke(registry, "minecraft:stone");
+        Object stoneIcon = loader.loadClass("net.minecraft.block.Block").getMethod("func_149691_a", int.class, int.class).invoke(stone, 0, 0);
+        Class<?> iconType = loader.loadClass("net.minecraft.util.IIcon");
+        String iconName = (String)iconType.getMethod("func_94215_i").invoke(stoneIcon);
+        float[] iconCell = services.items().iconLayout().get(iconName);
+        if ((float)iconType.getMethod("func_94206_g").invoke(stoneIcon) != iconCell[1]
+                || (float)iconType.getMethod("func_94210_h").invoke(stoneIcon) != iconCell[3]
+                || (float)iconType.getMethod("func_94207_b", double.class).invoke(stoneIcon, 0d) != iconCell[1]
+                || (float)iconType.getMethod("func_94207_b", double.class).invoke(stoneIcon, 16d) != iconCell[3])
+            throw new AssertionError("Original IIcon V endpoints and interpolated V disagree");
+        report.put("genericIconUvEndpointsVerified", true);
+        var shapes = new LegacyBlockShapes(services);
+        var stoneShape = shapes.shapes("minecraft:stone",LegacyBlockRendering.isolatedView("minecraft:stone",0));
+        if (stoneShape.collision().size() != 1 || stoneShape.collision().get(0).maxY() != 1)
+            throw new AssertionError("Original stone collision did not remain a full cube");
+        var plantShape = shapes.shapes("minecraft:red_flower",LegacyBlockRendering.isolatedView("minecraft:red_flower",0));
+        if (!plantShape.collision().isEmpty() || plantShape.outline().isEmpty()) throw new AssertionError("Plant selection and empty collision were conflated");
+        var lower = shapes.shapes("minecraft:stone_stairs",LegacyBlockRendering.isolatedView("minecraft:stone_stairs",0));
+        var upper = shapes.shapes("minecraft:stone_stairs",LegacyBlockRendering.isolatedView("minecraft:stone_stairs",4));
+        for (var stair : List.of(lower,upper)) {
+            double volume = stair.collision().stream().mapToDouble(b -> (b.maxX()-b.minX())*(b.maxY()-b.minY())*(b.maxZ()-b.minZ())).sum();
+            if (Math.abs(volume-.75) > 1e-6) throw new AssertionError("Original stair multipart collision volume changed: " + stair);
+        }
+        if (lower.equals(upper)) throw new AssertionError("Stair collision cache lost upper/lower metadata");
+        report.put("genericOriginalBlockShapesVerified", true);
         world.getClass().getMethod("func_147465_d", int.class, int.class, int.class, loader.loadClass("net.minecraft.block.Block"), int.class, int.class)
                 .invoke(world, 1, 2, 3, stone, 0, 3);
         if (world.getClass().getMethod("func_147439_a", int.class, int.class, int.class).invoke(world, 1, 2, 3) != stone)
@@ -107,6 +131,46 @@ public final class GenericSemanticsProbe {
         if (oldGui.getClass().getField("closed").getInt(oldGui) != 1) throw new AssertionError("Old GuiScreen did not close");
         try { session.mousePressed(0, 0, 0); throw new AssertionError("Closed screen accepted input"); } catch (IllegalStateException expected) {}
         report.put("genericItemWorldGuiSemanticsVerified", true);
+        services.containers().create(320, 240, 20, 20, 176, 166, List.of(new LegacyContainers.Slot(8, 18, diamond)));
+        Object clientPlayer = minecraft.getField("field_71439_g").get(minecraft.getMethod("func_71410_x").invoke(null));
+        Class<?> living = loader.loadClass("net.minecraft.entity.EntityLivingBase");
+        if ((Boolean)living.getMethod("func_82165_m", int.class).invoke(clientPlayer, 1))
+            throw new AssertionError("Fresh GUI player unexpectedly has a potion effect");
+        Object potion = loader.loadClass("net.minecraft.potion.PotionEffect").getConstructor(int.class, int.class).newInstance(1, 100);
+        var potionField = living.getDeclaredField("field_70713_bf"); potionField.setAccessible(true);
+        @SuppressWarnings("unchecked") var effects = (Map<Integer, Object>)potionField.get(clientPlayer);
+        effects.put(1, potion);
+        services.containers().create(320, 240, 20, 20, 176, 166, List.of(new LegacyContainers.Slot(8, 18, diamond)));
+        if (!(Boolean)living.getMethod("func_82165_m", int.class).invoke(clientPlayer, 1))
+            throw new AssertionError("Reopening a container discarded the player's potion state");
+        report.put("genericContainerPlayerPotionStateVerified", true);
+        Object oldClient = minecraft.getMethod("func_71410_x").invoke(null);
+        Object previousViewer = minecraft.getField("field_71451_h").get(oldClient);
+        var playerWorld = loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p");
+        Object previousWorld = playerWorld.get(clientPlayer), previewWorld;
+        Class<?> managerType = loader.loadClass("net.minecraft.client.renderer.entity.RenderManager");
+        Object manager = managerType.getField("field_78727_a").get(null);
+        Object previousEntityWorld = managerType.getField("field_78722_g").get(manager);
+        Object previousEntityViewer = managerType.getField("field_78734_h").get(manager);
+        try (var context = new LegacyInventoryContext(services)) {
+            previewWorld = playerWorld.get(clientPlayer);
+            if (previewWorld == null || minecraft.getField("field_71451_h").get(oldClient) != clientPlayer)
+                throw new AssertionError("Inventory renderers lack player/world/viewer context");
+            if (managerType.getField("field_78722_g").get(manager) != previewWorld || managerType.getField("field_78734_h").get(manager) != clientPlayer)
+                throw new AssertionError("Nested entity renderers lack preview world/viewer context");
+            Object actual = previewWorld.getClass().getMethod("func_147439_a", int.class,int.class,int.class).invoke(previewWorld,0,0,0);
+            if (!"minecraft:air".equals(registry.getClass().getMethod("func_148750_c", Object.class).invoke(registry, actual)))
+                throw new AssertionError("Inventory preview world changed block identity");
+            Class<?> dispatcherType = loader.loadClass("net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher");
+            Object dispatcher = dispatcherType.getField("field_147556_a").get(null);
+            if (dispatcherType.getField("field_147553_e").get(dispatcher) != minecraft.getField("field_71446_o").get(oldClient))
+                throw new AssertionError("Tile inventory renderers have no texture manager");
+        }
+        if (playerWorld.get(clientPlayer) != previousWorld || minecraft.getField("field_71451_h").get(oldClient) != previousViewer)
+            throw new AssertionError("Inventory capture leaked its temporary context");
+        if (managerType.getField("field_78722_g").get(manager) != previousEntityWorld || managerType.getField("field_78734_h").get(manager) != previousEntityViewer)
+            throw new AssertionError("Inventory capture leaked into entity rendering");
+        report.put("genericInventoryRenderContextVerified", true);
         try(var capture=LegacyGuiGraphics.begin(320,240,12,34,Set.of(29))) {
             Class<?> gl=loader.loadClass("org.lwjgl.opengl.GL11");gl.getMethod("glPushMatrix").invoke(null);gl.getMethod("glTranslatef",float.class,float.class,float.class).invoke(null,10f,20f,0f);
             loader.loadClass("net.minecraft.client.gui.Gui").getMethod("func_73734_a",int.class,int.class,int.class,int.class,int.class).invoke(null,1,2,4,5,0xff00ff00);

@@ -1,0 +1,1971 @@
+{
+  "date": "2026-10-18",
+  "target": "Thaumcraft 1.7.10-4.2.3.5 / Forge 1.20.1",
+  "method": "Current canPlace predicate + frozen runtime declarations + original creative stacks; source audit for custom Items. No repeated click test of blocked entries.",
+  "smokeReport": "C:\\Users\\gengy\\Desktop\\ModernForgeConnectLoader\\build\\crash-render-smoke\\game\\logs\\mfcl\\content-1.7.10-smoke.json",
+  "manifest": "C:\\Users\\gengy\\Desktop\\ModernForgeConnectLoader\\build\\crash-render-smoke\\game\\mfcl\\generated-packs\\content-1.7.10-14128448109560791214\\mfcl-content-manifest.json",
+  "manifestSha256": "f3b25aef5a2a227189e1e210fc82be83957ac805e08e4f3f8a123ff2c3e4bbac",
+  "summary": {
+    "registeredBlockTypes": 45,
+    "registeredBlockedBlockTypes": 35,
+    "declaredBlockItemVariants": 145,
+    "declaredBlockedBlockItemVariants": 115,
+    "creativeBlockTypes": 34,
+    "creativeBlockedBlockTypes": 28,
+    "creativeBlockItemVariants": 134,
+    "creativeBlockedBlockItemVariants": 108,
+    "creativeBlockItemStacks": 150,
+    "creativeBlockedBlockItemStacks": 124,
+    "additionalSourceConfirmedCustomPlacerTypes": 6,
+    "additionalVisibleCustomPlacerEntries": 4
+  },
+  "worldSpecialRenderSupport": {
+    "Thaumcraft:blockCosmeticOpaque": [
+      0,
+      1,
+      2
+    ]
+  },
+  "blockedBlockTypes": [
+    {
+      "blockKey": "Thaumcraft:blockAiry",
+      "renderType": -1,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "没有普通方块网格，需接通方块实体专用渲染/放置",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "灵气节点"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockAlchemyFurnace",
+      "renderType": -1,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "没有普通方块网格，需接通方块实体专用渲染/放置",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "荒古炼金炉"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockArcaneDoor",
+      "renderType": 7,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "门的朝向、上下两半及专用放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "奥能之扉"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockArcaneFurnace",
+      "renderType": 44,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "炼狱熔炉"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "renderType": 55,
+      "declaredBlockedVariants": 16,
+      "creativeBlockedVariants": 16,
+      "creativeBlockedStacks": 16,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "白色油脂蜡烛"
+        },
+        {
+          "metadata": 1,
+          "name": "橙色油脂蜡烛"
+        },
+        {
+          "metadata": 2,
+          "name": "品红色油脂蜡烛"
+        },
+        {
+          "metadata": 3,
+          "name": "浅蓝色油脂蜡烛"
+        },
+        {
+          "metadata": 4,
+          "name": "黄色油脂蜡烛"
+        },
+        {
+          "metadata": 5,
+          "name": "柠檬色油脂蜡烛"
+        },
+        {
+          "metadata": 6,
+          "name": "粉色油脂蜡烛"
+        },
+        {
+          "metadata": 7,
+          "name": "灰色油脂蜡烛"
+        },
+        {
+          "metadata": 8,
+          "name": "浅灰色油脂蜡烛"
+        },
+        {
+          "metadata": 9,
+          "name": "青色油脂蜡烛"
+        },
+        {
+          "metadata": 10,
+          "name": "紫色油脂蜡烛"
+        },
+        {
+          "metadata": 11,
+          "name": "蓝色油脂蜡烛"
+        },
+        {
+          "metadata": 12,
+          "name": "棕色油脂蜡烛"
+        },
+        {
+          "metadata": 13,
+          "name": "绿色油脂蜡烛"
+        },
+        {
+          "metadata": 14,
+          "name": "红色油脂蜡烛"
+        },
+        {
+          "metadata": 15,
+          "name": "黑色油脂蜡烛"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockChestHungry",
+      "renderType": 53,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "饕餮箱子"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "renderType": 58,
+      "declaredBlockedVariants": 7,
+      "creativeBlockedVariants": 7,
+      "creativeBlockedStacks": 7,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "风之魔晶"
+        },
+        {
+          "metadata": 1,
+          "name": "火之魔晶"
+        },
+        {
+          "metadata": 2,
+          "name": "水之魔晶"
+        },
+        {
+          "metadata": 3,
+          "name": "地之魔晶"
+        },
+        {
+          "metadata": 4,
+          "name": "秩序魔晶"
+        },
+        {
+          "metadata": 5,
+          "name": "混沌魔晶"
+        },
+        {
+          "metadata": 6,
+          "name": "复相魔晶"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "renderType": 52,
+      "declaredBlockedVariants": 8,
+      "creativeBlockedVariants": 8,
+      "creativeBlockedStacks": 8,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "朱砂矿石"
+        },
+        {
+          "metadata": 1,
+          "name": "风之蕴魔石"
+        },
+        {
+          "metadata": 2,
+          "name": "火之蕴魔石"
+        },
+        {
+          "metadata": 3,
+          "name": "水之蕴魔石"
+        },
+        {
+          "metadata": 4,
+          "name": "地之蕴魔石"
+        },
+        {
+          "metadata": 5,
+          "name": "秩序蕴魔石"
+        },
+        {
+          "metadata": 6,
+          "name": "混沌蕴魔石"
+        },
+        {
+          "metadata": 7,
+          "name": "琥珀矿石"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "renderType": 1,
+      "declaredBlockedVariants": 6,
+      "creativeBlockedVariants": 6,
+      "creativeBlockedStacks": 6,
+      "reason": "植物交叉面及生长/附着放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "宏伟之木树苗"
+        },
+        {
+          "metadata": 1,
+          "name": "银树树苗"
+        },
+        {
+          "metadata": 2,
+          "name": "水银花"
+        },
+        {
+          "metadata": 3,
+          "name": "火焰草"
+        },
+        {
+          "metadata": 4,
+          "name": "天域花"
+        },
+        {
+          "metadata": 5,
+          "name": "纤毛菇"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockEldritch",
+      "renderType": 60,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 4,
+          "name": "发光荒古石头"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockEldritchNothing",
+      "renderType": -1,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "没有普通方块网格，需接通方块实体专用渲染/放置",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "tile.blockPortalNothing.name"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockEssentiaReservoir",
+      "renderType": 61,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "源质库"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluidDeath",
+      "renderType": 42,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "旧流体世界渲染及放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "死亡之水  "
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluidPure",
+      "renderType": 42,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "旧流体世界渲染及放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "净化之水"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluxGas",
+      "renderType": 43,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "咒波气体世界渲染/放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "咒波瓦斯"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluxGoo",
+      "renderType": 42,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "旧流体世界渲染及放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "咒波粘浆"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockJar",
+      "renderType": 51,
+      "declaredBlockedVariants": 3,
+      "creativeBlockedVariants": 3,
+      "creativeBlockedStacks": 3,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "源质罐子"
+        },
+        {
+          "metadata": 1,
+          "name": "缸中之脑"
+        },
+        {
+          "metadata": 3,
+          "name": "虚空罐子"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockLifter",
+      "renderType": 57,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "奥术悬浮台"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootCrate",
+      "renderType": 63,
+      "declaredBlockedVariants": 3,
+      "creativeBlockedVariants": 3,
+      "creativeBlockedStacks": 3,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "废弃箱子"
+        },
+        {
+          "metadata": 1,
+          "name": "废弃箱子"
+        },
+        {
+          "metadata": 2,
+          "name": "废弃箱子"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootUrn",
+      "renderType": 62,
+      "declaredBlockedVariants": 3,
+      "creativeBlockedVariants": 3,
+      "creativeBlockedStacks": 3,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "古旧之瓮"
+        },
+        {
+          "metadata": 1,
+          "name": "古旧之瓮"
+        },
+        {
+          "metadata": 2,
+          "name": "古旧之瓮"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockMagicalLog",
+      "renderType": 31,
+      "declaredBlockedVariants": 2,
+      "creativeBlockedVariants": 2,
+      "creativeBlockedStacks": 2,
+      "reason": "原木侧面/端面及轴向元数据尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "宏伟之木原木"
+        },
+        {
+          "metadata": 1,
+          "name": "银树原木"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockManaPod",
+      "renderType": 1,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "植物交叉面及生长/附着放置尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "tile.blockManaPod.name"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "renderType": 45,
+      "declaredBlockedVariants": 11,
+      "creativeBlockedVariants": 11,
+      "creativeBlockedStacks": 11,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "坩埚"
+        },
+        {
+          "metadata": 1,
+          "name": "奥术蒸馏器"
+        },
+        {
+          "metadata": 2,
+          "name": "魔力充能中继器"
+        },
+        {
+          "metadata": 3,
+          "name": "高级炼金构材"
+        },
+        {
+          "metadata": 5,
+          "name": "物品格栅"
+        },
+        {
+          "metadata": 7,
+          "name": "奥术灯"
+        },
+        {
+          "metadata": 8,
+          "name": "催生灯"
+        },
+        {
+          "metadata": 9,
+          "name": "炼金构材"
+        },
+        {
+          "metadata": 12,
+          "name": "记忆矩阵"
+        },
+        {
+          "metadata": 13,
+          "name": "育种灯 "
+        },
+        {
+          "metadata": 14,
+          "name": "魔力中继器 "
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockMirror",
+      "renderType": -1,
+      "declaredBlockedVariants": 2,
+      "creativeBlockedVariants": 2,
+      "creativeBlockedStacks": 2,
+      "reason": "没有普通方块网格，需接通方块实体专用渲染/放置",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "魔镜"
+        },
+        {
+          "metadata": 6,
+          "name": "源质之镜"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockPortalEldritch",
+      "renderType": -1,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "没有普通方块网格，需接通方块实体专用渲染/放置",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "邪术传送门"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsArcaneStone",
+      "renderType": 10,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "楼梯形状、朝向和碰撞尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "奥术楼梯"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsEldritch",
+      "renderType": 10,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "楼梯形状、朝向和碰撞尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "荒古楼梯"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsGreatwood",
+      "renderType": 10,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "楼梯形状、朝向和碰撞尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "宏伟之木楼梯"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsSilverwood",
+      "renderType": 10,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 1,
+      "creativeBlockedStacks": 1,
+      "reason": "楼梯形状、朝向和碰撞尚未桥接",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "银树楼梯"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "renderType": 46,
+      "declaredBlockedVariants": 11,
+      "creativeBlockedVariants": 11,
+      "creativeBlockedStacks": 11,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "炼金炉"
+        },
+        {
+          "metadata": 1,
+          "name": "奥术基座"
+        },
+        {
+          "metadata": 2,
+          "name": "符文矩阵"
+        },
+        {
+          "metadata": 5,
+          "name": "法杖充能基座"
+        },
+        {
+          "metadata": 8,
+          "name": "复合充能核心"
+        },
+        {
+          "metadata": 9,
+          "name": "节点稳定器"
+        },
+        {
+          "metadata": 10,
+          "name": "高级节点稳定器"
+        },
+        {
+          "metadata": 11,
+          "name": "节点换能器"
+        },
+        {
+          "metadata": 12,
+          "name": "奥术浴场"
+        },
+        {
+          "metadata": 13,
+          "name": "核心镶饰台"
+        },
+        {
+          "metadata": 14,
+          "name": "咒波洗涤器"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockTable",
+      "renderType": 54,
+      "declaredBlockedVariants": 3,
+      "creativeBlockedVariants": 3,
+      "creativeBlockedStacks": 3,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "台桌"
+        },
+        {
+          "metadata": 14,
+          "name": "解构工作台"
+        },
+        {
+          "metadata": 15,
+          "name": "奥术工作台"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaintFibres",
+      "renderType": 50,
+      "declaredBlockedVariants": 4,
+      "creativeBlockedVariants": 4,
+      "creativeBlockedStacks": 4,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "腐化草丛"
+        },
+        {
+          "metadata": 1,
+          "name": "腐化草地"
+        },
+        {
+          "metadata": 2,
+          "name": "腐化植物"
+        },
+        {
+          "metadata": 3,
+          "name": "孢子梗"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "renderType": 49,
+      "declaredBlockedVariants": 8,
+      "creativeBlockedVariants": 8,
+      "creativeBlockedStacks": 8,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "源质管道"
+        },
+        {
+          "metadata": 1,
+          "name": "源质阀门"
+        },
+        {
+          "metadata": 2,
+          "name": "奥法离心机"
+        },
+        {
+          "metadata": 3,
+          "name": "过滤源质管道"
+        },
+        {
+          "metadata": 4,
+          "name": "源质缓存器"
+        },
+        {
+          "metadata": 5,
+          "name": "限定源质管道"
+        },
+        {
+          "metadata": 6,
+          "name": "定向源质管道"
+        },
+        {
+          "metadata": 7,
+          "name": "源质结晶器"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockWarded",
+      "renderType": 59,
+      "declaredBlockedVariants": 1,
+      "creativeBlockedVariants": 0,
+      "creativeBlockedStacks": 0,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "tile.blockWarded.name"
+        }
+      ]
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "renderType": 56,
+      "declaredBlockedVariants": 8,
+      "creativeBlockedVariants": 8,
+      "creativeBlockedStacks": 24,
+      "reason": "自定义世界渲染未通过当前支持探测，放置被拦截",
+      "variants": [
+        {
+          "metadata": 0,
+          "name": "奥术风箱"
+        },
+        {
+          "metadata": 1,
+          "name": "奥术之耳"
+        },
+        {
+          "metadata": 2,
+          "name": "奥术压力盘"
+        },
+        {
+          "metadata": 4,
+          "name": "奥术钻探机基座"
+        },
+        {
+          "metadata": 5,
+          "name": "奥术钻探机"
+        },
+        {
+          "metadata": 6,
+          "name": "宏伟之树木板"
+        },
+        {
+          "metadata": 7,
+          "name": "银树木板"
+        },
+        {
+          "metadata": 8,
+          "name": "血腥教徒旗帜"
+        }
+      ]
+    }
+  ],
+  "creativeVariants": [
+    {
+      "blockKey": "Thaumcraft:blockAiry",
+      "itemKey": "Thaumcraft:blockAiry",
+      "metadata": 0,
+      "tag": "",
+      "name": "灵气节点",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 0,
+      "tag": "",
+      "name": "白色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 1,
+      "tag": "",
+      "name": "橙色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 2,
+      "tag": "",
+      "name": "品红色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 3,
+      "tag": "",
+      "name": "浅蓝色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 4,
+      "tag": "",
+      "name": "黄色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 5,
+      "tag": "",
+      "name": "柠檬色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 6,
+      "tag": "",
+      "name": "粉色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 7,
+      "tag": "",
+      "name": "灰色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 8,
+      "tag": "",
+      "name": "浅灰色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 9,
+      "tag": "",
+      "name": "青色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 10,
+      "tag": "",
+      "name": "紫色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 11,
+      "tag": "",
+      "name": "蓝色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 12,
+      "tag": "",
+      "name": "棕色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 13,
+      "tag": "",
+      "name": "绿色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 14,
+      "tag": "",
+      "name": "红色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCandle",
+      "itemKey": "Thaumcraft:blockCandle",
+      "metadata": 15,
+      "tag": "",
+      "name": "黑色油脂蜡烛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockChestHungry",
+      "itemKey": "Thaumcraft:blockChestHungry",
+      "metadata": 0,
+      "tag": "",
+      "name": "饕餮箱子",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticOpaque",
+      "itemKey": "Thaumcraft:blockCosmeticOpaque",
+      "metadata": 0,
+      "tag": "",
+      "name": "琥珀方块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticOpaque",
+      "itemKey": "Thaumcraft:blockCosmeticOpaque",
+      "metadata": 1,
+      "tag": "",
+      "name": "琥珀砖块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticOpaque",
+      "itemKey": "Thaumcraft:blockCosmeticOpaque",
+      "metadata": 2,
+      "tag": "",
+      "name": "守卫者玻璃",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSlabStone",
+      "itemKey": "Thaumcraft:blockCosmeticSlabStone",
+      "metadata": 0,
+      "tag": "",
+      "name": "奥术台阶",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSlabStone",
+      "itemKey": "Thaumcraft:blockCosmeticSlabStone",
+      "metadata": 1,
+      "tag": "",
+      "name": "荒古台阶",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSlabWood",
+      "itemKey": "Thaumcraft:blockCosmeticSlabWood",
+      "metadata": 0,
+      "tag": "",
+      "name": "宏伟之木台阶",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSlabWood",
+      "itemKey": "Thaumcraft:blockCosmeticSlabWood",
+      "metadata": 1,
+      "tag": "",
+      "name": "银树台阶",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 0,
+      "tag": "",
+      "name": "黑曜石图腾",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 1,
+      "tag": "",
+      "name": "黑曜石瓦块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 2,
+      "tag": "",
+      "name": "旅行者铺路石",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 3,
+      "tag": "",
+      "name": "守卫者铺路石",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 4,
+      "tag": "",
+      "name": "神秘方块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 5,
+      "tag": "",
+      "name": "油脂方块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 6,
+      "tag": "",
+      "name": "奥术石块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 7,
+      "tag": "",
+      "name": "奥术石砖",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 8,
+      "tag": "",
+      "name": "蕴灵黑曜石图腾",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 9,
+      "tag": "",
+      "name": "傀儡脚镣",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 11,
+      "tag": "",
+      "name": "荒古石头",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 12,
+      "tag": "",
+      "name": "荒古岩石",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 14,
+      "tag": "",
+      "name": "陈年石头",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCosmeticSolid",
+      "itemKey": "Thaumcraft:blockCosmeticSolid",
+      "metadata": 15,
+      "tag": "",
+      "name": "荒古石座",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 0,
+      "tag": "",
+      "name": "风之魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 1,
+      "tag": "",
+      "name": "火之魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 2,
+      "tag": "",
+      "name": "水之魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 3,
+      "tag": "",
+      "name": "地之魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 4,
+      "tag": "",
+      "name": "秩序魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 5,
+      "tag": "",
+      "name": "混沌魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCrystal",
+      "itemKey": "Thaumcraft:blockCrystal",
+      "metadata": 6,
+      "tag": "",
+      "name": "复相魔晶",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 0,
+      "tag": "",
+      "name": "朱砂矿石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 1,
+      "tag": "",
+      "name": "风之蕴魔石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 2,
+      "tag": "",
+      "name": "火之蕴魔石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 3,
+      "tag": "",
+      "name": "水之蕴魔石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 4,
+      "tag": "",
+      "name": "地之蕴魔石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 5,
+      "tag": "",
+      "name": "秩序蕴魔石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 6,
+      "tag": "",
+      "name": "混沌蕴魔石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomOre",
+      "itemKey": "Thaumcraft:blockCustomOre",
+      "metadata": 7,
+      "tag": "",
+      "name": "琥珀矿石",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "itemKey": "Thaumcraft:blockCustomPlant",
+      "metadata": 0,
+      "tag": "",
+      "name": "宏伟之木树苗",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "itemKey": "Thaumcraft:blockCustomPlant",
+      "metadata": 1,
+      "tag": "",
+      "name": "银树树苗",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "itemKey": "Thaumcraft:blockCustomPlant",
+      "metadata": 2,
+      "tag": "",
+      "name": "水银花",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "itemKey": "Thaumcraft:blockCustomPlant",
+      "metadata": 3,
+      "tag": "",
+      "name": "火焰草",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "itemKey": "Thaumcraft:blockCustomPlant",
+      "metadata": 4,
+      "tag": "",
+      "name": "天域花",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockCustomPlant",
+      "itemKey": "Thaumcraft:blockCustomPlant",
+      "metadata": 5,
+      "tag": "",
+      "name": "纤毛菇",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockEldritch",
+      "itemKey": "Thaumcraft:blockEldritch",
+      "metadata": 4,
+      "tag": "",
+      "name": "发光荒古石头",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockEssentiaReservoir",
+      "itemKey": "Thaumcraft:blockEssentiaReservoir",
+      "metadata": 0,
+      "tag": "",
+      "name": "源质库",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluidDeath",
+      "itemKey": "Thaumcraft:blockFluidDeath",
+      "metadata": 0,
+      "tag": "",
+      "name": "死亡之水  ",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluidPure",
+      "itemKey": "Thaumcraft:blockFluidPure",
+      "metadata": 0,
+      "tag": "",
+      "name": "净化之水",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluxGas",
+      "itemKey": "Thaumcraft:blockFluxGas",
+      "metadata": 0,
+      "tag": "",
+      "name": "咒波瓦斯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockFluxGoo",
+      "itemKey": "Thaumcraft:blockFluxGoo",
+      "metadata": 0,
+      "tag": "",
+      "name": "咒波粘浆",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockJar",
+      "itemKey": "Thaumcraft:blockJar",
+      "metadata": 0,
+      "tag": "",
+      "name": "源质罐子",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockJar",
+      "itemKey": "Thaumcraft:blockJar",
+      "metadata": 1,
+      "tag": "",
+      "name": "缸中之脑",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockJar",
+      "itemKey": "Thaumcraft:blockJar",
+      "metadata": 3,
+      "tag": "",
+      "name": "虚空罐子",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLifter",
+      "itemKey": "Thaumcraft:blockLifter",
+      "metadata": 0,
+      "tag": "",
+      "name": "奥术悬浮台",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootCrate",
+      "itemKey": "Thaumcraft:blockLootCrate",
+      "metadata": 0,
+      "tag": "",
+      "name": "废弃箱子",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootCrate",
+      "itemKey": "Thaumcraft:blockLootCrate",
+      "metadata": 1,
+      "tag": "",
+      "name": "废弃箱子",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootCrate",
+      "itemKey": "Thaumcraft:blockLootCrate",
+      "metadata": 2,
+      "tag": "",
+      "name": "废弃箱子",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootUrn",
+      "itemKey": "Thaumcraft:blockLootUrn",
+      "metadata": 0,
+      "tag": "",
+      "name": "古旧之瓮",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootUrn",
+      "itemKey": "Thaumcraft:blockLootUrn",
+      "metadata": 1,
+      "tag": "",
+      "name": "古旧之瓮",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockLootUrn",
+      "itemKey": "Thaumcraft:blockLootUrn",
+      "metadata": 2,
+      "tag": "",
+      "name": "古旧之瓮",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMagicalLeaves",
+      "itemKey": "Thaumcraft:blockMagicalLeaves",
+      "metadata": 0,
+      "tag": "",
+      "name": "宏伟之木树叶",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockMagicalLeaves",
+      "itemKey": "Thaumcraft:blockMagicalLeaves",
+      "metadata": 1,
+      "tag": "",
+      "name": "银树树叶",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockMagicalLog",
+      "itemKey": "Thaumcraft:blockMagicalLog",
+      "metadata": 0,
+      "tag": "",
+      "name": "宏伟之木原木",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMagicalLog",
+      "itemKey": "Thaumcraft:blockMagicalLog",
+      "metadata": 1,
+      "tag": "",
+      "name": "银树原木",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 0,
+      "tag": "",
+      "name": "坩埚",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 1,
+      "tag": "",
+      "name": "奥术蒸馏器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 2,
+      "tag": "",
+      "name": "魔力充能中继器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 3,
+      "tag": "",
+      "name": "高级炼金构材",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 5,
+      "tag": "",
+      "name": "物品格栅",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 7,
+      "tag": "",
+      "name": "奥术灯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 8,
+      "tag": "",
+      "name": "催生灯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 9,
+      "tag": "",
+      "name": "炼金构材",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 12,
+      "tag": "",
+      "name": "记忆矩阵",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 13,
+      "tag": "",
+      "name": "育种灯 ",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMetalDevice",
+      "itemKey": "Thaumcraft:blockMetalDevice",
+      "metadata": 14,
+      "tag": "",
+      "name": "魔力中继器 ",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMirror",
+      "itemKey": "Thaumcraft:blockMirror",
+      "metadata": 0,
+      "tag": "",
+      "name": "魔镜",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockMirror",
+      "itemKey": "Thaumcraft:blockMirror",
+      "metadata": 6,
+      "tag": "",
+      "name": "源质之镜",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsArcaneStone",
+      "itemKey": "Thaumcraft:blockStairsArcaneStone",
+      "metadata": 0,
+      "tag": "",
+      "name": "奥术楼梯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsEldritch",
+      "itemKey": "Thaumcraft:blockStairsEldritch",
+      "metadata": 0,
+      "tag": "",
+      "name": "荒古楼梯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsGreatwood",
+      "itemKey": "Thaumcraft:blockStairsGreatwood",
+      "metadata": 0,
+      "tag": "",
+      "name": "宏伟之木楼梯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStairsSilverwood",
+      "itemKey": "Thaumcraft:blockStairsSilverwood",
+      "metadata": 0,
+      "tag": "",
+      "name": "银树楼梯",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 0,
+      "tag": "",
+      "name": "炼金炉",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 1,
+      "tag": "",
+      "name": "奥术基座",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 2,
+      "tag": "",
+      "name": "符文矩阵",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 5,
+      "tag": "",
+      "name": "法杖充能基座",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 8,
+      "tag": "",
+      "name": "复合充能核心",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 9,
+      "tag": "",
+      "name": "节点稳定器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 10,
+      "tag": "",
+      "name": "高级节点稳定器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 11,
+      "tag": "",
+      "name": "节点换能器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 12,
+      "tag": "",
+      "name": "奥术浴场",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 13,
+      "tag": "",
+      "name": "核心镶饰台",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockStoneDevice",
+      "itemKey": "Thaumcraft:blockStoneDevice",
+      "metadata": 14,
+      "tag": "",
+      "name": "咒波洗涤器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTable",
+      "itemKey": "Thaumcraft:blockTable",
+      "metadata": 0,
+      "tag": "",
+      "name": "台桌",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTable",
+      "itemKey": "Thaumcraft:blockTable",
+      "metadata": 14,
+      "tag": "",
+      "name": "解构工作台",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTable",
+      "itemKey": "Thaumcraft:blockTable",
+      "metadata": 15,
+      "tag": "",
+      "name": "奥术工作台",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaint",
+      "itemKey": "Thaumcraft:blockTaint",
+      "metadata": 0,
+      "tag": "",
+      "name": "陈年污点",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaint",
+      "itemKey": "Thaumcraft:blockTaint",
+      "metadata": 1,
+      "tag": "",
+      "name": "腐化泥土",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaint",
+      "itemKey": "Thaumcraft:blockTaint",
+      "metadata": 2,
+      "tag": "",
+      "name": "血肉方块",
+      "allowedByBridge": true
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaintFibres",
+      "itemKey": "Thaumcraft:blockTaintFibres",
+      "metadata": 0,
+      "tag": "",
+      "name": "腐化草丛",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaintFibres",
+      "itemKey": "Thaumcraft:blockTaintFibres",
+      "metadata": 1,
+      "tag": "",
+      "name": "腐化草地",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaintFibres",
+      "itemKey": "Thaumcraft:blockTaintFibres",
+      "metadata": 2,
+      "tag": "",
+      "name": "腐化植物",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTaintFibres",
+      "itemKey": "Thaumcraft:blockTaintFibres",
+      "metadata": 3,
+      "tag": "",
+      "name": "孢子梗",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 0,
+      "tag": "",
+      "name": "源质管道",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 1,
+      "tag": "",
+      "name": "源质阀门",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 2,
+      "tag": "",
+      "name": "奥法离心机",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 3,
+      "tag": "",
+      "name": "过滤源质管道",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 4,
+      "tag": "",
+      "name": "源质缓存器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 5,
+      "tag": "",
+      "name": "限定源质管道",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 6,
+      "tag": "",
+      "name": "定向源质管道",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockTube",
+      "itemKey": "Thaumcraft:blockTube",
+      "metadata": 7,
+      "tag": "",
+      "name": "源质结晶器",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 0,
+      "tag": "",
+      "name": "奥术风箱",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 1,
+      "tag": "",
+      "name": "奥术之耳",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 2,
+      "tag": "",
+      "name": "奥术压力盘",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 4,
+      "tag": "",
+      "name": "奥术钻探机基座",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 5,
+      "tag": "",
+      "name": "奥术钻探机",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 6,
+      "tag": "",
+      "name": "宏伟之树木板",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 7,
+      "tag": "",
+      "name": "银树木板",
+      "allowedByBridge": false
+    },
+    {
+      "blockKey": "Thaumcraft:blockWoodenDevice",
+      "itemKey": "Thaumcraft:blockWoodenDevice",
+      "metadata": 8,
+      "tag": "{color:7b,}",
+      "name": "血腥教徒旗帜",
+      "allowedByBridge": false
+    }
+  ],
+  "additionalCustomPlacers": [
+    {
+      "itemKey": "Thaumcraft:ItemArcaneDoor",
+      "metadata": 0,
+      "name": "奥能之扉",
+      "target": "Thaumcraft:blockArcaneDoor",
+      "creativeEntries": 1,
+      "source": "build/thaumcraft-investigation/decompiled/thaumcraft/common/blocks/ItemArcaneDoor.java",
+      "reason": "当前 MirroredItem 未覆写 useOn，原版专用放置回调未执行"
+    },
+    {
+      "itemKey": "Thaumcraft:ItemManaBean",
+      "metadata": 0,
+      "name": "魔豆",
+      "target": "Thaumcraft:blockManaPod",
+      "creativeEntries": 1,
+      "source": "build/thaumcraft-investigation/decompiled/thaumcraft/common/items/ItemManaBean.java",
+      "reason": "当前 MirroredItem 未覆写 useOn，原版专用放置回调未执行"
+    },
+    {
+      "itemKey": "Thaumcraft:ItemResource",
+      "metadata": 1,
+      "name": "闪耀之光",
+      "target": "Thaumcraft:blockAiry@1",
+      "creativeEntries": 1,
+      "source": "build/thaumcraft-investigation/decompiled/thaumcraft/common/items/ItemResource.java",
+      "reason": "当前 MirroredItem 未覆写 useOn，原版专用放置回调未执行"
+    },
+    {
+      "itemKey": "Thaumcraft:ItemEldritchObject",
+      "metadata": 4,
+      "name": "邪术方尖碑敷设器",
+      "target": "Thaumcraft:blockEldritch@0,1,2",
+      "creativeEntries": 1,
+      "source": "build/thaumcraft-investigation/decompiled/thaumcraft/common/items/ItemEldritchObject.java",
+      "reason": "当前 MirroredItem 未覆写 useOn，原版专用放置回调未执行"
+    },
+    {
+      "itemKey": "Thaumcraft:BlockJarFilledItem",
+      "metadata": 0,
+      "name": "要素罐子",
+      "target": "Thaumcraft:blockJar",
+      "creativeEntries": 0,
+      "source": "build/thaumcraft-investigation/decompiled/thaumcraft/common/blocks/ItemJarFilled.java",
+      "reason": "当前 MirroredItem 未覆写 useOn，原版专用放置回调未执行"
+    },
+    {
+      "itemKey": "Thaumcraft:BlockJarNodeItem",
+      "metadata": 0,
+      "name": "缸中节点",
+      "target": "Thaumcraft:blockJar",
+      "creativeEntries": 0,
+      "source": "build/thaumcraft-investigation/decompiled/thaumcraft/common/blocks/ItemJarNode.java",
+      "reason": "当前 MirroredItem 未覆写 useOn，原版专用放置回调未执行"
+    }
+  ]
+}

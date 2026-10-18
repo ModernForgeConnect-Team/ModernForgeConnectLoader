@@ -5,14 +5,15 @@ import java.util.*;
 
 /** Frozen declarations from the real old registries. No Minecraft types cross the runtime boundary. */
 public final class LegacyContent {
-    public record Variant(int metadata, String nameKey, String icon, int color) {}
+    public record Layer(String icon, int color) {}
+    public record Variant(int metadata, String nameKey, String icon, int color, List<Layer> layers) {
+        public Variant { layers = List.copyOf(layers); }
+    }
     public record Item(String key, String blockKey, int stackLimit, int maxDamage, boolean creative, List<Variant> variants) {
         public Item { variants = List.copyOf(variants); }
     }
-    /** Render types whose inventory form is a flat sprite rather than a cube: crosses, crops, doors, stems, vines and candles. */
-    private static final Set<Integer> FLAT_RENDER_TYPES = Set.of(1, 6, 7, 19, 20, 31, 50, 55);
     public record Block(String key, float hardness, float resistance, int light, boolean opaque,
-                        boolean tileEntity, int renderType, List<List<String>> faces, List<Integer> tileMetas) {
+                        boolean tileEntity, int renderType, boolean inventory3D, List<List<String>> faces, List<Integer> tileMetas) {
         public Block {
             faces = faces.stream().map(List::copyOf).toList();
             tileMetas = List.copyOf(tileMetas);
@@ -20,7 +21,7 @@ public final class LegacyContent {
         public boolean simple() { return renderType == 0 && !tileEntity; }
         public boolean hasTile(int metadata) { return tileMetas.contains(metadata); }
         /** Whether the original inventory model is a block cube instead of a flat sprite. */
-        public boolean blockModel() { return renderType == 0 || !FLAT_RENDER_TYPES.contains(renderType); }
+        public boolean blockModel() { return inventory3D; }
     }
     private final LegacyClientData data;
     private final List<Item> items;
@@ -56,22 +57,29 @@ public final class LegacyContent {
             var stacks = new ArrayList<LegacyClientData.Stack>(data.catalog());
             for (var tab : tabs) for (var entry : tab.contents()) if (stacks.stream().noneMatch(s -> s.key().equals(entry.key()) && s.metadata() == entry.metadata() && s.tag().equals(entry.tag()))) stacks.add(entry);
             for (var snapshot : stacks) {
-                if (snapshot.key().startsWith("minecraft:") || customItems.contains(snapshot.key())) continue;
+                if (snapshot.key().startsWith("minecraft:")) continue;
                 Object stack = data.materialize(snapshot); // keeps the original NBT, e.g. a wand's rod and cap
                 Object renderer = getRenderer.invoke(null, stack, inventory);
                 if (renderer == null) { if (snapshot.key().contains("Wand")) captureDiagnostics.add("no item renderer for " + snapshot.key() + "@" + snapshot.metadata()); continue; }
                 LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
-                try { data.inLegacy(() -> { renderItem.invoke(renderer, inventory, stack, new Object[]{renderBlocks, stack}); return null; }); }
+                boolean complete = false;
+                try { data.inLegacy(() -> { renderItem.invoke(renderer, inventory, stack, new Object[]{renderBlocks, stack}); return null; }); complete = true; }
                 catch (Throwable failure) {
                     Throwable cause = failure;
                     while (cause.getCause() != null && cause != cause.getCause()) cause = cause.getCause();
                     captureDiagnostics.add("item renderer failed " + snapshot.key() + "@" + snapshot.metadata() + ": " + cause);
                 }
                 List<LegacyVertexStream.Primitive> captured;
-                try { captured = frame.primitives(); } finally { frame.close(); }
-                if (snapshot.key().contains("Wand")) captureDiagnostics.add("wand renderer " + snapshot.key() + "@" + snapshot.metadata() + " -> " + captured.size() + " primitives, tag=" + snapshot.tag());
+                try { captured = frame.primitives(); }
+                finally {
+                    try { frame.close(); }
+                    catch (IllegalStateException failure) { complete = false; captureDiagnostics.add("item capture failed to close " + snapshot.key() + "@" + snapshot.metadata() + ": " + failure); }
+                }
+                if (!complete) continue; // An exception may leave only half of a model in the frame.
+                captured = resolveIcons(captured);
+                if (snapshot.key().contains("Wand")) captureDiagnostics.add("wand renderer " + snapshot.key() + "@" + snapshot.metadata() + " -> " + captured.size() + " primitives");
                 if (captured.isEmpty()) continue;
-                geometry.put(snapshot.key() + "@" + snapshot.metadata(), captured);
+                geometry.put(geometryKey(snapshot.key(), snapshot.metadata(), snapshot.tag()), captured);
                 captureDiagnostics.add("captured item renderer " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives, "
                         + captured.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices");
                 customItems.add(snapshot.key());
@@ -103,7 +111,11 @@ public final class LegacyContent {
                         captureDiagnostics.add("capture failed " + block.key() + "@" + variant.metadata() + " renderType=" + block.renderType() + ": " + cause);
                     }
                     List<LegacyVertexStream.Primitive> captured;
-                    try { captured = frame.primitives(); } finally { frame.close(); }
+                    try { captured = frame.primitives(); }
+                    finally {
+                        try { frame.close(); }
+                        catch (IllegalStateException failure) { drawn = false; captureDiagnostics.add("block capture failed to close " + block.key() + "@" + variant.metadata() + ": " + failure); }
+                    }
                     if (!drawn || captured.isEmpty()) continue;
                     var resolved = resolveIcons(captured);
                     if (resolved.isEmpty()) { captureDiagnostics.add("unresolved icons " + block.key() + "@" + variant.metadata() + " (" + captured.size() + " primitives)"); continue; }
@@ -117,24 +129,12 @@ public final class LegacyContent {
         }
     }
     private List<LegacyVertexStream.Primitive> resolveIcons(List<LegacyVertexStream.Primitive> primitives) {
-        var result = new ArrayList<LegacyVertexStream.Primitive>();
-        for (var primitive : primitives) {
-            var vertices = primitive.vertices();
-            if (vertices.isEmpty()) continue;
-            float u = 0, v = 0;
-            for (var vertex : vertices) { u += vertex.u(); v += vertex.v(); }
-            String icon = data.iconAt(u / vertices.size(), v / vertices.size());
-            float[] cell = icon == null ? null : data.iconLayout().get(icon);
-            if (cell == null) continue;
-            var mapped = new ArrayList<LegacyVertexStream.Vertex>(vertices.size());
-            for (var vertex : vertices) mapped.add(new LegacyVertexStream.Vertex(vertex.x(), vertex.y(), vertex.z(),
-                    (vertex.u() - cell[0]) / (cell[2] - cell[0]), (vertex.v() - cell[1]) / (cell[3] - cell[1]),
-                    vertex.nx(), vertex.ny(), vertex.nz(), vertex.argb()));
-            result.add(new LegacyVertexStream.Primitive(primitive.mode(), icon, mapped));
-        }
-        return List.copyOf(result);
+        return LegacyIconResolver.resolve(primitives, data.iconLayout());
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
+    public static String geometryKey(String key, int metadata, String tag) {
+        return key + "@" + metadata + (tag == null || tag.isEmpty() ? "" : "#" + tag);
+    }
     public Set<String> customItems() { return customItems; }
     public List<String> captureDiagnostics() { return List.copyOf(captureDiagnostics); }
     private static String bounds(List<LegacyVertexStream.Primitive> primitives) {
@@ -183,7 +183,9 @@ public final class LegacyContent {
             blockValues.add(new Block(key, number(blockType, block, "field_149782_v"),
                     ((Number) blockType.getMethod("func_149638_a", loader.loadClass("net.minecraft.entity.Entity")).invoke(block, new Object[]{null})).floatValue(),
                     (int) blockType.getMethod("func_149750_m").invoke(block), (boolean) blockType.getMethod("func_149662_c").invoke(block),
-                    !tileMetas.isEmpty(), (int) blockType.getMethod("func_149645_b").invoke(block), faces, tileMetas));
+                    !tileMetas.isEmpty(), (int) blockType.getMethod("func_149645_b").invoke(block),
+                    (boolean)data.loader().loadClass("net.minecraft.client.renderer.RenderBlocks").getMethod("func_147739_a", int.class)
+                            .invoke(null, (int)blockType.getMethod("func_149645_b").invoke(block)), faces, tileMetas));
             oldBlocks.put(key, block);
         }
         var itemValues = new ArrayList<Item>();
@@ -220,7 +222,17 @@ public final class LegacyContent {
                     name = (String) itemType.getMethod("func_77658_a").invoke(item);
                     texture = ""; color = 0xFFFFFF;
                 }
-                variants.add(new Variant(meta, name + ".name", texture, color));
+                var layers = new ArrayList<Layer>();
+                try {
+                    int passes = linkedBlock == null ? (int)itemType.getMethod("getRenderPasses", int.class).invoke(item, meta) : 1;
+                    for (int pass = 0; pass < passes; pass++) {
+                        Object icon = linkedBlock == null ? itemType.getMethod("getIcon", stackType, int.class).invoke(item, stack, pass) : null;
+                        String layerIcon = icon == null ? texture : (String)iconType.getMethod("func_94215_i").invoke(icon);
+                        int layerColor = linkedBlock == null ? (int)itemType.getMethod("func_82790_a", stackType, int.class).invoke(item, stack, pass) : color;
+                        layers.add(new Layer(layerIcon, layerColor));
+                    }
+                } catch (ReflectiveOperationException undeclared) { layers.clear(); layers.add(new Layer(texture, color)); }
+                variants.add(new Variant(meta, name + ".name", texture, color, layers));
             }
             boolean creative = Arrays.stream((Object[]) itemType.getMethod("getCreativeTabs").invoke(item)).anyMatch(Objects::nonNull);
             itemValues.add(new Item(key, linkedBlock, Math.max(1, Math.min(64, limit)), damage, creative, variants));
@@ -252,6 +264,7 @@ public final class LegacyContent {
     public List<Block> blocks() { return blocks; }
     public List<LegacyCreativeTabs.Tab> tabs() { return tabs; }
     public ClassLoader loader() { return data.loader(); }
+    public Set<String> registeredIcons() { return Set.copyOf(data.iconLayout().keySet()); }
     /** Execute the original vanilla-style drop methods, preserving custom ore drop identity and metadata. */
     public List<LegacyClientData.Stack> drops(String key, int metadata, long seed) throws Exception {
         return data.inLegacy(() -> {

@@ -91,9 +91,21 @@ public final class LegacyClientData {
                 setField(fontType, font, "field_78287_e", in == null ? new byte[65536] : in.readAllBytes());
             }
             setField(mcType, client, "field_71466_p", font); setField(mcType, client, "field_71464_q", font);
-            setField(mcType, client, "field_71446_o", loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")
+            Object textureManager = loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")
                     .getConstructor(loader.loadClass("net.minecraft.client.resources.IResourceManager"))
-                    .newInstance(mcType.getMethod("func_110442_L").invoke(client)));
+                    .newInstance(mcType.getMethod("func_110442_L").invoke(client));
+            setField(mcType, client, "field_71446_o", textureManager);
+            Class<?> renderManagerType = loader.loadClass("net.minecraft.client.renderer.entity.RenderManager");
+            Object renderManager = renderManagerType.getField("field_78727_a").get(null);
+            if (renderManager != null) {
+                setField(renderManagerType, renderManager, "field_78724_e", textureManager);
+                setField(renderManagerType, renderManager, "field_78736_p", font);
+                setField(renderManagerType, renderManager, "field_78733_k", mcType.getField("field_71474_y").get(client));
+            }
+            Class<?> dispatcherType = loader.loadClass("net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher");
+            Object dispatcher = dispatcherType.getField("field_147556_a").get(null);
+            setField(dispatcherType, dispatcher, "field_147553_e", textureManager);
+            setField(dispatcherType, dispatcher, "field_147557_n", font);
             setField(mcType, client, "field_147127_av", unsafe.getClass().getMethod("allocateInstance", Class.class)
                     .invoke(unsafe, loader.loadClass("net.minecraft.client.audio.SoundHandler")));
             setField(mcType, client, "field_135017_as", loader.loadClass("net.minecraft.client.resources.LanguageManager")
@@ -166,6 +178,30 @@ public final class LegacyClientData {
     }
     public void close() throws java.io.IOException { if (resourceContext != null) resourceContext.close(); }
     public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
+    /** Evaluate the original item's per-pass color on the full stack, including its opaque old NBT. */
+    public int itemColor(Stack value, int pass) throws Exception {
+        return inLegacy(() -> {
+            Object stack = materialize(value);
+            return (int)itemType.getMethod("func_82790_a", stackType, int.class).invoke(itemOfStack.invoke(stack), stack, pass);
+        });
+    }
+    private String currentLanguage;
+    public synchronized void language(String code) throws Exception {
+        if (code.equals(currentLanguage)) return;
+        inLegacy(() -> {
+            int split = code.indexOf('_');
+            String oldCode = split < 0 ? code : code.substring(0, split) + "_" + code.substring(split + 1).toUpperCase(java.util.Locale.ROOT);
+            Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale");
+            Object locale = localeType.getConstructor().newInstance();
+            localeType.getMethod("func_135022_a", loader.loadClass("net.minecraft.client.resources.IResourceManager"), List.class)
+                    .invoke(locale, resourceContext.manager(), oldCode.equals("en_US") ? List.of("en_US") : List.of("en_US", oldCode));
+            setField(loader.loadClass("net.minecraft.client.resources.I18n"), null, "field_135054_a", locale);
+            Field translations = localeType.getDeclaredField("field_135032_a"); translations.setAccessible(true);
+            loader.loadClass("net.minecraft.util.StringTranslate").getMethod("func_135063_a", Map.class).invoke(null, translations.get(locale));
+            currentLanguage = code;
+            return null;
+        });
+    }
     private void prepareIconMetadata() throws Exception {
         Class<?> icon = loader.loadClass("net.minecraft.util.IIcon"), register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");
         Map<String, Object> icons = new HashMap<>();
@@ -180,9 +216,9 @@ public final class LegacyClientData {
             return Proxy.newProxyInstance(loader, new Class<?>[]{icon}, (ignored, m, a) -> switch (m.getName()) {
                 case "func_94211_a", "func_94216_b" -> 16;
                 case "func_94209_e" -> minU;
-                case "func_94210_h" -> minV;
+                case "func_94206_g" -> minV;
                 case "func_94212_f" -> maxU;
-                case "func_94206_g" -> maxV;
+                case "func_94210_h" -> maxV;
                 case "func_94214_a" -> minU + (maxU - minU) * (((Double) a[0]).floatValue() / 16f);
                 case "func_94207_b" -> minV + (maxV - minV) * (((Double) a[0]).floatValue() / 16f);
                 case "func_94215_i", "toString" -> name;
@@ -301,7 +337,7 @@ public final class LegacyClientData {
         if (!originals.containsKey(stack)) originals.put(stack, copyStack.invoke(value));
         return stack;
     }
-    public <T> T inLegacy(Callable<T> work) throws Exception {
+    public synchronized <T> T inLegacy(Callable<T> work) throws Exception {
         Thread thread = Thread.currentThread(); ClassLoader before = thread.getContextClassLoader();
         try { thread.setContextClassLoader(loader); return work.call(); }
         finally { thread.setContextClassLoader(before); }

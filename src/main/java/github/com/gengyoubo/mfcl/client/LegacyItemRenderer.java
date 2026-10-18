@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import github.com.gengyoubo.mfcl.bridge.LegacyVertexStream;
+import github.com.gengyoubo.mfcl.bridge.LegacyItemLayout;
 import github.com.gengyoubo.mfcl.content.ModernContentBridge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
@@ -24,19 +25,33 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
     private static final java.util.Set<String> missingSprites = new java.util.HashSet<>();
     private final ModernContentBridge bridge;
     private final String itemKey;
+    private final String blockKey;
+    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> guiFits = new java.util.IdentityHashMap<>();
     public LegacyItemRenderer(ModernContentBridge bridge, String itemKey) {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         this.bridge = bridge; this.itemKey = itemKey;
+        this.blockKey = bridge.declarations().items().stream().filter(item -> item.key().equals(itemKey)).findFirst().map(github.com.gengyoubo.mfcl.bridge.LegacyContent.Item::blockKey).orElse(null);
     }
     @Override public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose, MultiBufferSource buffer, int light, int overlay) {
-        List<LegacyVertexStream.Primitive> primitives = bridge.pack().geometry().get(itemKey + "@" + ModernContentBridge.metadata(stack));
+        var legacyTag = stack.getTagElement(ModernContentBridge.STACK_TAG);
+        String tag = legacyTag == null ? "" : legacyTag.getString("snbt");
+        String baseKey = github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, ModernContentBridge.metadata(stack), "");
+        List<LegacyVertexStream.Primitive> primitives = bridge.pack().geometry().get(
+                github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, ModernContentBridge.metadata(stack), tag));
+        if (primitives == null) primitives = bridge.pack().geometry().get(baseKey);
         if (primitives == null || primitives.isEmpty()) return;
+        var worldLayers = bridge.blockRendering().isolated(blockKey, ModernContentBridge.metadata(stack));
+        boolean translucent = !worldLayers.isEmpty() && worldLayers.stream().allMatch(layer -> layer.pass() == 1);
         pose.pushPose();
-        // Captured old geometry is centered on the block origin ([-0.5,0.5]); block models are [0,1], so
-        // shift first, then apply the standard block item display transform.
+        // Block captures are usually centered, while IItemRenderers can add their own origins and scale.
+        // Anchor in the host item coordinate system; fit overflowing GUI projections before replay.
         pose.translate(0.5, 0.5, 0.5);
         switch (context) {
-            case GUI -> { pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); pose.scale(0.625f, 0.625f, 0.625f); }
+            case GUI -> {
+                var fit = guiFits.computeIfAbsent(primitives, LegacyItemLayout::fitGui);
+                pose.translate(fit.x(), fit.y(), 0); pose.scale((float)fit.scale(), (float)fit.scale(), (float)fit.scale());
+                pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); pose.scale(0.625f, 0.625f, 0.625f);
+            }
             case GROUND -> { pose.translate(0, 0.1875, 0); pose.scale(0.25f, 0.25f, 0.25f); }
             case FIXED -> pose.scale(0.5f, 0.5f, 0.5f);
             case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
@@ -50,7 +65,7 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
             ResourceLocation spriteId = ResourceLocation.tryParse(entry.getKey());
             if (spriteId == null) continue;
             if (entry.getKey().contains("textures/")) { // old model renderer texture, UVs already 0..1
-                LegacyWorldRenderer.replayStandalone(pose, buffer.getBuffer(RenderType.entityCutoutNoCull(spriteId)), entry.getValue(), light, overlay);
+                LegacyWorldRenderer.replayStandalone(pose, buffer.getBuffer(translucent ? RenderType.entityTranslucent(spriteId) : RenderType.entityCutoutNoCull(spriteId)), entry.getValue(), light, overlay);
                 continue;
             }
             TextureAtlasSprite sprite = atlas.apply(spriteId);
@@ -58,7 +73,7 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
                 if (missingSprites.add(spriteId.toString())) com.mojang.logging.LogUtils.getLogger().warn("MFCL: captured sprite is not stitched: {}", spriteId);
                 continue;
             }
-            LegacyWorldRenderer.replay(pose, buffer.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS)), sprite, entry.getValue(), light, overlay);
+            LegacyWorldRenderer.replay(pose, buffer.getBuffer(translucent ? RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS) : RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS)), sprite, entry.getValue(), light, overlay);
         }
         pose.popPose();
     }

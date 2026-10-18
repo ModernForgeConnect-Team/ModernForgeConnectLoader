@@ -42,6 +42,7 @@ public final class ClientContainerBridge {
     private void init(ScreenEvent.Init.Post event) {
         if(!(event.getScreen() instanceof AbstractContainerScreen<?> screen))return;
         try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,0,0,keys())) {
+            services.items().language(Minecraft.getInstance().options.languageCode);
             Bound previous=bindings.remove(screen);if(previous!=null)previous.session.close();
             List<LegacyContainers.Slot> slots=new ArrayList<>();
             for(var slot:screen.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));
@@ -56,10 +57,10 @@ public final class ClientContainerBridge {
         if(value.isEmpty())return null;
         var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
         if(content!=null){var old=content.snapshot(value);if(old!=null)return old;}
-        if(value.hasTag())throw new UnsupportedOperationException("Host container NBT mapping is not available: "+value);
+        if(value.hasTag())return null; // unmapped host NBT items are simply not mirrored, never fatal
         if(reverse==null){reverse=new HashMap<>();for(var stack:services.items().catalog()){var modern=ModernItemMapping.renderStack(stack);if(!modern.isEmpty()&&!modern.hasTag())reverse.putIfAbsent(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(),stack);}}
         var old=reverse.get(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(value.getItem()).toString());
-        if(old==null)throw new UnsupportedOperationException("Host item has no old representation: "+value);
+        if(old==null)return null; // an unknown host item leaves its mirror slot empty instead of failing the container
         return new LegacyClientData.Stack(old.key(),value.isDamageableItem()?value.getDamageValue():old.metadata(),value.getCount(),old.name(),old.tag());
     }
     private void render(ScreenEvent.Render.Post event) {
