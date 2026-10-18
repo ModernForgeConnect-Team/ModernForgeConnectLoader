@@ -1,0 +1,543 @@
+{
+  "date": "2026-10-18",
+  "timezone": "Asia/Tokyo",
+  "scope": "Forge 1.7.10 10.13.4.1614 to Forge 1.20.1 47.4.28",
+  "officialMinecraftServer": {
+    "url": "https://launcher.mojang.com/v1/objects/952438ac4e01b4d115c5fc38f891710c4941df29/server.jar",
+    "sha1Verified": true,
+    "expectedSha1": "952438ac4e01b4d115c5fc38f891710c4941df29",
+    "versionMetadataUrl": "https://piston-meta.mojang.com/v1/packages/ed5d8789ed29872ea2ef1c348302b0c55e3f3468/1.7.10.json"
+  },
+  "artifacts": [
+    {
+      "name": "asm-debug-all-5.0.3.jar",
+      "size": 378662,
+      "sha256": "2969356ac1e40fe4141948c563690238f5d79d76aec7fd873536867a331ede81"
+    },
+    {
+      "name": "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar",
+      "size": 3018833,
+      "sha256": "00d1ca02192c7efb87da95552ebf247021f1e1d642f86d0a03076314def11529"
+    },
+    {
+      "name": "forge-1.7.10-10.13.4.1614-1.7.10-userdev.jar",
+      "size": 4353213,
+      "sha256": "6ed364c0defdb481a41ef2d99c02d382f16fc42a6ea0ea1c2b849848d8466e91"
+    },
+    {
+      "name": "guava-17.0.jar",
+      "size": 2243036,
+      "sha256": "8c36a80ea613d0b6b8040a17cf837c5bbe3677bc1b06a058a6c174fdb787ebbc"
+    },
+    {
+      "name": "joined-1.7.10.srg",
+      "size": 2029430,
+      "sha256": "43d4376110b2638213d3096f80f8395c076eb05b58d6c0dbd22c0d999b37a357"
+    },
+    {
+      "name": "launchwrapper-1.12.jar",
+      "size": 32999,
+      "sha256": "57f402b626d16cc2705bf2a37add7adbb074f0ca3b3102fa6e23aa303dae682f"
+    },
+    {
+      "name": "mcp-1.7.10-srg.zip",
+      "size": 292626,
+      "sha256": "d49df5c445dcf00ada532ab3b0e4283bf4b05ac13f210647658dfd3cec8b34c2"
+    },
+    {
+      "name": "minecraft-1.7.10-version.json",
+      "size": 19529,
+      "sha256": "96b4a83b9bd90041170b6f0bda98d8201af52ce778b1202272cb161c54658fcd"
+    },
+    {
+      "name": "minecraft-server-1.7.10.jar",
+      "size": 9605030,
+      "sha256": "c70870f00c4024d829e154f7e5f4e885b02dd87991726a3308d81f513972f3fc"
+    }
+  ],
+  "sources": [
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/Loader.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/Loader.java",
+      "sha256": "b2c48a784ea1c32b8f9fe3fc7b76ed92cbf3adbd0f8d96aa48dd8c71dbab4f1f"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/ModClassLoader.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/ModClassLoader.java",
+      "sha256": "41cd8772c4f490f7ae9beeb4828a785f5b1ee64233782b9474a6f1e89e74eb2e"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/FMLCommonHandler.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/FMLCommonHandler.java",
+      "sha256": "82f1f7714a5cfe58e4bb7f89f451578efab4c0cb335caba4b63f33c537d3e563"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/registry/GameData.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/registry/GameData.java",
+      "sha256": "6bcbb1c9b8c6982754d55afb1ec79c953f41481e4b3c1bd290f8d74141abd148"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/registry/GameRegistry.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/registry/GameRegistry.java",
+      "sha256": "8da1eed2d299d69bbf4151e5a2624112af225fbe779281d60d1cd02366def6f8"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/server/FMLServerHandler.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/server/FMLServerHandler.java",
+      "sha256": "2e0502fec31061b6c7c23f50c266cbe6148aae3c1a3f8f234d58168256b24274"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/relauncher/FMLLaunchHandler.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/relauncher/FMLLaunchHandler.java",
+      "sha256": "3861552adaae5ce51e084fe18455990916a6ffccde3682e1a8f2f9de4248da96"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/relauncher/FMLInjectionData.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/relauncher/FMLInjectionData.java",
+      "sha256": "7a61ed08cdf8bd39738e1b18e89a75b80bf1dcef91bfae3198226a9302db4fbb"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/launcher/FMLTweaker.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/launcher/FMLTweaker.java",
+      "sha256": "a9e1f8da137b7c2c61aafc71ee1a74a2ca513af7f28b98d56b6968a5ad4f0921"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/launcher/FMLDeobfTweaker.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/launcher/FMLDeobfTweaker.java",
+      "sha256": "92220720a34b21a6d20a0b663a9798e3b48fde9025a193d6d8a466ac4708d0cc"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/relauncher/CoreModManager.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/relauncher/CoreModManager.java",
+      "sha256": "1307f28e9964c9435b7c4293d522c0fbad7fa08cca13ae744d23635114fd3969"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/relauncher/FMLSecurityManager.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/relauncher/FMLSecurityManager.java",
+      "sha256": "e61c88464f8e25ac4fa6386f8aa5f0e1087b97438104c587084f9947887f00a4"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/asm/transformers/AccessTransformer.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/asm/transformers/AccessTransformer.java",
+      "sha256": "4ab4a98b048998f0c785be4c1f6c1a937b5682aab90bb897b9a72a5985e0afe1"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/boot/java/dev/umb/legacy/boot/LegacyLoader.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/boot/java/dev/umb/legacy/boot/LegacyLoader.java",
+      "sha256": "8e889a1f48eeac8784376c5385d5f464c2a59e271f50083f35642f33a486fdeb"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/boot/java/dev/umb/legacy/boot/Bootstrap.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/boot/java/dev/umb/legacy/boot/Bootstrap.java",
+      "sha256": "169b6038fdc647be090e5c1435731924341298ee05be17c735fbdf4d33451568"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/LegacyDriver.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/LegacyDriver.java",
+      "sha256": "8d57aca778082db2fbf63039bade6d3f3365ee020254d366c2c8dcc94a160857"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/UmbWorld.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/UmbWorld.java",
+      "sha256": "c9c2eb48301e81fdef50478c5feb846901851a3d8e341fceb54e9a7b9ceb6cf4"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/UmbWorldProvider.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/UmbWorldProvider.java",
+      "sha256": "42f201e5779a5f8e00c19a31683935d136c53eb6f8cf2f491b5c1322be01d8aa"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/UmbItemConv.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/UmbItemConv.java",
+      "sha256": "238e16381c1c0f565b408f226e8371d57301938abf368e9923511c5a051237a5"
+    },
+    {
+      "group": "umb",
+      "repository": "gato001k1/UniversalModBridge",
+      "commit": "b24a6378b58db5b7c4581456b38e74c02deb8a8b",
+      "path": "umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/LegacyCoremodLoader.java",
+      "url": "https://raw.githubusercontent.com/gato001k1/UniversalModBridge/b24a6378b58db5b7c4581456b38e74c02deb8a8b/umb-legacy/src/legacyside/java/dev/umb/legacy/legacyside/LegacyCoremodLoader.java",
+      "sha256": "630fbb69e21a03a2bd4dfd93535c3e1c3fba7925a112be280f3ac41f0770cbda"
+    },
+    {
+      "group": "rfb",
+      "repository": "GTNewHorizons/RetroFuturaBootstrap",
+      "commit": "78b687172b77a3b933f3a0f1de58fcaebf9dcbda",
+      "path": "src/main/java/com/gtnewhorizons/retrofuturabootstrap/Main.java",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/RetroFuturaBootstrap/78b687172b77a3b933f3a0f1de58fcaebf9dcbda/src/main/java/com/gtnewhorizons/retrofuturabootstrap/Main.java",
+      "sha256": "e4d1e07ebd676aed86435843afadd8f0e6a4f7db6952c6d77fe20c75a544b712"
+    },
+    {
+      "group": "rfb",
+      "repository": "GTNewHorizons/RetroFuturaBootstrap",
+      "commit": "78b687172b77a3b933f3a0f1de58fcaebf9dcbda",
+      "path": "src/main/java/com/gtnewhorizons/retrofuturabootstrap/RfbSystemClassLoader.java",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/RetroFuturaBootstrap/78b687172b77a3b933f3a0f1de58fcaebf9dcbda/src/main/java/com/gtnewhorizons/retrofuturabootstrap/RfbSystemClassLoader.java",
+      "sha256": "31d0a9b6de9efc809b525b49c122a2e4b778e4c290e5521ad7c4c49317e041cd"
+    },
+    {
+      "group": "rfb",
+      "repository": "GTNewHorizons/RetroFuturaBootstrap",
+      "commit": "78b687172b77a3b933f3a0f1de58fcaebf9dcbda",
+      "path": "src/main/java/net/minecraft/launchwrapper/LaunchClassLoader.java",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/RetroFuturaBootstrap/78b687172b77a3b933f3a0f1de58fcaebf9dcbda/src/main/java/net/minecraft/launchwrapper/LaunchClassLoader.java",
+      "sha256": "f1cc49ef79ed28e1641215eeedd4cff1e04316ec339d9d7a1e1c2a7edfe032d7"
+    },
+    {
+      "group": "lwjgl3ify",
+      "repository": "GTNewHorizons/lwjgl3ify",
+      "commit": "4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf",
+      "path": "README.MD",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/lwjgl3ify/4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf/README.MD",
+      "sha256": "b2262ac1dfa1b1133d712db323e1ed29c74a385629df7402f5c25350fc57ede8"
+    },
+    {
+      "group": "lwjgl3ify",
+      "repository": "GTNewHorizons/lwjgl3ify",
+      "commit": "4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf",
+      "path": "java9args.txt",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/lwjgl3ify/4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf/java9args.txt",
+      "sha256": "4323ca4203c84371d4fe1698dad306f81858be97bfe6da2606e7fd1b81749c9d"
+    },
+    {
+      "group": "lwjgl3ify",
+      "repository": "GTNewHorizons/lwjgl3ify",
+      "commit": "4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf",
+      "path": "src/main/java/me/eigenraven/lwjgl3ify/rfb/Lwjgl3ifyRfbPlugin.java",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/lwjgl3ify/4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf/src/main/java/me/eigenraven/lwjgl3ify/rfb/Lwjgl3ifyRfbPlugin.java",
+      "sha256": "a44f231a6fcd56b94ca4e91637439bdd1e70b43fda0afe8f021ae3bc3d60aa55"
+    },
+    {
+      "group": "lwjgl3ify",
+      "repository": "GTNewHorizons/lwjgl3ify",
+      "commit": "4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf",
+      "path": "src/main/java/me/eigenraven/lwjgl3ify/rfb/transformers/ForgePatchTransformer.java",
+      "url": "https://raw.githubusercontent.com/GTNewHorizons/lwjgl3ify/4b9a170e369cb718cbe06b9e4d2ff17fe142d4cf/src/main/java/me/eigenraven/lwjgl3ify/rfb/transformers/ForgePatchTransformer.java",
+      "sha256": "923bd15a085dfc2d8ae8ff411b77ea985ab70705e36605c1521ce8b7c314862c"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/client/loading/ClientModLoader.java",
+      "sha256": "a1ba9c2c8074a0f1daf51270e91adf8eac3099c6b4472328be06c8c88cc67ecf"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/common/ForgeStatesProvider.java",
+      "sha256": "b7149f81cb81e5386042c837060931ed07207e86a126ae1738c5eff74ce5a5cb"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/data/loading/DatagenModLoader.java",
+      "sha256": "6399edbf9bfa40af5c117f5701c6b03f8cc4a16c01279f065c81f2ee4710ede6"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/event/entity/SpawnPlacementRegisterEvent.java",
+      "sha256": "713a97d0644fecc0b40202cc8ec46cf678744c77799314131eee72e9aad2e64e"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/fml/core/ModStateProvider.java",
+      "sha256": "bc6cd06fa8a5dd102442ebbd4909678395f5203fa32a591bcf0a78329800de9d"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/registries/ForgeRegistry.java",
+      "sha256": "166d4d874bb6f3a7e3f0e6317d5ee627edaf9e0bc62ea0aebb32d852e9ba30c8"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/registries/GameData.java",
+      "sha256": "010c3c73978db36f38efe0ed11f2047a34a97d485d16c7246191947e81d269c0"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/registries/IForgeRegistry.java",
+      "sha256": "c6223418feeaaf83905feafcf26d89fe86d622050cad2d8e06f082b982146963"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/registries/NamespacedWrapper.java",
+      "sha256": "5e632820968b91eb66270b6721194d99ffaabd19e1a7a9eebfbb94050f211557"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/registries/RegisterEvent.java",
+      "sha256": "6a7ce275489bb69691746160fecf20b6fd84d5bed1bc39eeb0735a9ed2204ddc"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "forge-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "3e5df39a45547ee01a8fa3dcc6c5fbd53ada696cd10a29e822cf15aa496d1ab5",
+      "path": "net/minecraftforge/server/loading/ServerModLoader.java",
+      "sha256": "0a5ec7d46e958fe36090196e93d2a65c3ad13de6e77cb59ee5ee610bf7880e17"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "fmlcore-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "11017374aea471de89655ce6bc4ed2373352a579829b51fb8def3c349de984a5",
+      "path": "net/minecraftforge/fml/IModStateProvider.java",
+      "sha256": "f2971920ae54e8643f5aaa2e5937c46bedd35a776b01ae9447338bc73b2e9f6a"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "fmlcore-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "11017374aea471de89655ce6bc4ed2373352a579829b51fb8def3c349de984a5",
+      "path": "net/minecraftforge/fml/ModLoader.java",
+      "sha256": "b6b53fc795afe0196be087f3c7822412ab3d015a5338e1d90c4614dab132b59e"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "fmlcore-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "11017374aea471de89655ce6bc4ed2373352a579829b51fb8def3c349de984a5",
+      "path": "net/minecraftforge/fml/ModContainer.java",
+      "sha256": "609394cdda856f7da52f87912f22355ff18b86a2d9e04ca32952b9b568b7511b"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "fmlcore-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "11017374aea471de89655ce6bc4ed2373352a579829b51fb8def3c349de984a5",
+      "path": "net/minecraftforge/fml/ModLoadingStage.java",
+      "sha256": "f19bea434a9aa360457fe4b83ec6fb7d622e15ebc5284f9b34b59094bc7f614b"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "fmlloader-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "5223a9d03822af36916160a33d3ba27922d3169894a060d14313b6a0943ab799",
+      "path": "net/minecraftforge/fml/loading/FMLLoader.java",
+      "sha256": "b3e50031f6307b870b3a02638f83aceeff39ce9e26d5b4a544284612a13e3da9"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "javafmllanguage-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "4c8e8731632e614966bbeee20dce733f02139683b240847099e58757065d0f56",
+      "path": "net/minecraftforge/fml/javafmlmod/FMLModContainer.java",
+      "sha256": "4e6d6ad1fbc3f5e831b732e6fcc39262205222c62c2ed7314167d62f6b8b4a8e"
+    },
+    {
+      "group": "forge1201",
+      "version": "1.20.1-47.4.28",
+      "artifact": "javafmllanguage-1.20.1-47.4.28-sources.jar",
+      "artifactSha256": "4c8e8731632e614966bbeee20dce733f02139683b240847099e58757065d0f56",
+      "path": "net/minecraftforge/fml/javafmlmod/FMLJavaModLoadingContext.java",
+      "sha256": "4320e10dfa03e52ac2c451323b43a5d5a7de5844458f5c78e745da6932bf21d2"
+    },
+    {
+      "group": "fml1614",
+      "path": "dev.json",
+      "sha256": "9f5e98718a3d1210c214f3e0bb9dfa720616a2e5e329c41f6545c9156d79d7d5"
+    },
+    {
+      "group": "fml1614",
+      "path": "conf/packaged.srg",
+      "sha256": "0ea622782729246038c1e7ad92002a4dcdebc8d8839000e2a8c8e2c9b2b6cc4a"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/FMLCommonHandler.java",
+      "sha256": "f0d63cb181805b31dbe4542aad5f8f260b9ab660d13b1dd220984e0a07d0de32"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/Loader.java",
+      "sha256": "5938d3ea95f4c5627032aff2c5c161614682d957a1c530afd190f1b605dc8587"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/ModClassLoader.java",
+      "sha256": "41cd8772c4f490f7ae9beeb4828a785f5b1ee64233782b9474a6f1e89e74eb2e"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/asm/transformers/AccessTransformer.java",
+      "sha256": "4ab4a98b048998f0c785be4c1f6c1a937b5682aab90bb897b9a72a5985e0afe1"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/asm/transformers/ModAccessTransformer.java",
+      "sha256": "24dd1142cb9fcc16cc0bbd139daa243e86850138085e80231bdf8e39e624ead0"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/launcher/FMLTweaker.java",
+      "sha256": "a9e1f8da137b7c2c61aafc71ee1a74a2ca513af7f28b98d56b6968a5ad4f0921"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/registry/FMLControlledNamespacedRegistry.java",
+      "sha256": "fe3015d10ba65319f31e9a230f97d9cdf8654be2e32eb4336a96f90bf0188f80"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/registry/GameData.java",
+      "sha256": "e25901f422b1af0a28bdbdb6d465d210de61b71dfd5a04ad60948ba6b2e1b6d7"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/common/registry/GameRegistry.java",
+      "sha256": "ddc1b57588f00cd509307d455f5f857925989b038bcadc917a8b58b95a36ce48"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/relauncher/CoreModManager.java",
+      "sha256": "dc68cdb555ce0a73056a120da3124a4d7a7811d3e2fd0ac26787d486e1f8bbb3"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/relauncher/FMLInjectionData.java",
+      "sha256": "7a61ed08cdf8bd39738e1b18e89a75b80bf1dcef91bfae3198226a9302db4fbb"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/relauncher/FMLLaunchHandler.java",
+      "sha256": "3861552adaae5ce51e084fe18455990916a6ffccde3682e1a8f2f9de4248da96"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/java/cpw/mods/fml/server/FMLServerHandler.java",
+      "sha256": "fcc05aa9ed0221d20731de6d483d3fa513e040a9253db85ef012a9bab677a1f0"
+    },
+    {
+      "group": "fml1614",
+      "path": "src/main/resources/packaged.srg",
+      "sha256": "db447904ae1829036b6d250cbd2df6cd89afb089752f1d65a4d1aaef7a93e7a8"
+    },
+    {
+      "group": "modern-game",
+      "path": "net/minecraft/world/item/ItemStack.java",
+      "sha256": "16b9e0d43961a296d096384502ca57633e005192c49a7bf4179bf24f52a8ef82"
+    },
+    {
+      "group": "modern-game",
+      "path": "net/minecraft/world/level/Level.java",
+      "sha256": "760656be42bd34bc2fb7661e43ed4cf30f19e12f3c9608a8e767a443f45e906f"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/asm/transformers/ModAccessTransformer.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/asm/transformers/ModAccessTransformer.java",
+      "sha256": "24dd1142cb9fcc16cc0bbd139daa243e86850138085e80231bdf8e39e624ead0"
+    },
+    {
+      "group": "fml1710",
+      "repository": "MinecraftForge/FML",
+      "commit": "a099592d3d1418245e3af65eda195da244287188",
+      "path": "src/main/java/cpw/mods/fml/common/registry/FMLControlledNamespacedRegistry.java",
+      "url": "https://raw.githubusercontent.com/MinecraftForge/FML/a099592d3d1418245e3af65eda195da244287188/src/main/java/cpw/mods/fml/common/registry/FMLControlledNamespacedRegistry.java",
+      "sha256": "cb7263d646fd0cf3fa38f9c5fb051cccec8fb549860dbd8f8f9c44ad6a793151"
+    }
+  ],
+  "probe": {
+    "modernForgeHostedTested": false,
+    "fullFmlBootstrapTested": false,
+    "java": "Temurin 17.0.18+8",
+    "output": [
+      "JAVA=17.0.18+8",
+      "SYSTEM_IS_URL_CLASSLOADER=false",
+      "FML_SOURCE=file:/C:/Users/gengy/Desktop/ModernForgeConnectLoader/build/research-round2/artifacts/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar",
+      "REAL_FML_SYSTEM_PARENT=REJECTED_ClassCastException",
+      "ASM5_RELEASE8=ACCEPTED_LegacyFixture",
+      "ASM5_RELEASE17=REJECTED_IllegalArgumentException",
+      "FIELD_SHADOWING=BASE_FIELD_0_SUBCLASS_FIELD_42",
+      "BASE_PROVIDER_MUTATION=VISIBLE_THROUGH_OLD_REFERENCE",
+      "SYSTEM_CLASSLOADER=UNCHANGED",
+      "RESULT=PASS_5_NARROW_CHECKS_NOT_FULL_FML_BOOT"
+    ]
+  }
+}

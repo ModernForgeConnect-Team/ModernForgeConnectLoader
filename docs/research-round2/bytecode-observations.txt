@@ -1,0 +1,21 @@
+Scope: official vanilla 1.7.10 bytecode + MCP SRG; Forge ItemStack patch retains final. No game startup.
+public final class add {
+  public int b;
+  public dh d;
+public abstract class ahb implements ahl {
+  public final aqo t;
+public abstract class aqo {
+  public ahb b;
+  public int i;
+MCP SRG mapping observations:
+93:CL: add net/minecraft/item/ItemStack
+190:CL: ahb net/minecraft/world/World
+435:CL: aqo net/minecraft/world/WorldProvider
+2053:FD: add/b net/minecraft/item/ItemStack/field_77994_a
+2055:FD: add/d net/minecraft/item/ItemStack/field_77990_d
+2466:FD: ahb/t net/minecraft/world/World/field_73011_w
+3296:FD: aqo/b net/minecraft/world/WorldProvider/field_76579_a
+3303:FD: aqo/i net/minecraft/world/WorldProvider/field_76574_g
+Forge universal 1614 Loader:
+  minor version: 0
+  major version: 50
