@@ -35,29 +35,28 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
     @Override public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose, MultiBufferSource buffer, int light, int overlay) {
         var legacyTag = stack.getTagElement(ModernContentBridge.STACK_TAG);
         String tag = legacyTag == null ? "" : legacyTag.getString("snbt");
-        String baseKey = github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, ModernContentBridge.metadata(stack), "");
-        List<LegacyVertexStream.Primitive> primitives = bridge.pack().geometry().get(
-                github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, ModernContentBridge.metadata(stack), tag));
+        int metadata = ModernContentBridge.metadata(stack);
+        String baseKey = github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, metadata, "");
+        List<LegacyVertexStream.Primitive> primitives = null;
+        String foundType = null;
+        // The original IItemRenderer owners (wands, thaumometer, bows) capture distinct EQUIPPED, first-person and
+        // entity transforms; replay the one matching the modern display context instead of the inventory snapshot.
+        for (String type : contextTypes(context)) {
+            primitives = bridge.pack().contextGeometry().get(type + "|" + github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, metadata, tag));
+            if (primitives != null && !primitives.isEmpty()) { foundType = type; break; }
+            primitives = null;
+        }
+        if (primitives == null) primitives = bridge.pack().geometry().get(github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, metadata, tag));
         if (primitives == null) primitives = bridge.pack().geometry().get(baseKey);
         if (primitives == null || primitives.isEmpty()) return;
-        var worldLayers = bridge.blockRendering().isolated(blockKey, ModernContentBridge.metadata(stack));
+        var worldLayers = bridge.blockRendering().isolated(blockKey, metadata);
         boolean translucent = !worldLayers.isEmpty() && worldLayers.stream().allMatch(layer -> layer.pass() == 1);
         pose.pushPose();
-        // Block captures are usually centered, while IItemRenderers can add their own origins and scale.
-        // Anchor in the host item coordinate system; fit overflowing GUI projections before replay.
+        // Host item space centers on the slot; the original IItemRenderer geometry is replayed with the base matrix
+        // the old pipeline supplied for its ItemRenderType, rather than the ISBRH block display transform.
         pose.translate(0.5, 0.5, 0.5);
-        switch (context) {
-            case GUI -> {
-                var fit = guiFits.computeIfAbsent(primitives, LegacyItemLayout::fitGui);
-                pose.translate(fit.x(), fit.y(), 0); pose.scale((float)fit.scale(), (float)fit.scale(), (float)fit.scale());
-                pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); pose.scale(0.625f, 0.625f, 0.625f);
-            }
-            case GROUND -> { pose.translate(0, 0.1875, 0); pose.scale(0.25f, 0.25f, 0.25f); }
-            case FIXED -> pose.scale(0.5f, 0.5f, 0.5f);
-            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
-            case THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
-            default -> pose.scale(0.5f, 0.5f, 0.5f);
-        }
+        if ("EQUIPPED".equals(foundType)) applyLegacyEquippedTransform(pose);
+        else applyDefaultItemTransform(context, pose, primitives);
         var atlas = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS);
         Map<String, List<LegacyVertexStream.Primitive>> byTexture = new LinkedHashMap<>();
         for (LegacyVertexStream.Primitive primitive : primitives) byTexture.computeIfAbsent(primitive.texture(), ignored -> new ArrayList<>()).add(primitive);
@@ -76,5 +75,42 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
             LegacyWorldRenderer.replay(pose, buffer.getBuffer(translucent ? RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS) : RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS)), sprite, entry.getValue(), light, overlay);
         }
         pose.popPose();
+    }
+    /**
+     * The base matrix RenderBiped.func_77029_c establishes before invoking a plain (non-block, non-bow, non-full-3D)
+     * ItemRenderType.EQUIPPED callback. The captured geometry holds only the callback's own transform, so this must
+     * be re-applied to land in the same hand coordinates the old client used.
+     */
+    private static void applyLegacyEquippedTransform(PoseStack pose) {
+        // bipedRightArm.postRender(0.0625) lands on the arm end; this is RenderBiped's grip offset from there.
+        pose.translate(-0.0625f, 0.4375f, 0.0625f);
+        pose.translate(0.25f, 0.1875f, -0.1875f);
+        pose.scale(0.375f, 0.375f, 0.375f);
+        pose.mulPose(Axis.ZP.rotationDegrees(60));
+        pose.mulPose(Axis.XP.rotationDegrees(-90));
+        pose.mulPose(Axis.ZP.rotationDegrees(20));
+    }
+    /** Host display transforms for centered ISBRH block captures and the inventory IItemRenderer snapshot. */
+    private void applyDefaultItemTransform(ItemDisplayContext context, PoseStack pose, List<LegacyVertexStream.Primitive> primitives) {
+        switch (context) {
+            case GUI -> {
+                var fit = guiFits.computeIfAbsent(primitives, LegacyItemLayout::fitGui);
+                pose.translate(fit.x(), fit.y(), 0); pose.scale((float)fit.scale(), (float)fit.scale(), (float)fit.scale());
+                pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); pose.scale(0.625f, 0.625f, 0.625f);
+            }
+            case GROUND -> { pose.translate(0, 0.1875, 0); pose.scale(0.25f, 0.25f, 0.25f); }
+            case FIXED -> pose.scale(0.5f, 0.5f, 0.5f);
+            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
+            case THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
+            default -> pose.scale(0.5f, 0.5f, 0.5f);
+        }
+    }
+    private static List<String> contextTypes(ItemDisplayContext context) {
+        return switch (context) {
+            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> List.of("EQUIPPED_FIRST_PERSON", "EQUIPPED", "INVENTORY");
+            case THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> List.of("EQUIPPED", "INVENTORY");
+            case GROUND, HEAD -> List.of("ENTITY", "INVENTORY");
+            default -> List.of("INVENTORY");
+        };
     }
 }

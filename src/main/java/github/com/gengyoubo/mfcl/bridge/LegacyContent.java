@@ -29,6 +29,8 @@ public final class LegacyContent {
     private final List<LegacyCreativeTabs.Tab> tabs;
     private final Map<String, Object> oldBlocks = new HashMap<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
+    /** IItemRenderer geometry per {@code ItemRenderType}, so held/entity models can differ from the inventory snapshot. */
+    private final Map<String, List<LegacyVertexStream.Primitive>> contextGeometry = new LinkedHashMap<>();
     private final Set<String> customItems = new LinkedHashSet<>();
     private final List<String> captureDiagnostics = new ArrayList<>();
 
@@ -47,42 +49,59 @@ public final class LegacyContent {
             Class<?> forgeClient = loader.loadClass("net.minecraftforge.client.MinecraftForgeClient");
             Class<?> rendererType = loader.loadClass("net.minecraftforge.client.IItemRenderer");
             Class<?> renderType = loader.loadClass("net.minecraftforge.client.IItemRenderer$ItemRenderType");
-            Object inventory = renderType.getField("INVENTORY").get(null);
             Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
             Class<?> renderBlocksType = loader.loadClass("net.minecraft.client.renderer.RenderBlocks");
             Method getRenderer = forgeClient.getMethod("getItemRenderer", stackType, renderType);
             Method renderItem = rendererType.getMethod("renderItem", renderType, stackType, Object[].class);
             Object renderBlocks = renderBlocksType.getConstructor().newInstance();
+            var renderTypes = new ArrayList<Object>();
+            // EQUIPPED_FIRST_PERSON bakes the old player's arm skins, so held contexts reuse the EQUIPPED model.
+            for (String name : List.of("INVENTORY", "EQUIPPED", "ENTITY")) renderTypes.add(renderType.getField(name).get(null));
+            Object inventory = renderType.getField("INVENTORY").get(null);
+            // The held branches read the rendering entity from data[1]; use the old preview player.
+            Class<?> mcType = loader.loadClass("net.minecraft.client.Minecraft");
+            Object legacyClient = mcType.getMethod("func_71410_x").invoke(null);
+            Object viewer = mcType.getField("field_71439_g").get(legacyClient);
             var stacks = new ArrayList<LegacyClientData.Stack>(data.catalog());
             for (var tab : tabs) for (var entry : tab.contents()) if (stacks.stream().noneMatch(s -> s.key().equals(entry.key()) && s.metadata() == entry.metadata() && s.tag().equals(entry.tag()))) stacks.add(entry);
             for (var snapshot : stacks) {
                 if (snapshot.key().startsWith("minecraft:")) continue;
                 Object stack = data.materialize(snapshot); // keeps the original NBT, e.g. a wand's rod and cap
-                Object renderer = getRenderer.invoke(null, stack, inventory);
-                if (renderer == null) { if (snapshot.key().contains("Wand")) captureDiagnostics.add("no item renderer for " + snapshot.key() + "@" + snapshot.metadata()); continue; }
-                LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
-                boolean complete = false;
-                try { data.inLegacy(() -> { renderItem.invoke(renderer, inventory, stack, new Object[]{renderBlocks, stack}); return null; }); complete = true; }
-                catch (Throwable failure) {
-                    Throwable cause = failure;
-                    while (cause.getCause() != null && cause != cause.getCause()) cause = cause.getCause();
-                    captureDiagnostics.add("item renderer failed " + snapshot.key() + "@" + snapshot.metadata() + ": " + cause);
+                Object inventoryRenderer = getRenderer.invoke(null, stack, inventory);
+                if (inventoryRenderer == null) { if (snapshot.key().contains("Wand")) captureDiagnostics.add("no item renderer for " + snapshot.key() + "@" + snapshot.metadata()); continue; }
+                for (Object renderTypeValue : renderTypes) {
+                    String typeName = ((Enum<?>)renderTypeValue).name();
+                    Object renderer = getRenderer.invoke(null, stack, renderTypeValue);
+                    if (renderer == null) continue;
+                    Object[] renderData = renderTypeValue == inventory ? new Object[]{renderBlocks, stack} : new Object[]{renderBlocks, viewer};
+                    LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
+                    boolean complete = false;
+                    try { data.inLegacy(() -> { renderItem.invoke(renderer, renderTypeValue, stack, renderData); return null; }); complete = true; }
+                    catch (Throwable failure) {
+                        Throwable cause = failure;
+                        while (cause.getCause() != null && cause != cause.getCause()) cause = cause.getCause();
+                        if (typeName.equals("INVENTORY")) captureDiagnostics.add("item renderer failed " + snapshot.key() + "@" + snapshot.metadata() + ": " + cause);
+                    }
+                    List<LegacyVertexStream.Primitive> captured;
+                    try { captured = frame.primitives(); }
+                    finally {
+                        try { frame.close(); }
+                        catch (IllegalStateException failure) { complete = false; captureDiagnostics.add("item capture failed to close " + snapshot.key() + "@" + snapshot.metadata() + ": " + failure); }
+                    }
+                    if (!complete) continue; // An exception may leave only half of a model in the frame.
+                    captured = resolveIcons(captured);
+                    if (typeName.equals("INVENTORY") && snapshot.key().contains("Wand")) captureDiagnostics.add("wand renderer " + snapshot.key() + "@" + snapshot.metadata() + " -> " + captured.size() + " primitives");
+                    if (captured.isEmpty()) continue;
+                    String key = geometryKey(snapshot.key(), snapshot.metadata(), snapshot.tag());
+                    contextGeometry.put(typeName + "|" + key, captured);
+                    if (typeName.equals("INVENTORY")) {
+                        geometry.put(key, captured);
+                        captureDiagnostics.add("captured item renderer " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives, "
+                                + captured.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices");
+                        customItems.add(snapshot.key());
+                    } else captureDiagnostics.add("captured " + typeName + " " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives");
                 }
-                List<LegacyVertexStream.Primitive> captured;
-                try { captured = frame.primitives(); }
-                finally {
-                    try { frame.close(); }
-                    catch (IllegalStateException failure) { complete = false; captureDiagnostics.add("item capture failed to close " + snapshot.key() + "@" + snapshot.metadata() + ": " + failure); }
-                }
-                if (!complete) continue; // An exception may leave only half of a model in the frame.
-                captured = resolveIcons(captured);
-                if (snapshot.key().contains("Wand")) captureDiagnostics.add("wand renderer " + snapshot.key() + "@" + snapshot.metadata() + " -> " + captured.size() + " primitives");
-                if (captured.isEmpty()) continue;
-                geometry.put(geometryKey(snapshot.key(), snapshot.metadata(), snapshot.tag()), captured);
-                captureDiagnostics.add("captured item renderer " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives, "
-                        + captured.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices");
-                customItems.add(snapshot.key());
             }
         } catch (Throwable unavailable) { captureDiagnostics.add("item renderer bridge unavailable: " + unavailable); }
     }
@@ -132,6 +151,7 @@ public final class LegacyContent {
         return LegacyIconResolver.resolve(primitives, data.iconLayout());
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
+    public Map<String, List<LegacyVertexStream.Primitive>> contextGeometry() { return contextGeometry; }
     public static String geometryKey(String key, int metadata, String tag) {
         return key + "@" + metadata + (tag == null || tag.isEmpty() ? "" : "#" + tag);
     }

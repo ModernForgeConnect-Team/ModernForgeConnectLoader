@@ -22,6 +22,7 @@ public final class LegacyContentPack {
     private final Map<String, String> textures = new HashMap<>();
     private final Set<String> missingIcons = new TreeSet<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
+    private final Map<String, List<LegacyVertexStream.Primitive>> contextGeometry = new LinkedHashMap<>();
     public LegacyContentPack(Path gameDirectory, LegacyContent content, github.com.gengyoubo.mfcl.bridge.LegacyBlockRendering worldRendering) throws Exception {
         this.content = content;
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
@@ -77,21 +78,25 @@ public final class LegacyContentPack {
             model.put("overrides", overrides);
             json("assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json", model);
         }
-        for (var entry : content.geometry().entrySet()) {
-            var resolved = new ArrayList<LegacyVertexStream.Primitive>();
-            for (var primitive : entry.getValue()) {
-                String source = primitive.texture();
-                // IItemRenderer geometry keeps a full old texture path; ISBRH geometry keeps an icon name.
-                String id = source.contains("textures/") ? texturePath(source) : texture(source, "blocks");
-                if (id.isEmpty()) continue;
-                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), id, primitive.vertices(), primitive.state()));
-            }
-            geometry.put(entry.getKey(), List.copyOf(resolved));
-        }
+        resolveGeometry(content.geometry(), geometry);
+        resolveGeometry(content.contextGeometry(), contextGeometry);
         languages();
         json("mfcl-content-manifest.json", Map.of("blocks", content.blocks(), "items", content.items(), "creativeTabs", content.tabs(), "missingIcons", missingIcons,
                 "customItems", List.copyOf(content.customItems()),
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
+    }
+    private void resolveGeometry(Map<String, List<LegacyVertexStream.Primitive>> source, Map<String, List<LegacyVertexStream.Primitive>> target) throws Exception {
+        for (var entry : source.entrySet()) {
+            var resolved = new ArrayList<LegacyVertexStream.Primitive>();
+            for (var primitive : entry.getValue()) {
+                String texture = primitive.texture();
+                // IItemRenderer geometry keeps a full old texture path; ISBRH geometry keeps an icon name.
+                String id = texture.contains("textures/") ? texturePath(texture) : texture(texture, "blocks");
+                if (id.isEmpty()) continue;
+                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), id, primitive.vertices(), primitive.state()));
+            }
+            target.put(entry.getKey(), List.copyOf(resolved));
+        }
     }
     private Map<String, Object> itemModel(LegacyContent.Item item, LegacyContent.Variant variant) throws Exception {
         var block = item.blockKey() == null ? null : content.blocks().stream()
@@ -183,6 +188,7 @@ public final class LegacyContentPack {
         Files.createDirectories(file.getParent()); Files.writeString(file, new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(value), StandardCharsets.UTF_8);
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
+    public Map<String, List<LegacyVertexStream.Primitive>> contextGeometry() { return contextGeometry; }
     public String worldTexture(String icon) {
         String value = textures.get("blocks:" + icon);
         if (value == null) throw new IllegalArgumentException("World renderer referenced an unregistered icon: " + icon);
