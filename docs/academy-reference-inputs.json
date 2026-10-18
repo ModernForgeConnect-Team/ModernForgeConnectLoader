@@ -1,0 +1,15 @@
+{
+  "minecraft": "1.7.10",
+  "academyCraft": {
+    "file": "AcademyCraft-1.0.7.jar",
+    "sha256": "3a05685bd76dfecab39b5137a38658eb1cd3d9eac2185d0a5854ea0571060ce0",
+    "source": "User-provided original JAR"
+  },
+  "dependencies": [
+    {
+      "file": "LambdaLib-1.2.3.jar",
+      "url": "https://github.com/LambdaInnovation/LambdaLib/releases/download/1.2.3/LambdaLib-1.2.3.jar",
+      "sha256": "f1d18b48d56f25e8ca0fb6255fdc26350a4a725ebe97734b9fae8ae490335b50"
+    }
+  ]
+}

@@ -26,6 +26,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                 "cpw.mods.fml.common.asm.transformers.", "cpw.mods.fml.common.patcher.",
                 "net.minecraftforge.classloading.", "net.minecraftforge.transformers.")) addTransformerExclusion(prefix);
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ModernJavaTransformer");
+        registerTransformer("github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
     }
     private final List<LegacyBytecodeAdapter> bytecodeAdapters = new ArrayList<LegacyBytecodeAdapter>();
@@ -40,8 +41,29 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
             byte[] bytes = super.getClassBytes(name);
             if (bytes == null) throw new ClassNotFoundException(name);
             for (LegacyBytecodeAdapter adapter : bytecodeAdapters) if (adapter.targets(name)) bytes = adapter.adapt(name, bytes);
-            return defineClass(name, bytes, 0, bytes.length);
+            URL resource = super.findResource(name.replace('.', '/') + ".class");
+            if (resource == null) throw new ClassNotFoundException(name);
+            java.net.URLConnection connection = resource.openConnection();
+            java.security.CodeSource source = null;
+            if (connection instanceof java.net.JarURLConnection) {
+                java.net.JarURLConnection jar = (java.net.JarURLConnection) connection;
+                URL location = jar.getJarFileURL();
+                String packageName = name.substring(0, name.lastIndexOf('.'));
+                if (ClassLoader.class.getMethod("getDefinedPackage", String.class).invoke(this, packageName) == null) {
+                    try { definePackage(packageName, jar.getManifest(), location); }
+                    catch (IllegalArgumentException concurrent) {
+                        if (ClassLoader.class.getMethod("getDefinedPackage", String.class).invoke(this, packageName) == null) throw concurrent;
+                    }
+                }
+                source = new java.security.CodeSource(location, (java.security.CodeSigner[]) null);
+                Field manifests = LaunchClassLoader.class.getDeclaredField("packageManifests"); manifests.setAccessible(true);
+                @SuppressWarnings("unchecked") Map<Package, java.util.jar.Manifest> packageManifests = (Map<Package, java.util.jar.Manifest>) manifests.get(this);
+                Package defined = (Package) ClassLoader.class.getMethod("getDefinedPackage", String.class).invoke(this, packageName);
+                packageManifests.put(defined, jar.getManifest());
+            }
+            return defineClass(name, bytes, 0, bytes.length, source);
         } catch (IOException error) { throw new ClassNotFoundException(name, error); }
+        catch (ReflectiveOperationException error) { throw new ClassNotFoundException(name, error); }
     }
     public Class<?> defineLegacyClass(String name, byte[] bytes, int offset, int length) {
         return defineClass(name, bytes, offset, length);
@@ -55,11 +77,27 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                         || name.startsWith("net.minecraft.launchwrapper.") || name.startsWith("cpw.mods.fml.relauncher.")
                         || name.startsWith("org.apache.logging.") || name.startsWith("github.com.gengyoubo.mfcl.bridge.")
                         || name.startsWith("github.com.gengyoubo.mfcl.legacy1710.boot.")) c = root.loadClass(name);
-                else c = findClass(name);
+                else {
+                    // JDK modules also expose org.w3c.dom, org.xml.sax, etc. The platform
+                    // loader cannot resolve the host's Minecraft, Forge or application libraries.
+                    try { c = jdkClass(name); }
+                    catch (ClassNotFoundException absentPlatformClass) { c = findClass(name); }
+                }
             }
             if (resolve) resolveClass(c);
             return c;
         }
+    }
+    private Class<?> jdkClass(String name) throws ClassNotFoundException {
+        Class<?> type = root.getParent().loadClass(name);
+        try {
+            Object module = Class.class.getMethod("getModule").invoke(type);
+            String moduleName = (String) module.getClass().getMethod("getName").invoke(module);
+            // ModLauncher's boot module path also exposes ASM. Only JDK modules may
+            // bypass private libraries; otherwise ASM 9 can replace legacy ASM 5.
+            if (moduleName != null && (moduleName.startsWith("java.") || moduleName.startsWith("jdk."))) return type;
+        } catch (ReflectiveOperationException failure) { throw new ClassNotFoundException(name, failure); }
+        throw new ClassNotFoundException("Not a JDK module class: " + name);
     }
     @Override public void registerTransformer(String name) {
         int before = getTransformers().size();

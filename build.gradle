@@ -79,6 +79,8 @@ minecraft {
             if (project.hasProperty('mfclNeiUiSmokeTest') || project.hasProperty('mfclNeiWorldSmokeTest')) property 'mfcl.test.neiUiSmoke', 'true'
             if (project.hasProperty('mfclNeiWorldSmokeTest')) property 'mfcl.test.neiWorldSmoke', 'true'
             if (project.hasProperty('mfclModListSmokeTest')) property 'mfcl.test.modListSmoke', 'true'
+            if (project.hasProperty('mfclOpenGlSmokeTest')) property 'mfcl.test.openGl', 'true'
+            if (project.hasProperty('mfclSmokePrefix')) property 'mfcl.test.smokePrefix', project.property('mfclSmokePrefix')
             if (project.hasProperty('mfclLegacyGui')) property 'mfcl.legacyGui', 'true'
             if (project.hasProperty('mfclLegacyBrowser')) property 'mfcl.legacyGui', 'false'
             if (project.hasProperty('legacyRuntimeDir')) {

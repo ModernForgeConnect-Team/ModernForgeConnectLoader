@@ -15,6 +15,9 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     private final List<File> mods;
     private final Map<Path, String> originalHashes = new LinkedHashMap<>();
     private github.com.gengyoubo.mfcl.bridge.LegacyServices services;
+    private github.com.gengyoubo.mfcl.bridge.LegacyClientData earlyClient;
+    private github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend openGlBackend;
+    public void openGlBackend(github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend backend) { this.openGlBackend = backend; }
     private final List<github.com.gengyoubo.mfcl.bridge.LegacyModAdapter> adapters = new ArrayList<>();
     public github.com.gengyoubo.mfcl.bridge.LegacyServices services() { return Objects.requireNonNull(services, "Runtime has not booted"); }
     public List<github.com.gengyoubo.mfcl.bridge.LegacyModAdapter> adapters() { return List.copyOf(adapters); }
@@ -91,10 +94,24 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             for (String type : List.of("cpw.mods.fml.relauncher.FMLLaunchHandler", "cpw.mods.fml.relauncher.FMLRelaunchLog")) set(root.loadClass(type), "side", side);
             set(root.loadClass("cpw.mods.fml.relauncher.FMLRelaunchLog"), "minecraftHome", gameDirectory.toFile());
             Class<?> driver = legacy.loadClass("github.com.gengyoubo.mfcl.legacy1710.RuntimeDriver");
-            Map<String, Object> result = (Map<String, Object>) driver.getMethod("boot", File.class, File.class, List.class)
-                    .invoke(driver.getConstructor().newInstance(), gameDirectory.toFile(), forge.toFile(), mods);
+            if (openGlBackend != null) for (String type : List.of("org.lwjgl.opengl.GL11", "org.lwjgl.opengl.GL20", "org.lwjgl.opengl.GL30"))
+                github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.attach(legacy.loadClass(type), openGlBackend);
+            Map<String, Object> glVerification = openGlBackend != null && Boolean.getBoolean("mfcl.test.openGl")
+                    ? openGlBackend.verify(legacy.loadClass("org.lwjgl.opengl.GL11"), legacy.loadClass("org.lwjgl.opengl.GL20")) : Map.of();
+            Runnable initializeClient = () -> {
+                try {
+                    earlyClient = new github.com.gengyoubo.mfcl.bridge.LegacyClientData(legacy);
+                    earlyClient.initializeContext(gameDirectory, List.of("assets/minecraft/lang/en_US.lang"));
+                } catch (Exception failure) { throw new IllegalStateException("Cannot initialize legacy client services", failure); }
+            };
+            Map<String, Object> result = (Map<String, Object>) driver.getMethod("boot", File.class, File.class, List.class, Runnable.class)
+                    .invoke(driver.getConstructor().newInstance(), gameDirectory.toFile(), forge.toFile(), mods, initializeClient);
+            result.put("retainedDisplayLists", github.com.gengyoubo.mfcl.bridge.LegacyDisplayLists.statistics(legacy.loadClass("org.lwjgl.opengl.GL11")));
+            if (openGlBackend != null) result.put("hostOpenGl", openGlBackend.statistics());
+            if (!glVerification.isEmpty()) result.put("hostOpenGlVerification", glVerification);
             if (Boolean.TRUE.equals(result.get("legacyFmlStarted"))) {
-                services = new github.com.gengyoubo.mfcl.bridge.LegacyServices(gameDirectory, legacy);
+                services = new github.com.gengyoubo.mfcl.bridge.LegacyServices(gameDirectory, legacy, earlyClient);
+                result.put("legacyRegistries", services.items().registrySummary());
                 var reports = new LinkedHashMap<String, Object>();
                 for (var adapter : adapters) {
                     try { reports.put(adapter.id(), adapter.initialize(services)); }
@@ -111,7 +128,10 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
                 if (!LegacyDiscovery.sha256(input.getKey()).equals(input.getValue())) throw new IOException("Original mod JAR changed during boot: " + input.getKey());
             }
             return result;
-        } finally { thread.setContextClassLoader(before); if (System.out != stdout) System.setOut(stdout); if (System.err != stderr) System.setErr(stderr); }
+        } finally {
+            if (openGlBackend != null) openGlBackend.bootstrapComplete();
+            thread.setContextClassLoader(before); if (System.out != stdout) System.setOut(stdout); if (System.err != stderr) System.setErr(stderr);
+        }
     }
     private static void set(Class<?> owner, String name, Object value) throws Exception {
         Field field = owner.getDeclaredField(name); field.setAccessible(true); field.set(null, value);
@@ -127,7 +147,14 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         if (!Files.exists(target)) Files.write(target, bytes, StandardOpenOption.CREATE_NEW);
         return target;
     }
-    @Override public void close() throws IOException { if (services != null) services.worlds().close(); legacy.close(); root.close(); }
+    @Override public void close() throws IOException {
+        if (services != null) services.worlds().close();
+        if (earlyClient != null) earlyClient.close();
+        if (openGlBackend != null) {
+            try { openGlBackend.close(); } catch (Exception failure) { throw new IOException("Cannot release legacy host GL resources", failure); }
+        }
+        legacy.close(); root.close();
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) throw new IllegalArgumentException("EmbeddedLegacyRuntime <game-directory> <runtime-directory>");

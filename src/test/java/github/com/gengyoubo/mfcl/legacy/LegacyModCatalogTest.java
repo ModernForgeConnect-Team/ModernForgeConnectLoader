@@ -22,6 +22,8 @@ class LegacyModCatalogTest {
     @Test void discoveredOrFailedModsStayVisibleWithoutIncreasingLoadedCount() {
         var discovered = catalog(true, Set.of("FML", "Forge"), archive("pending.jar", mod("pending")));
         var failed = catalog(false, Set.of("pending"), archive("pending.jar", mod("pending")));
+        assertTrue(discovered.failure().isBlank());
+        assertFalse(failed.failure().isBlank());
         for (var catalog : List.of(discovered, failed)) {
             assertEquals(1, catalog.entries().size());
             assertFalse(catalog.entries().get(0).loaded());

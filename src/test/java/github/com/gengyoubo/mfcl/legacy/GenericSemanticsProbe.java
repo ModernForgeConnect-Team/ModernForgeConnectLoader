@@ -13,6 +13,33 @@ public final class GenericSemanticsProbe {
     static void verify(EmbeddedLegacyRuntime runtime, Map<String, Object> report) throws Exception {
         if (!Boolean.TRUE.equals(report.get("legacyFmlStarted"))) throw new AssertionError(report);
         LegacyServices services = runtime.services(); ClassLoader loader = services.loader();
+        if (loader.loadClass("org.w3c.dom.Node") != org.w3c.dom.Node.class) throw new AssertionError("JDK XML types were not shared");
+        if (loader.loadClass("org.objectweb.asm.Type").getClassLoader() != loader) throw new AssertionError("Host ASM escaped into the private runtime");
+        Class<?> reflection = loader.loadClass("github.com.gengyoubo.mfcl.legacy1710.LegacyReflection");
+        var modifiers = (java.lang.reflect.Field) reflection.getMethod("declaredField", Class.class, String.class).invoke(null, java.lang.reflect.Field.class, "modifiers");
+        reflection.getMethod("accessible", java.lang.reflect.AccessibleObject.class, boolean.class).invoke(null, modifiers, true);
+        var keyMap = loader.loadClass("net.minecraft.client.settings.KeyBinding").getDeclaredField("field_74514_b");
+        modifiers.setInt(keyMap, keyMap.getModifiers() & ~java.lang.reflect.Modifier.FINAL);
+        if (java.lang.reflect.Modifier.isFinal(keyMap.getModifiers())) throw new AssertionError("Legacy Field.modifiers idiom did not work");
+        try { java.lang.reflect.Field.class.getDeclaredField("modifiers"); throw new AssertionError("JDK reflection filtering was changed globally"); }
+        catch (NoSuchFieldException expected) { }
+        report.put("genericModernJavaAndPlatformIsolationVerified", true);
+        Class<?> minecraft = loader.loadClass("net.minecraft.client.Minecraft");
+        Object resourceManager = minecraft.getMethod("func_110442_L").invoke(minecraft.getMethod("func_71410_x").invoke(null));
+        Class<?> locationType = loader.loadClass("net.minecraft.util.ResourceLocation");
+        var getResource = loader.loadClass("net.minecraft.client.resources.IResourceManager").getMethod("func_110536_a", locationType);
+        Object resource = getResource.invoke(resourceManager, locationType.getConstructor(String.class).newInstance("minecraft:textures/font/ascii.png"));
+        try (var stream = (java.io.InputStream) loader.loadClass("net.minecraft.client.resources.IResource").getMethod("func_110527_b").invoke(resource)) {
+            if (stream.read() != 137 || stream.read() != 80) throw new AssertionError("Original resource stream was not preserved");
+        }
+        try { getResource.invoke(resourceManager, locationType.getConstructor(String.class).newInstance("minecraft:mfcl-missing-resource")); throw new AssertionError("Missing legacy resource was silently accepted"); }
+        catch (InvocationTargetException expected) { if (!(expected.getCause() instanceof java.io.IOException)) throw expected; }
+        report.put("genericOriginalResourceManagerVerified", true);
+        Class<?> sys = loader.loadClass("org.lwjgl.Sys");
+        long tick = (Long) sys.getMethod("getTime").invoke(null);
+        long resolution = (Long) sys.getMethod("getTimerResolution").invoke(null);
+        if (resolution != 1_000_000 || Math.abs(tick / 1000 - System.nanoTime() / 1_000_000) > 1000)
+            throw new AssertionError("Private platform clock did not preserve elapsed-time units");
         var diamond = services.items().catalog().stream().filter(s -> s.key().equals("minecraft:diamond")).findFirst().orElseThrow();
         Object first = services.items().materialize(diamond), second = services.items().materialize(diamond);
         if (first == second) throw new AssertionError("Stacks alias across ownership boundary");
@@ -74,6 +101,18 @@ public final class GenericSemanticsProbe {
             catch(InvocationTargetException expected){if(!(expected.getCause() instanceof UnsupportedOperationException))throw expected;}
         }
         report.put("genericGuiCaptureVerified",true);
+        Class<?> privateGl = loader.loadClass("org.lwjgl.opengl.GL11");
+        int displayList = (Integer) privateGl.getMethod("glGenLists", int.class).invoke(null, 1);
+        privateGl.getMethod("glNewList", int.class, int.class).invoke(null, displayList, 4864);
+        privateGl.getMethod("glBegin", int.class).invoke(null, 7);
+        privateGl.getMethod("glColor4d", double.class, double.class, double.class, double.class).invoke(null, 1d, 0.5d, 0d, 1d);
+        privateGl.getMethod("glVertex3d", double.class, double.class, double.class).invoke(null, 1.25d, 2d, 3d);
+        privateGl.getMethod("glEnd").invoke(null);
+        privateGl.getMethod("glEndList").invoke(null);
+        if (github.com.gengyoubo.mfcl.bridge.LegacyDisplayLists.commands(privateGl, displayList).size() != 4)
+            throw new AssertionError("Private GL display list lost original commands");
+        privateGl.getMethod("glDeleteLists", int.class, int.class).invoke(null, displayList, 1);
+        report.put("genericDisplayListCaptureVerified", true);
     }
     private static Class<?> fixture(ClassLoader loader) throws Exception {
         String name = "mfcl/fixture/Gui"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

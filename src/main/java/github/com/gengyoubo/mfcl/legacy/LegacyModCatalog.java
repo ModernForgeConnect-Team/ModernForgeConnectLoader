@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Immutable view shared by the mod list and both loading counters. */
-public record LegacyModCatalog(String targetMinecraft, String sourceMinecraft, List<Entry> entries) {
+public record LegacyModCatalog(String targetMinecraft, String sourceMinecraft, List<Entry> entries, String failure) {
     private static final Set<String> RUNTIME_COMPONENTS = Set.of("mcp", "FML", "Forge");
     private static final Pattern COMPLETION = Pattern.compile("Mod loading complete - (\\d+) mods loaded");
 
@@ -26,7 +26,10 @@ public record LegacyModCatalog(String targetMinecraft, String sourceMinecraft, L
         successful.stream().filter(id -> !RUNTIME_COMPONENTS.contains(id)).sorted().forEach(id ->
                 entries.putIfAbsent(id, new Entry(new LegacyMod(id, id, "", report.sourceMinecraft(),
                         "", "", List.of()), "(runtime)", true)));
-        return new LegacyModCatalog(report.targetMinecraft(), report.sourceMinecraft(), List.copyOf(entries.values()));
+        boolean failed = report.state() == LegacyRuntimeService.State.RUNTIME_FAILED || report.state() == LegacyRuntimeService.State.DEPENDENCY_ERRORS;
+        String failure = failed ? report.diagnostics().stream().filter(LegacyDiagnostic::error).map(LegacyDiagnostic::message)
+                .findFirst().orElse(report.state().name()) : "";
+        return new LegacyModCatalog(report.targetMinecraft(), report.sourceMinecraft(), List.copyOf(entries.values()), failure);
     }
 
     public int loadedCount() { return (int) entries.stream().filter(Entry::loaded).count(); }

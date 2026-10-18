@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 /** Passive inspection only: no Class.forName, service providers, or mod initializers. */
 public final class LegacyDiscovery {
     private static final long MAX_ENTRY_BYTES = 8L * 1024 * 1024;
-    private static final Pattern MOD_REFERENCE = Pattern.compile("[A-Za-z0-9_.-]+(?:@[^;\\s]+)?");
+    private static final Pattern MOD_REFERENCE = Pattern.compile("[A-Za-z0-9_.|\\-]+(?:@[^;\\s]+)?");
 
     public record Result(List<LegacyArchive> archives, List<LegacyDiagnostic> diagnostics) {
         public Result { archives = List.copyOf(archives); diagnostics = List.copyOf(diagnostics); }
@@ -141,6 +141,14 @@ public final class LegacyDiscovery {
                 if (at.contains("..") || at.startsWith("/") || !resources.contains(resource)) throw new IOException("missing or invalid FMLAT resource " + resource);
                 ats.add(resource);
             }
+            String container = constantContainers.get(corePlugin);
+            if (container != null) {
+                var entry = jar.getJarEntry(container.replace('.', '/') + ".class");
+                if (entry != null) {
+                    LegacyMod coreMod = readContainerMetadata(read(jar, entry), container);
+                    if (coreMod != null && metadataMods.stream().noneMatch(mod -> mod.id().equals(coreMod.id()))) metadataMods.add(coreMod);
+                }
+            }
         }
         if (!beforeHash.equals(sha256(path))) throw new IOException("archive changed during discovery");
         Map<String, LegacyMod> mods = new LinkedHashMap<>();
@@ -158,6 +166,35 @@ public final class LegacyDiscovery {
         }
         return new LegacyArchive(path.toAbsolutePath().normalize().toString(), beforeHash, List.copyOf(mods.values()),
                 corePlugin, constantContainers.getOrDefault(corePlugin, ""), ats, classes, List.copyOf(requirements), List.copyOf(requiredClasses));
+    }
+
+    /** Recognize literal ModMetadata factories in DummyModContainers without defining the plugin. */
+    private static LegacyMod readContainerMetadata(byte[] bytes, String container) {
+        var node = new org.objectweb.asm.tree.ClassNode(Opcodes.ASM9);
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        if (!node.superName.equals("cpw/mods/fml/common/DummyModContainer")) return null;
+        for (var method : node.methods) {
+            if (!method.desc.equals("()Lcpw/mods/fml/common/ModMetadata;")) continue;
+            Map<String, String> fields = new LinkedHashMap<>();
+            boolean straightLine = true;
+            int allocations = 0;
+            for (var insn : method.instructions) {
+                if (insn instanceof org.objectweb.asm.tree.JumpInsnNode
+                        || insn instanceof org.objectweb.asm.tree.TableSwitchInsnNode
+                        || insn instanceof org.objectweb.asm.tree.LookupSwitchInsnNode) straightLine = false;
+                if (insn instanceof org.objectweb.asm.tree.TypeInsnNode type && type.getOpcode() == Opcodes.NEW
+                        && type.desc.equals("cpw/mods/fml/common/ModMetadata")) allocations++;
+                if (insn instanceof org.objectweb.asm.tree.FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD
+                        && field.owner.equals("cpw/mods/fml/common/ModMetadata") && field.desc.equals("Ljava/lang/String;")
+                        && insn.getPrevious() instanceof org.objectweb.asm.tree.LdcInsnNode literal && literal.cst instanceof String text) {
+                    fields.put(field.name, text);
+                }
+            }
+            String id = fields.getOrDefault("modId", "");
+            if (straightLine && allocations == 1 && !id.isBlank()) return new LegacyMod(id, fields.getOrDefault("name", id),
+                    fields.getOrDefault("version", ""), fields.getOrDefault("mcversion", ""), "", container + "#ModMetadata", List.of());
+        }
+        return null;
     }
 
     private static List<String> requiredAnnotationMods(String dependencies) {

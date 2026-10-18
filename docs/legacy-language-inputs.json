@@ -1,0 +1,71 @@
+{
+  "forge": "10.13.4.1614",
+  "dependencies": [
+    {
+      "sha256": "4ccbc821a417f0174c9734fc721f078177cacef94ded09c3775ebf40c6a7bdfd",
+      "coordinate": "com.typesafe.akka:akka-actor_2.11:2.3.3",
+      "url": "https://repo.maven.apache.org/maven2/com/typesafe/akka/akka-actor_2.11/2.3.3/akka-actor_2.11-2.3.3.jar",
+      "file": "akka-actor_2.11-2.3.3.jar"
+    },
+    {
+      "sha256": "c160fbd78f51a0c2375a794e435ce2112524a6871f64d0331895e9e26ee8b9ee",
+      "coordinate": "com.typesafe:config:1.2.1",
+      "url": "https://repo.maven.apache.org/maven2/com/typesafe/config/1.2.1/config-1.2.1.jar",
+      "file": "config-1.2.1.jar"
+    },
+    {
+      "sha256": "b89d0beb76df20c7b2c2bee59ba53b802cc48566bc3e89ac96ce6361c5c2ee38",
+      "coordinate": "org.scala-lang:scala-actors-migration_2.11:1.1.0",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/scala-actors-migration_2.11/1.1.0/scala-actors-migration_2.11-1.1.0.jar",
+      "file": "scala-actors-migration_2.11-1.1.0.jar"
+    },
+    {
+      "sha256": "3aa616f5c56d2052fc5e3231f3e8cf1736f876caff0142a66096fc5b4dc87ae5",
+      "coordinate": "org.scala-lang:scala-compiler:2.11.1",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/scala-compiler/2.11.1/scala-compiler-2.11.1.jar",
+      "file": "scala-compiler-2.11.1.jar"
+    },
+    {
+      "sha256": "8dd0a4941f4564117cc991734ca36aa53dff6bb0be329f39eab46d8819f60d1a",
+      "coordinate": "org.scala-lang.plugins:scala-continuations-library_2.11:1.0.2",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/plugins/scala-continuations-library_2.11/1.0.2/scala-continuations-library_2.11-1.0.2.jar",
+      "file": "scala-continuations-library_2.11-1.0.2.jar"
+    },
+    {
+      "sha256": "79329971a31ede7b6823f21a6ab765506b4093d9276debdc9dbe17b996884f2b",
+      "coordinate": "org.scala-lang.plugins:scala-continuations-plugin_2.11.1:1.0.2",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/plugins/scala-continuations-plugin_2.11.1/1.0.2/scala-continuations-plugin_2.11.1-1.0.2.jar",
+      "file": "scala-continuations-plugin_2.11.1-1.0.2.jar"
+    },
+    {
+      "sha256": "088bcb80f71b6e6a2a31d2fe7288c1fd64f19663ce281b924cdfab3fb105f4f3",
+      "coordinate": "org.scala-lang:scala-library:2.11.1",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/scala-library/2.11.1/scala-library-2.11.1.jar",
+      "file": "scala-library-2.11.1.jar"
+    },
+    {
+      "sha256": "19495ce701fd9ba3c499c137e3ad5364acee8f87a01ef99e912f995a23fd4cb1",
+      "coordinate": "org.scala-lang:scala-parser-combinators_2.11:1.0.1",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/modules/scala-parser-combinators_2.11/1.0.1/scala-parser-combinators_2.11-1.0.1.jar",
+      "file": "scala-parser-combinators_2.11-1.0.1.jar"
+    },
+    {
+      "sha256": "41938d1e89670979dd783102777a8b879999f4fb00a5b811b51c105b02a9d4f8",
+      "coordinate": "org.scala-lang:scala-reflect:2.11.1",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/scala-reflect/2.11.1/scala-reflect-2.11.1.jar",
+      "file": "scala-reflect-2.11.1.jar"
+    },
+    {
+      "sha256": "4a7c757d4d87dd37382bd777ad611b5875748aef148277cf25bb39eebb496d07",
+      "coordinate": "org.scala-lang:scala-swing_2.11:1.0.1",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/modules/scala-swing_2.11/1.0.1/scala-swing_2.11-1.0.1.jar",
+      "file": "scala-swing_2.11-1.0.1.jar"
+    },
+    {
+      "sha256": "13c0d8d442bde14b73af3ed60e8d53452f9e1ad62ffbe3d944cb918df652db6f",
+      "coordinate": "org.scala-lang:scala-xml_2.11:1.0.2",
+      "url": "https://repo.maven.apache.org/maven2/org/scala-lang/modules/scala-xml_2.11/1.0.2/scala-xml_2.11-1.0.2.jar",
+      "file": "scala-xml_2.11-1.0.2.jar"
+    }
+  ]
+}

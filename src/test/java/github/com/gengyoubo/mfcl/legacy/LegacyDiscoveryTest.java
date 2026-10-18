@@ -68,4 +68,32 @@ class LegacyDiscoveryTest {
         Path jar = TestArchives.jar(temporary.resolve("modern.jar"), Map.of(), Map.of("META-INF/mods.toml", TestArchives.text("modern")));
         assertThrows(java.io.IOException.class, () -> new LegacyDiscovery().inspect(jar));
     }
+
+    @Test void discoversCoremodMetadataFactoriesWithoutRunningThem() throws Exception {
+        var plugin = new org.objectweb.asm.ClassWriter(0);
+        plugin.visit(52, 1, "test/Plugin", null, "java/lang/Object", null);
+        var getter = plugin.visitMethod(1, "getModContainerClass", "()Ljava/lang/String;", null, null);
+        getter.visitCode(); getter.visitLdcInsn("test.Container"); getter.visitInsn(org.objectweb.asm.Opcodes.ARETURN);
+        getter.visitMaxs(1, 1); getter.visitEnd(); plugin.visitEnd();
+        var container = new org.objectweb.asm.ClassWriter(0);
+        container.visit(52, 1, "test/Container", null, "cpw/mods/fml/common/DummyModContainer", null);
+        var metadata = container.visitMethod(10, "metadata", "()Lcpw/mods/fml/common/ModMetadata;", null, null);
+        metadata.visitCode(); metadata.visitTypeInsn(org.objectweb.asm.Opcodes.NEW, "cpw/mods/fml/common/ModMetadata");
+        metadata.visitInsn(org.objectweb.asm.Opcodes.DUP);
+        metadata.visitMethodInsn(org.objectweb.asm.Opcodes.INVOKESPECIAL, "cpw/mods/fml/common/ModMetadata", "<init>", "()V", false);
+        metadata.visitVarInsn(org.objectweb.asm.Opcodes.ASTORE, 0);
+        for (var pair : Map.of("modId", "Example|Core", "name", "Example Core", "version", "1.2.3").entrySet()) {
+            metadata.visitVarInsn(org.objectweb.asm.Opcodes.ALOAD, 0); metadata.visitLdcInsn(pair.getValue());
+            metadata.visitFieldInsn(org.objectweb.asm.Opcodes.PUTFIELD, "cpw/mods/fml/common/ModMetadata", pair.getKey(), "Ljava/lang/String;");
+        }
+        metadata.visitVarInsn(org.objectweb.asm.Opcodes.ALOAD, 0); metadata.visitInsn(org.objectweb.asm.Opcodes.ARETURN);
+        metadata.visitMaxs(2, 1); metadata.visitEnd(); container.visitEnd();
+        Path jar = TestArchives.jar(temporary.resolve("core.jar"), Map.of("FMLCorePlugin", "test.Plugin"),
+                Map.of("test/Plugin.class", plugin.toByteArray(), "test/Container.class", container.toByteArray()));
+        var archive = new LegacyDiscovery().inspect(jar);
+        assertEquals("test.Container", archive.coreContainer());
+        assertEquals("Example|Core", archive.mods().get(0).id());
+        assertEquals("1.2.3", archive.mods().get(0).version());
+        assertNull(System.getProperty("mfcl.test.scanExecuted"));
+    }
 }

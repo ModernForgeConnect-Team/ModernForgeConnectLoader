@@ -4,6 +4,8 @@
   "mfcl.mods.status": "Status: %s",
   "mfcl.mods.loaded": "Loaded",
   "mfcl.mods.discovered": "Discovered; loading has not completed",
+  "mfcl.mods.runtime_failed": "Legacy runtime failed to load",
+  "mfcl.mods.failure": "Failure: %s",
   "mfcl.mods.loader": "Loader: Forge 1.7.10 (via MFCL)",
   "mfcl.mods.file": "File: %s",
   "mfcl.mods.total_loaded": "%s mods loaded (%s: %s, %s: %s)"

@@ -45,7 +45,11 @@ public final class IsolatedLegacyClassLoader extends URLClassLoader {
                 else if (name.startsWith("java.") || name.startsWith("jdk.") || name.startsWith("sun.")) type = getParent().loadClass(name);
                 else {
                     try { type = findClass(name); }
-                    catch (ClassNotFoundException absent) { type = getParent().loadClass(name); }
+                    catch (ClassNotFoundException absent) {
+                        type = getParent().loadClass(name);
+                        String module = type.getModule().getName();
+                        if (module == null || !(module.startsWith("java.") || module.startsWith("jdk."))) throw absent;
+                    }
                 }
             }
             if (resolve) resolveClass(type);

@@ -35,13 +35,13 @@ public final class LegacyModListScreen extends ModListScreen {
 
     public static void install(LegacyModCatalog catalog) {
         List<LegacyInfo> entries = catalog.entries().stream().map(entry ->
-                new LegacyInfo(entry.mod(), entry.file(), catalog.sourceMinecraft(), entry.loaded())).toList();
+                new LegacyInfo(entry.mod(), entry.file(), catalog.sourceMinecraft(), entry.loaded(), entry.loaded() ? "" : catalog.failure())).toList();
         if (entries.isEmpty()) return;
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Opening event) -> {
             if (event.getNewScreen() != null && event.getNewScreen().getClass() == ModListScreen.class)
                 event.setNewScreen(new LegacyModListScreen(event.getCurrentScreen(), entries));
         });
-        if (Boolean.getBoolean("mfcl.test.modListSmoke")) ModListSmokeProbe.install(catalog);
+        if (Boolean.getBoolean("mfcl.test.modListSmoke")) ModListSmokeProbe.install(catalog, entries.get(0));
     }
 
     private LegacyModListScreen(Screen parent, List<LegacyInfo> entries) {
@@ -118,13 +118,15 @@ public final class LegacyModListScreen extends ModListScreen {
         void set(LegacyInfo info) {
             visible = info != null; scrollDistance = 0;
             if (info == null) { lines = List.of(); return; }
-            List<Component> text = List.of(Component.literal(info.getDisplayName()),
+            List<Component> text = new ArrayList<>(List.of(Component.literal(info.getDisplayName()),
                     Component.translatable("mfcl.mods.version", info.mod.version()),
                     Component.translatable("mfcl.mods.game_version", info.gameVersion),
                     Component.literal("Mod ID: " + info.mod.id()),
-                    Component.translatable("mfcl.mods.status", Component.translatable(info.loaded ? "mfcl.mods.loaded" : "mfcl.mods.discovered")),
+                    Component.translatable("mfcl.mods.status", Component.translatable(info.loaded ? "mfcl.mods.loaded"
+                            : info.failure.isBlank() ? "mfcl.mods.discovered" : "mfcl.mods.runtime_failed")),
                     Component.translatable("mfcl.mods.loader"),
-                    Component.translatable("mfcl.mods.file", info.file));
+                    Component.translatable("mfcl.mods.file", info.file)));
+            if (!info.failure.isBlank()) text.add(Component.translatable("mfcl.mods.failure", info.failure));
             List<FormattedCharSequence> wrapped = new ArrayList<>();
             for (Component line : text) wrapped.addAll(font.split(line, Math.max(20, width - 18)));
             lines = List.copyOf(wrapped);
@@ -143,7 +145,7 @@ public final class LegacyModListScreen extends ModListScreen {
     }
 
     /** Presentation metadata only: never inserted into the host's actual mod/container registries. */
-    private record LegacyInfo(LegacyMod mod, String file, String gameVersion, boolean loaded) implements IModInfo {
+    private record LegacyInfo(LegacyMod mod, String file, String gameVersion, boolean loaded, String failure) implements IModInfo {
         @Override public String getModId() { return mod.id(); }
         @Override public String getDisplayName() { return mod.name().isBlank() ? mod.id() : mod.name(); }
         @Override public ArtifactVersion getVersion() { return new DefaultArtifactVersion(mod.version().isBlank() ? "unknown" : mod.version()); }
@@ -168,7 +170,9 @@ public final class LegacyModListScreen extends ModListScreen {
     private static final class ModListSmokeProbe {
         private static int stage, frames;
         private static volatile boolean screenshotSaved;
-        static void install(LegacyModCatalog catalog) {
+        static void install(LegacyModCatalog catalog, LegacyInfo target) {
+            String screenshotPrefix = System.getProperty("mfcl.test.smokePrefix", "mfcl");
+            if (!screenshotPrefix.matches("[A-Za-z0-9_-]+")) throw new IllegalArgumentException("Invalid smoke screenshot prefix");
             MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ClientTickEvent event) -> {
                 if (event.phase != net.minecraftforge.event.TickEvent.Phase.END || stage == 99) return;
                 var mc = Minecraft.getInstance();
@@ -181,7 +185,7 @@ public final class LegacyModListScreen extends ModListScreen {
                     } else if (stage == 10 && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
                         if (++frames < 10) return;
                         verifyCounts(catalog);
-                        net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-mod-count.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
+                        net.minecraft.client.Screenshot.grab(mc.gameDirectory, screenshotPrefix + "-mod-count.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
                         stage = 11;
                     } else if (stage == 11 && screenshotSaved) {
                         screenshotSaved = false;
@@ -197,12 +201,12 @@ public final class LegacyModListScreen extends ModListScreen {
                         var names = screen.list.children().stream().map(e -> e.getInfo().getDisplayName().toLowerCase(Locale.ROOT)).toList();
                         require(names.equals(names.stream().sorted().toList()), "Combined list did not sort");
                         screen.children().stream().filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
-                                .map(net.minecraft.client.gui.components.EditBox.class::cast).findFirst().orElseThrow().setValue("not enough");
+                                .map(net.minecraft.client.gui.components.EditBox.class::cast).findFirst().orElseThrow().setValue(target.getDisplayName());
                         stage = 3; frames = screen.renderedFrames;
                     } else if (stage == 3 && mc.screen instanceof LegacyModListScreen screen && screen.renderedFrames > frames + 3) {
                         require(screen.list.children().size() == 1, "Legacy search did not filter native list");
                         screen.setSelected(screen.list.children().get(0));
-                        require(screen.selection != null && screen.selection.loaded && screen.selection.gameVersion.equals("1.7.10"), "Legacy version or load status incorrect");
+                        require(screen.selection != null && screen.selection.loaded == target.loaded && screen.selection.gameVersion.equals(catalog.sourceMinecraft()), "Legacy version or load status incorrect");
                         screen.resize(mc, screen.width, screen.height);
                         require(screen.details.visible, "Legacy details lost on resize");
                         screen.children().stream().filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
@@ -211,11 +215,11 @@ public final class LegacyModListScreen extends ModListScreen {
                     } else if (stage == 4 && mc.screen instanceof LegacyModListScreen screen && screen.renderedFrames > frames + 3) {
                         screen.setSelected(screen.list.children().stream().filter(e -> e.getInfo().getModId().equals("forge")).findFirst().orElseThrow());
                         require(!screen.details.visible, "Legacy panel obscured modern details");
-                        screen.setSelected(screen.list.children().stream().filter(e -> e.getInfo().getModId().equals("NotEnoughItems")).findFirst().orElseThrow());
+                        screen.setSelected(screen.list.children().stream().filter(e -> e.getInfo() == target).findFirst().orElseThrow());
                         screen.list.setScrollAmount(Double.MAX_VALUE);
                         stage = 5; frames = screen.renderedFrames;
                     } else if (stage == 5 && mc.screen instanceof LegacyModListScreen screen && screen.renderedFrames > frames + 3) {
-                        net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-mod-list.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
+                        net.minecraft.client.Screenshot.grab(mc.gameDirectory, screenshotPrefix + "-mod-list.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
                         stage = 6;
                     } else if (stage == 6 && screenshotSaved && mc.screen instanceof LegacyModListScreen screen) {
                         screen.onClose();
@@ -230,10 +234,12 @@ public final class LegacyModListScreen extends ModListScreen {
         }
         private static void verifyCounts(LegacyModCatalog catalog) {
             int modern = net.minecraftforge.fml.ModList.get().size();
-            require(catalog.loadedCount() == 2, "Expected the NEI and CodeChickenCore fixture; libraries/builtin FML must not count");
             String completion = "Mod loading complete - " + catalog.totalLoaded(modern) + " mods loaded";
-            require(completion.equals(github.com.gengyoubo.mfcl.legacy.RuntimeModAccounting.completionMessage()), "Startup notification did not use the completed runtime count");
-            String label = Component.translatable("mfcl.mods.total_loaded", catalog.totalLoaded(modern),
+            require(catalog.loadedCount() == 0
+                    ? github.com.gengyoubo.mfcl.legacy.RuntimeModAccounting.completionMessage() == null
+                    : completion.equals(github.com.gengyoubo.mfcl.legacy.RuntimeModAccounting.completionMessage()), "Startup notification did not use the completed runtime count");
+            String label = catalog.loadedCount() == 0 ? net.minecraftforge.common.ForgeI18n.parseMessage("fml.menu.loadingmods", modern)
+                    : Component.translatable("mfcl.mods.total_loaded", catalog.totalLoaded(modern),
                     catalog.targetMinecraft(), modern, catalog.sourceMinecraft(), catalog.loadedCount()).getString();
             var lines = new ArrayList<String>();
             net.minecraftforge.internal.BrandingControl.forEachLine(true, false, (index, line) -> lines.add(line));

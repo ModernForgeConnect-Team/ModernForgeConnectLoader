@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-18",
+  "target": "Original AcademyCraft 1.0.7 + LambdaLib 1.2.3 on Forge 1.20.1 / Java 17",
+  "compatibilityComplete": false,
+  "initializationComplete": true,
+  "activeModDirectory": "run/mods/1.7.10",
+  "previousModBackup": "run/mfcl/disabled-mods/nei-20261018",
+  "originalInputs": [
+    {
+      "sha256": "3a05685bd76dfecab39b5137a38658eb1cd3d9eac2185d0a5854ea0571060ce0",
+      "unchanged": true,
+      "file": "AcademyCraft-1.0.7.jar"
+    },
+    {
+      "sha256": "f1d18b48d56f25e8ca0fb6255fdc26350a4a725ebe97734b9fae8ae490335b50",
+      "unchanged": true,
+      "file": "LambdaLib-1.2.3.jar"
+    }
+  ],
+  "checks": {
+    "skipped": 0,
+    "tests": 28,
+    "errors": 0,
+    "failures": 0
+  },
+  "legacyRuntime": {
+    "state": "FML_AVAILABLE",
+    "stage": "AVAILABLE",
+    "completed": [
+      "COREMODS",
+      "VANILLA_BOOTSTRAP",
+      "FORGE_INITIALIZATION",
+      "CONSTRUCTING",
+      "PREINITIALIZATION",
+      "INITIALIZATION_POSTINITIALIZATION"
+    ],
+    "legacyFmlStarted": true,
+    "legacyClientReady": false,
+    "loadedModIds": [
+      "mcp",
+      "FML",
+      "Forge",
+      "LambdaLib|Core",
+      "LambdaLib",
+      "academy-craft"
+    ],
+    "diagnostics": [],
+    "registries": {
+      "blocksByNamespace": {
+        "minecraft": 171,
+        "academy-craft": 23
+      },
+      "itemsByNamespace": {
+        "minecraft": 315,
+        "academy-craft": 58
+      },
+      "catalogStacks": 622
+    },
+    "retainedDisplayLists": {
+      "lists": 180,
+      "commands": 136260
+    },
+    "hostOpenGl": {
+      "textureUploads": 12,
+      "programs": 4,
+      "backend": "HOST_OPENGL",
+      "failures": [],
+      "textures": 7,
+      "shaders": 8,
+      "version": "4.6.0 NVIDIA 610.78"
+    },
+    "hostOpenGlVerification": {
+      "textureRecreation": true,
+      "shaderUniform": true,
+      "hostTextureIsolated": true,
+      "textureRoundTrip": true,
+      "maxTextureSize": 32768,
+      "hostStateRestored": true,
+      "status": "PASS"
+    }
+  },
+  "clientSmoke": {
+    "modListMarker": "MFCL_MOD_LIST_SMOKE_PASS",
+    "exitedNormally": true,
+    "screenshots": [
+      "build/academy-smoke/game/screenshots/mfcl-academy-gl-mod-list.png",
+      "build/academy-smoke/game/screenshots/mfcl-academy-gl-mod-count.png"
+    ],
+    "modernHostStarted": true,
+    "brandingReloadVerified": true,
+    "gpuMarker": "MFCL_HOST_OPENGL_SMOKE_PASS",
+    "legacyModsLoaded": 3,
+    "loadedTotal": 6,
+    "log": "build/academy-investigation/host-gl-acceptance.log",
+    "runtime": "build/academy-investigation/accepted-runtime.json",
+    "modListSearchAndSortPassed": true,
+    "fullGameplayCompatibilityPassed": false,
+    "modListVersionAndStatusVerified": true,
+    "legacyInitializationPassed": true,
+    "discovery": "build/academy-investigation/accepted-discovery.json"
+  },
+  "remaining": [
+    "Modern registration of legacy blocks/items and their game behaviors",
+    "Player/world/entity identity, old event forwarding, ability data and network packets",
+    "Original AcademyCraft UI input, Tessellator, display-list/world rendering and wider GL state coverage",
+    "Legacy GL_CLAMP currently maps to CLAMP_TO_EDGE; edge sampling differs",
+    "Broader hardware/mod compatibility; native rendering tested on this host only"
+  ],
+  "artifact": {
+    "sha256": "ff0925e4d93ab847bf5b29dfced25fcc16b363db3ecb33ac4d289e1c90b8b892",
+    "path": "build/libs/mfcl-0.1.0.jar"
+  }
+}

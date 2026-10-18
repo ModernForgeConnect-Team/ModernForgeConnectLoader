@@ -18,7 +18,9 @@ public final class ModernForgeConnectLoader {
     public ModernForgeConnectLoader() {
         var gameDirectory = FMLPaths.GAMEDIR.get();
         var supportDirectory = java.nio.file.Path.of(System.getProperty("mfcl.legacyRuntimeDir", gameDirectory.resolve("mfcl/runtime/1.7.10").toString()));
-        var result = runtimeService.start(gameDirectory, supportDirectory);
+        var backend = new java.util.concurrent.atomic.AtomicReference<github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend>();
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> backend.set(new github.com.gengyoubo.mfcl.client.ClientOpenGlBackend()));
+        var result = runtimeService.start(gameDirectory, supportDirectory, backend.get());
         LOGGER.info("MFCL: reading Forge 1.7.10 mods from {}", result.modDirectory());
         LOGGER.info("MFCL: {} legacy archives; state {}; report {}",
                 result.archives().size(), result.state(), result.reportFile());

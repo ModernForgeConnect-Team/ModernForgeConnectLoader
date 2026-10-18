@@ -20,6 +20,9 @@ public final class LegacyRuntimeService {
     public java.util.Set<String> loadedModIds() { return loadedModIds; }
 
     public Report start(Path gameDirectory, Path runtimeDirectory) {
+        return start(gameDirectory, runtimeDirectory, null);
+    }
+    public Report start(Path gameDirectory, Path runtimeDirectory, github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend backend) {
         Report inspected = inspect(gameDirectory);
         if (inspected.state() != State.RUNTIME_NOT_READY) return inspected;
         List<LegacyDiagnostic> diagnostics = new ArrayList<>(inspected.diagnostics());
@@ -31,6 +34,7 @@ public final class LegacyRuntimeService {
                 diagnostics.add(LegacyDiagnostic.notice("RUNTIME_INPUT_MISSING", "Prepare the private Forge 1.7.10 runtime in " + runtimeDirectory));
             } else {
                 runtime = new EmbeddedLegacyRuntime(gameDirectory, runtimeDirectory, inspected);
+                runtime.openGlBackend(backend);
                 var stages = runtime.boot();
                 if (stages.get("loadedMods") instanceof List<?> loaded) {
                     loadedModIds = loaded.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -40,8 +44,10 @@ public final class LegacyRuntimeService {
                 clientDataReady = started && stages.get("adapters") instanceof java.util.Map<?, ?> reports
                         && !reports.isEmpty() && reports.values().stream().allMatch(v -> v instanceof java.util.Map<?, ?> details && "READY".equals(details.get("status")));
                 state = clientDataReady ? State.CLIENT_DATA_AVAILABLE : started ? State.FML_AVAILABLE : State.RUNTIME_FAILED;
-                if (!started) diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", stages.get("stage") + ": " + stages.get("failure")));
-                else if (!clientDataReady) diagnostics.add(LegacyDiagnostic.notice("LEGACY_CLIENT_DATA_FAILED", String.valueOf(stages.get("adapters"))));
+                if (!started) diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", stages.get("stage") + ": "
+                        + stages.get("failure") + (stages.containsKey("rootCause") ? " / " + stages.get("rootCause") : "")));
+                else if (!clientDataReady && stages.get("adapters") instanceof java.util.Map<?, ?> reports && !reports.isEmpty())
+                    diagnostics.add(LegacyDiagnostic.notice("LEGACY_CLIENT_DATA_FAILED", String.valueOf(reports)));
             }
         } catch (Throwable failure) {
             state = State.RUNTIME_FAILED;

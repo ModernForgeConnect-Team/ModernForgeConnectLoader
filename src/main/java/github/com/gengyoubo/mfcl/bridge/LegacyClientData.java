@@ -31,6 +31,7 @@ public final class LegacyClientData {
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
     private boolean contextInitialized;
+    private LegacyClientResources.Context resourceContext;
 
     private final List<Consumer<List<Object>>> catalogListeners = new ArrayList<>();
     public LegacyClientData(ClassLoader loader) throws Exception {
@@ -53,6 +54,10 @@ public final class LegacyClientData {
             Object client = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, mcType);
             setField(mcType, client, "field_71432_P", client);
             setField(mcType, client, "field_71412_D", gameDir.toFile());
+            resourceContext = LegacyClientResources.create(loader);
+            setField(mcType, client, "field_110451_am", resourceContext.manager());
+            Class<?> fmlClient = loader.loadClass("cpw.mods.fml.client.FMLClientHandler");
+            setField(fmlClient, fmlClient.getMethod("instance").invoke(null), "client", client);
             setField(mcType, client, "field_71474_y", loader.loadClass("net.minecraft.client.settings.GameSettings").getConstructor().newInstance());
             setField(mcType, client, "field_71443_c", 854); setField(mcType, client, "field_71440_d", 480);
             Class<?> fontType = loader.loadClass("net.minecraft.client.gui.FontRenderer");
@@ -74,8 +79,9 @@ public final class LegacyClientData {
                 setField(fontType, font, "field_78287_e", in == null ? new byte[65536] : in.readAllBytes());
             }
             setField(mcType, client, "field_71466_p", font); setField(mcType, client, "field_71464_q", font);
-            setField(mcType, client, "field_71446_o", unsafe.getClass().getMethod("allocateInstance", Class.class)
-                    .invoke(unsafe, loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")));
+            setField(mcType, client, "field_71446_o", loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")
+                    .getConstructor(loader.loadClass("net.minecraft.client.resources.IResourceManager"))
+                    .newInstance(mcType.getMethod("func_110442_L").invoke(client)));
             setField(mcType, client, "field_147127_av", unsafe.getClass().getMethod("allocateInstance", Class.class)
                     .invoke(unsafe, loader.loadClass("net.minecraft.client.audio.SoundHandler")));
             setField(mcType, client, "field_135017_as", loader.loadClass("net.minecraft.client.resources.LanguageManager")
@@ -130,6 +136,23 @@ public final class LegacyClientData {
         });
     }
     public synchronized boolean ready() { return ready; }
+    public Map<String, Object> registrySummary() throws Exception {
+        return inLegacy(() -> {
+            Object blocks = loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
+            return Map.of("itemsByNamespace", namespaces(registry), "blocksByNamespace", namespaces(blocks), "catalogStacks", catalog.size());
+        });
+    }
+    private Map<String, Integer> namespaces(Object registry) throws Exception {
+        var names = new TreeMap<String, Integer>();
+        var keyOf = registry.getClass().getMethod("func_148750_c", Object.class);
+        for (Object value : (Iterable<?>) registry) {
+            String key = (String) keyOf.invoke(registry, value);
+            String namespace = key != null && key.contains(":") ? key.substring(0, key.indexOf(':')) : "minecraft";
+            names.merge(namespace, 1, Integer::sum);
+        }
+        return Map.copyOf(names);
+    }
+    public void close() throws java.io.IOException { if (resourceContext != null) resourceContext.close(); }
     public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
     private void prepareIconMetadata() throws Exception {
         Class<?> icon = loader.loadClass("net.minecraft.util.IIcon"), register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");
@@ -149,6 +172,7 @@ public final class LegacyClientData {
         for (Object b : (Iterable<?>) block.getField("field_149771_c").get(null)) block.getMethod("func_149651_a", register).invoke(b, registrar);
         for (Object i : (Iterable<?>) registry) itemType.getMethod("func_94581_a", register).invoke(i, registrar);
     }
+    public void refreshIconMetadata() throws Exception { inLegacy(() -> { prepareIconMetadata(); return null; }); }
 
     private void setField(Class<?> owner, Object target, String name, Object value) throws Exception {
         loader.loadClass("github.com.gengyoubo.mfcl.legacy1710.ModernEnumSupport")

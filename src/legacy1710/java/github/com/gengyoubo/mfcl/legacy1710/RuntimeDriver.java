@@ -14,6 +14,9 @@ import java.util.jar.*;
 /** Runs in the legacy domain. No modern Minecraft or Forge type appears in this boundary. */
 public final class RuntimeDriver {
     public Map<String, Object> boot(File gameDir, File forgeJar, List<File> mods) {
+        return boot(gameDir, forgeJar, mods, new Runnable() { public void run() { } });
+    }
+    public Map<String, Object> boot(File gameDir, File forgeJar, List<File> mods, Runnable initializeClient) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         List<String> completed = new ArrayList<String>(); result.put("completed", completed);
         String stage = "COREMODS";
@@ -89,6 +92,7 @@ public final class RuntimeDriver {
                         }
                     });
             FMLCommonHandler.instance().beginLoading(sided);
+            initializeClient.run();
             completed.add(stage); stage = "CONSTRUCTING";
             Loader.instance().loadMods(); completed.add(stage); stage = "PREINITIALIZATION";
             Loader.instance().preinitializeMods(); completed.add(stage); stage = "INITIALIZATION_POSTINITIALIZATION";
@@ -103,6 +107,10 @@ public final class RuntimeDriver {
             while (failure instanceof InvocationTargetException && failure.getCause() != null) failure = failure.getCause();
             result.put("stage", stage); result.put("legacyFmlStarted", false);
             result.put("failure", failure.toString());
+            Throwable rootCause = failure;
+            Set<Throwable> causes = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
+            while (rootCause.getCause() != null && causes.add(rootCause)) rootCause = rootCause.getCause();
+            result.put("rootCause", rootCause.toString());
             StringWriter trace = new StringWriter(); failure.printStackTrace(new PrintWriter(trace)); result.put("stackTrace", trace.toString());
         }
         result.put("legacyClientReady", false);

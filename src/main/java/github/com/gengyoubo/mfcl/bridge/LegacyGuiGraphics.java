@@ -74,5 +74,5 @@ public final class LegacyGuiGraphics {
     }
     public static int mouseX() { return frame().mouseX; }
     public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }
-    public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy GUI backend does not support " + name); }
+    public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy rendering backend does not support " + name); }
 }

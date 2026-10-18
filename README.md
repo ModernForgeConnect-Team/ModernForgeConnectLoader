@@ -1,6 +1,8 @@
 # Modern Forge Connect Loader
 
-目标：在 Forge 1.20.1 / Java 17 中运行原始 Forge 1.7.10 模组。第一阶段验收样本固定为 `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`，验收包括物品列表、搜索、配方和用途交互。
+目标：在 Forge 1.20.1 / Java 17 中运行原始 Forge 1.7.10 模组。首个回归样本为 `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`，检查物品列表、搜索、配方和用途交互。当前 `runClient` 测试目录已切换为 AcademyCraft 1.0.7 与 LambdaLib 1.2.3；NEI 及 CodeChicken 前置已移至 `run/mfcl/disabled-mods/nei-20261018/`，独立的 NEI 回归夹具仍保留在构建测试目录。
+
+**AcademyCraft 已完成真实旧 FML 初始化，游戏行为桥接仍未完成。** 原始 AcademyCraft 和 LambdaLib 已通过构造、`PreInit`、`Init`、`PostInit`，状态为 `AVAILABLE`，旧注册表中有 23 个 AcademyCraft 方块和 58 个物品。纹理上传、mipmap、着色器编译和 uniform 使用现代宿主的真实 OpenGL，由渲染线程同步执行；GPU 像素读回、纹理删除重建与宿主状态恢复已实测。方块物品还未接入现代注册表，玩家能力、网络及完整世界绘制尚不可用，因此不能将初始化成功视为可完整游玩。调查过程和实际客户端报告见 `docs/academy-progress.json`。
 
 **已接通原始 NEI 的背包附着界面和配方页，完整 NEI 兼容仍未完成。**原始 NEI 在同一个 Java 17 进程内完成真实旧 FML 生命周期，并应用其 CoreMod 转换器和 AT。默认驱动旧 `GuiContainer` 上的原始 NEI 布局、物品面板和搜索框，保留现代背包；配方页执行原始 `GuiCraftingRecipe`，通过通用绘制层显示。此前的独立浏览器仅保留为开发诊断选项。
 
@@ -15,9 +17,8 @@
   mods/
     mfcl-0.1.0.jar
     1.7.10/
-      NotEnoughItems-1.7.10-1.0.5.120-universal.jar
-      CodeChickenCore-1.7.10-1.0.7.47-universal.jar
-      CodeChickenLib-1.7.10-1.1.3.138-universal.jar
+      AcademyCraft-1.0.7.jar
+      LambdaLib-1.2.3.jar
   mfcl/runtime/1.7.10/
     runtime-manifest.json
     minecraft-forge-1.7.10-srg.jar
@@ -28,9 +29,15 @@ MFCL 使用 Forge 的 `FMLPaths.GAMEDIR`，自动建立 `mods/1.7.10`，只读�
 
 Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。选择旧模组后显示“游戏版本：1.7.10”、来源 JAR 及实际加载状态；仅扫描到文件的条目不会标为已加载。该展示不向现代 FML 的容器和注册表插入旧模组。
 
-启动完成提示和主菜单计数使用同一份运行时目录，只统计旧 FML 实际完成加载的模组。当前测试环境应为 5 个：现代环境 3 个，加上 1.7.10 的 CodeChickenCore 和 NEI；CodeChickenLib 依赖库及旧 FML 内置组件不重复计数。主菜单同时标明两个游戏版本的数量。旧模组仍属于隔离的旧 FML，现代 `ModList` 的查询和网络握手不因此包含旧模组。启动提示和主菜单品牌缓存适配当前 Forge 47 的内部字段，升级 Forge 时需重新验证。
+启动完成提示和主菜单计数使用同一份运行时目录，只统计旧 FML 实际完成加载的模组。NEI 回归环境已验证总数为 5：现代环境 3 个，加上 1.7.10 的 CodeChickenCore 和 NEI；CodeChickenLib 依赖库及旧 FML 内置组件不重复计数。主菜单同时标明两个游戏版本的数量。AcademyCraft 环境现在为 6 个：现代 3 个，加上 AcademyCraft、LambdaLib 和 LambdaLib Core 容器。旧模组仍属于隔离的旧 FML，现代 `ModList` 的查询和网络握手不因此包含旧模组。启动提示和主菜单品牌缓存适配当前 Forge 47 的内部字段，升级 Forge 时需重新验证。
 
-运行时报告为 `<游戏目录>/logs/mfcl/runtime-1.7.10.json`，记录真实 FML 阶段、转换器和适配器结果。成功时发现报告为 `CLIENT_DATA_AVAILABLE`，`legacyFmlStarted=true`；`legacyClientReady=false` 仍保留，以免将当前浏览功能误报为完整旧客户端支持。
+通用准备步骤还会安装 Forge 1.7.10 原本附带的 Scala 2.11.1 / Typesafe 库；版本来自 Forge 的 `version.json`，规范 Maven 分发文件的固定校验值列于 `docs/legacy-language-inputs.json`。旧 CoreMod 提供的 `DummyModContainer` 常量元数据可被被动识别，包括带 `|` 的旧模组 ID。已覆盖的旧 GL 显示列表命令可在 `GL_COMPILE` 阶段缓存，保留原始顶点、颜色等参数，按旧 GL 类身份隔离；世界绘制重放尚未接通，调用实际重放会明确报错。
+
+运行时报告为 `<游戏目录>/logs/mfcl/runtime-1.7.10.json`，记录真实 FML 阶段、转换器和适配器结果。通用 FML 初始化成功时状态为 `FML_AVAILABLE`，NEI 可选适配器就绪时为 `CLIENT_DATA_AVAILABLE`；二者均有 `legacyFmlStarted=true`。`legacyClientReady=false` 仍保留，以免误报为完整旧客户端支持。
+
+通用原生渲染桥按旧 GL 类身份绑定，每个运行时拥有独立纹理句柄；删除后重新绑定同一旧编号会创建新的宿主纹理。着色器与纹理调用会恢复宿主的程序、纹理、pixel-store 和像素传输缓冲状态。旧 `GL_CLAMP` 暂映射为 `GL_CLAMP_TO_EDGE`，边界采样行为存在差异；完整旧 GL 状态、Tessellator 和三维绘制仍未覆盖。Java 17 反射兼容只适配旧域中的 `Field.modifiers` 调用，不修改 JDK 全局反射过滤或启动参数。JDK XML 模块可共享，ASM 等宿主库仍严格隔离。
+
+原生 GPU 与模组列表复测使用 `runClient -PmfclOpenGlSmokeTest -PmfclModListSmokeTest`。`mfclOpenGlSmokeTest` 会通过真实旧 LWJGL 入口验证上传读回、着色器 uniform、纹理重建和宿主状态恢复；它需要图形客户端，独立无图形旧运行时不提供 GPU 服务。
 
 ## 构建与检查
 

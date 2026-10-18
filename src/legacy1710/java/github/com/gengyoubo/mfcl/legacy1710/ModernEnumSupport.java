@@ -32,10 +32,13 @@ public final class ModernEnumSupport {
         Class<?>[] types = new Class<?>[extraTypes.length + 2]; types[0] = String.class; types[1] = int.class;
         System.arraycopy(extraTypes, 0, types, 2, extraTypes.length);
         List<Object> values = new ArrayList<Object>(); values.add(name); values.add(ordinal); values.addAll(Arrays.asList(extraValues));
-        Field field = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
-        Object base = unsafe("staticFieldBase", new Class<?>[]{Field.class}, field);
-        MethodHandles.Lookup trusted = (MethodHandles.Lookup) unsafe("getObject", new Class<?>[]{Object.class, long.class}, base, offset(field));
+        MethodHandles.Lookup trusted = trustedLookup();
         try { return (Enum<?>) trusted.unreflectConstructor(type.getDeclaredConstructor(types)).invokeWithArguments(values); }
         catch (Throwable t) { throw new Exception("Cannot construct legacy enum " + type.getName() + "." + name, t); }
+    }
+    public static MethodHandles.Lookup trustedLookup() throws Exception {
+        Field field = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
+        Object base = unsafe("staticFieldBase", new Class<?>[]{Field.class}, field);
+        return (MethodHandles.Lookup) unsafe("getObject", new Class<?>[]{Object.class, long.class}, base, offset(field));
     }
 }
