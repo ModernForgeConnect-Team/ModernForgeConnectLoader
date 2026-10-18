@@ -44,6 +44,7 @@ public final class ModernContentBridge {
     private final LegacyContentPack pack;
     private final CreativeTabBridge creative;
     private boolean blocksRegistered, itemsRegistered;
+    private Map<Item,LegacyClientData.Stack> vanillaStacks;
     private BlockEntityType<LegacyBlockEntity> tileType;
 
     private ModernContentBridge(LegacyServices services) throws Exception {
@@ -65,6 +66,7 @@ public final class ModernContentBridge {
         try {
             var bridge = new ModernContentBridge(services); active = bridge;
             ScanSyncChannel.register();
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::playerLoggedIn);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
@@ -91,11 +93,24 @@ public final class ModernContentBridge {
     public static boolean canPlace(LegacyContent.Block entry, int metadata) {
         return entry.renderType() == 0 || active != null && active.blockRendering.supports(entry.key(), metadata);
     }
-    /** Applies a client-reported legacy scan on the authoritative server thread. */
+    public static final String LEGACY_ENTITY_DATA = "mfcl_legacy_entity";
+    private void playerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        byte[] data = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
+        if (data.length == 0) return;
+        try {
+            itemUse.loadPersisted(services.worlds().bound(player.serverLevel()), placer(player), data);
+        } catch (Exception failure) {
+            LogUtils.getLogger().error("MFCL legacy player data restore failed for {}", player.getName().getString(), failure);
+        }
+    }
+    /** Applies a client-reported legacy scan on the authoritative server thread and persists the resulting research. */
     public void applyServerScan(net.minecraft.server.level.ServerPlayer player, ScanSyncChannel.ScanMessage message) {
         try {
             var world = services.worlds().bound(player.serverLevel());
-            itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.phenomena(), message.prefix());
+            byte[] prior = player.getPersistentData().contains(LEGACY_ENTITY_DATA) ? player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA) : null;
+            byte[] updated = itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.phenomena(), message.prefix(), prior);
+            player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, updated);
             LogUtils.getLogger().info("MFCL legacy server scan applied for {}: type={}, id={}, meta={}", player.getName().getString(), message.type(), message.id(), message.meta());
         } catch (Exception failure) {
             LogUtils.getLogger().error("MFCL legacy server scan application failed for {}", player.getName().getString(), failure);
@@ -144,6 +159,30 @@ public final class ModernContentBridge {
     }
     public ItemStack mapStack(LegacyClientData.Stack old) {
         return items.containsKey(old.key()) ? stack(old.key(), old.metadata(), old.count(), old.tag()) : HostStackMapping.renderStack(old);
+    }
+    public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
+        if (stack.isEmpty()) return null;
+        if (reverseItems.containsKey(stack.getItem())) return snapshot(stack);
+        if (stack.hasTag() && stack.getTag().getAllKeys().stream().anyMatch(key -> !key.equals("Damage")))
+            throw new UnsupportedOperationException("Unmapped host inventory NBT: " + stack);
+        if (vanillaStacks == null) {
+            var mapped = new IdentityHashMap<Item,LegacyClientData.Stack>();
+            for (var original : services.items().catalog()) if (original.key().startsWith("minecraft:") && original.tag().isEmpty()) {
+                var modern = HostStackMapping.renderStack(original);
+                if (!modern.isEmpty()) mapped.putIfAbsent(modern.getItem(),original);
+            }
+            vanillaStacks = mapped;
+        }
+        var original = vanillaStacks.get(stack.getItem());
+        if (original == null) throw new UnsupportedOperationException("No original item representation: " + BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        return new LegacyClientData.Stack(original.key(),stack.isDamageableItem() ? stack.getDamageValue() : original.metadata(),stack.getCount(),original.name(),"");
+    }
+    public ItemStack gameplayStack(LegacyClientData.Stack stack) {
+        if (stack == null || stack.count() <= 0) return ItemStack.EMPTY;
+        if (!items.containsKey(stack.key()) && !stack.tag().isEmpty()) throw new UnsupportedOperationException("Original inventory NBT needs a host mapping: " + stack.key());
+        var mapped = mapStack(stack);
+        if (mapped.isEmpty()) throw new UnsupportedOperationException("Original inventory item needs a host mapping: " + stack.key());
+        return mapped;
     }
     public ItemStack stack(String key, int metadata, int count, String tag) {
         Item item = items.get(key); if (item == null) return ItemStack.EMPTY;
@@ -298,6 +337,43 @@ public final class ModernContentBridge {
             super(properties(entry)); this.entry = entry; registerDefaultState(stateDefinition.any().setValue(METADATA, 0));
         }
         @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(METADATA); }
+        @Override public InteractionResult use(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
+            if (level.isClientSide) return InteractionResult.SUCCESS;
+            try {
+                var pendingInventory = new ArrayList<ItemStack>();
+                int selected = player.getInventory().selected;
+                var outcome = logicTransaction(level,pos,() -> {
+                    var inventory = new ArrayList<LegacyClientData.Stack>();
+                    for (int slot=0;slot<40;slot++) inventory.add(gameplayStack(player.getInventory().getItem(slot)));
+                    if (hand == net.minecraft.world.InteractionHand.OFF_HAND) inventory.set(selected,gameplayStack(player.getOffhandItem()));
+                    var point = hit.getLocation().subtract(pos.getX(),pos.getY(),pos.getZ());
+                    var actor = new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
+                    var result = services.logic().activate(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),actor,inventory,selected,hit.getDirection().get3DDataValue(),(float)point.x,(float)point.y,(float)point.z);
+                    if (!result.handled()) return InteractionResult.PASS;
+                    pendingInventory.addAll(result.inventory().stream().map(ModernContentBridge.this::gameplayStack).toList());
+                    return InteractionResult.CONSUME;
+                },true);
+                if (outcome.consumesAction()) {
+                    for (int slot=0;slot<40;slot++) {
+                        if (slot == selected && hand == net.minecraft.world.InteractionHand.OFF_HAND) player.setItemInHand(hand,pendingInventory.get(slot));
+                        else player.getInventory().setItem(slot,pendingInventory.get(slot));
+                    }
+                    player.inventoryMenu.broadcastChanges();
+                }
+                return outcome;
+            } catch (Exception failure) {
+                LogUtils.getLogger().error("MFCL original block interaction failed for {} at {}",entry.key(),pos,failure);
+                player.displayClientMessage(Component.literal("此设备的部分交互尚未支持。"),true); return InteractionResult.FAIL;
+            }
+        }
+        @Override public boolean triggerEvent(BlockState state, Level level, BlockPos pos, int event, int data) {
+            try { return services.logic().event(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),event,data); }
+            catch (Exception failure) { LogUtils.getLogger().error("MFCL original block event failed for {} at {}",entry.key(),pos,failure); return false; }
+        }
+        @Override public void tick(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos, net.minecraft.util.RandomSource random) {
+            try { logicTransaction(level,pos,() -> { services.logic().scheduled(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ()); return null; },true); }
+            catch (Exception failure) { LogUtils.getLogger().error("MFCL original scheduled tick failed for {} at {}",entry.key(),pos,failure); }
+        }
         @Override public RenderShape getRenderShape(BlockState state) {
             return entry.renderType() < 0 && blockRendering.hasTileRenderer(entry.key(), state.getValue(METADATA)) ? RenderShape.INVISIBLE : RenderShape.MODEL;
         }
@@ -357,6 +433,9 @@ public final class ModernContentBridge {
     private final class MirroredTileBlock extends MirroredBlock implements EntityBlock {
         MirroredTileBlock(LegacyContent.Block entry) { super(entry); }
         @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new LegacyBlockEntity(ModernContentBridge.this, pos, state); }
+        @Override public <T extends BlockEntity> net.minecraft.world.level.block.entity.BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
+            return level.isClientSide || type != tileType ? null : (world,pos,current,tile) -> ((LegacyBlockEntity)tile).tickServer();
+        }
     }
     public ItemStack itemForBlock(String key, int metadata) {
         for (var item : declarations.items()) if (key.equals(item.blockKey())) return stack(item.key(), metadata, 1, "");
@@ -412,6 +491,12 @@ public final class ModernContentBridge {
         var transaction = placement.get();
         if (transaction != null && transaction.level == level) transaction.record(pos);
     }
+    public <T> T logicTransaction(Level level, BlockPos pos, java.util.concurrent.Callable<T> action, boolean immediate) throws Exception {
+        if (placement.get() != null) { beforeMutation(level,pos); return action.call(); }
+        try (var transaction = new PlacementTransaction(level)) {
+            transaction.record(pos); var result = action.call(); transaction.commit(immediate); return result;
+        }
+    }
     private final class PlacementTransaction implements AutoCloseable {
         private record Before(BlockState state, CompoundTag tile) {}
         private final Level level;
@@ -428,7 +513,10 @@ public final class ModernContentBridge {
             });
         }
         void commit() {
-            for (var pos : before.keySet()) if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.synchronize();
+            commit(true);
+        }
+        void commit(boolean immediate) {
+            for (var pos : before.keySet()) if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.captureChanges(immediate);
             committed = true;
         }
         @Override public void close() {

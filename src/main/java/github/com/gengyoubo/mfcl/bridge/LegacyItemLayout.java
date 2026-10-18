@@ -24,6 +24,9 @@ public final class LegacyItemLayout {
             LegacyVertexStream.rotate(matrix, 225, 0, 1, 0);
         }
         LegacyVertexStream.scale(matrix, .625, .625, .625);
+        return bounds(primitives, matrix);
+    }
+    public static Bounds bounds(List<LegacyVertexStream.Primitive> primitives, double[] matrix) {
         double minX = Double.POSITIVE_INFINITY, minY = minX, maxX = -minX, maxY = maxX;
         for (var primitive : primitives) for (var vertex : primitive.vertices()) {
             double[] point = LegacyVertexStream.transform(matrix, vertex.x(), vertex.y(), vertex.z());
@@ -35,6 +38,9 @@ public final class LegacyItemLayout {
     public static GuiFit fitGui(List<LegacyVertexStream.Primitive> primitives) { return fitGui(primitives, true); }
     public static GuiFit fitGui(List<LegacyVertexStream.Primitive> primitives, boolean blockRotation) {
         Bounds bounds = guiBounds(primitives, blockRotation);
+        return fit(bounds);
+    }
+    public static GuiFit fit(Bounds bounds) {
         if (bounds.minX() >= -.5 && bounds.minY() >= -.5 && bounds.maxX() <= .5 && bounds.maxY() <= .5)
             return GuiFit.IDENTITY;
         // Leave a small slot margin; translate in projected space so asymmetric old origins do not drift.

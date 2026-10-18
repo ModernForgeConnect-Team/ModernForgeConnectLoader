@@ -88,18 +88,28 @@ public final class LegacyItemUse {
             return null;
         });
     }
-    /** Runs the original {@code ScanManager.completeScan} against the authoritative (server) old player. */
-    public void applyScan(Object world, LegacyTiles.Placer placer, byte type, int id, int meta, String phenomena, String prefix) throws Exception {
-        services.items().inLegacy(() -> {
+    /** Restores previously persisted old player data into the cached actor before any legacy logic reads it. */
+    public void loadPersisted(Object world, LegacyTiles.Placer placer, byte[] data) throws Exception {
+        if (data == null || data.length == 0) return;
+        services.items().inLegacy(() -> { services.playerData().write(actor(world, placer, null), data); return null; });
+    }
+    /**
+     * Runs the original {@code ScanManager.completeScan} against the authoritative (server) old player. The
+     * caller passes the player's previously persisted old entity data (or null) and gets the updated bytes back,
+     * so research survives across sessions.
+     */
+    public byte[] applyScan(Object world, LegacyTiles.Placer placer, byte type, int id, int meta, String phenomena, String prefix, byte[] priorData) throws Exception {
+        return services.items().inLegacy(() -> {
             var loader = services.loader();
             Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
             Object scan = loader.loadClass("thaumcraft.api.research.ScanResult").getConstructor(byte.class, int.class, int.class, entityType, String.class)
                     .newInstance(type, id, meta, null, phenomena);
             Object player = actor(world, placer, null);
+            if (priorData != null && priorData.length != 0) services.playerData().write(player, priorData);
             loader.loadClass("thaumcraft.common.lib.research.ScanManager")
                     .getMethod("completeScan", loader.loadClass("net.minecraft.entity.player.EntityPlayer"), loader.loadClass("thaumcraft.api.research.ScanResult"), String.class)
                     .invoke(null, player, scan, prefix == null ? "@" : prefix);
-            return null;
+            return services.playerData().read(player);
         });
     }
     public void release(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {

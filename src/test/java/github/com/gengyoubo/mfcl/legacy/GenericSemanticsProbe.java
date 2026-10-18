@@ -144,6 +144,16 @@ public final class GenericSemanticsProbe {
         if (!(Boolean)living.getMethod("func_82165_m", int.class).invoke(clientPlayer, 1))
             throw new AssertionError("Reopening a container discarded the player's potion state");
         report.put("genericContainerPlayerPotionStateVerified", true);
+        Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
+        Object entityData = entityType.getMethod("getEntityData").invoke(clientPlayer);
+        entityData.getClass().getMethod("func_74778_a", String.class, String.class).invoke(entityData, "mfcl_probe", "kept");
+        byte[] dataBytes = services.playerData().read(clientPlayer);
+        if (dataBytes == null || dataBytes.length == 0) throw new AssertionError("Legacy player persistent data did not serialize");
+        services.playerData().write(clientPlayer, dataBytes);
+        Object reloaded = entityType.getMethod("getEntityData").invoke(clientPlayer);
+        if (!"kept".equals(reloaded.getClass().getMethod("func_74779_i", String.class).invoke(reloaded, "mfcl_probe")))
+            throw new AssertionError("Legacy player persistent data did not round-trip");
+        report.put("genericPlayerDataBridgeVerified", true);
         Object oldClient = minecraft.getMethod("func_71410_x").invoke(null);
         Object previousViewer = minecraft.getField("field_71451_h").get(oldClient);
         var playerWorld = loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p");

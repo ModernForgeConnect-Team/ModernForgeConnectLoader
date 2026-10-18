@@ -2,124 +2,95 @@ package github.com.gengyoubo.mfcl.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
-import github.com.gengyoubo.mfcl.bridge.LegacyVertexStream;
-import github.com.gengyoubo.mfcl.bridge.LegacyItemLayout;
+import github.com.gengyoubo.mfcl.bridge.*;
 import github.com.gengyoubo.mfcl.content.ModernContentBridge;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.*;
 import net.minecraft.client.renderer.texture.TextureAtlas;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.*;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-/** Replays the captured original inventory-block geometry for one legacy block item. */
+/** Replays the original caller/helper/item pipeline for the selected display context, preserving draw order. */
 public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
-    private static final java.util.Set<String> missingSprites = new java.util.HashSet<>();
     private final ModernContentBridge bridge;
     private final String itemKey;
-    private final String blockKey;
-    // Bounds depend on whether the isometric block rotation applies, so the two cases are cached separately.
-    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> blockGuiFits = new java.util.IdentityHashMap<>();
-    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> nativeGuiFits = new java.util.IdentityHashMap<>();
+    private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> guiFits = new IdentityHashMap<>();
     public LegacyItemRenderer(ModernContentBridge bridge, String itemKey) {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         this.bridge = bridge; this.itemKey = itemKey;
-        this.blockKey = bridge.declarations().items().stream().filter(item -> item.key().equals(itemKey)).findFirst().map(github.com.gengyoubo.mfcl.bridge.LegacyContent.Item::blockKey).orElse(null);
     }
     @Override public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose, MultiBufferSource buffer, int light, int overlay) {
-        var legacyTag = stack.getTagElement(ModernContentBridge.STACK_TAG);
-        String tag = legacyTag == null ? "" : legacyTag.getString("snbt");
-        int metadata = ModernContentBridge.metadata(stack);
-        String baseKey = github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, metadata, "");
-        List<LegacyVertexStream.Primitive> primitives = null;
-        String foundType = null;
-        // The original IItemRenderer owners (wands, thaumometer, bows) capture distinct EQUIPPED, first-person and
-        // entity transforms; replay the one matching the modern display context instead of the inventory snapshot.
-        for (String type : contextTypes(context)) {
-            primitives = bridge.pack().contextGeometry().get(type + "|" + github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, metadata, tag));
-            if (primitives != null && !primitives.isEmpty()) { foundType = type; break; }
-            primitives = null;
+        var tag = stack.getTagElement(ModernContentBridge.STACK_TAG);
+        String base = LegacyContent.geometryKey(itemKey,ModernContentBridge.metadata(stack),"");
+        String key = LegacyContent.geometryKey(itemKey,ModernContentBridge.metadata(stack),tag == null ? "" : tag.getString("snbt"));
+        String type = contextType(context);
+        var primitives = bridge.pack().contextGeometry().get(type + "|" + key);
+        if (primitives == null) primitives = bridge.pack().contextGeometry().get(type + "|" + base);
+        boolean originalPipeline = primitives != null && !primitives.isEmpty();
+        if (!originalPipeline) {
+            primitives = bridge.pack().geometry().get(key);
+            if (primitives == null) primitives = bridge.pack().geometry().get(base);
         }
-        if (primitives == null) primitives = bridge.pack().geometry().get(github.com.gengyoubo.mfcl.bridge.LegacyContent.geometryKey(itemKey, metadata, tag));
-        if (primitives == null) primitives = bridge.pack().geometry().get(baseKey);
         if (primitives == null || primitives.isEmpty()) return;
-        var worldLayers = bridge.blockRendering().isolated(blockKey, metadata);
-        boolean translucent = !worldLayers.isEmpty() && worldLayers.stream().allMatch(layer -> layer.pass() == 1);
         pose.pushPose();
-        // Host item space centers on the slot; the original IItemRenderer geometry is replayed with the base matrix
-        // the old pipeline supplied for its ItemRenderType, rather than the ISBRH block display transform.
-        pose.translate(0.5, 0.5, 0.5);
-        boolean firstPerson = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || context == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
-        if ("EQUIPPED".equals(foundType)) {
-            // The third-person base would place the item from the arm end; the first-person hand pose differs.
-            if (firstPerson) applyLegacyFirstPersonTransform(pose);
-            else LegacyItemTransformBridge.equipped(pose, blockKey != null);
-        } else if ("INVENTORY".equals(foundType) && (context == ItemDisplayContext.GUI || context == ItemDisplayContext.FIXED)) {
-            // Original inventory geometry already carries the renderer's own view; only the caller base is restored.
-            LegacyItemTransformBridge.inventory(pose);
-        } else applyDefaultItemTransform(context, pose, primitives, foundType != null);
-        var atlas = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS);
-        Map<String, List<LegacyVertexStream.Primitive>> byTexture = new LinkedHashMap<>();
-        for (LegacyVertexStream.Primitive primitive : primitives) byTexture.computeIfAbsent(primitive.texture(), ignored -> new ArrayList<>()).add(primitive);
-        for (var entry : byTexture.entrySet()) {
-            ResourceLocation spriteId = ResourceLocation.tryParse(entry.getKey());
-            if (spriteId == null) continue;
-            if (entry.getKey().contains("textures/")) { // old model renderer texture, UVs already 0..1
-                LegacyWorldRenderer.replayStandalone(pose, buffer.getBuffer(translucent ? RenderType.entityTranslucent(spriteId) : RenderType.entityCutoutNoCull(spriteId)), entry.getValue(), light, overlay);
-                continue;
+        try {
+            pose.translate(.5,.5,.5); // ItemRenderer already translated by (-.5,-.5,-.5).
+            if (originalPipeline) {
+                boolean left = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
+                if (type.equals("EQUIPPED")) LegacyItemTransformBridge.handToArm(pose,left);
+                else if (type.equals("EQUIPPED_FIRST_PERSON") && left) pose.scale(-1,1,1);
+                else if (context == ItemDisplayContext.GUI) {
+                    var fit = guiFits.computeIfAbsent(primitives,p -> LegacyItemLayout.fit(LegacyItemLayout.bounds(p,LegacyVertexStream.identity())));
+                    pose.translate(fit.x(),fit.y(),0); pose.scale((float)fit.scale(),(float)fit.scale(),(float)fit.scale());
+                }
+            } else blockTransform(context,pose,primitives);
+            replay(primitives,pose,buffer,light,overlay);
+        } finally { pose.popPose(); }
+    }
+    private void replay(List<LegacyVertexStream.Primitive> primitives, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
+        var mc = Minecraft.getInstance(); var atlas = mc.getTextureAtlas(TextureAtlas.LOCATION_BLOCKS);
+        int first = 0;
+        while (first < primitives.size()) {
+            var primitive = primitives.get(first); int end = first+1;
+            while (end < primitives.size() && primitives.get(end).texture().equals(primitive.texture()) && primitives.get(end).state().equals(primitive.state())) end++;
+            var group = primitives.subList(first,end);
+            ResourceLocation texture = ResourceLocation.parse(primitive.texture());
+            boolean standalone = primitive.texture().contains("textures/");
+            if (primitive.texture().equals(LegacyItemRendering.PLAYER_SKIN)) {
+                texture = mc.player == null ? net.minecraft.client.resources.DefaultPlayerSkin.getDefaultSkin() : mc.player.getSkinTextureLocation();
+                // 1.7.10 arm models use the upper half of a 64x32 skin; current skins are 64x64.
+                group = group.stream().map(p -> new LegacyVertexStream.Primitive(p.mode(),p.texture(),p.vertices().stream().map(v ->
+                        new LegacyVertexStream.Vertex(v.x(),v.y(),v.z(),v.u(),v.v()*.5f,v.nx(),v.ny(),v.nz(),v.argb())).toList(),p.state())).toList();
             }
-            TextureAtlasSprite sprite = atlas.apply(spriteId);
-            if (sprite.contents().name().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation())) {
-                if (missingSprites.add(spriteId.toString())) com.mojang.logging.LogUtils.getLogger().warn("MFCL: captured sprite is not stitched: {}", spriteId);
-                continue;
-            }
-            LegacyWorldRenderer.replay(pose, buffer.getBuffer(translucent ? RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS) : RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS)), sprite, entry.getValue(), light, overlay);
+            var renderType = LegacyRenderTypes.get(standalone ? texture : TextureAtlas.LOCATION_BLOCKS,primitive.state());
+            int brightness = primitive.state().blend() && primitive.state().destinationBlend() == 1 ? 0xF000F0 : light;
+            if (standalone) LegacyWorldRenderer.replayStandalone(pose,buffers.getBuffer(renderType),group,brightness,overlay);
+            else LegacyWorldRenderer.replay(pose,buffers.getBuffer(renderType),atlas.apply(texture),group,brightness,overlay);
+            if (buffers instanceof MultiBufferSource.BufferSource immediate) immediate.endBatch(renderType);
+            first = end;
         }
-        pose.popPose();
     }
-    /**
-     * Experimental first-person placement: the old EQUIPPED_FIRST_PERSON context (which also drew the player's
-     * arms) is not captured yet, so the EQUIPPED geometry is only rescaled/repositioned to the first-person hand
-     * instead of reusing the third-person arm transform. Parameters are provisional.
-     */
-    private static void applyLegacyFirstPersonTransform(PoseStack pose) {
-        pose.translate(0.0f, -0.15f, 0.0f);
-        pose.scale(0.375f, 0.375f, 0.375f);
+    static String contextType(ItemDisplayContext context) {
+        return switch (context) {
+            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> "EQUIPPED_FIRST_PERSON";
+            case THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> "EQUIPPED";
+            case GROUND, HEAD, FIXED -> "ENTITY";
+            default -> "INVENTORY";
+        };
     }
-    /** Host display transforms for centered ISBRH block captures. */
-    private void applyDefaultItemTransform(ItemDisplayContext context, PoseStack pose, List<LegacyVertexStream.Primitive> primitives, boolean originalRenderer) {
+    private void blockTransform(ItemDisplayContext context, PoseStack pose, List<LegacyVertexStream.Primitive> geometry) {
         switch (context) {
             case GUI -> {
-                boolean blockRotation = !originalRenderer;
-                // The old IItemRenderer already orients its own inventory view; only ISBRH block captures need the
-                // isometric block rotation, otherwise the face is turned away from the camera.
-                var fits = blockRotation ? blockGuiFits : nativeGuiFits;
-                var fit = fits.computeIfAbsent(primitives, geometry -> LegacyItemLayout.fitGui(geometry, blockRotation));
-                pose.translate(fit.x(), fit.y(), 0); pose.scale((float)fit.scale(), (float)fit.scale(), (float)fit.scale());
-                if (blockRotation) { pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); }
-                pose.scale(0.625f, 0.625f, 0.625f);
+                var fit = guiFits.computeIfAbsent(geometry,LegacyItemLayout::fitGui);
+                pose.translate(fit.x(),fit.y(),0); pose.scale((float)fit.scale(),(float)fit.scale(),(float)fit.scale());
+                pose.mulPose(Axis.XP.rotationDegrees(30)); pose.mulPose(Axis.YP.rotationDegrees(225)); pose.scale(.625f,.625f,.625f);
             }
-            case GROUND -> { pose.translate(0, 0.1875, 0); pose.scale(0.25f, 0.25f, 0.25f); }
-            case FIXED -> pose.scale(0.5f, 0.5f, 0.5f);
-            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
-            case THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> { pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0, 0.125, 0); pose.scale(0.375f, 0.375f, 0.375f); }
-            default -> pose.scale(0.5f, 0.5f, 0.5f);
+            case GROUND -> { pose.translate(0,.1875,0); pose.scale(.25f,.25f,.25f); }
+            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND, THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> {
+                pose.mulPose(Axis.YP.rotationDegrees(45)); pose.translate(0,.125,0); pose.scale(.375f,.375f,.375f);
+            }
+            default -> pose.scale(.5f,.5f,.5f);
         }
-    }
-    private static List<String> contextTypes(ItemDisplayContext context) {
-        return switch (context) {
-            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND -> List.of("EQUIPPED_FIRST_PERSON", "EQUIPPED", "INVENTORY");
-            case THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> List.of("EQUIPPED", "INVENTORY");
-            case GROUND, HEAD -> List.of("ENTITY", "INVENTORY");
-            default -> List.of("INVENTORY");
-        };
     }
 }

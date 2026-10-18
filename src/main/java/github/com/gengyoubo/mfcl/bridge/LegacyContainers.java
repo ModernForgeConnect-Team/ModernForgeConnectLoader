@@ -65,6 +65,7 @@ public final class LegacyContainers {
             Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(loader.loadClass("net.minecraft.entity.Entity")).newInstance(player);
             var field=loader.loadClass("net.minecraft.entity.Entity").getDeclaredField("field_70180_af");field.setAccessible(true);field.set(player,watcher);
             watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
+              watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)0);
             mc.getField("field_71439_g").set(client,player);
             mc.getField("field_71442_b").set(client,loader.loadClass("net.minecraft.client.multiplayer.PlayerControllerMP").getConstructor(mc,loader.loadClass("net.minecraft.client.network.NetHandlerPlayClient")).newInstance(client,null));
         }

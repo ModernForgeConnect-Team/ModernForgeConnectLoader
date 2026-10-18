@@ -10,12 +10,16 @@ public final class GuiCaptureTransformer implements IClassTransformer {
     public byte[] transform(String name,String transformedName,byte[] bytes) {
         if (bytes == null || !(name.equals("net.minecraft.client.gui.Gui") || name.equals("net.minecraft.client.gui.FontRenderer")
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
-                || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer")
+                || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer") || name.equals("net.minecraft.entity.player.EntityPlayer")
                 || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (name.endsWith(".EntityPlayer") && m.name.equals("openGui")) {
+                m.instructions.insert(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","requireGuiBridge","()V",false));
+                continue;
+            }
             if (name.endsWith("AbstractClientPlayer") && m.name.equals("func_110306_p")) {
                 // Resolve preview arm textures at replay time, using the modern player's current skin.
                 InsnList skin = new InsnList(); LabelNode original = new LabelNode();
@@ -23,7 +27,8 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 skin.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyItemRendering","playerSkin","(Ljava/lang/Object;)Ljava/lang/Object;",false));
                 skin.add(new InsnNode(Opcodes.DUP)); skin.add(new JumpInsnNode(Opcodes.IFNULL,original));
                 skin.add(new TypeInsnNode(Opcodes.CHECKCAST,"net/minecraft/util/ResourceLocation")); skin.add(new InsnNode(Opcodes.ARETURN));
-                skin.add(original); skin.add(new InsnNode(Opcodes.POP)); m.instructions.insert(skin);
+                skin.add(original); skin.add(new FrameNode(Opcodes.F_SAME1,0,null,1,new Object[]{"java/lang/Object"}));
+                skin.add(new InsnNode(Opcodes.POP)); m.instructions.insert(skin);
                 continue;
             }
             InsnList code = new InsnList(); String target=null, descriptor=null;

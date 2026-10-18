@@ -66,6 +66,7 @@ final class ContentHostSmokeProbe {
                 proof.put("clientTileStateSynchronized", true);
                 verifyPlacedTileRendering(mc);
                 verifySpecialBlockModels(mc);
+                verifyItemContextModels();
                 int checked = 0;
                 for (var item : bridge.declarations().items()) for (var variant : item.variants()) {
                     var stack = bridge.stack(item.key(), variant.metadata(), 1, "");
@@ -146,7 +147,28 @@ final class ContentHostSmokeProbe {
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-warded-glass-world.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
                 stage = 51;
             } else if (stage == 51 && screenshotSaved) {
-                mc.options.hideGui = false;
+                mc.options.hideGui = false; screenshotSaved = false; frames = 0;
+                mc.setScreen(new ItemContextSmokeScreen(bridge)); stage = 60;
+            } else if (stage == 60 && ++frames > 20) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-item-context-inventory.png",mc.getMainRenderTarget(),message -> screenshotSaved = true); stage = 61;
+            } else if (stage == 61 && screenshotSaved) {
+                mc.setScreen(null); mc.player.getInventory().selected = 1;
+                mc.player.getInventory().setItem(1,bridge.stack("Thaumcraft:ItemThaumometer",0,1,""));
+                mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+                mc.options.hideGui = true; screenshotSaved = false; frames = 0; stage = 62;
+            } else if (stage == 62 && ++frames > 40) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-item-context-first-person.png",mc.getMainRenderTarget(),message -> screenshotSaved = true); stage = 63;
+            } else if (stage == 63 && screenshotSaved) {
+                mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK); screenshotSaved = false; frames = 0; stage = 64;
+            } else if (stage == 64 && ++frames > 30) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-item-context-third-person-back.png",mc.getMainRenderTarget(),message -> screenshotSaved = true); stage = 65;
+            } else if (stage == 65 && screenshotSaved) {
+                mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_FRONT); screenshotSaved = false; frames = 0; stage = 66;
+            } else if (stage == 66 && ++frames > 30) {
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-item-context-third-person-front.png",mc.getMainRenderTarget(),message -> screenshotSaved = true); stage = 67;
+            } else if (stage == 67 && screenshotSaved) {
+                mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON); mc.options.hideGui = false;
+                mc.player.getInventory().selected = 0;
                 mc.level.disconnect(); mc.clearLevel(); mc.setScreen(new TitleScreen()); stage = 5;
             } else if (stage == 5 && mc.getSingleplayerServer() == null && mc.screen instanceof TitleScreen) {
                 stage = 6; mc.createWorldOpenFlows().loadLevel(mc.screen, worldName);
@@ -195,6 +217,27 @@ final class ContentHostSmokeProbe {
             } catch (Throwable ignored) { }
             stage = 99; mc.stop();
         }
+    }
+    private void verifyItemContextModels() {
+        String key = "Thaumcraft:ItemThaumometer@0";
+        var contexts = new LinkedHashMap<String,Object>();
+        for (String type : List.of("INVENTORY","EQUIPPED","EQUIPPED_FIRST_PERSON","ENTITY")) {
+            var geometry = bridge.declarations().contextGeometry().get(type+"|"+key);
+            if (geometry == null || geometry.isEmpty()) throw new IllegalStateException("Original context capture missing: " + type+"|"+key);
+            contexts.put(type,Map.of("bounds",LegacyItemLayout.bounds(geometry,LegacyVertexStream.identity()),"vertices",geometry.stream().mapToInt(p -> p.vertices().size()).sum()));
+            if (type.equals("INVENTORY")) {
+                var bounds = LegacyItemLayout.bounds(geometry,LegacyVertexStream.identity());
+                if (bounds.maxX()-bounds.minX() < .6 || bounds.maxY()-bounds.minY() < .6)
+                    throw new IllegalStateException("Thaumometer inventory face is edge-on or too small: " + bounds);
+                if (geometry.stream().noneMatch(p -> p.state().blend())) throw new IllegalStateException("Thaumometer lens lost its blend state");
+            }
+            if (type.equals("EQUIPPED_FIRST_PERSON") && geometry.stream().noneMatch(p -> p.texture().equals(LegacyItemRendering.PLAYER_SKIN)))
+                throw new IllegalStateException("Original first-person hands were not captured");
+        }
+        var table = bridge.declarations().geometry().get("Thaumcraft:blockTable@14");
+        if (table == null || table.stream().noneMatch(p -> p.texture().contains("scanner.png")))
+            throw new IllegalStateException("Deconstruction table lost its embedded thaumometer");
+        proof.put("originalItemRenderContexts",contexts);
     }
     private void verifyPlacedTileRendering(Minecraft mc) throws Exception {
         var tiles = bridge.blockRendering().tiles();
@@ -451,7 +494,9 @@ final class ContentHostSmokeProbe {
                 .filter(item -> declaration.key().equals(item.blockKey())).flatMap(item -> item.variants().stream()).mapToInt(LegacyContent.Variant::metadata).distinct().toArray()) {
             if (!ModernContentBridge.canPlace(declaration, requestedMetadata)) continue;
             try {
-            BlockPos target = player.blockPosition().offset(3 + (index % 4) * 3, 0, 3 + (index / 4) * 3); index++;
+            // Keep every fixture in the subscribed client chunks, including those verified after save/reload.
+            BlockPos target = player.blockPosition().offset(-18 + (index % 12) * 3, 0, -18 + (index / 12) * 3); index++;
+            if (Math.abs(target.getX()-player.getX()) < 2 && Math.abs(target.getZ()-player.getZ()) < 2) target = target.offset(1,0,1);
             if (target.equals(position)) throw new IllegalStateException("Placement fixtures overlap");
             var ground = declaration.key().equals("Thaumcraft:blockCustomPlant") && requestedMetadata <= 3
                     ? (requestedMetadata == 3 ? Blocks.SAND : Blocks.GRASS_BLOCK).defaultBlockState() : Blocks.STONE.defaultBlockState();
@@ -511,7 +556,7 @@ final class ContentHostSmokeProbe {
         }
         if (!placementFailures.isEmpty()) throw new IllegalStateException("Placement failures: " + placementFailures);
         if (bridge.blockRendering().supports("Thaumcraft:blockCosmeticOpaque", 2)) {
-            glassPosition = player.blockPosition().offset(-5, 1, 6);
+            glassPosition = player.blockPosition().offset(-5, 1, 24);
             var glass = bridge.modernBlock(new HostWorldAccess.Block("Thaumcraft:blockCosmeticOpaque", 2));
             for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) level.setBlockAndUpdate(glassPosition.offset(x,y,0), glass);
             for (int x = -2; x <= 2; x++) for (int y = -1; y <= 1; y++)

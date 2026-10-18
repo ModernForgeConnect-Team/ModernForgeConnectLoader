@@ -11,6 +11,9 @@ public final class LegacyServices {
     private final LegacyScreens screens;
     private final LegacyContainers containers;
     private final LegacyTiles tiles;
+    private final LegacyPlayerData playerData;
+    private final LegacyBlockLogic logic;
+    private final LegacyInventoryAccess inventories;
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
         this(gameDirectory, loader, new LegacyClientData(loader));
     }
@@ -22,6 +25,8 @@ public final class LegacyServices {
         this.worlds = new LegacyWorlds(loader); this.screens = new LegacyScreens(loader);
         this.containers = new LegacyContainers(this);
         this.tiles = new LegacyTiles(this);
+        this.playerData = new LegacyPlayerData(this);
+        this.logic = new LegacyBlockLogic(this); this.inventories = new LegacyInventoryAccess(this);
     }
     public Path gameDirectory() { return gameDirectory; }
     public ClassLoader loader() { return loader; }
@@ -30,4 +35,7 @@ public final class LegacyServices {
     public LegacyScreens screens() { return screens; }
     public LegacyContainers containers() { return containers; }
     public LegacyTiles tiles() { return tiles; }
+    public LegacyPlayerData playerData() { return playerData; }
+    public LegacyBlockLogic logic() { return logic; }
+    public LegacyInventoryAccess inventories() { return inventories; }
 }

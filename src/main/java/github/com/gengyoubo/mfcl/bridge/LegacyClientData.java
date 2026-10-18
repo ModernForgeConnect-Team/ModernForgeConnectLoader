@@ -97,7 +97,13 @@ public final class LegacyClientData {
             setField(mcType, client, "field_71446_o", textureManager);
             Class<?> renderManagerType = loader.loadClass("net.minecraft.client.renderer.entity.RenderManager");
             Object renderManager = renderManagerType.getField("field_78727_a").get(null);
+            Object heldRenderer = loader.loadClass("net.minecraft.client.renderer.ItemRenderer").getConstructor(mcType).newInstance(client);
+            Class<?> gameRendererType = loader.loadClass("net.minecraft.client.renderer.EntityRenderer");
+            Object gameRenderer = unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,gameRendererType);
+            setField(gameRendererType,gameRenderer,"field_78516_c",heldRenderer);
+            setField(mcType,client,"field_71460_t",gameRenderer);
             if (renderManager != null) {
+                setField(renderManagerType,renderManager,"field_78721_f",heldRenderer);
                 setField(renderManagerType, renderManager, "field_78724_e", textureManager);
                 setField(renderManagerType, renderManager, "field_78736_p", font);
                 setField(renderManagerType, renderManager, "field_78733_k", mcType.getField("field_71474_y").get(client));

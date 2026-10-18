@@ -10,6 +10,9 @@ public final class LegacyInventoryContext implements AutoCloseable {
     private final Field worldField, viewerField, tileViewerField;
     private final Object entityRenderer, entityWorld, entityViewer;
     private final Field entityWorldField, entityViewerField;
+    private final Object heldRenderer;
+    private final Field equipField, previousEquipField;
+    private final float equip, previousEquip;
     public LegacyInventoryContext(LegacyServices services) throws Exception {
         this.services = services;
         services.containers().preparePlayer();
@@ -17,6 +20,12 @@ public final class LegacyInventoryContext implements AutoCloseable {
         Class<?> mc = loader.loadClass("net.minecraft.client.Minecraft");
         client = mc.getMethod("func_71410_x").invoke(null);
         player = mc.getField("field_71439_g").get(client);
+        Object gameRenderer = mc.getField("field_71460_t").get(client);
+        heldRenderer = gameRenderer.getClass().getField("field_78516_c").get(gameRenderer);
+        equipField = heldRenderer.getClass().getDeclaredField("field_78454_c"); equipField.setAccessible(true);
+        previousEquipField = heldRenderer.getClass().getDeclaredField("field_78451_d"); previousEquipField.setAccessible(true);
+        equip = equipField.getFloat(heldRenderer); previousEquip = previousEquipField.getFloat(heldRenderer);
+        equipField.setFloat(heldRenderer,1); previousEquipField.setFloat(heldRenderer,1);
         worldField = loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p"); playerWorld = worldField.get(player);
         viewerField = mc.getField("field_71451_h"); viewer = viewerField.get(client);
         Class<?> dispatcher = loader.loadClass("net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher");
@@ -44,6 +53,7 @@ public final class LegacyInventoryContext implements AutoCloseable {
         try {
             worldField.set(player, playerWorld); viewerField.set(client, viewer); tileViewerField.set(tileDispatcher, tileViewer);
             entityWorldField.set(entityRenderer, entityWorld); entityViewerField.set(entityRenderer, entityViewer);
+            equipField.setFloat(heldRenderer,equip); previousEquipField.setFloat(heldRenderer,previousEquip);
         }
         finally { services.worlds().unbind(identity); }
     }
