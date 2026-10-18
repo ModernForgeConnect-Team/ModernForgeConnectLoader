@@ -41,7 +41,9 @@ Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。�
 
 运行时报告为 `<游戏目录>/logs/mfcl/runtime-1.7.10.json`，记录真实 FML 阶段、转换器和适配器结果。通用 FML 初始化成功时状态为 `FML_AVAILABLE`，NEI 可选适配器就绪时为 `CLIENT_DATA_AVAILABLE`；二者均有 `legacyFmlStarted=true`。`legacyClientReady=false` 仍保留，以免误报为完整旧客户端支持。
 
-通用原生渲染桥按旧 GL 类身份绑定，每个运行时拥有独立纹理句柄；删除后重新绑定同一旧编号会创建新的宿主纹理。着色器与纹理调用会恢复宿主的程序、纹理、pixel-store 和像素传输缓冲状态。旧 `GL_CLAMP` 暂映射为 `GL_CLAMP_TO_EDGE`，边界采样行为存在差异；完整旧 GL 状态、Tessellator 和三维绘制仍未覆盖。Java 17 反射兼容只适配旧域中的 `Field.modifiers` 调用，不修改 JDK 全局反射过滤或启动参数。JDK XML 模块可共享，ASM 等宿主库仍严格隔离。
+通用原生渲染桥按旧 GL 类身份绑定，每个运行时拥有独立纹理句柄；删除后重新绑定同一旧编号会创建新的宿主纹理。着色器与纹理调用会恢复宿主的程序、纹理、pixel-store 和像素传输缓冲状态。旧 `GL_CLAMP` 暂映射为 `GL_CLAMP_TO_EDGE`，边界采样行为存在差异。Java 17 反射兼容只适配旧域中的 `Field.modifiers` 调用，不修改 JDK 全局反射过滤或启动参数。JDK XML 模块可共享，ASM 等宿主库仍严格隔离。
+
+三维旧渲染进入通用桥接阶段：`LegacyWorldGraphics` 在旧域捕获真正的旧 Tessellator 顶点数组（`glVertexPointer`/`glTexCoordPointer`/`glColorPointer`/`glNormalPointer`/`glDrawArrays`）与立即模式调用，连同 `glPushMatrix`/`glTranslate`/`glScale`/`glRotate` 的变换和纹理绑定，产出与宿主无关的顶点流（位置、UV、法线、颜色、纹理）。`LegacyVertexStream` 负责矩阵数学与重放，`LegacyDisplayLists` 的 `glCallList` 会把已编译的旧显示列表展开进当前捕获，而不是写入宿主 OpenGL。`LegacyRenderBridge` 在 2D GUI 捕获与 3D 世界捕获之间分派；现代侧 `LegacyWorldRenderer` 用 `PoseStack`/`VertexConsumer` 重放三角化后的几何。旧方块几何的纹理图集映射、`ISimpleBlockRenderingHandler` 与 `TileEntitySpecialRenderer` 的调用与缓存仍是下一步。
 
 原生 GPU 与模组列表复测使用 `runClient -PmfclOpenGlSmokeTest -PmfclModListSmokeTest`。`mfclOpenGlSmokeTest` 会通过真实旧 LWJGL 入口验证上传读回、着色器 uniform、纹理重建和宿主状态恢复；它需要图形客户端，独立无图形旧运行时不提供 GPU 服务。
 

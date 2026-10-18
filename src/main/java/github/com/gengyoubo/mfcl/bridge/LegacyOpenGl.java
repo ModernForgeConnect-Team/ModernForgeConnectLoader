@@ -29,6 +29,7 @@ public final class LegacyOpenGl {
             int query = (Integer) arguments[0];
             if (query == 2979 || query == 3415) return LegacyGuiGraphics.integer(query);
         }
+        if (operation.equals("glBindTexture(II)V") && LegacyWorldGraphics.active()) LegacyWorldGraphics.bindTexture((Integer) arguments[1]);
         Backend backend = BACKENDS.get(owner).get();
         if (backend == null) throw new UnsupportedOperationException("No host rendering backend for " + operation);
         try { return backend.call(operation, arguments); }

@@ -170,12 +170,30 @@ public final class ModernContentBridge {
         MirroredItem(Properties properties, LegacyContent.Item entry) { super(properties); this.entry = entry; }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
+        @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
+            consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
+        }
+    }
+    /** Item's constructor invokes this before the subclass sets its entry, so the key is resolved lazily. */
+    private net.minecraftforge.client.extensions.common.IClientItemExtensions customRenderer(java.util.function.Supplier<String> key) {
+        return new net.minecraftforge.client.extensions.common.IClientItemExtensions() {
+            private github.com.gengyoubo.mfcl.client.LegacyItemRenderer renderer;
+            @Override public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                String value = key.get();
+                if (value == null || !declarations.customItems().contains(value)) return null;
+                if (renderer == null) renderer = new github.com.gengyoubo.mfcl.client.LegacyItemRenderer(ModernContentBridge.this, value);
+                return renderer;
+            }
+        };
     }
     private final class MirroredBlockItem extends BlockItem {
         private final LegacyContent.Item entry;
         MirroredBlockItem(MirroredBlock block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
+        @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
+            consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
+        }
         @Override public InteractionResult useOn(UseOnContext context) {
             if (!ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry)) {
                 if (context.getPlayer() != null && context.getLevel().isClientSide) context.getPlayer().displayClientMessage(Component.translatable("mfcl.content.special_block_pending"), true);

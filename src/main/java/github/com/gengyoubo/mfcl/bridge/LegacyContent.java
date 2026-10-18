@@ -27,12 +27,67 @@ public final class LegacyContent {
     private final List<Block> blocks;
     private final List<LegacyCreativeTabs.Tab> tabs;
     private final Map<String, Object> oldBlocks = new HashMap<>();
+    private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
+    private final Set<String> customItems = new LinkedHashSet<>();
 
     public LegacyContent(LegacyClientData data) throws Exception {
         this.data = data;
         var declarations = data.inLegacy(() -> read());
         items = declarations.items; blocks = declarations.blocks; tabs = declarations.tabs;
+        captureStaticGeometry();
     }
+
+    /** Executes the real old inventory renderers once and keeps their geometry; texture stays the icon name. */
+    private void captureStaticGeometry() {
+        Object renderer;
+        Method render;
+        try {
+            Class<?> type = data.loader().loadClass("github.com.gengyoubo.mfcl.legacy1710.LegacyBlockRenderer");
+            renderer = type.getConstructor().newInstance();
+            render = type.getMethod("renderInventory", String.class, int.class, int.class);
+        } catch (Exception unavailable) { return; }
+        for (var block : blocks) {
+            if (block.renderType() == 0 || block.renderType() < 0) continue;
+            for (var item : items) {
+                if (!block.key().equals(item.blockKey())) continue;
+                boolean rendered = false;
+                for (var variant : item.variants()) {
+                    LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
+                    boolean drawn = false;
+                    try { drawn = Boolean.TRUE.equals(data.inLegacy(() -> render.invoke(renderer, block.key(), variant.metadata(), 0))); }
+                    catch (Throwable ignored) { }
+                    List<LegacyVertexStream.Primitive> captured;
+                    try { captured = frame.primitives(); } finally { frame.close(); }
+                    if (!drawn || captured.isEmpty()) continue;
+                    var resolved = resolveIcons(captured);
+                    if (resolved.isEmpty()) continue;
+                    geometry.put(item.key() + "@" + variant.metadata(), resolved);
+                    rendered = true;
+                }
+                if (rendered) customItems.add(item.key());
+            }
+        }
+    }
+    private List<LegacyVertexStream.Primitive> resolveIcons(List<LegacyVertexStream.Primitive> primitives) {
+        var result = new ArrayList<LegacyVertexStream.Primitive>();
+        for (var primitive : primitives) {
+            var vertices = primitive.vertices();
+            if (vertices.isEmpty()) continue;
+            float u = 0, v = 0;
+            for (var vertex : vertices) { u += vertex.u(); v += vertex.v(); }
+            String icon = data.iconAt(u / vertices.size(), v / vertices.size());
+            float[] cell = icon == null ? null : data.iconLayout().get(icon);
+            if (cell == null) continue;
+            var mapped = new ArrayList<LegacyVertexStream.Vertex>(vertices.size());
+            for (var vertex : vertices) mapped.add(new LegacyVertexStream.Vertex(vertex.x(), vertex.y(), vertex.z(),
+                    (vertex.u() - cell[0]) / (cell[2] - cell[0]), (vertex.v() - cell[1]) / (cell[3] - cell[1]),
+                    vertex.nx(), vertex.ny(), vertex.nz(), vertex.argb()));
+            result.add(new LegacyVertexStream.Primitive(primitive.mode(), icon, mapped));
+        }
+        return List.copyOf(result);
+    }
+    public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
+    public Set<String> customItems() { return customItems; }
     private record Declarations(List<Item> items, List<Block> blocks, List<LegacyCreativeTabs.Tab> tabs) {}
     private Declarations read() throws Exception {
         ClassLoader loader = data.loader();

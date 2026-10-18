@@ -2,6 +2,7 @@ package github.com.gengyoubo.mfcl.content;
 
 import com.google.gson.GsonBuilder;
 import github.com.gengyoubo.mfcl.bridge.LegacyContent;
+import github.com.gengyoubo.mfcl.bridge.LegacyVertexStream;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.*;
 import net.minecraft.server.packs.repository.*;
@@ -20,6 +21,7 @@ public final class LegacyContentPack {
     private final LegacyContent content;
     private final Map<String, String> textures = new HashMap<>();
     private final Set<String> missingIcons = new TreeSet<>();
+    private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
     public LegacyContentPack(Path gameDirectory, LegacyContent content) throws Exception {
         this.content = content;
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
@@ -40,6 +42,11 @@ public final class LegacyContentPack {
         }
         for (var item : content.items()) {
             var id = ModernContentBridge.id(item.key());
+            if (content.customItems().contains(item.key())) {
+                // The real old ISBRH geometry is replayed by a modern custom item renderer.
+                json("assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json", Map.of("parent", "builtin/entity"));
+                continue;
+            }
             var overrides = new ArrayList<Object>();
             LegacyContent.Variant base = item.variants().stream().filter(v -> v.metadata() == 0).findFirst().orElse(item.variants().get(0));
             Map<String, Object> model = itemModel(item, base);
@@ -51,8 +58,15 @@ public final class LegacyContentPack {
             model.put("overrides", overrides);
             json("assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json", model);
         }
+        for (var entry : content.geometry().entrySet()) {
+            var resolved = new ArrayList<LegacyVertexStream.Primitive>();
+            for (var primitive : entry.getValue())
+                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), texture(primitive.texture(), "blocks"), primitive.vertices()));
+            geometry.put(entry.getKey(), List.copyOf(resolved));
+        }
         languages();
         json("mfcl-content-manifest.json", Map.of("blocks", content.blocks(), "items", content.items(), "creativeTabs", content.tabs(), "missingIcons", missingIcons,
+                "customItems", List.copyOf(content.customItems()),
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
     }
     private Map<String, Object> itemModel(LegacyContent.Item item, LegacyContent.Variant variant) throws Exception {
@@ -122,6 +136,7 @@ public final class LegacyContentPack {
         if (!file.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + resource);
         Files.createDirectories(file.getParent()); Files.writeString(file, new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(value), StandardCharsets.UTF_8);
     }
+    public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
     public Path directory() { return directory; }
     public Set<String> missingIcons() { return Collections.unmodifiableSet(missingIcons); }
     public void findPacks(AddPackFindersEvent event) {

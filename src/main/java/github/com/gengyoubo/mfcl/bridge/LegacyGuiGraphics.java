@@ -39,6 +39,7 @@ public final class LegacyGuiGraphics {
         private int y(double value) { return (int)Math.round(matrix.y + matrix.sy * value); }
     }
     private static Frame frame() { return Objects.requireNonNull(CURRENT.get(), "Legacy GUI operation outside a host frame"); }
+    public static boolean capturing() { return CURRENT.get() != null; }
     public static void rect(int x1, int y1, int x2, int y2, int color) { gradient(x1, y1, x2, y2, color, color); }
     public static void gradient(int x1, int y1, int x2, int y2, int a, int b) {
         Frame f = frame(); f.commands.add(new Rect(f.x(x1), f.y(y1), f.x(x2), f.y(y2), a, b));

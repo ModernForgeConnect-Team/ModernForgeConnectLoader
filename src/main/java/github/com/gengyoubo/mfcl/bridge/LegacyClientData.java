@@ -30,6 +30,7 @@ public final class LegacyClientData {
     private final Map<Object, HostItem> hostItems = new IdentityHashMap<>();
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
+    private Map<String, float[]> iconLayout = Map.of();
     private boolean contextInitialized;
     private LegacyClientResources.Context resourceContext;
 
@@ -44,6 +45,15 @@ public final class LegacyClientData {
     }
 
     public ClassLoader loader() { return loader; }
+    public Map<String, float[]> iconLayout() { return iconLayout; }
+    /** The original icon whose synthetic atlas cell contains the given legacy UV, or null. */
+    public String iconAt(float u, float v) {
+        for (var entry : iconLayout.entrySet()) {
+            float[] cell = entry.getValue();
+            if (u >= cell[0] - 1.0e-4f && u <= cell[2] + 1.0e-4f && v >= cell[1] - 1.0e-4f && v <= cell[3] + 1.0e-4f) return entry.getKey();
+        }
+        return null;
+    }
     public synchronized void initializeContext(Path gameDir, List<String> languageResources) throws Exception {
         inLegacy(() -> {
             if (contextInitialized) { addLanguages(languageResources); return null; }
@@ -157,20 +167,32 @@ public final class LegacyClientData {
     private void prepareIconMetadata() throws Exception {
         Class<?> icon = loader.loadClass("net.minecraft.util.IIcon"), register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");
         Map<String, Object> icons = new HashMap<>();
-        Object registrar = Proxy.newProxyInstance(loader, new Class<?>[]{register}, (p, method, args) -> icons.computeIfAbsent((String) args[0], name ->
-                Proxy.newProxyInstance(loader, new Class<?>[]{icon}, (ignored, m, a) -> switch (m.getName()) {
-                    case "func_94211_a", "func_94216_b" -> 16;
-                    case "func_94209_e", "func_94210_h" -> 0f;
-                    case "func_94212_f", "func_94206_g" -> 1f;
-                    case "func_94214_a", "func_94207_b" -> ((Double) a[0]).floatValue() / 16f;
-                    case "func_94215_i", "toString" -> name;
-                    case "hashCode" -> name.hashCode();
-                    case "equals" -> ignored == a[0];
-                    default -> throw new UnsupportedOperationException("Legacy icon metadata: " + m);
-                })));
+        Map<String, float[]> layout = new LinkedHashMap<>();
+        java.util.concurrent.atomic.AtomicInteger cell = new java.util.concurrent.atomic.AtomicInteger();
+        Object registrar = Proxy.newProxyInstance(loader, new Class<?>[]{register}, (p, method, args) -> icons.computeIfAbsent((String) args[0], name -> {
+            // A synthetic atlas cell makes captured geometry self-describing: a quad's UV range tells the
+            // host which original icon texture it belongs to, without running the old texture stitcher.
+            int index = cell.getAndIncrement(), column = index % 16, row = index / 16;
+            float minU = column / 16f, maxU = (column + 1) / 16f, minV = row / 16f, maxV = (row + 1) / 16f;
+            layout.put(name, new float[]{minU, minV, maxU, maxV});
+            return Proxy.newProxyInstance(loader, new Class<?>[]{icon}, (ignored, m, a) -> switch (m.getName()) {
+                case "func_94211_a", "func_94216_b" -> 16;
+                case "func_94209_e" -> minU;
+                case "func_94210_h" -> minV;
+                case "func_94212_f" -> maxU;
+                case "func_94206_g" -> maxV;
+                case "func_94214_a" -> minU + (maxU - minU) * (((Double) a[0]).floatValue() / 16f);
+                case "func_94207_b" -> minV + (maxV - minV) * (((Double) a[0]).floatValue() / 16f);
+                case "func_94215_i", "toString" -> name;
+                case "hashCode" -> name.hashCode();
+                case "equals" -> ignored == a[0];
+                default -> throw new UnsupportedOperationException("Legacy icon metadata: " + m);
+            });
+        }));
         Class<?> block = loader.loadClass("net.minecraft.block.Block");
         for (Object b : (Iterable<?>) block.getField("field_149771_c").get(null)) block.getMethod("func_149651_a", register).invoke(b, registrar);
         for (Object i : (Iterable<?>) registry) itemType.getMethod("func_94581_a", register).invoke(i, registrar);
+        iconLayout = Map.copyOf(layout);
     }
     public void refreshIconMetadata() throws Exception { inLegacy(() -> { prepareIconMetadata(); return null; }); }
 

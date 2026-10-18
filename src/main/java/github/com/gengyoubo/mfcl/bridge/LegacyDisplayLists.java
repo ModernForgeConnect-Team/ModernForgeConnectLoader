@@ -68,8 +68,11 @@ public final class LegacyDisplayLists {
     }
     public static void call(Class<?> owner, int id) {
         if (record(owner, "glCallList(I)V", new double[]{id})) return;
-        if (DOMAINS.get(owner).lists.containsKey(id))
+        List<Command> commands = DOMAINS.get(owner).lists.get(id);
+        if (commands != null) {
+            if (LegacyWorldGraphics.active()) { LegacyWorldGraphics.callList(commands); return; }
             throw new UnsupportedOperationException("Legacy display list " + id + " requires a connected host world renderer");
+        }
         // OpenGL ignores undefined display lists.
     }
     public static boolean exists(Class<?> owner, int id) { return DOMAINS.get(owner).lists.containsKey(id); }

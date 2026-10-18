@@ -7,6 +7,18 @@ import org.objectweb.asm.tree.*;
 public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
     private static final String API = "github/com/gengyoubo/mfcl/bridge/LegacyGuiGraphics";
     private static final String LISTS = "github/com/gengyoubo/mfcl/bridge/LegacyDisplayLists";
+    private static final String DISPATCH = "github/com/gengyoubo/mfcl/bridge/LegacyRenderBridge";
+    private static final String WORLD = "github/com/gengyoubo/mfcl/bridge/LegacyWorldGraphics";
+    private static final java.util.Set<String> WORLD_METHODS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "glBegin(I)V", "glEnd()V",
+            "glVertex2f(FF)V", "glVertex2d(DD)V", "glVertex3f(FFF)V", "glVertex3d(DDD)V",
+            "glTexCoord2f(FF)V", "glTexCoord2d(DD)V", "glNormal3f(FFF)V", "glNormal3d(DDD)V",
+            "glColor3f(FFF)V", "glColor4f(FFFF)V", "glColor3d(DDD)V", "glColor4d(DDDD)V", "glColor3ub(BBB)V", "glColor4ub(BBBB)V",
+            "glEnableClientState(I)V", "glDisableClientState(I)V",
+            "glVertexPointer(IILjava/nio/FloatBuffer;)V", "glVertexPointer(IILjava/nio/DoubleBuffer;)V",
+            "glTexCoordPointer(IILjava/nio/FloatBuffer;)V", "glTexCoordPointer(IILjava/nio/ShortBuffer;)V",
+            "glColorPointer(IZILjava/nio/ByteBuffer;)V", "glColorPointer(IILjava/nio/FloatBuffer;)V",
+            "glNormalPointer(ILjava/nio/ByteBuffer;)V", "glDrawArrays(III)V"));
     public boolean targets(String name) { return name.equals("org.lwjgl.opengl.GL11") || name.equals("org.lwjgl.opengl.GL20") || name.equals("org.lwjgl.opengl.GL30")
             || name.equals("org.lwjgl.Sys") || name.equals("org.lwjgl.input.Keyboard") || name.equals("org.lwjgl.input.Mouse"); }
     public byte[] adapt(String name, byte[] bytes) {
@@ -32,16 +44,24 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             if (name.endsWith("GL11")) {
                 if (displayListMethod(m)) continue;
                 if (method.matches("gl(Begin|End|Vertex[234][fd]|TexCoord[234][fd]|Color[34][fd]|Normal3[fd]|Enable|Disable|BlendFunc|DepthMask|DepthFunc|ColorMask|ShadeModel|AlphaFunc|LineWidth|PushAttrib|PopAttrib|PushMatrix|PopMatrix|Translate[fd]|Scale[fd]|Rotate[fd])")) recordDisplayList(m);
-                if (method.equals("glPushMatrix")) call(m,"push","()V");
-                else if (method.equals("glPopMatrix")) call(m,"pop","()V");
+                if (method.equals("glPushMatrix")) call(m,DISPATCH,"push","()V");
+                else if (method.equals("glPopMatrix")) call(m,DISPATCH,"pop","()V");
                 else if (method.equals("glTranslatef") || method.equals("glScalef")) {
                     for (int i=0;i<3;i++) { m.instructions.add(new VarInsnNode(Opcodes.FLOAD,i)); m.instructions.add(new InsnNode(Opcodes.F2D)); }
-                    call(m,method.equals("glTranslatef") ? "translate" : "scale","(DDD)V");
+                    call(m,DISPATCH,method.equals("glTranslatef") ? "translate" : "scale","(DDD)V");
                 } else if (method.equals("glTranslated") || method.equals("glScaled")) {
                     for (int i=0;i<3;i++) m.instructions.add(new VarInsnNode(Opcodes.DLOAD,i*2));
-                    call(m,method.equals("glTranslated") ? "translate" : "scale","(DDD)V");
-                } else if (method.equals("glGetInteger") && desc.equals("(I)I")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0)); call(m,"integer","(I)I"); }
-                else if (method.matches("gl(Enable|Disable|Color4f|Color3f|BlendFunc|DepthMask|DepthFunc|ColorMask|Normal3f|ShadeModel|AlphaFunc|PushAttrib|PopAttrib)")) { }
+                    call(m,DISPATCH,method.equals("glTranslated") ? "translate" : "scale","(DDD)V");
+                } else if (method.equals("glRotatef")) {
+                    for (int i=0;i<4;i++) { m.instructions.add(new VarInsnNode(Opcodes.FLOAD,i)); m.instructions.add(new InsnNode(Opcodes.F2D)); }
+                    call(m,DISPATCH,"rotate","(DDDD)V");
+                } else if (method.equals("glRotated")) {
+                    for (int i=0;i<4;i++) m.instructions.add(new VarInsnNode(Opcodes.DLOAD,i*2));
+                    call(m,DISPATCH,"rotate","(DDDD)V");
+                } else if (method.equals("glLoadIdentity")) call(m,DISPATCH,"loadIdentity","()V");
+                else if (method.equals("glGetInteger") && desc.equals("(I)I")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0)); call(m,DISPATCH,"integer","(I)I"); }
+                else if (WORLD_METHODS.contains(method+desc)) routeWorld(m);
+                else if (method.matches("gl(Enable|Disable|BlendFunc|DepthMask|DepthFunc|ColorMask|ShadeModel|AlphaFunc|LineWidth|PushAttrib|PopAttrib|MatrixMode|ColorMaterial|DepthRange)")) { }
                 else { unsupported(m,name+"."+method+desc); continue; }
             } else if (name.endsWith("Keyboard") && method.equals("isKeyDown")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0)); call(m,"key","(I)Z"); }
             else if (name.endsWith("Mouse") && method.equals("getX")) call(m,"mouseX","()I");
@@ -149,7 +169,16 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
         method.instructions.add(new InsnNode(method.name.equals("getKeyName")?Opcodes.ACONST_NULL:Opcodes.ICONST_0));
         method.instructions.add(new InsnNode(method.name.equals("getKeyName")?Opcodes.ARETURN:Opcodes.IRETURN));
     }
-    private static void call(MethodNode m,String name,String desc) { m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,API,name,desc,false)); }
+    private static void call(MethodNode m,String name,String desc) { call(m,API,name,desc); }
+    private static void call(MethodNode m,String owner,String name,String desc) { m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,owner,name,desc,false)); }
+    private static void routeWorld(MethodNode m) {
+        Type[] arguments = Type.getArgumentTypes(m.desc);
+        InsnList code = m.instructions;
+        int local = 0;
+        for (Type argument : arguments) { code.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), local)); local += argument.getSize(); }
+        code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, WORLD, m.name, m.desc, false));
+        code.add(new InsnNode(Opcodes.RETURN));
+    }
     private static void unsupported(MethodNode m,String name) {
         m.instructions.add(new LdcInsnNode(name)); call(m,"unsupported","(Ljava/lang/String;)V");
         m.instructions.add(new InsnNode(Opcodes.ACONST_NULL)); m.instructions.add(new InsnNode(Opcodes.ATHROW));
