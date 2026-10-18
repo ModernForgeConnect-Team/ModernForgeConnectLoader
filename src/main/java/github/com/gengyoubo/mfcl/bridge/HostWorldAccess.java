@@ -11,6 +11,7 @@ public interface HostWorldAccess {
     void setDayTime(long time);
     Block block(int x, int y, int z);
     boolean setBlock(int x, int y, int z, Block block, int flags);
+    default boolean canPlaceBlock(Block block, int x, int y, int z) { return true; }
     default Object tileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity lookup is not available"); }
     default void setTileEntity(int x, int y, int z, Object tile) { throw new UnsupportedOperationException("Host TileEntity assignment is not available"); }
     default void removeTileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity removal is not available"); }

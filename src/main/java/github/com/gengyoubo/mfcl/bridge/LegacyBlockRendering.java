@@ -3,7 +3,7 @@ package github.com.gengyoubo.mfcl.bridge;
 import java.lang.reflect.*;
 import java.util.*;
 
-/** Replays stateless, full-cube ISBRHs against a read-only chunk view, never a live legacy World. */
+/** Captures original block and tile renderers against a read-only view of the host world. */
 public final class LegacyBlockRendering {
     @FunctionalInterface public interface View {
         HostWorldAccess.Block block(int x, int y, int z);
@@ -59,7 +59,7 @@ public final class LegacyBlockRendering {
                 try {
                     data.inLegacy(() -> {
                         Object block = block(declaration.key());
-                        View view = isolatedView(declaration.key(), meta);
+                        View view = previewView(declaration.key(), meta, declaration.renderType());
                         // TESRs and non-cube collision/placement need their own bridge. Do not publish a partial model.
                         boolean hasTile = false;
                         try (var scene = new LegacyBlockScene(services, view)) {
@@ -101,6 +101,12 @@ public final class LegacyBlockRendering {
     public List<Layer> isolated(String key, int metadata) { return isolated.getOrDefault(key + "@" + metadata, List.of()); }
     public static View isolatedView(String key, int metadata) {
         return (x,y,z) -> new HostWorldAccess.Block(x == 0 && y == 0 && z == 0 ? key : "minecraft:air", x == 0 && y == 0 && z == 0 ? metadata : 0);
+    }
+    private static View previewView(String key, int metadata, int renderType) {
+        var isolated = isolatedView(key, metadata);
+        // The vanilla door renderer deliberately skips orphan halves.
+        return (x,y,z) -> renderType == 7 && x == 0 && z == 0 && y == (metadata < 8 ? 1 : -1)
+                ? new HostWorldAccess.Block(key, metadata < 8 ? 8 : 0) : isolated.block(x,y,z);
     }
     public List<Layer> capture(String key, int metadata, View view) throws Exception {
         return data.inLegacy(() -> {

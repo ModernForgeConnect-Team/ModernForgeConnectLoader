@@ -80,8 +80,9 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
         String key = method.name + method.desc;
         boolean supported = owner.endsWith("GL11") && java.util.Arrays.asList(
                 "glGetString(I)Ljava/lang/String;", "glGetInteger(I)I", "glGenTextures()I", "glBindTexture(II)V",
-                "glDeleteTextures(I)V", "glIsTexture(I)Z", "glTexParameteri(III)V", "glTexParameterf(IIF)V",
+                "glDeleteTextures(I)V", "glIsTexture(I)Z",                 "glTexParameteri(III)V", "glTexParameterf(IIF)V",
                 "glTexEnvi(III)V", "glPixelStorei(II)V", "glGetTexLevelParameteri(III)I",
+                "glGetTexParameteri(II)I", "glGetTexParameterf(II)F",
                 "glTexImage2D(IIIIIIIILjava/nio/ByteBuffer;)V", "glTexImage2D(IIIIIIIILjava/nio/IntBuffer;)V",
                 "glTexSubImage2D(IIIIIIIILjava/nio/ByteBuffer;)V", "glTexSubImage2D(IIIIIIIILjava/nio/IntBuffer;)V",
                 "glGetTexImage(IIIILjava/nio/ByteBuffer;)V", "glGetTexImage(IIIILjava/nio/IntBuffer;)V").contains(key);
@@ -112,6 +113,11 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             String boxed = result.getSort() == Type.INT ? "java/lang/Integer" : "java/lang/Boolean";
             code.add(new TypeInsnNode(Opcodes.CHECKCAST, boxed));
             code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, boxed, result.getSort() == Type.INT ? "intValue" : "booleanValue", "()" + result.getDescriptor(), false));
+        } else if (result.getSort() == Type.FLOAT || result.getSort() == Type.DOUBLE) {
+            boolean single = result.getSort() == Type.FLOAT;
+            String boxed = single ? "java/lang/Float" : "java/lang/Double";
+            code.add(new TypeInsnNode(Opcodes.CHECKCAST, boxed));
+            code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, boxed, single ? "floatValue" : "doubleValue", "()" + result.getDescriptor(), false));
         } else code.add(new TypeInsnNode(Opcodes.CHECKCAST, result.getInternalName()));
         code.add(new InsnNode(result.getOpcode(Opcodes.IRETURN))); return true;
     }

@@ -13,17 +13,25 @@ import java.util.*;
 /** Dynamic models use each placed tile's real NBT/facing, independent from inventory captures. */
 public final class LegacyBlockEntityRenderer implements BlockEntityRenderer<LegacyBlockEntity> {
     private final ModernContentBridge bridge;
+    private final Map<LegacyBlockEntity, Long> retryAfter = new WeakHashMap<>();
     public LegacyBlockEntityRenderer(ModernContentBridge bridge) { this.bridge = bridge; }
     @Override public void render(LegacyBlockEntity tile, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         var state = tile.getBlockState(); var cell = bridge.legacyBlock(state);
         if (!bridge.blockRendering().hasTileRenderer(cell.legacyKey(), cell.metadata())) return;
+        if (System.nanoTime() < retryAfter.getOrDefault(tile, 0L)) return;
         try {
             var mc = Minecraft.getInstance(); var camera = mc.gameRenderer.getMainCamera(); var eye = camera.getPosition();
             bridge.blockRendering().tiles().view(bridge.services().worlds().bound(tile.getLevel()),eye.x,eye.y,eye.z,camera.getYRot(),camera.getXRot(),mc.player == null ? 0 : mc.player.tickCount);
             var pos = tile.getBlockPos();
             var primitives = bridge.blockRendering().tiles().capture(tile.legacyOrNull(), partial,pos.getX()-eye.x,pos.getY()-eye.y,pos.getZ()-eye.z);
             render(primitives, pose, buffers, light, overlay);
-        } catch (Exception failure) { throw new IllegalStateException("Cannot render placed legacy tile " + cell + " at " + tile.getBlockPos(), failure); }
+            retryAfter.remove(tile);
+        } catch (Exception | LinkageError failure) {
+            // A single incompatible model must not make a saved world impossible to open or repair.
+            // The acceptance probe invokes capture directly so failures still fail verification.
+            retryAfter.put(tile, System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5));
+            com.mojang.logging.LogUtils.getLogger().error("Cannot render placed legacy tile {} at {}; retrying in 5 seconds",cell,tile.getBlockPos(),failure);
+        }
     }
     public void render(List<LegacyVertexStream.Primitive> primitives, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         var atlas = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS);

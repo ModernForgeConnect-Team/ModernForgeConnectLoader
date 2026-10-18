@@ -31,6 +31,8 @@ public final class LegacyBlockModel extends BakedModelWrapper<BakedModel> {
     }
     @Override public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData data) {
         try {
+            if (bridge.blockRendering().isolated(key, metadata).isEmpty())
+                return data.derive().with(GEOMETRY, Map.of()).build();
             var layers = bridge.blockRendering().capture(key, metadata, bridge.renderView(level, pos));
             return data.derive().with(GEOMETRY, bake(layers)).build();
         } catch (Exception failure) { throw new IllegalStateException("Cannot render legacy block " + key + "@" + metadata + " at " + pos, failure); }

@@ -45,6 +45,7 @@ public final class LegacyGuiGraphics {
         Frame f = frame(); f.commands.add(new Rect(f.x(x1), f.y(y1), f.x(x2), f.y(y2), a, b));
     }
     public static void bind(Object resource) {
+        if (resource == null) return; // RenderItem may defer its actual atlas binding until the item pass.
         Frame f = CURRENT.get();
         if (f != null) f.texture = resource.toString();
         else LegacyWorldGraphics.texture(resource.toString());

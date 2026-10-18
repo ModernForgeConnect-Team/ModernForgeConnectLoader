@@ -39,10 +39,16 @@ public final class LevelWorldBridge {
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }
             @Override public Block block(int x, int y, int z) { check(); return content.legacyBlock(level.getBlockState(new BlockPos(x, y, z))); }
             @Override public boolean setBlock(int x, int y, int z, Block block, int flags) {
-                check(); return level.setBlock(new BlockPos(x, y, z), content.modernBlock(block), flags);
+                check(); var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
+                return level.setBlock(pos, content.modernBlock(block), flags);
+            }
+            @Override public boolean canPlaceBlock(Block block, int x, int y, int z) {
+                check(); var candidate = content.blocks().get(block.legacyKey());
+                var state = candidate == null ? content.modernBlock(block) : candidate.defaultBlockState();
+                return level.isInWorldBounds(new BlockPos(x,y,z)) && level.isUnobstructed(state,new BlockPos(x,y,z),net.minecraft.world.phys.shapes.CollisionContext.empty());
             }
             @Override public Object tileEntity(int x, int y, int z) {
-                check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
+                check(); content.beforeMutation(level,new BlockPos(x,y,z)); var tile = level.getBlockEntity(new BlockPos(x, y, z));
                 if (tile == null) return null;
                 if (tile instanceof LegacyBlockEntity legacy) return legacy.legacy();
                 throw new UnsupportedOperationException("Modern block entity has no old representation: " + tile.getType());

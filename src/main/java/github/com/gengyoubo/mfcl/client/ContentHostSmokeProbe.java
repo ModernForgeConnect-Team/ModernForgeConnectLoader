@@ -64,6 +64,7 @@ final class ContentHostSmokeProbe {
                     if (!Arrays.equals(bridge.services().tiles().save(old), check.nbt())) return;
                 }
                 proof.put("clientTileStateSynchronized", true);
+                verifyPlacedTileRendering(mc);
                 verifySpecialBlockModels(mc);
                 int checked = 0;
                 for (var item : bridge.declarations().items()) for (var variant : item.variants()) {
@@ -175,7 +176,10 @@ final class ContentHostSmokeProbe {
                     return true;
                 });
             } else if (stage == 7 && pending.isDone()) {
-                pending.join(); proof.put("worldReload", true); proof.put("status", "PASS"); proof.put("world", worldName);
+                pending.join();
+                for (var check : tileChecks) if (mc.level.getBlockEntity(check.position()) == null) return;
+                verifyPlacedTileRendering(mc);
+                proof.put("worldReload", true); proof.put("status", "PASS"); proof.put("world", worldName);
                 Path file = mc.gameDirectory.toPath().resolve("logs/mfcl/content-1.7.10-smoke.json"); Files.createDirectories(file.getParent());
                 Files.writeString(file, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(proof));
                 LogUtils.getLogger().info("MFCL_CONTENT_WORLD_SMOKE_PASS: {}", proof);
@@ -191,6 +195,26 @@ final class ContentHostSmokeProbe {
             } catch (Throwable ignored) { }
             stage = 99; mc.stop();
         }
+    }
+    private void verifyPlacedTileRendering(Minecraft mc) throws Exception {
+        var tiles = bridge.blockRendering().tiles();
+        var camera = mc.gameRenderer.getMainCamera(); var eye = camera.getPosition();
+        tiles.view(bridge.services().worlds().bound(mc.level), eye.x,eye.y,eye.z,camera.getYRot(),camera.getXRot(),mc.player.tickCount);
+        int checked = 0;
+        for (var check : tileChecks) {
+            var tile = (github.com.gengyoubo.mfcl.content.LegacyBlockEntity)mc.level.getBlockEntity(check.position());
+            Object original = tile.legacy(); // Includes client NBT callbacks such as the bore's markDirty().
+            if (!bridge.blockRendering().hasTileRenderer(check.key(),check.metadata())) continue;
+            var pos = check.position();
+            var geometry = tiles.capture(original,.5f,pos.getX()-eye.x,pos.getY()-eye.y,pos.getZ()-eye.z);
+            for (var primitive : geometry) for (var vertex : primitive.vertices())
+                if (!Double.isFinite(vertex.x()) || !Double.isFinite(vertex.y()) || !Double.isFinite(vertex.z())
+                        || !Float.isFinite(vertex.u()) || !Float.isFinite(vertex.v()))
+                    throw new IllegalStateException("Non-finite placed tile geometry: " + check.key());
+            checked++;
+        }
+        proof.put("placedTileRenderersChecked", checked);
+        proof.put("clientTileNbtLoadAndRender", true);
     }
     private void verifyContainerMirrors(Minecraft mc) throws Exception {
         var inventory = new net.minecraft.world.SimpleContainer(27);
@@ -422,17 +446,29 @@ final class ContentHostSmokeProbe {
         Class<?> oldInventory = bridge.services().loader().loadClass("net.minecraft.inventory.IInventory");
         Class<?> oldTileType = bridge.services().loader().loadClass("net.minecraft.tileentity.TileEntity");
         var placementFailures = new ArrayList<String>();
+        var restrictions = new ArrayList<String>();
         for (var declaration : bridge.declarations().blocks()) for (int requestedMetadata : bridge.declarations().items().stream()
                 .filter(item -> declaration.key().equals(item.blockKey())).flatMap(item -> item.variants().stream()).mapToInt(LegacyContent.Variant::metadata).distinct().toArray()) {
             if (!ModernContentBridge.canPlace(declaration, requestedMetadata)) continue;
             try {
             BlockPos target = player.blockPosition().offset(3 + (index % 4) * 3, 0, 3 + (index / 4) * 3); index++;
             if (target.equals(position)) throw new IllegalStateException("Placement fixtures overlap");
-            level.setBlockAndUpdate(target.below(), Blocks.STONE.defaultBlockState()); level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState());
+            var ground = declaration.key().equals("Thaumcraft:blockCustomPlant") && requestedMetadata <= 3
+                    ? (requestedMetadata == 3 ? Blocks.SAND : Blocks.GRASS_BLOCK).defaultBlockState() : Blocks.STONE.defaultBlockState();
+            if (declaration.key().equals("Thaumcraft:blockMetalDevice") && requestedMetadata == 12)
+                ground = bridge.modernBlock(new HostWorldAccess.Block(declaration.key(), 10));
+            level.setBlockAndUpdate(target.below(), ground); level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState());
             var item = bridge.itemForBlock(declaration.key(), requestedMetadata); if (item.isEmpty()) throw new IllegalStateException("No original block item for " + declaration.key());
             item.setCount(2); player.setItemInHand(InteractionHand.MAIN_HAND, item); player.setYRot(90); player.getAbilities().instabuild = false;
             var placeHit = new BlockHitResult(Vec3.atCenterOf(target.below()).add(0, .5, 0), Direction.UP, target.below(), false);
-            if (!item.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, placeHit)).consumesAction()
+            var result = item.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, placeHit));
+            if (declaration.key().equals("Thaumcraft:blockManaPod") || declaration.key().equals("Thaumcraft:blockTaintFibres")) {
+                if (result.consumesAction() || !level.getBlockState(target).isAir() || item.getCount() != 2)
+                    throw new IllegalStateException("Original biome placement restriction was bypassed: " + declaration.key());
+                restrictions.add(declaration.key() + "@" + requestedMetadata + ": original biome/support restriction");
+                continue;
+            }
+            if (!result.consumesAction()
                     || level.getBlockState(target).getBlock() != bridge.blocks().get(declaration.key()) || item.getCount() != 1)
                 throw new IllegalStateException("Original tile block could not be placed: " + declaration.key());
             int metadata = level.getBlockState(target).getValue(ModernContentBridge.METADATA);
@@ -487,6 +523,7 @@ final class ContentHostSmokeProbe {
         player.getInventory().setItem(0, stack); player.getAbilities().instabuild = true;
         server.saveEverything(false, true, true);
         proof.put("allSupportedBlockPlacements", placements); proof.put("originalTilesPersisted", tileChecks.size());
+        proof.put("originalPlacementRestrictions", restrictions);
         proof.put("tileCachedMetadataAndPlacer", true);
     }
 }

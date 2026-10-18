@@ -5,7 +5,9 @@ import java.util.*;
 
 /** Real old TileEntity construction, lifecycle and binary NBT. The host owns positions and scheduling. */
 public final class LegacyTiles {
-    public record Placer(UUID id, String name, double x, double y, double z, float yaw, float pitch) {}
+    public record Placer(UUID id, String name, double x, double y, double z, float yaw, float pitch, boolean creative, boolean sneaking) {
+        public Placer(UUID id, String name, double x, double y, double z, float yaw, float pitch) { this(id,name,x,y,z,yaw,pitch,false,false); }
+    }
     private final LegacyServices services;
     private final ClassLoader loader;
     private final Class<?> blockType, tileType, worldType, nbtType;
@@ -53,22 +55,35 @@ public final class LegacyTiles {
     public void metadata(Object tile, int metadata) throws Exception { tileType.getField("field_145847_g").setInt(tile, metadata); }
     public void placed(String key, Object world, int x, int y, int z, Placer placer, LegacyClientData.Stack stack) throws Exception {
         services.items().inLegacy(() -> {
-            Object actor = null;
-            if (placer != null) {
-                Class<?> actorType = loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP");
-                Field field = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); field.setAccessible(true); Object unsafe = field.get(null);
-                actor = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, actorType);
-                Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
-                var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);
-                profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));
-                entity.getField("field_70170_p").set(actor, world);
-                entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()); entity.getField("field_70161_v").setDouble(actor, placer.z());
-                entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
-            }
+            Object actor = actor(world, placer, stack);
             blockType.getMethod("func_149689_a", worldType, int.class, int.class, int.class, loader.loadClass("net.minecraft.entity.EntityLivingBase"), loader.loadClass("net.minecraft.item.ItemStack"))
                     .invoke(block(key), world, x, y, z, actor, services.items().materialize(stack));
             return null;
         });
+    }
+    public Object actor(Object world, Placer placer, LegacyClientData.Stack stack) throws Exception {
+        if (placer == null) return null;
+        Class<?> actorType = loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP");
+        Field field = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); field.setAccessible(true); Object unsafe = field.get(null);
+        Object actor = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, actorType);
+        Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
+        var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);
+        profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));
+        Object inventory = loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(player).newInstance(actor);
+        player.getField("field_71071_by").set(actor, inventory);
+        if (stack != null) inventory.getClass().getMethod("func_70299_a",int.class,loader.loadClass("net.minecraft.item.ItemStack")).invoke(inventory,0,services.items().materialize(stack));
+        Object capabilities = loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance();
+        capabilities.getClass().getField("field_75098_d").setBoolean(capabilities, placer.creative());
+        player.getField("field_71075_bZ").set(actor, capabilities);
+        Object watcher = loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(entity).newInstance(actor);
+        var data = entity.getDeclaredField("field_70180_af"); data.setAccessible(true); data.set(actor,watcher);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?2:0));
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
+        entity.getField("field_70170_p").set(actor, world);
+        entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()); entity.getField("field_70161_v").setDouble(actor, placer.z());
+        entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
+        var potions = loader.loadClass("net.minecraft.entity.EntityLivingBase").getDeclaredField("field_70713_bf"); potions.setAccessible(true); potions.set(actor,new HashMap<>());
+        return actor;
     }
     public List<LegacyClientData.Stack> inventory(Object tile) throws Exception {
         return services.items().inLegacy(() -> {
