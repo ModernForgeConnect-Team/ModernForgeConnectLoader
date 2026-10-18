@@ -10,9 +10,43 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import github.com.gengyoubo.mfcl.legacy.runtime.EmbeddedLegacyRuntime;
 
 public final class LegacyRuntimeService {
-    public enum State { NO_LEGACY_MODS, DEPENDENCY_ERRORS, RUNTIME_NOT_READY }
+    public enum State { NO_LEGACY_MODS, DEPENDENCY_ERRORS, RUNTIME_NOT_READY, RUNTIME_FAILED, FML_AVAILABLE, CLIENT_DATA_AVAILABLE }
+    private EmbeddedLegacyRuntime runtime;
+    public EmbeddedLegacyRuntime runtime() { return runtime; }
+
+    public Report start(Path gameDirectory, Path runtimeDirectory) {
+        Report inspected = inspect(gameDirectory);
+        if (inspected.state() != State.RUNTIME_NOT_READY) return inspected;
+        List<LegacyDiagnostic> diagnostics = new ArrayList<>(inspected.diagnostics());
+        diagnostics.removeIf(d -> d.code().equals("LEGACY_RUNTIME_NOT_READY"));
+        boolean started = false, clientDataReady = false;
+        State state = State.RUNTIME_NOT_READY;
+        try {
+            if (!Files.isRegularFile(runtimeDirectory.resolve("minecraft-forge-1.7.10-srg.jar"))) {
+                diagnostics.add(LegacyDiagnostic.notice("RUNTIME_INPUT_MISSING", "Prepare the private Forge 1.7.10 runtime in " + runtimeDirectory));
+            } else {
+                runtime = new EmbeddedLegacyRuntime(gameDirectory, runtimeDirectory, inspected);
+                var stages = runtime.boot();
+                writeReport(gameDirectory.resolve("logs/mfcl/runtime-1.7.10.json"), stages);
+                started = Boolean.TRUE.equals(stages.get("legacyFmlStarted"));
+                clientDataReady = started && Boolean.TRUE.equals(stages.get("neiDataReady"));
+                state = clientDataReady ? State.CLIENT_DATA_AVAILABLE : started ? State.FML_AVAILABLE : State.RUNTIME_FAILED;
+                if (!started) diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", stages.get("stage") + ": " + stages.get("failure")));
+                else if (!clientDataReady) diagnostics.add(LegacyDiagnostic.notice("LEGACY_CLIENT_DATA_FAILED", String.valueOf(stages.get("neiDataFailure"))));
+            }
+        } catch (Throwable failure) {
+            state = State.RUNTIME_FAILED;
+            diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", failure.toString()));
+        }
+        Report result = new Report(inspected.targetMinecraft(), inspected.sourceMinecraft(), inspected.modDirectory(), inspected.reportFile(),
+                state, started, false, inspected.archives(), diagnostics);
+        try { writeReport(Path.of(result.reportFile()), result); }
+        catch (IOException error) { throw new IllegalStateException("Cannot save legacy boot report", error); }
+        return result;
+    }
 
     public record Report(String targetMinecraft, String sourceMinecraft, String modDirectory, String reportFile,
                          State state, boolean legacyFmlStarted, boolean legacyClientReady,
@@ -49,7 +83,7 @@ public final class LegacyRuntimeService {
         return report;
     }
 
-    private static void writeReport(Path target, Report report) throws IOException {
+    private static void writeReport(Path target, Object report) throws IOException {
         Files.createDirectories(target.getParent());
         Path temporary = Files.createTempFile(target.getParent(), "legacy-1.7.10-", ".json.tmp");
         try {

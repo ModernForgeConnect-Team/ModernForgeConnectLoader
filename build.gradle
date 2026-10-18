@@ -73,8 +73,12 @@ minecraft {
             // You can set various levels here.
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
             property 'forge.logging.console.level', 'debug'
-            if (project.hasProperty('mfclHostSmokeTest')) {
+            if (project.hasProperty('mfclHostSmokeTest') || project.hasProperty('mfclNeiUiSmokeTest')) {
                 property 'mfcl.test.exitAtTitleScreen', 'true'
+            }
+            if (project.hasProperty('mfclNeiUiSmokeTest')) property 'mfcl.test.neiUiSmoke', 'true'
+            if (project.hasProperty('legacyRuntimeDir')) {
+                property 'mfcl.legacyRuntimeDir', file(project.property('legacyRuntimeDir')).absolutePath
             }
 
             mods {
@@ -115,6 +119,7 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
+    maven { url = 'https://libraries.minecraft.net' }
     // Put repositories for dependencies here
     // ForgeGradle automatically adds the Forge maven and Maven Central for you
 
@@ -123,6 +128,48 @@ repositories {
     // flatDir {
     //     dir 'libs'
     // }
+}
+
+sourceSets {
+    create('preparation')
+    create('legacy1710')
+}
+
+configurations {
+    legacySupport
+}
+
+dependencies {
+    preparationImplementation 'org.ow2.asm:asm:9.7.1'
+    preparationImplementation 'org.ow2.asm:asm-commons:9.7.1'
+    preparationImplementation 'org.glavo:pack200:0.3.0'
+    preparationImplementation 'org.tukaani:xz:1.10'
+    legacy1710CompileOnly 'net.minecraft:launchwrapper:1.12'
+    legacy1710CompileOnly 'org.ow2.asm:asm-debug-all:5.0.3'
+    legacy1710CompileOnly 'com.google.guava:guava:17.0'
+    legacy1710CompileOnly 'net.minecraftforge:forge:1.7.10-10.13.4.1614-1.7.10:universal'
+}
+
+tasks.named('compileLegacy1710Java', JavaCompile) { options.release = 8 }
+tasks.register('legacyJar', Jar) {
+    archiveFileName = 'mfcl-legacy-runtime.jar'
+    destinationDirectory = layout.buildDirectory.dir('legacy')
+    from sourceSets.legacy1710.output
+}
+tasks.named('processResources') {
+    from(tasks.named('legacyJar')) { into 'mfcl' }
+}
+
+tasks.register('prepareLegacyRuntime', JavaExec) {
+    group = 'development'
+    description = 'Apply verified Forge client binary patches and SRG mappings to a private runtime cache.'
+    classpath = sourceSets.preparation.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.tools.PrepareLegacyRuntime'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    args file('build/research-round2/artifacts/minecraft-client-1.7.10.jar').absolutePath,
+            file('build/nei-investigation/runtime/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar').absolutePath,
+            file('build/research-round2/artifacts/joined-1.7.10.srg').absolutePath,
+            file('build/nei-investigation/runtime/minecraft-forge-1.7.10-srg.jar').absolutePath
 }
 
 dependencies {
@@ -254,4 +301,15 @@ tasks.register('probeLegacyCoremod', JavaExec) {
         args probeGameDir.absolutePath,
                 (runtimeSupport.isDirectory() ? runtimeSupport : supportRoot).absolutePath, project.property('legacyModId')
     }
+}
+
+tasks.register('bootLegacyRuntime', JavaExec) {
+    group = 'verification'
+    description = 'Execute real legacy FML and coremod transformers, retaining stage failures in a JSON report.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.legacy.runtime.EmbeddedLegacyRuntime'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    workingDir file('build/nei-smoke/game')
+    args file(providers.gradleProperty('legacyGameDir').getOrElse('build/nei-smoke/game')).absolutePath,
+            file(providers.gradleProperty('legacyRuntimeDir').getOrElse('build/nei-investigation/runtime')).absolutePath
 }
