@@ -100,7 +100,7 @@ public final class LegacyContent {
                         captureDiagnostics.add("captured item renderer " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives, "
                                 + captured.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices");
                         customItems.add(snapshot.key());
-                    } else captureDiagnostics.add("captured " + typeName + " " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives");
+                    } else captureDiagnostics.add("captured " + typeName + " " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives, bounds " + bounds(captured));
                 }
             }
         } catch (Throwable unavailable) { captureDiagnostics.add("item renderer bridge unavailable: " + unavailable); }
