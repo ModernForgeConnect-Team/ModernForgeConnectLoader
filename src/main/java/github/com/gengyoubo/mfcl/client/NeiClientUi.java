@@ -49,6 +49,7 @@ public final class NeiClientUi {
         private int page, recipePage;
         private boolean usages;
         private NeiDataBridge.Stack selected;
+        int renderedFrames;
         private record Hit(int x, int y, NeiDataBridge.Stack stack) {
             boolean contains(double mx, double my) { return mx >= x && mx < x + 18 && my >= y && my < y + 18; }
         }
@@ -72,6 +73,7 @@ public final class NeiClientUi {
             catch (Exception failure) { error = failure.toString(); recipes = List.of(); }
         }
         @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            renderedFrames++;
             renderBackground(graphics); hits.clear();
             graphics.drawString(font, title, 10, 9, 0xffffff);
             graphics.drawString(font, "R: recipes   U: uses   Esc: back", width / 2 + 8, 9, 0xcccccc);
@@ -98,7 +100,7 @@ public final class NeiClientUi {
             if (!error.isEmpty()) graphics.drawString(font, font.plainSubstrByWidth(error, width - 20), 10, height - 39, 0xff7777);
             super.render(graphics, mouseX, mouseY, partialTick);
             hits.stream().filter(h -> h.contains(mouseX, mouseY)).findFirst().ifPresent(hit -> graphics.renderComponentTooltip(font,
-                    List.of(Component.literal(hit.stack().name()), Component.literal(hit.stack().key() + ":" + hit.stack().metadata())), mouseX, mouseY));
+                    List.of(Component.literal(hit.stack().name()), Component.literal("R: recipes   U: uses")), mouseX, mouseY));
         }
         private void drawStack(GuiGraphics graphics, NeiDataBridge.Stack stack, int x, int y) {
             graphics.fill(x, y, x + 18, y + 18, 0x88333333);

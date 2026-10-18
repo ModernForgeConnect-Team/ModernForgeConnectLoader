@@ -22,7 +22,8 @@ public final class ModernItemMapping {
     private ModernItemMapping() {}
     public static ItemStack renderStack(NeiDataBridge.Stack old) {
         String key = old.key(); int meta = old.metadata();
-        if (key.startsWith("minecraft:")) {
+        if (key.startsWith("mfcl_host:")) key = key.substring(10).replaceFirst("/", ":");
+        else if (key.startsWith("minecraft:")) {
             String path = key.substring(10);
             if ((path.equals("planks") || path.equals("sapling")) && meta >= 0 && meta < WOODS.length) path = WOODS[meta] + (path.equals("planks") ? "_planks" : "_sapling");
             else if ((path.equals("log") || path.equals("leaves")) && meta >= 0 && meta < 4) path = WOODS[meta] + (path.equals("log") ? "_log" : "_leaves");

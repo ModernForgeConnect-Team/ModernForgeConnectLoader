@@ -12,6 +12,8 @@ import java.util.*;
 
 /** Projects only fully representable common recipes into the old crafting/furnace data read by NEI. */
 public final class ModernRecipeProjection {
+    private static volatile Result lastResult;
+    static Result lastResult() { return lastResult; }
     private final NeiDataBridge bridge;
     private final Map<String, NeiDataBridge.Stack> reverse = new HashMap<>();
     public ModernRecipeProjection(NeiDataBridge bridge) throws Exception {
@@ -21,9 +23,21 @@ public final class ModernRecipeProjection {
             ItemStack modern = ModernItemMapping.renderStack(old);
             if (!modern.isEmpty()) reverse.putIfAbsent(BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(), old);
         }
+        var missing = new ArrayList<NeiDataBridge.HostItem>();
+        for (var item : BuiltInRegistries.ITEM) {
+            String key = BuiltInRegistries.ITEM.getKey(item).toString(); var stack = new ItemStack(item);
+            if (!stack.isEmpty() && !reverse.containsKey(key)) missing.add(new NeiDataBridge.HostItem(key, stack.getHoverName().getString(), stack.getMaxStackSize(), stack.getMaxDamage()));
+        }
+        bridge.importHostItems(missing);
+        for (var old : bridge.search("")) {
+            if (!old.tag().isEmpty()) continue;
+            ItemStack modern = ModernItemMapping.renderStack(old);
+            if (!modern.isEmpty()) reverse.putIfAbsent(BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(), old);
+        }
     }
     public static void install(NeiDataBridge bridge) {
         MinecraftForge.EVENT_BUS.addListener((RecipesUpdatedEvent event) -> {
+            lastResult = null;
             try {
                 var projection = new ModernRecipeProjection(bridge);
                 var access = net.minecraft.client.Minecraft.getInstance().getConnection();
@@ -60,7 +74,7 @@ public final class ModernRecipeProjection {
         }
         int count = bridge.projectHostRecipes(recipes);
         LogUtils.getLogger().info("MFCL: projected {} modern recipes into original NEI; {} recipes not representable yet", count, skipped);
-        return new Result(count, skipped);
+        lastResult = new Result(count, skipped); return lastResult;
     }
     private NeiDataBridge.Stack convert(ItemStack modern) {
         if (modern.isEmpty() || modern.hasTag()) return null;

@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$NeiJar,
     [Parameter(Mandatory=$true)][string]$JavaHome,
+    [string]$GameDirectory,
     [switch]$Boot
 )
 $ErrorActionPreference = 'Stop'
@@ -8,6 +9,8 @@ $workspaceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 & (Join-Path $PSScriptRoot 'prepare-nei-probe.ps1') -NeiJar $NeiJar -JavaHome $JavaHome
 $inputRoot = Join-Path $workspaceRoot 'build/research-round2/artifacts'
 $runtimeRoot = Join-Path $workspaceRoot 'build/nei-investigation/runtime'
+if (!$GameDirectory) { $GameDirectory = Join-Path $workspaceRoot 'build/nei-smoke/game' }
+$GameDirectory = [IO.Path]::GetFullPath($GameDirectory)
 [IO.Directory]::CreateDirectory($inputRoot) | Out-Null
 
 function Get-Verified([string]$url, [string]$target, [string]$algorithm, [string]$hash) {
@@ -53,8 +56,25 @@ try {
     $env:JAVA_HOME = $JavaHome
     & .\gradlew.bat prepareLegacyRuntime --console=plain
     if ($LASTEXITCODE -ne 0) { throw "Runtime preparation failed: $LASTEXITCODE" }
+    $installedRuntime = Join-Path $GameDirectory 'mfcl/runtime/1.7.10'
+    $installedMods = Join-Path $GameDirectory 'mods/1.7.10'
+    [IO.Directory]::CreateDirectory($installedRuntime) | Out-Null
+    [IO.Directory]::CreateDirectory($installedMods) | Out-Null
+    foreach ($input in Get-ChildItem -LiteralPath $runtimeRoot -Filter '*.jar' -File) {
+        if ($input.Name -match '^forge-1.7.10-' -or $input.Name -eq 'commons-lang3-3.1.jar') { continue }
+        $destination = Join-Path $installedRuntime $input.Name
+        if (!(Test-Path -LiteralPath $destination) -or (Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $input.FullName).Hash) {
+            [IO.File]::Copy($input.FullName, $destination, $true)
+        }
+    }
+    foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $workspaceRoot 'build/nei-smoke/game/mods/1.7.10') -Filter '*.jar' -File) {
+        $destination = Join-Path $installedMods $mod.Name
+        if (!(Test-Path -LiteralPath $destination)) { [IO.File]::Copy($mod.FullName, $destination, $false) }
+        elseif ((Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $mod.FullName).Hash) { throw "Existing mod differs: $destination" }
+    }
+    Write-Output "Installed private Java 17 runtime: $installedRuntime"
     if ($Boot) {
-        & .\gradlew.bat bootLegacyRuntime --console=plain
+        & .\gradlew.bat bootLegacyRuntime "-PlegacyGameDir=$GameDirectory" "-PlegacyRuntimeDir=$installedRuntime" --console=plain
         if ($LASTEXITCODE -ne 0) { throw "Legacy FML boot failed; see build/nei-smoke/game/logs/mfcl/runtime-1.7.10.json" }
     }
 } finally { $env:JAVA_HOME = $previousJavaHome; Pop-Location }

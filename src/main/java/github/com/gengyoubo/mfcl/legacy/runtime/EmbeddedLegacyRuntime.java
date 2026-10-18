@@ -13,6 +13,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     private final URLClassLoader legacy;
     private final Path gameDirectory, forge;
     private final List<File> mods;
+    private final Map<Path, String> originalHashes = new LinkedHashMap<>();
     private github.com.gengyoubo.mfcl.bridge.NeiDataBridge nei;
 
     public EmbeddedLegacyRuntime(Path gameDirectory, Path supportDirectory, LegacyRuntimeService.Report report) throws Exception {
@@ -35,6 +36,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             Path path = Path.of(archive.file());
             if (!LegacyDiscovery.sha256(path).equals(archive.sha256())) throw new IOException("Legacy JAR changed: " + path);
             inputs.add(path.toUri().toURL()); mods.add(path.toFile());
+            originalHashes.put(path, archive.sha256());
         }
         URL[] urls = inputs.toArray(URL[]::new);
         root = new IsolatedLegacyClassLoader(urls, getClass().getClassLoader());
@@ -48,6 +50,9 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         PrintStream stdout = System.out, stderr = System.err;
         try {
             thread.setContextClassLoader(legacy);
+            Object logContext = root.loadClass("org.apache.logging.log4j.LogManager").getMethod("getContext", boolean.class).invoke(null, false);
+            logContext.getClass().getMethod("setConfigLocation", URI.class).invoke(logContext,
+                    Objects.requireNonNull(getClass().getResource("/mfcl/legacy-probe-log4j2.xml")).toURI());
             Class<?> launch = root.loadClass("net.minecraft.launchwrapper.Launch");
             launch.getField("classLoader").set(null, legacy);
             launch.getField("minecraftHome").set(null, gameDirectory.toFile());
@@ -83,7 +88,22 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
                         if (nei.recipes(diamond, true).isEmpty()) throw new IllegalStateException("Original NEI usage handler did not consume projected ingredient");
                         nei.projectHostRecipes(List.of(projected));
                         if (nei.recipes(craftingTable, false).size() != 1) throw new IllegalStateException("Recipe reload duplicated projected recipes");
+                        try {
+                            nei.projectHostRecipes(List.of(new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostRecipe("mfcl:invalid", "unknown", 0, 0, List.of(), craftingTable)));
+                            throw new IllegalStateException("Invalid recipe projection was accepted");
+                        } catch (IllegalArgumentException expected) {
+                            if (nei.recipes(craftingTable, false).size() != 1) throw new IllegalStateException("Failed projection changed live recipes");
+                        }
                         result.put("recipeProjectionVerified", true);
+                        nei.importHostItems(List.of(new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostItem("mfcl:probe_a", "MFCL probe A", 64, 0),
+                                new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostItem("mfcl:probe_b", "MFCL probe B", 64, 0)));
+                        var imported = nei.search("");
+                        var a = imported.stream().filter(s -> s.key().equals("mfcl_host:mfcl/probe_a")).findFirst().orElseThrow();
+                        var b = imported.stream().filter(s -> s.key().equals("mfcl_host:mfcl/probe_b")).findFirst().orElseThrow();
+                        nei.projectHostRecipes(List.of(new github.com.gengyoubo.mfcl.bridge.NeiDataBridge.HostRecipe("mfcl:facade_identity", "shapeless", 0, 0, List.of(List.of(a)), b)));
+                        if (nei.recipes(b, false).size() != 1 || nei.recipes(a, true).isEmpty() || !nei.recipes(b, true).isEmpty())
+                            throw new IllegalStateException("Host item facades lost identity in original NEI handlers");
+                        result.put("hostItemIdentityVerified", true);
                     }
                 } catch (Throwable error) {
                     result.put("neiDataReady", false);
@@ -92,9 +112,19 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             }
             try { legacy.loadClass("net.minecraft.world.level.Level"); throw new IllegalStateException("Modern Minecraft leaked into legacy domain"); }
             catch (ClassNotFoundException expected) { result.put("modernClassIsolationVerified", true); }
-            for (File mod : mods) {
-                var archive = new LegacyDiscovery().scan(new LegacyPaths(gameDirectory)).archives().stream().filter(a -> Path.of(a.file()).equals(mod.toPath())).findFirst().orElseThrow();
-                if (!LegacyDiscovery.sha256(mod.toPath()).equals(archive.sha256())) throw new IOException("Original mod JAR changed during boot: " + mod);
+            if (Boolean.getBoolean("mfcl.test.verifyRecipeProjection")) {
+                Class<?> data = legacy.loadClass("cpw.mods.fml.common.registry.GameData");
+                Method getMain = data.getDeclaredMethod("getMain"); getMain.setAccessible(true);
+                Class<?> item = legacy.loadClass("net.minecraft.item.Item"); var constructor = item.getDeclaredConstructor(); constructor.setAccessible(true);
+                Method register = data.getDeclaredMethod("registerItem", item, String.class); register.setAccessible(true);
+                try { register.invoke(getMain.invoke(null), constructor.newInstance(), "mfcl:late_attempt"); throw new IllegalStateException("Registration barrier accepted a late item"); }
+                catch (InvocationTargetException expected) {
+                    if (!(expected.getCause() instanceof IllegalStateException) || !expected.getCause().getMessage().contains("registration barrier")) throw expected;
+                    result.put("lateRegistrationRejected", true);
+                }
+            }
+            for (var input : originalHashes.entrySet()) {
+                if (!LegacyDiscovery.sha256(input.getKey()).equals(input.getValue())) throw new IOException("Original mod JAR changed during boot: " + input.getKey());
             }
             return result;
         } finally { thread.setContextClassLoader(before); if (System.out != stdout) System.setOut(stdout); if (System.err != stderr) System.setErr(stderr); }

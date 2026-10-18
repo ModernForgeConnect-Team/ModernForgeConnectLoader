@@ -17,15 +17,20 @@ public final class NeiDataBridge {
     public record HostRecipe(String id, String kind, int width, int height, List<List<Stack>> ingredients, Stack result) {
         public HostRecipe { ingredients = ingredients.stream().map(List::copyOf).toList(); }
     }
+    public record HostItem(String key, String name, int stackLimit, int maxDamage) {}
     private final ClassLoader loader;
     private final Class<?> stackType, itemType;
     private final Object registry;
     private final Method itemOfStack, nameOfItem, itemByName, copyStack;
     private List<Object> catalog = List.of();
+    private List<Stack> catalogSnapshots;
     private final Map<Stack, Object> originals = new HashMap<>();
     private final List<String> diagnostics = new ArrayList<>();
     private boolean ready;
     private List<Object> ownCrafting;
+    private final Map<Object, HostItem> hostItems = new IdentityHashMap<>();
+    private final Map<String, Object> hostItemsByKey = new HashMap<>();
+    private Class<?> facadeType;
 
     public NeiDataBridge(ClassLoader loader) throws Exception {
         this.loader = loader;
@@ -71,6 +76,7 @@ public final class NeiDataBridge {
             Method loadLanguage = localeType.getDeclaredMethod("func_135021_a", java.io.InputStream.class); loadLanguage.setAccessible(true);
             for (String resource : List.of("assets/minecraft/lang/en_US.lang", "assets/nei/lang/en_US.lang")) {
                 try (var in = loader.getResourceAsStream(resource)) { if (in != null) loadLanguage.invoke(locale, in); }
+                try (var in = loader.getResourceAsStream(resource)) { if (in != null) loader.loadClass("net.minecraft.util.StringTranslate").getMethod("inject", java.io.InputStream.class).invoke(null, in); }
             }
             setField(loader.loadClass("net.minecraft.client.resources.I18n"), null, "field_135054_a", locale);
             prepareIconMetadata();
@@ -121,9 +127,12 @@ public final class NeiDataBridge {
         return inLegacy(() -> {
             Pattern pattern = (Pattern) loader.loadClass("codechicken.nei.SearchField").getMethod("getPattern", String.class).invoke(null, expression.toLowerCase(Locale.ROOT));
             var result = new ArrayList<Stack>();
-            for (Object value : catalog) {
-                Stack stack = snapshot(value);
-                if (pattern.matcher(stack.name().toLowerCase(Locale.ROOT)).find() || pattern.matcher(stack.key().toLowerCase(Locale.ROOT)).find()) result.add(stack);
+            if (catalogSnapshots == null) {
+                var snapshots = new ArrayList<Stack>(); for (Object value : catalog) snapshots.add(snapshot(value));
+                catalogSnapshots = List.copyOf(snapshots);
+            }
+            for (Stack stack : catalogSnapshots) {
+                if (pattern == null || pattern.matcher(stack.name().toLowerCase(Locale.ROOT)).find() || pattern.matcher(stack.key().toLowerCase(Locale.ROOT)).find()) result.add(stack);
             }
             return List.copyOf(result);
         });
@@ -143,7 +152,7 @@ public final class NeiDataBridge {
                 Object derived;
                 try {
                     derived = handler.getClass().getMethod(usages ? "getUsageHandler" : "getRecipeHandler", String.class, Object[].class)
-                            .invoke(handler, "item", new Object[]{query});
+                            .invoke(handler, "item", new Object[]{copyStack.invoke(query)});
                 } catch (InvocationTargetException error) {
                     throw new IllegalStateException("NEI handler failed: " + handler.getClass().getName(), error.getCause());
                 }
@@ -159,6 +168,25 @@ public final class NeiDataBridge {
         });
     }
     public synchronized boolean ready() { return ready; }
+    public synchronized int importHostItems(List<HostItem> items) throws Exception {
+        requireReady();
+        return inLegacy(() -> {
+            if (facadeType == null) facadeType = LegacyItemFacades.define(loader);
+            var next = new ArrayList<>(catalog); int imported = 0;
+            for (HostItem item : items) {
+                String key = "mfcl_host:" + item.key().replace(':', '/');
+                if (hostItemsByKey.containsKey(key)) continue;
+                Object facade = facadeType.getConstructor(String.class, int.class, int.class).newInstance(item.name(), item.stackLimit(), item.maxDamage());
+                hostItems.put(facade, new HostItem(key, item.name(), item.stackLimit(), item.maxDamage())); hostItemsByKey.put(key, facade);
+                Object stack = stackType.getConstructor(itemType, int.class, int.class).newInstance(facade, 1, 0);
+                next.add(stack); imported++;
+            }
+            catalog = List.copyOf(next);
+            catalogSnapshots = null;
+            loader.loadClass("codechicken.nei.ItemList").getField("items").set(null, new ArrayList<>(catalog));
+            return imported;
+        });
+    }
     /** Build the replacement entirely before publishing it; reloads replace rather than append. */
     @SuppressWarnings("unchecked")
     public synchronized int projectHostRecipes(List<HostRecipe> recipes) throws Exception {
@@ -217,7 +245,9 @@ public final class NeiDataBridge {
         if (existing != null) result = copyStack.invoke(existing);
         else {
             if (!value.tag().isEmpty()) throw new IllegalArgumentException("Unmapped legacy NBT in host recipe: " + value.key());
-            Object item = itemByName.invoke(registry, value.key()); if (item == null) throw new IllegalArgumentException("Unknown legacy item " + value.key());
+            Object item = hostItemsByKey.get(value.key());
+            if (item == null) item = itemByName.invoke(registry, value.key());
+            if (item == null) throw new IllegalArgumentException("Unknown legacy item " + value.key());
             result = stackType.getConstructor(itemType, int.class, int.class).newInstance(item, value.count(), value.metadata());
         }
         stackType.getField("field_77994_a").setInt(result, value.count()); return result;
@@ -243,10 +273,11 @@ public final class NeiDataBridge {
     private Stack snapshot(Object value) throws Exception {
         Object item = itemOfStack.invoke(value);
         Object nbt = stackType.getField("field_77990_d").get(value);
-        Stack stack = new Stack((String) nameOfItem.invoke(registry, item),
+        HostItem host = hostItems.get(item);
+        Stack stack = new Stack(host == null ? (String) nameOfItem.invoke(registry, item) : host.key(),
                 (Integer) stackType.getMethod("func_77960_j").invoke(value), stackType.getField("field_77994_a").getInt(value),
-                (String) stackType.getMethod("func_82833_r").invoke(value), nbt == null ? "" : nbt.toString());
-        originals.putIfAbsent(stack, copyStack.invoke(value));
+                host == null ? (String) stackType.getMethod("func_82833_r").invoke(value) : host.name(), nbt == null ? "" : nbt.toString());
+        if (!originals.containsKey(stack)) originals.put(stack, copyStack.invoke(value));
         return stack;
     }
     private <T> T inLegacy(Callable<T> work) throws Exception {
