@@ -349,16 +349,21 @@ public final class ModernContentBridge {
                     var point = hit.getLocation().subtract(pos.getX(),pos.getY(),pos.getZ());
                     var actor = new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
                     var result = services.logic().activate(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),actor,inventory,selected,hit.getDirection().get3DDataValue(),(float)point.x,(float)point.y,(float)point.z);
-                    if (!result.handled()) return InteractionResult.PASS;
                     pendingInventory.addAll(result.inventory().stream().map(ModernContentBridge.this::gameplayStack).toList());
-                    return InteractionResult.CONSUME;
+                    return result.handled() ? InteractionResult.CONSUME : InteractionResult.PASS;
                 },true);
-                if (outcome.consumesAction()) {
+                if (!pendingInventory.isEmpty()) {
                     for (int slot=0;slot<40;slot++) {
-                        if (slot == selected && hand == net.minecraft.world.InteractionHand.OFF_HAND) player.setItemInHand(hand,pendingInventory.get(slot));
-                        else player.getInventory().setItem(slot,pendingInventory.get(slot));
+                        var replacement = pendingInventory.get(slot);
+                        var current = slot == selected && hand == net.minecraft.world.InteractionHand.OFF_HAND ? player.getOffhandItem() : player.getInventory().getItem(slot);
+                        if (ItemStack.isSameItemSameTags(current,replacement)) current.setCount(replacement.getCount());
+                        else {
+                            current.setCount(0); // Invalidate a native useOn caller's reference to the consumed item.
+                            if (slot == selected && hand == net.minecraft.world.InteractionHand.OFF_HAND) player.setItemInHand(hand,replacement);
+                            else player.getInventory().setItem(slot,replacement);
+                        }
                     }
-                    player.inventoryMenu.broadcastChanges();
+                    player.getInventory().setChanged(); player.inventoryMenu.broadcastChanges();
                 }
                 return outcome;
             } catch (Exception failure) {
@@ -497,10 +502,16 @@ public final class ModernContentBridge {
             transaction.record(pos); var result = action.call(); transaction.commit(immediate); return result;
         }
     }
+    public void afterCommit(Level level, Runnable action) {
+        var transaction = placement.get();
+        if (transaction != null && transaction.level == level) transaction.effects.add(action);
+        else action.run();
+    }
     private final class PlacementTransaction implements AutoCloseable {
         private record Before(BlockState state, CompoundTag tile) {}
         private final Level level;
         private final Map<BlockPos,Before> before = new LinkedHashMap<>();
+        private final List<Runnable> effects = new ArrayList<>();
         private boolean committed;
         PlacementTransaction(Level level) {
             if (placement.get() != null) throw new IllegalStateException("Nested legacy placement");
@@ -518,6 +529,7 @@ public final class ModernContentBridge {
         void commit(boolean immediate) {
             for (var pos : before.keySet()) if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.captureChanges(immediate);
             committed = true;
+            effects.forEach(Runnable::run);
         }
         @Override public void close() {
             placement.remove();

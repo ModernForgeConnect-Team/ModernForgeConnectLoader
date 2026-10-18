@@ -13,6 +13,13 @@ public final class LegacyBlockEntity extends BlockEntity {
     private volatile byte[] saved = new byte[0];
     public byte[] renderData() { return saved.clone(); }
     private String savedBlock;
+    private boolean updatePending, logicSuspended;
+    private long successfulTicks;
+    private final java.util.Map<net.minecraft.core.Direction,net.minecraftforge.common.util.LazyOptional<net.minecraftforge.items.IItemHandler>> inventories = new java.util.HashMap<>();
+    public ModernContentBridge content() { return content; }
+    public boolean owns(Object original) { return legacy == original; }
+    public boolean logicSuspended() { return logicSuspended; }
+    public long successfulTicks() { return successfulTicks; }
     public LegacyBlockEntity(ModernContentBridge content, BlockPos position, BlockState state) {
         super(content.tileType(), position, state); this.content = content;
     }
@@ -61,10 +68,43 @@ public final class LegacyBlockEntity extends BlockEntity {
     @Override public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
     public void synchronize() {
-        try { if (legacy != null) saved = content.services().tiles().save(legacy); }
+        captureChanges(true);
+    }
+    public void captureChanges(boolean immediate) {
+        try {
+            if (legacy != null) {
+                byte[] next = content.services().tiles().save(legacy);
+                if (!java.util.Arrays.equals(next,saved)) { saved = next; updatePending = true; setChanged(); }
+            }
+        }
         catch (Exception error) { throw new IllegalStateException("Cannot snapshot legacy tile for rendering", error); }
-        setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        if (updatePending && level != null && !level.isClientSide && (immediate || level.getGameTime()%5 == 0)) {
+            updatePending = false; level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+    public void markLegacyDirty() { setChanged(); updatePending = true; }
+    public void tickServer() {
+        if (logicSuspended || isRemoved() || level == null || level.isClientSide) return;
+        try {
+            boolean ticked = content.logicTransaction(level,worldPosition,() -> content.services().logic().tick(legacyOrNull()),false);
+            if (ticked) successfulTicks++;
+        } catch (Exception | LinkageError failure) {
+            logicSuspended = true;
+            if (level.getBlockEntity(worldPosition) instanceof LegacyBlockEntity current) current.logicSuspended = true;
+            com.mojang.logging.LogUtils.getLogger().error("MFCL paused original tile logic for {} at {} after rollback",key(),worldPosition,failure);
+        }
+    }
+    @Override public <T> net.minecraftforge.common.util.LazyOptional<T> getCapability(net.minecraftforge.common.capabilities.Capability<T> capability, net.minecraft.core.Direction side) {
+        if (capability == net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER && level != null && !isRemoved()) {
+            try {
+                if (content.services().inventories().supports(legacyOrNull())) return inventories.computeIfAbsent(side,key ->
+                        net.minecraftforge.common.util.LazyOptional.of(() -> new LegacyInventoryHandler(this,key))).cast();
+            } catch (Exception failure) { throw new IllegalStateException("Cannot expose original inventory",failure); }
+        }
+        return super.getCapability(capability,side);
+    }
+    @Override public void invalidateCaps() {
+        super.invalidateCaps(); inventories.values().forEach(net.minecraftforge.common.util.LazyOptional::invalidate); inventories.clear();
     }
     @Override public void setBlockState(BlockState state) {
         super.setBlockState(state);

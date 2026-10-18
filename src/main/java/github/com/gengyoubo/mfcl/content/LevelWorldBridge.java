@@ -37,6 +37,25 @@ public final class LevelWorldBridge {
             @Override public long gameTime() { check(); return level.getGameTime(); }
             @Override public long dayTime() { check(); return level.getDayTime(); }
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }
+            @Override public boolean powered(int x, int y, int z) { check(); return level.hasNeighborSignal(new BlockPos(x,y,z)); }
+            @Override public int power(int x, int y, int z, int side) { check(); return level.getSignal(new BlockPos(x,y,z),net.minecraft.core.Direction.from3DDataValue(side)); }
+            @Override public boolean loaded(int x, int y, int z) { check(); return level.isInWorldBounds(new BlockPos(x,y,z)) && level.hasChunkAt(new BlockPos(x,y,z)); }
+            @Override public void updateComparators(int x, int y, int z) {
+                check(); var pos = new BlockPos(x,y,z); var block = level.getBlockState(pos).getBlock();
+                content.afterCommit(level,() -> level.updateNeighbourForOutputSignal(pos,block));
+            }
+            @Override public void blockEvent(int x, int y, int z, String key, int event, int data) {
+                check(); var pos = new BlockPos(x,y,z); var block = level.getBlockState(pos).getBlock();
+                if (!content.legacyBlock(level.getBlockState(pos)).legacyKey().equals(key)) return;
+                content.afterCommit(level,() -> level.blockEvent(pos,block,event,data));
+            }
+            @Override public void schedule(int x, int y, int z, String key, int delay) {
+                check(); var pos = new BlockPos(x,y,z);
+                if (content.legacyBlock(level.getBlockState(pos)).legacyKey().equals(key)) {
+                    var block = level.getBlockState(pos).getBlock();
+                    content.afterCommit(level,() -> level.scheduleTick(pos,block,Math.max(1,delay)));
+                }
+            }
             @Override public Block block(int x, int y, int z) { check(); return content.legacyBlock(level.getBlockState(new BlockPos(x, y, z))); }
             @Override public boolean setBlock(int x, int y, int z, Block block, int flags) {
                 check(); var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
@@ -59,7 +78,7 @@ public final class LevelWorldBridge {
                 check(); content.beforeMutation(level,new BlockPos(x,y,z)); var tile = level.getBlockEntity(new BlockPos(x, y, z));
                 if (tile == null) return null;
                 if (tile instanceof LegacyBlockEntity legacy) return legacy.legacy();
-                throw new UnsupportedOperationException("Modern block entity has no old representation: " + tile.getType());
+                return null; // An unsupported native tile is not an instance of any legacy machine/interface.
             }
             @Override public void setTileEntity(int x, int y, int z, Object old) {
                 check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
@@ -69,12 +88,13 @@ public final class LevelWorldBridge {
             @Override public void removeTileEntity(int x, int y, int z) { check(); level.removeBlockEntity(new BlockPos(x, y, z)); }
             @Override public void markTileDirty(int x, int y, int z, Object old) {
                 check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
-                if (!(tile instanceof LegacyBlockEntity legacy) || legacy.legacy() != old) throw new IllegalStateException("Legacy tile identity mismatch");
-                legacy.synchronize();
+                if (!(tile instanceof LegacyBlockEntity legacy) || !legacy.owns(old)) throw new IllegalStateException("Legacy tile identity mismatch");
+                legacy.markLegacyDirty();
             }
             @Override public void blockUpdated(int x, int y, int z) {
                 check(); BlockPos pos = new BlockPos(x, y, z); var state = level.getBlockState(pos);
-                level.sendBlockUpdated(pos, state, state, 3);
+                if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.markLegacyDirty();
+                else level.sendBlockUpdated(pos, state, state, 3);
             }
         };
     }

@@ -25,6 +25,7 @@ class GenericRuntimeIntegrationTest {
             assertTrue(result.get("genericItemUseCallbackVerified").getAsBoolean());
             assertTrue(result.get("genericWorldRayTraceVerified").getAsBoolean());
             assertTrue(result.get("genericPlayerDataBridgeVerified").getAsBoolean());
+            assertTrue(result.get("genericOriginalGameplayCallbacksVerified").getAsBoolean());
             assertEquals(0, result.getAsJsonObject("adapters").size());
             assertFalse(result.getAsJsonArray("loadedMods").asList().stream().anyMatch(v -> v.getAsString().equals("NotEnoughItems")));
         } finally { if (process.isAlive()) { process.destroyForcibly(); assertTrue(process.waitFor(10, TimeUnit.SECONDS)); } }

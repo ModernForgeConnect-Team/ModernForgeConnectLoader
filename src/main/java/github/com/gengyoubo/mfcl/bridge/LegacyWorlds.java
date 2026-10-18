@@ -83,6 +83,22 @@ public final class LegacyWorlds implements AutoCloseable {
     public static void removeTile(Object world, int x, int y, int z) { binding(world).host.removeTileEntity(x, y, z); }
     public static void dirty(Object world, int x, int y, int z, Object tile) { binding(world).host.markTileDirty(x, y, z, tile); }
     public static void updated(Object world, int x, int y, int z) { binding(world).host.blockUpdated(x, y, z); }
+    public static boolean powered(Object world, int x, int y, int z) { return binding(world).host.powered(x,y,z); }
+    public static int power(Object world, int x, int y, int z, int side) { return binding(world).host.power(x,y,z,side); }
+    public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
+    public static void comparators(Object world, int x, int y, int z, Object block) { binding(world).host.updateComparators(x,y,z); }
+    private static String blockKey(Binding binding, Object block) {
+        try {
+            Object registry = binding.loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
+            return (String)registry.getClass().getMethod("func_148750_c",Object.class).invoke(registry,block);
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
+    }
+    public static void blockEvent(Object world, int x, int y, int z, Object block, int event, int data) {
+        var binding = binding(world); binding.host.blockEvent(x,y,z,blockKey(binding,block),event,data);
+    }
+    public static void schedule(Object world, int x, int y, int z, Object block, int delay) {
+        var binding = binding(world); binding.host.schedule(x,y,z,blockKey(binding,block),delay);
+    }
     public static boolean air(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).legacyKey().equals("minecraft:air"); }
     public static Object biome(Object world, int x, int z) {
         var binding = binding(world);
@@ -155,10 +171,13 @@ public final class LegacyWorlds implements AutoCloseable {
         constant(writer, "func_72802_i", "(IIII)I", 0x00F000F0);
         constant(writer, "func_72800_K", "()I", 256);
         constant(writer, "func_72806_N", "()Z", 0);
-        constant(writer, "func_72879_k", "(IIII)I", 0);
+        forward(writer,bridge,"func_72879_k","(IIII)I","power","(Ljava/lang/Object;IIII)I",null);
         constant(writer, "func_72849_a", "(IIIZ)I", 15);
-        constant(writer, "func_72864_z", "(III)Z", 0);
-        constant(writer, "func_72899_e", "(III)Z", 1);
+        forward(writer,bridge,"func_72864_z","(III)Z","powered","(Ljava/lang/Object;III)Z",null);
+        forward(writer,bridge,"func_72899_e","(III)Z","loaded","(Ljava/lang/Object;III)Z",null);
+        forward(writer,bridge,"func_147452_c","(IIILnet/minecraft/block/Block;II)V","blockEvent","(Ljava/lang/Object;IIILjava/lang/Object;II)V",null);
+        forward(writer,bridge,"func_147464_a","(IIILnet/minecraft/block/Block;I)V","schedule","(Ljava/lang/Object;IIILjava/lang/Object;I)V",null);
+        forward(writer,bridge,"func_147453_f","(IIILnet/minecraft/block/Block;)V","comparators","(Ljava/lang/Object;IIILjava/lang/Object;)V",null);
         constant(writer, "func_72904_c", "(IIIIII)Z", 1);
         var sound = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72908_a","(DDDLjava/lang/String;FF)V",null,null);
         sound.visitCode(); sound.visitInsn(Opcodes.RETURN); sound.visitMaxs(0,10); sound.visitEnd();

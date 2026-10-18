@@ -35,6 +35,9 @@ public final class ClientWorldBridge {
                     @Override public boolean clientSide() { return true; }
                     @Override public long gameTime() { return next.getGameTime(); }
                     @Override public long dayTime() { return next.getDayTime(); }
+                    @Override public boolean powered(int x, int y, int z) { return next.hasNeighborSignal(new BlockPos(x,y,z)); }
+                    @Override public int power(int x, int y, int z, int side) { return next.getSignal(new BlockPos(x,y,z),net.minecraft.core.Direction.from3DDataValue(side)); }
+                    @Override public boolean loaded(int x, int y, int z) { return next.isInWorldBounds(new BlockPos(x,y,z)) && next.hasChunkAt(new BlockPos(x,y,z)); }
                     @Override public void setDayTime(long time) { throw new UnsupportedOperationException("Client world cannot change authoritative time"); }
                     @Override public Block block(int x, int y, int z) {
                         var state = next.getBlockState(new BlockPos(x, y, z));

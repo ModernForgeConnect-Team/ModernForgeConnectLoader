@@ -14,6 +14,12 @@ public interface HostWorldAccess {
     Block block(int x, int y, int z);
     boolean setBlock(int x, int y, int z, Block block, int flags);
     default boolean canPlaceBlock(Block block, int x, int y, int z) { return true; }
+    default boolean powered(int x, int y, int z) { return false; }
+    default int power(int x, int y, int z, int side) { return 0; }
+    default boolean loaded(int x, int y, int z) { return true; }
+    default void updateComparators(int x, int y, int z) { }
+    default void blockEvent(int x, int y, int z, String block, int event, int data) { throw new UnsupportedOperationException("Host block events are not available"); }
+    default void schedule(int x, int y, int z, String block, int delay) { throw new UnsupportedOperationException("Host block scheduling is not available"); }
     default Hit rayTrace(double startX, double startY, double startZ, double endX, double endY, double endZ) { return null; }
     default Object tileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity lookup is not available"); }
     default void setTileEntity(int x, int y, int z, Object tile) { throw new UnsupportedOperationException("Host TileEntity assignment is not available"); }
