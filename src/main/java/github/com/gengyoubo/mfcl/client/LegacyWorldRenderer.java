@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import github.com.gengyoubo.mfcl.bridge.LegacyVertexStream;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import org.joml.Matrix4f;
 
 import java.util.List;
@@ -10,7 +11,8 @@ import java.util.List;
 /** Replays captured legacy geometry through the modern vertex pipeline without a legacy GL context. */
 public final class LegacyWorldRenderer {
     private LegacyWorldRenderer() { }
-    public static void replay(PoseStack pose, VertexConsumer consumer, List<LegacyVertexStream.Primitive> primitives, int packedLight, int packedOverlay) {
+    /** Local captured UVs are mapped onto a modern atlas sprite, so scaled and animated textures sample correctly. */
+    public static void replay(PoseStack pose, VertexConsumer consumer, TextureAtlasSprite sprite, List<LegacyVertexStream.Primitive> primitives, int packedLight, int packedOverlay) {
         Matrix4f matrix = pose.last().pose();
         for (LegacyVertexStream.Primitive primitive : primitives) {
             var vertices = primitive.vertices();
@@ -19,7 +21,8 @@ public final class LegacyWorldRenderer {
                     LegacyVertexStream.Vertex vertex = vertices.get(index);
                     consumer.vertex(matrix, (float) vertex.x(), (float) vertex.y(), (float) vertex.z())
                             .color(vertex.argb() >> 16 & 0xFF, vertex.argb() >> 8 & 0xFF, vertex.argb() & 0xFF, vertex.argb() >>> 24)
-                            .uv(vertex.u(), vertex.v())
+                            // TextureAtlasSprite.getU/getV take a 0..16 icon coordinate, not 0..1.
+                            .uv(sprite.getU(vertex.u() * 16.0), sprite.getV(vertex.v() * 16.0))
                             .overlayCoords(packedOverlay).uv2(packedLight)
                             .normal(vertex.nx(), vertex.ny(), vertex.nz())
                             .endVertex();

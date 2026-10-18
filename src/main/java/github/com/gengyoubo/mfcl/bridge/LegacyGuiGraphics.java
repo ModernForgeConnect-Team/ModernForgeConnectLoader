@@ -44,7 +44,7 @@ public final class LegacyGuiGraphics {
     public static void gradient(int x1, int y1, int x2, int y2, int a, int b) {
         Frame f = frame(); f.commands.add(new Rect(f.x(x1), f.y(y1), f.x(x2), f.y(y2), a, b));
     }
-    public static void bind(Object resource) { frame().texture = resource.toString(); }
+    public static void bind(Object resource) { Frame f = CURRENT.get(); if (f != null) f.texture = resource.toString(); }
     public static void texture(int x, int y, int u, int v, int width, int height) {
         Frame f = frame(); f.commands.add(new Texture(Objects.requireNonNull(f.texture, "Unbound legacy texture"), f.x(x), f.y(y), u, v, width, height));
     }

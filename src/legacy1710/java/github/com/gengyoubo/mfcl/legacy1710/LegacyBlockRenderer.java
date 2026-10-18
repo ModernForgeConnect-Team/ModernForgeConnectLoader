@@ -1,6 +1,7 @@
 package github.com.gengyoubo.mfcl.legacy1710;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 /**
  * Runs the real old inventory block renderer inside the private legacy domain. The host wraps the call in a
@@ -19,7 +20,19 @@ public final class LegacyBlockRenderer {
         Object rendering = renderingType.getMethod("instance").invoke(null);
         if (rendering == null) return false;
         Class<?> renderBlocksType = loader.loadClass("net.minecraft.client.renderer.RenderBlocks");
-        Object renderBlocks = renderBlocksType.getConstructor().newInstance();
+        Class<?> accessType = loader.loadClass("net.minecraft.world.IBlockAccess");
+        Object air = loader.loadClass("net.minecraft.init.Blocks").getField("field_150350_a").get(null);
+        Object access = Proxy.newProxyInstance(loader, new Class<?>[]{accessType}, (proxy, method, args) -> {
+            if (method.getName().equals("func_147439_a")) return air;
+            Class<?> result = method.getReturnType();
+            if (result == boolean.class) return false;
+            if (result == int.class) return 0;
+            if (result == float.class) return 0f;
+            if (result == double.class) return 0d;
+            if (result == long.class) return 0L;
+            return null;
+        });
+        Object renderBlocks = renderBlocksType.getConstructor(accessType).newInstance(access);
         Method render = renderingType.getMethod("renderInventoryBlock", renderBlocksType, blockType, int.class, int.class);
         render.invoke(rendering, renderBlocks, block, metadata, renderType);
         return true;

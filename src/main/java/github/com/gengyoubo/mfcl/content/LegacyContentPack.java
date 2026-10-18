@@ -27,6 +27,8 @@ public final class LegacyContentPack {
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
         directory = Files.createTempDirectory(parent, "content-1.7.10-");
         json("pack.mcmeta", Map.of("pack", Map.of("pack_format", 15, "description", "MFCL original 1.7.10 content resources")));
+        // builtin/entity item models reference no texture, so their sprites must be stitched explicitly.
+        json("assets/mfcl/atlases/blocks.json", Map.of("sources", List.of(Map.of("type", "minecraft:directory", "source", "block/legacy"))));
         for (var block : content.blocks()) {
             var id = ModernContentBridge.id(block.key()); var variants = new LinkedHashMap<String, Object>();
             for (int meta = 0; meta < 16; meta++) {

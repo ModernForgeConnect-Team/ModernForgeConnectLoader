@@ -55,6 +55,8 @@ public final class ModernContentBridge {
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
             LogUtils.getLogger().info("MFCL content barrier: {} blocks, {} items declared before modern registration", bridge.declarations.blocks().size(), bridge.declarations.items().size());
+            LogUtils.getLogger().info("MFCL legacy static models: {} items custom-rendered", bridge.declarations.customItems().size());
+            for (String diagnostic : bridge.declarations.captureDiagnostics()) LogUtils.getLogger().info("MFCL capture: {}", diagnostic);
             return bridge;
         } catch (Exception failure) { throw new IllegalStateException("Cannot freeze legacy content declarations", failure); }
     }

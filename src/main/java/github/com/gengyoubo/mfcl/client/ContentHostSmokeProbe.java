@@ -65,6 +65,7 @@ final class ContentHostSmokeProbe {
                     var stack = bridge.stack(item.key(), variant.metadata(), 1, "");
                     var model = mc.getItemRenderer().getModel(stack, mc.level, mc.player, 0);
                     if (model == mc.getModelManager().getMissingModel()) throw new IllegalStateException("Missing generated item model: " + item.key());
+                    if (bridge.declarations().customItems().contains(item.key())) { checked++; continue; } // builtin/entity is rendered by the captured old geometry
                     if (model.getParticleIcon().contents().name().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation()))
                         throw new IllegalStateException("Generated model references an unstitched texture: " + item.key());
                     checked++;

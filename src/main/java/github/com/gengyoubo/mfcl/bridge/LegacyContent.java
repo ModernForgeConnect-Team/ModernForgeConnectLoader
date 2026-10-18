@@ -29,6 +29,7 @@ public final class LegacyContent {
     private final Map<String, Object> oldBlocks = new HashMap<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
     private final Set<String> customItems = new LinkedHashSet<>();
+    private final List<String> captureDiagnostics = new ArrayList<>();
 
     public LegacyContent(LegacyClientData data) throws Exception {
         this.data = data;
@@ -55,13 +56,28 @@ public final class LegacyContent {
                     LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
                     boolean drawn = false;
                     try { drawn = Boolean.TRUE.equals(data.inLegacy(() -> render.invoke(renderer, block.key(), variant.metadata(), 0))); }
-                    catch (Throwable ignored) { }
+                    catch (Throwable failure) {
+                        Throwable cause = failure;
+                        while (cause.getCause() != null && cause != cause.getCause()) cause = cause.getCause();
+                        captureDiagnostics.add("capture failed " + block.key() + "@" + variant.metadata() + " renderType=" + block.renderType() + ": " + cause);
+                    }
                     List<LegacyVertexStream.Primitive> captured;
                     try { captured = frame.primitives(); } finally { frame.close(); }
                     if (!drawn || captured.isEmpty()) continue;
                     var resolved = resolveIcons(captured);
-                    if (resolved.isEmpty()) continue;
+                    if (resolved.isEmpty()) { captureDiagnostics.add("unresolved icons " + block.key() + "@" + variant.metadata() + " (" + captured.size() + " primitives)"); continue; }
+                    if (item.key().equals("Thaumcraft:blockCustomOre") && variant.metadata() == 1) {
+                        for (int i = 0; i < captured.size(); i++) {
+                            var p = captured.get(i);
+                            float minU = Float.MAX_VALUE, maxU = -Float.MAX_VALUE, minV = Float.MAX_VALUE, maxV = -Float.MAX_VALUE;
+                            for (var vertex : p.vertices()) { minU = Math.min(minU, vertex.u()); maxU = Math.max(maxU, vertex.u()); minV = Math.min(minV, vertex.v()); maxV = Math.max(maxV, vertex.v()); }
+                            captureDiagnostics.add("debug primitive " + i + " raw u[" + minU + "," + maxU + "] v[" + minV + "," + maxV + "] icon=" + data.iconAt((minU + maxU) / 2, (minV + maxV) / 2));
+                        }
+                        captureDiagnostics.add("debug iconLayout size=" + data.iconLayout().size());
+                    }
                     geometry.put(item.key() + "@" + variant.metadata(), resolved);
+                    captureDiagnostics.add("captured " + item.key() + "@" + variant.metadata() + ": " + resolved.size() + " primitives, "
+                            + resolved.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices, bounds " + bounds(resolved));
                     rendered = true;
                 }
                 if (rendered) customItems.add(item.key());
@@ -88,6 +104,15 @@ public final class LegacyContent {
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
     public Set<String> customItems() { return customItems; }
+    public List<String> captureDiagnostics() { return List.copyOf(captureDiagnostics); }
+    private static String bounds(List<LegacyVertexStream.Primitive> primitives) {
+        double[] box = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
+        for (var primitive : primitives) for (var vertex : primitive.vertices()) {
+            box[0] = Math.min(box[0], vertex.x()); box[1] = Math.min(box[1], vertex.y()); box[2] = Math.min(box[2], vertex.z());
+            box[3] = Math.max(box[3], vertex.x()); box[4] = Math.max(box[4], vertex.y()); box[5] = Math.max(box[5], vertex.z());
+        }
+        return String.format(java.util.Locale.ROOT, "[%.2f,%.2f,%.2f]-[%.2f,%.2f,%.2f]", box[0], box[1], box[2], box[3], box[4], box[5]);
+    }
     private record Declarations(List<Item> items, List<Block> blocks, List<LegacyCreativeTabs.Tab> tabs) {}
     private Declarations read() throws Exception {
         ClassLoader loader = data.loader();
