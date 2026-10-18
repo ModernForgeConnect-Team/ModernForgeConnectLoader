@@ -60,7 +60,7 @@ minecraft {
     runs {
         // applies to all the run configs below
         configureEach {
-            workingDirectory project.file('run')
+            workingDirectory project.file(providers.gradleProperty('mfclRunDir').getOrElse('run'))
 
             // Recommended logging data for a userdev environment
             // The markers can be added/remove as needed separated by commas.
@@ -129,6 +129,11 @@ dependencies {
     // If the group id is "net.minecraft" and the artifact id is one of ["client", "server", "joined"],
     // then special handling is done to allow a setup of a vanilla dependency without the use of an external repository.
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    implementation 'org.ow2.asm:asm:9.7.1'
+    implementation 'org.apache.maven:maven-artifact:3.8.5'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
@@ -204,4 +209,46 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    systemProperty 'mfcl.test.runtimeClasspath', sourceSets.test.runtimeClasspath.asPath
+    if (project.hasProperty('neiJar')) {
+        inputs.file(file(project.property('neiJar')))
+        systemProperty 'mfcl.test.neiJar', file(project.property('neiJar')).absolutePath
+    }
+    if (project.hasProperty('legacySupportDir')) {
+        inputs.dir(file(project.property('legacySupportDir')))
+        systemProperty 'mfcl.test.legacySupportDir', file(project.property('legacySupportDir')).absolutePath
+    }
+}
+
+tasks.register('inspectLegacyMods', JavaExec) {
+    group = 'verification'
+    description = 'Inspect mods/1.7.10 without defining legacy mod classes.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.legacy.LegacyInspector'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    args file(providers.gradleProperty('legacyGameDir').getOrElse('run')).absolutePath
+}
+
+tasks.register('probeLegacyCoremod', JavaExec) {
+    group = 'verification'
+    description = 'Run an original legacy core-plugin handshake; does not start Minecraft or its client.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.legacy.runtime.LegacyCoremodProbe'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    doFirst {
+        if (!project.hasProperty('legacySupportDir') || !project.hasProperty('legacyModId')) {
+            throw new GradleException('Specify -PlegacySupportDir=<directory> -PlegacyModId=<id> and optionally -PlegacyGameDir=<game directory>')
+        }
+        def probeGameDir = file(providers.gradleProperty('legacyGameDir').getOrElse('run'))
+        probeGameDir.mkdirs()
+        workingDir probeGameDir
+        def supportRoot = file(project.property('legacySupportDir'))
+        def runtimeSupport = new File(supportRoot, 'runtime')
+        args probeGameDir.absolutePath,
+                (runtimeSupport.isDirectory() ? runtimeSupport : supportRoot).absolutePath, project.property('legacyModId')
+    }
 }
