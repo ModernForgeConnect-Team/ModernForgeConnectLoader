@@ -30,6 +30,7 @@ public final class LegacyClientData {
     private final Map<Object, HostItem> hostItems = new IdentityHashMap<>();
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
+    private boolean contextInitialized;
 
     private final List<Consumer<List<Object>>> catalogListeners = new ArrayList<>();
     public LegacyClientData(ClassLoader loader) throws Exception {
@@ -44,6 +45,7 @@ public final class LegacyClientData {
     public ClassLoader loader() { return loader; }
     public synchronized void initializeContext(Path gameDir, List<String> languageResources) throws Exception {
         inLegacy(() -> {
+            if (contextInitialized) { addLanguages(languageResources); return null; }
             // A typed old client context supplies settings and data; it never starts an old window or game loop.
             Class<?> mcType = loader.loadClass("net.minecraft.client.Minecraft");
             Field unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); unsafeField.setAccessible(true);
@@ -72,6 +74,10 @@ public final class LegacyClientData {
                 setField(fontType, font, "field_78287_e", in == null ? new byte[65536] : in.readAllBytes());
             }
             setField(mcType, client, "field_71466_p", font); setField(mcType, client, "field_71464_q", font);
+            setField(mcType, client, "field_71446_o", unsafe.getClass().getMethod("allocateInstance", Class.class)
+                    .invoke(unsafe, loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")));
+            setField(mcType, client, "field_135017_as", loader.loadClass("net.minecraft.client.resources.LanguageManager")
+                    .getConstructor(loader.loadClass("net.minecraft.client.resources.data.IMetadataSerializer"), String.class).newInstance(null, "en_US"));
             Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale"); Object locale = localeType.getConstructor().newInstance();
             Method loadLanguage = localeType.getDeclaredMethod("func_135021_a", java.io.InputStream.class); loadLanguage.setAccessible(true);
             for (String resource : languageResources) {
@@ -80,8 +86,18 @@ public final class LegacyClientData {
             }
             setField(loader.loadClass("net.minecraft.client.resources.I18n"), null, "field_135054_a", locale);
             prepareIconMetadata();
+            contextInitialized = true;
             return null;
         });
+    }
+    private void addLanguages(List<String> resources) throws Exception {
+        Class<?> i18n = loader.loadClass("net.minecraft.client.resources.I18n");
+        Field field = i18n.getDeclaredField("field_135054_a"); field.setAccessible(true); Object locale = field.get(null);
+        Method method = locale.getClass().getDeclaredMethod("func_135021_a", java.io.InputStream.class); method.setAccessible(true);
+        for (String resource : resources) {
+            try (var in = loader.getResourceAsStream(resource)) { if (in != null) method.invoke(locale, in); }
+            try (var in = loader.getResourceAsStream(resource)) { if (in != null) loader.loadClass("net.minecraft.util.StringTranslate").getMethod("inject", java.io.InputStream.class).invoke(null, in); }
+        }
     }
     public synchronized void loadRegistryCatalog() throws Exception {
         inLegacy(() -> {

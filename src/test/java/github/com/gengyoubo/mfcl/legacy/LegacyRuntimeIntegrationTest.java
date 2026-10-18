@@ -23,8 +23,8 @@ class LegacyRuntimeIntegrationTest {
             Files.copy(Path.of(support).resolve(file), mods.resolve(file));
         Path output = temporary.resolve("boot.log");
         var process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-Dmfcl.test.verifyRecipeProjection=true", "-cp", System.getProperty("mfcl.test.runtimeClasspath"),
-                "github.com.gengyoubo.mfcl.legacy.runtime.EmbeddedLegacyRuntime", temporary.toString(), runtime.toString())
+                "-cp", System.getProperty("mfcl.test.runtimeClasspath"),
+                "github.com.gengyoubo.mfcl.legacy.NeiSemanticsProbe", temporary.toString(), runtime.toString())
                 .directory(temporary.toFile()).redirectErrorStream(true).redirectOutput(output.toFile()).start();
         try {
             assertTrue(process.waitFor(60, TimeUnit.SECONDS), "Legacy FML boot timed out");
@@ -32,14 +32,14 @@ class LegacyRuntimeIntegrationTest {
             var report = JsonParser.parseString(Files.readString(temporary.resolve("logs/mfcl/runtime-1.7.10.json"))).getAsJsonObject();
             assertEquals("AVAILABLE", report.get("stage").getAsString());
             assertTrue(report.get("legacyFmlStarted").getAsBoolean());
-            assertTrue(report.get("neiClientHandlerLoaded").getAsBoolean());
-            assertTrue(report.get("neiDataReady").getAsBoolean());
+            assertEquals("READY", report.getAsJsonObject("adapters").getAsJsonObject("nei").get("status").getAsString());
+            assertTrue(report.get("genericItemWorldGuiSemanticsVerified").getAsBoolean());
             assertTrue(report.get("registrationSealed").getAsBoolean());
             assertTrue(report.get("lateRegistrationRejected").getAsBoolean());
             assertTrue(report.get("modernClassIsolationVerified").getAsBoolean());
             assertTrue(report.get("recipeProjectionVerified").getAsBoolean());
             assertTrue(report.get("hostItemIdentityVerified").getAsBoolean());
-            assertTrue(report.getAsJsonObject("neiData").get("catalogSize").getAsInt() > 500);
+            assertTrue(report.getAsJsonObject("adapters").getAsJsonObject("nei").getAsJsonObject("data").get("catalogSize").getAsInt() > 500);
             assertTrue(report.getAsJsonArray("loadedMods").asList().stream().anyMatch(id -> id.getAsString().equals("NotEnoughItems")));
             var transformed = report.getAsJsonArray("transformations").asList().stream().map(v -> v.getAsString()).toList();
             assertTrue(transformed.contains("codechicken.nei.asm.NEITransformer -> net.minecraft.client.gui.inventory.GuiContainer"));

@@ -15,7 +15,9 @@ import github.com.gengyoubo.mfcl.legacy.runtime.EmbeddedLegacyRuntime;
 public final class LegacyRuntimeService {
     public enum State { NO_LEGACY_MODS, DEPENDENCY_ERRORS, RUNTIME_NOT_READY, RUNTIME_FAILED, FML_AVAILABLE, CLIENT_DATA_AVAILABLE }
     private EmbeddedLegacyRuntime runtime;
+    private java.util.Set<String> loadedModIds = java.util.Set.of();
     public EmbeddedLegacyRuntime runtime() { return runtime; }
+    public java.util.Set<String> loadedModIds() { return loadedModIds; }
 
     public Report start(Path gameDirectory, Path runtimeDirectory) {
         Report inspected = inspect(gameDirectory);
@@ -30,6 +32,9 @@ public final class LegacyRuntimeService {
             } else {
                 runtime = new EmbeddedLegacyRuntime(gameDirectory, runtimeDirectory, inspected);
                 var stages = runtime.boot();
+                if (stages.get("loadedMods") instanceof List<?> loaded) {
+                    loadedModIds = loaded.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet());
+                }
                 writeReport(gameDirectory.resolve("logs/mfcl/runtime-1.7.10.json"), stages);
                 started = Boolean.TRUE.equals(stages.get("legacyFmlStarted"));
                 clientDataReady = started && stages.get("adapters") instanceof java.util.Map<?, ?> reports

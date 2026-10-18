@@ -4,6 +4,7 @@ import github.com.gengyoubo.mfcl.client.ModernRecipeProjection;
 import github.com.gengyoubo.mfcl.client.ModernItemMapping;
 
 import github.com.gengyoubo.mfcl.bridge.LegacyClientData;
+import github.com.gengyoubo.mfcl.bridge.LegacyScreens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -23,11 +24,14 @@ import java.util.*;
 /** Modern presentation of data returned by the original NEI ItemList and recipe handlers. */
 public final class NeiClientUi {
     private static NeiBackend activeBridge;
+    private static LegacyScreens activeScreens;
     static NeiBackend activeBridge() { return activeBridge; }
     private NeiClientUi() {}
-    public static void install(NeiBackend bridge) {
+    public static void install(NeiBackend bridge, LegacyScreens screens) {
         activeBridge = bridge;
+        activeScreens = screens;
         ModernRecipeProjection.install(bridge.data());
+        if (Boolean.getBoolean("mfcl.legacyGui")) return;
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> {
             if (event.getScreen() instanceof AbstractContainerScreen<?> screen) {
                 event.addListener(Button.builder(Component.literal("NEI"), b -> Minecraft.getInstance().setScreen(new Browser(screen, bridge)))
@@ -52,12 +56,17 @@ public final class NeiClientUi {
         private int page, recipePage;
         private boolean usages;
         private LegacyClientData.Stack selected;
+        private LegacyScreens.Session legacyScreen;
         int renderedFrames;
         private record Hit(int x, int y, LegacyClientData.Stack stack) {
             boolean contains(double mx, double my) { return mx >= x && mx < x + 18 && my >= y && my < y + 18; }
         }
         public Browser(Screen parent, NeiBackend bridge) { super(Component.literal("NEI · 1.7.10")); this.parent = parent; this.bridge = bridge; }
         @Override protected void init() {
+            try {
+                if (legacyScreen == null) legacyScreen = activeScreens.openDefault(width, height);
+                else legacyScreen.resize(width, height);
+            } catch (Exception failure) { throw new IllegalStateException("Legacy GuiScreen initialization failed", failure); }
             search = addRenderableWidget(new EditBox(font, 10, 25, Math.max(100, width / 2 - 20), 20, Component.literal("Search")));
             search.setMaxLength(256); search.setValue(expression);
             search.setResponder(text -> { expression = text; page = 0; refresh(); });
@@ -116,6 +125,8 @@ public final class NeiClientUi {
             hits.add(new Hit(x, y, stack));
         }
         @Override public boolean mouseClicked(double x, double y, int button) {
+            try { legacyScreen.mousePressed((int) x, (int) y, button); }
+            catch (Exception failure) { throw new IllegalStateException("Legacy GuiScreen input failed", failure); }
             if (super.mouseClicked(x, y, button)) return true;
             for (Hit hit : hits) if (hit.contains(x, y)) { query(hit.stack(), button == 1); return true; }
             return false;
@@ -131,7 +142,16 @@ public final class NeiClientUi {
             }
             return super.keyPressed(key, scanCode, modifiers);
         }
-        @Override public void onClose() { minecraft.setScreen(parent); }
+        @Override public boolean charTyped(char character, int modifiers) {
+            try { legacyScreen.keyPressed(character, 0); }
+            catch (Exception failure) { throw new IllegalStateException("Legacy GuiScreen text input failed", failure); }
+            return super.charTyped(character, modifiers);
+        }
+        @Override public void onClose() {
+            try { if (legacyScreen != null) { legacyScreen.close(); legacyScreen = null; } }
+            catch (Exception failure) { throw new IllegalStateException("Legacy GuiScreen close failed", failure); }
+            minecraft.setScreen(parent);
+        }
         @Override public boolean isPauseScreen() { return false; }
         void smokeSearch() {
             search.setValue("crafting"); search.setFocused(false);

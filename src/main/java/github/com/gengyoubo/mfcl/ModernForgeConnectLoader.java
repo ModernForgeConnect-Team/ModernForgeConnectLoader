@@ -26,6 +26,11 @@ public final class ModernForgeConnectLoader {
             if (diagnostic.error()) LOGGER.error("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
             else LOGGER.warn("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
         }
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModListScreen.install(result, runtimeService.loadedModIds()));
+        if (result.legacyFmlStarted() && runtimeService.runtime() != null) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientWorldBridge.install(runtimeService.runtime().services()));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContainerBridge.install(runtimeService.runtime().services()));
+        }
         if (result.state() == LegacyRuntimeService.State.CLIENT_DATA_AVAILABLE && runtimeService.runtime() != null) {
             for (var adapter : runtimeService.runtime().adapters()) DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> adapter::installClient);
         }

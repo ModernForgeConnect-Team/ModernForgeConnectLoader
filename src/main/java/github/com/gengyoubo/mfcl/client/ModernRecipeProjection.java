@@ -10,7 +10,7 @@ import net.minecraftforge.common.MinecraftForge;
 import com.mojang.logging.LogUtils;
 import java.util.*;
 
-/** Projects only fully representable common recipes into the old crafting/furnace data read by NEI. */
+/** Projects representable host recipes into the old crafting and furnace registries. */
 public final class ModernRecipeProjection {
     private static volatile Result lastResult;
     public static Result lastResult() { return lastResult; }

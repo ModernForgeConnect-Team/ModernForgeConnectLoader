@@ -1,0 +1,80 @@
+package github.com.gengyoubo.mfcl.bridge;
+
+import org.objectweb.asm.*;
+import java.lang.reflect.*;
+import java.util.*;
+
+/** Typed old container mirrors. Inventory writes remain owned by the host container. */
+public final class LegacyContainers {
+    public record Slot(int x, int y, LegacyClientData.Stack stack) {}
+    public interface InputHooks {
+        boolean mouse(Object screen, int x, int y, int button) throws Exception;
+        boolean key(Object screen, char character, int key) throws Exception;
+        void release(Object screen, int x, int y, int button) throws Exception;
+    }
+    private final LegacyServices services;
+    private final ClassLoader loader;
+    private Class<?> containerClass, guiClass;
+    private final List<InputHooks> hooks = new ArrayList<>();
+    public LegacyContainers(LegacyServices services) { this.services=services; loader=services.loader(); }
+    public void addInputHooks(InputHooks hook) { hooks.add(Objects.requireNonNull(hook)); }
+    public boolean mouse(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)if(hook.mouse(screen,x,y,button))return true; return false; }
+    public boolean key(Object screen,char character,int key) throws Exception { for(var hook:hooks)if(hook.key(screen,character,key))return true; return false; }
+    public void release(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)hook.release(screen,x,y,button); }
+    public Object create(int width,int height,int left,int top,int imageWidth,int imageHeight,List<Slot> slots) throws Exception {
+        preparePlayer();
+        Class<?> mc=loader.loadClass("net.minecraft.client.Minecraft");Object client=mc.getMethod("func_71410_x").invoke(null);
+        mc.getField("field_71443_c").setInt(client,width);mc.getField("field_71440_d").setInt(client,height);
+        Object settings=mc.getField("field_71474_y").get(client);settings.getClass().getField("field_74335_Z").setInt(settings,1);
+        if(containerClass==null) defineTypes();
+        Object container=containerClass.getConstructor().newInstance();
+        Class<?> inventoryType=loader.loadClass("net.minecraft.inventory.IInventory");
+        Object inventory=loader.loadClass("net.minecraft.inventory.InventoryBasic").getConstructor(String.class,boolean.class,int.class).newInstance("MFCL",true,slots.size());
+        Method add=loader.loadClass("net.minecraft.inventory.Container").getDeclaredMethod("func_75146_a",loader.loadClass("net.minecraft.inventory.Slot")); add.setAccessible(true);
+        for(int i=0;i<slots.size();i++) {
+            Slot slot=slots.get(i);
+            Object oldSlot=loader.loadClass("net.minecraft.inventory.Slot").getConstructor(inventoryType,int.class,int.class,int.class).newInstance(inventory,i,slot.x,slot.y);
+            add.invoke(container,oldSlot);
+            if(slot.stack!=null) inventoryType.getMethod("func_70299_a",int.class,loader.loadClass("net.minecraft.item.ItemStack")).invoke(inventory,i,services.items().materialize(slot.stack));
+        }
+        Object gui=guiClass.getConstructor(loader.loadClass("net.minecraft.inventory.Container")).newInstance(container);
+        setGui(gui,"field_146999_f",imageWidth);setGui(gui,"field_147000_g",imageHeight);
+        return gui;
+    }
+    public void update(Object gui,List<Slot> values) throws Exception {
+        var type=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer");Object container=type.getField("field_147002_h").get(gui);
+        List<?> slots=(List<?>)container.getClass().getField("field_75151_b").get(container);
+        if(slots.size()!=values.size())throw new IllegalStateException("Container slot count changed");
+        for(int i=0;i<slots.size();i++)slots.get(i).getClass().getMethod("func_75215_d",loader.loadClass("net.minecraft.item.ItemStack"))
+                .invoke(slots.get(i),values.get(i).stack==null?null:services.items().materialize(values.get(i).stack));
+    }
+    public void position(Object gui,int left,int top) throws Exception { setGui(gui,"field_147003_i",left);setGui(gui,"field_147009_r",top); }
+    private void setGui(Object target,String name,int value) throws Exception { Field field=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer").getDeclaredField(name);field.setAccessible(true);field.setInt(target,value); }
+    private void preparePlayer() throws Exception {
+        Class<?> mc=loader.loadClass("net.minecraft.client.Minecraft");Object client=mc.getMethod("func_71410_x").invoke(null);
+        if(mc.getField("field_71439_g").get(client)!=null)return;
+        Object player=allocate(loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP"));
+        var type=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+        type.getField("field_71071_by").set(player,loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(type).newInstance(player));
+        type.getField("field_71075_bZ").set(player,loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance());
+        Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(loader.loadClass("net.minecraft.entity.Entity")).newInstance(player);
+        var field=loader.loadClass("net.minecraft.entity.Entity").getDeclaredField("field_70180_af");field.setAccessible(true);field.set(player,watcher);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
+        mc.getField("field_71439_g").set(client,player);
+        mc.getField("field_71442_b").set(client,loader.loadClass("net.minecraft.client.multiplayer.PlayerControllerMP").getConstructor(mc,loader.loadClass("net.minecraft.client.network.NetHandlerPlayClient")).newInstance(client,null));
+    }
+    private Object allocate(Class<?> type) throws Exception { var field=Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");field.setAccessible(true);Object unsafe=field.get(null);return unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,type); }
+    private void defineTypes() throws Exception {
+        String container="github/com/gengyoubo/mfcl/legacy1710/HostContainer",gui="github/com/gengyoubo/mfcl/legacy1710/HostGuiContainer";
+        ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);writer.visit(Opcodes.V1_8,Opcodes.ACC_PUBLIC,container,null,"net/minecraft/inventory/Container",null);
+        var mv=writer.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);mv.visitCode();mv.visitVarInsn(Opcodes.ALOAD,0);mv.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/inventory/Container","<init>","()V",false);mv.visitInsn(Opcodes.RETURN);mv.visitMaxs(1,1);mv.visitEnd();
+        mv=writer.visitMethod(Opcodes.ACC_PUBLIC,"func_75145_c","(Lnet/minecraft/entity/player/EntityPlayer;)Z",null,null);mv.visitCode();mv.visitInsn(Opcodes.ICONST_1);mv.visitInsn(Opcodes.IRETURN);mv.visitMaxs(1,2);mv.visitEnd();writer.visitEnd();containerClass=define(container,writer.toByteArray());
+        writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);writer.visit(Opcodes.V1_8,Opcodes.ACC_PUBLIC,gui,null,"net/minecraft/client/gui/inventory/GuiContainer",null);
+        mv=writer.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Lnet/minecraft/inventory/Container;)V",null,null);mv.visitCode();mv.visitVarInsn(Opcodes.ALOAD,0);mv.visitVarInsn(Opcodes.ALOAD,1);mv.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/client/gui/inventory/GuiContainer","<init>","(Lnet/minecraft/inventory/Container;)V",false);mv.visitInsn(Opcodes.RETURN);mv.visitMaxs(2,2);mv.visitEnd();
+        for(String[] method:List.of(new String[]{"func_146976_a","(FII)V"},new String[]{"func_146979_b","(II)V"},new String[]{"func_146276_q_","()V"},new String[]{"func_146281_b","()V"})) {
+            mv=writer.visitMethod(Opcodes.ACC_PUBLIC,method[0],method[1],null,null);mv.visitCode();mv.visitInsn(Opcodes.RETURN);mv.visitMaxs(0,4);mv.visitEnd();
+        }
+        writer.visitEnd();guiClass=define(gui,writer.toByteArray());
+    }
+    private Class<?> define(String name,byte[] bytes) throws Exception { return (Class<?>)loader.getClass().getMethod("defineLegacyClass",String.class,byte[].class,int.class,int.class).invoke(loader,name.replace('/','.'),bytes,0,bytes.length); }
+}

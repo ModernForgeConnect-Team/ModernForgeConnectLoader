@@ -1,0 +1,63 @@
+package github.com.gengyoubo.mfcl.bridge;
+
+import java.util.*;
+
+/** Thread-confined GUI command capture. No legacy OpenGL context or native input library is entered. */
+public final class LegacyGuiGraphics {
+    public sealed interface Command permits Rect, Text, Texture, Item {}
+    public record Rect(int x1, int y1, int x2, int y2, int top, int bottom) implements Command {}
+    public record Text(String text, int x, int y, int color, boolean shadow) implements Command {}
+    public record Texture(String resource, int x, int y, int u, int v, int width, int height) implements Command {}
+    public record Item(Object stack, int x, int y, boolean overlay, String label) implements Command {}
+    private record Matrix(double x, double y, double sx, double sy) {}
+    private static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
+    private LegacyGuiGraphics() {}
+    public static Frame begin(int width, int height, int mouseX, int mouseY, Set<Integer> keys) {
+        if (CURRENT.get() != null) throw new IllegalStateException("Nested legacy GUI capture");
+        Frame frame = new Frame(width, height, mouseX, mouseY, keys); CURRENT.set(frame); return frame;
+    }
+    public static final class Frame implements AutoCloseable {
+        private final Thread owner = Thread.currentThread();
+        private final int width, height, mouseX, mouseY;
+        private final Set<Integer> keys;
+        private final List<Command> commands = new ArrayList<>();
+        private final Deque<Matrix> matrices = new ArrayDeque<>();
+        private Matrix matrix = new Matrix(0, 0, 1, 1);
+        private String texture;
+        private Object requestedScreen;
+        private Frame(int width, int height, int x, int y, Set<Integer> keys) {
+            this.width = width; this.height = height; mouseX = x; mouseY = y; this.keys = Set.copyOf(keys);
+        }
+        public List<Command> commands() { check(); return List.copyOf(commands); }
+        public Object requestedScreen() { check(); return requestedScreen; }
+        private void check() { if (Thread.currentThread() != owner || CURRENT.get() != this) throw new IllegalStateException("Expired or foreign GUI capture"); }
+        @Override public void close() { check(); CURRENT.remove(); if (!matrices.isEmpty()) throw new IllegalStateException("Unbalanced legacy GUI matrix stack"); }
+        private int x(double value) { return (int)Math.round(matrix.x + matrix.sx * value); }
+        private int y(double value) { return (int)Math.round(matrix.y + matrix.sy * value); }
+    }
+    private static Frame frame() { return Objects.requireNonNull(CURRENT.get(), "Legacy GUI operation outside a host frame"); }
+    public static void rect(int x1, int y1, int x2, int y2, int color) { gradient(x1, y1, x2, y2, color, color); }
+    public static void gradient(int x1, int y1, int x2, int y2, int a, int b) {
+        Frame f = frame(); f.commands.add(new Rect(f.x(x1), f.y(y1), f.x(x2), f.y(y2), a, b));
+    }
+    public static void bind(Object resource) { frame().texture = resource.toString(); }
+    public static void texture(int x, int y, int u, int v, int width, int height) {
+        Frame f = frame(); f.commands.add(new Texture(Objects.requireNonNull(f.texture, "Unbound legacy texture"), f.x(x), f.y(y), u, v, width, height));
+    }
+    public static int text(String text, int x, int y, int color, boolean shadow) {
+        Frame f = frame(); if (text != null) f.commands.add(new Text(text, f.x(x), f.y(y), color, shadow)); return x + (text == null ? 0 : text.length() * 6);
+    }
+    public static void item(Object stack, int x, int y, boolean overlay, String label) {
+        Frame f = frame(); if (stack != null) f.commands.add(new Item(stack, f.x(x), f.y(y), overlay, label));
+    }
+    public static void push() { Frame f = frame(); f.matrices.push(f.matrix); }
+    public static void pop() { Frame f = frame(); f.matrix = f.matrices.pop(); }
+    public static void translate(double x, double y, double z) { Frame f = frame(); var m = f.matrix; f.matrix = new Matrix(m.x + x * m.sx, m.y + y * m.sy, m.sx, m.sy); }
+    public static void scale(double x, double y, double z) { Frame f = frame(); var m = f.matrix; f.matrix = new Matrix(m.x, m.y, m.sx * x, m.sy * y); }
+    public static int integer(int value) { return value == 2979 ? frame().matrices.size() + 1 : 0; }
+    public static boolean key(int key) { return CURRENT.get() != null && frame().keys.contains(key); }
+    public static void showScreen(Object screen) { frame().requestedScreen = screen; }
+    public static int mouseX() { return frame().mouseX; }
+    public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }
+    public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy GUI backend does not support " + name); }
+}

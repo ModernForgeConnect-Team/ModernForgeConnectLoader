@@ -1,0 +1,9 @@
+{
+  "mfcl.mods.version": "版本：%s",
+  "mfcl.mods.game_version": "游戏版本：%s",
+  "mfcl.mods.status": "状态：%s",
+  "mfcl.mods.loaded": "已加载",
+  "mfcl.mods.discovered": "已发现，尚未完成加载",
+  "mfcl.mods.loader": "加载器：Forge 1.7.10（通过 MFCL）",
+  "mfcl.mods.file": "文件：%s"
+}

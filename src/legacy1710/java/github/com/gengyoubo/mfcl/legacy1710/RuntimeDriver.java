@@ -68,6 +68,7 @@ public final class RuntimeDriver {
             loader.registerTransformer("net.minecraftforge.classloading.FluidIdTransformer");
             Field ats = CoreModManager.class.getDeclaredField("accessTransformers"); ats.setAccessible(true);
             for (Object transformer : (List<?>) ats.get(null)) loader.registerTransformer((String) transformer);
+            loader.registerTransformer("github.com.gengyoubo.mfcl.legacy1710.GuiCaptureTransformer");
             completed.add(stage); stage = "VANILLA_BOOTSTRAP";
             Loader.injectData(FMLInjectionData.data()); Loader.instance();
             Class<?> bootstrap = loader.loadClass("net.minecraft.init.Bootstrap"); bootstrap.getMethod("func_151354_b").invoke(null);

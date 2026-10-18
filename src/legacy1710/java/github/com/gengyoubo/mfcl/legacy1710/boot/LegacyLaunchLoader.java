@@ -26,6 +26,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                 "cpw.mods.fml.common.asm.transformers.", "cpw.mods.fml.common.patcher.",
                 "net.minecraftforge.classloading.", "net.minecraftforge.transformers.")) addTransformerExclusion(prefix);
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ModernJavaTransformer");
+        registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
     }
     private final List<LegacyBytecodeAdapter> bytecodeAdapters = new ArrayList<LegacyBytecodeAdapter>();
     public void registerBytecodeAdapter(String name) throws Exception {

@@ -127,7 +127,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         if (!Files.exists(target)) Files.write(target, bytes, StandardOpenOption.CREATE_NEW);
         return target;
     }
-    @Override public void close() throws IOException { legacy.close(); root.close(); }
+    @Override public void close() throws IOException { if (services != null) services.worlds().close(); legacy.close(); root.close(); }
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) throw new IllegalArgumentException("EmbeddedLegacyRuntime <game-directory> <runtime-directory>");

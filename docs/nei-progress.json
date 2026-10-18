@@ -1,44 +1,46 @@
 {
   "date": "2026-10-18",
-  "target": "Original NotEnoughItems 1.7.10 1.0.5.120 on Forge 1.20.1 47.4.28",
+  "target": "Original NEI 1.7.10 1.0.5.120 on Forge 1.20.1 47.4.28 / Java 17",
   "phase1Complete": false,
   "productionModDirectory": "<game-directory>/mods/1.7.10",
+  "runtimeDirectory": "<game-directory>/mfcl/runtime/1.7.10",
   "referenceSha256": "3ebbc2f82b61812aa158375005a47da4d450bec870860fcbf015a64de74cde1c",
   "checks": {
-    "skipped": 0,
     "errors": 0,
-    "tests": 18,
-    "failures": 0
+    "failures": 0,
+    "tests": 21,
+    "skipped": 0
+  },
+  "legacyRuntime": {
+    "originalCoremodTransformersApplied": true,
+    "sameJvmAsModernHost": true,
+    "accessTransformersApplied": true,
+    "genericItemWorldGuiTestWithoutNei": true,
+    "legacyClientReady": false,
+    "fmlStage": "AVAILABLE",
+    "legacyFmlStarted": true,
+    "registrationSealed": true
   },
   "hostSmoke": {
-    "reachedTitleScreen": true,
-    "neiGameplayValidated": false,
+    "task": "runClient -PmfclRunDir=build/nei-smoke/game -PmfclNeiWorldSmokeTest",
+    "unsupportedModernRecipes": 335,
+    "returnedToInventory": true,
     "exitedNormally": true,
-    "legacyArchiveCount": 3
-  },
-  "corePluginProbe": {
-    "stage": "CORE_PLUGIN_HANDSHAKE",
-    "modId": "NotEnoughItems",
-    "pluginClass": "codechicken.nei.asm.NEICorePlugin",
-    "containerClass": "codechicken.nei.NEIModContainer",
-    "transformerClasses": [
-      "codechicken.nei.asm.NEITransformer"
-    ],
-    "setupClass": "codechicken.nei.asm.NEICorePlugin",
-    "codeSource": "jar:file:/C:/Users/gengy/Desktop/ModernForgeConnectLoader/build/nei-smoke/game/mods/1.7.10/NotEnoughItems-1.7.10-1.0.5.120-universal.jar!/codechicken/nei/asm/NEICorePlugin.class",
-    "legacyFmlStarted": false,
-    "legacyClientReady": false,
-    "systemClassLoaderUnchanged": true
-  },
-  "artifact": {
-    "sha256": "3aa2e5235896241ed47a8fc682f51c8dd434e8d965bdf4eac104a1f070db058a",
-    "path": "build/libs/mfcl-0.1.0.jar"
+    "projectedModernRecipes": 839,
+    "worldDisconnected": true,
+    "search": true,
+    "realWorldJoined": true,
+    "inventoryButton": true,
+    "screenshot": "build/nei-smoke/game/screenshots/mfcl-nei-smoke.png",
+    "log": "build/nei-investigation/refactor-world-smoke.log",
+    "originalNeiRecipeAndUsageQueries": true,
+    "marker": "MFCL_NEI_WORLD_SMOKE_PASS"
   },
   "remaining": [
-    "Embedded legacy FML lifecycle",
-    "Legacy Minecraft/Forge runtime preparation",
-    "CoreMod transformer and AT application",
-    "Legacy client and rendering bridge",
-    "NEI item, search, recipe and usage interactions"
+    "General World semantics beyond time and basic block access",
+    "Legacy custom GUI rendering and OpenGL capture",
+    "Complex NBT and special recipes",
+    "Inventory mutation, cheat actions and network operations",
+    "Broader mod compatibility and reload coverage"
   ]
 }
