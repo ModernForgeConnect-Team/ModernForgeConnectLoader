@@ -45,6 +45,17 @@ public final class GenericSemanticsProbe {
         if (first == second) throw new AssertionError("Stacks alias across ownership boundary");
         first.getClass().getField("field_77994_a").setInt(first, 17);
         if (services.items().snapshot(second).count() != diamond.count()) throw new AssertionError("Stack copy leaked mutable count");
+        // The old parser predates modern SNBT typed-array notation; preserve old NBT syntax at this boundary.
+        var withNbt = new LegacyClientData.Stack(diamond.key(), 7, 11, diamond.name(), "{mfcl_probe:{value:23},label:\"bridge\",numbers:[1,2,3]}");
+        Object nbtStack = services.items().materialize(withNbt);
+        Object nbt = nbtStack.getClass().getField("field_77990_d").get(nbtStack);
+        Object child = nbt.getClass().getMethod("func_74775_l", String.class).invoke(nbt, "mfcl_probe");
+        if ((int) child.getClass().getMethod("func_74762_e", String.class).invoke(child, "value") != 23
+                || services.items().snapshot(nbtStack).metadata() != 7 || services.items().snapshot(nbtStack).count() != 11)
+            throw new AssertionError("Fresh legacy NBT was not materialized with original types");
+        Object copiedNbt = services.items().materialize(services.items().snapshot(nbtStack));
+        if (copiedNbt.getClass().getField("field_77990_d").get(copiedNbt) == nbt) throw new AssertionError("Legacy NBT aliases across stack copies");
+        report.put("genericFreshNbtRoundTripVerified", true);
         final class Host implements HostWorldAccess {
             long time = 100; Block value = new Block("minecraft:dirt", 0);
             public String dimensionKey() { return "mfcl:test"; } public int legacyDimensionId() { return 7; } public boolean clientSide() { return true; }

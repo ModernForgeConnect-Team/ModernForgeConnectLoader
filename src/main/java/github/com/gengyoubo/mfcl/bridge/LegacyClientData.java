@@ -255,11 +255,15 @@ public final class LegacyClientData {
         Object result;
         if (existing != null) result = copyStack.invoke(existing);
         else {
-            if (!value.tag().isEmpty()) throw new IllegalArgumentException("Unmapped legacy NBT in host recipe: " + value.key());
             Object item = hostItemsByKey.get(value.key());
+            if (item != null && !value.tag().isEmpty()) throw new UnsupportedOperationException("Host item NBT needs a host-specific mapping: " + value.key());
             if (item == null) item = itemByName.invoke(registry, value.key());
             if (item == null) throw new IllegalArgumentException("Unknown legacy item " + value.key());
             result = stackType.getConstructor(itemType, int.class, int.class).newInstance(item, value.count(), value.metadata());
+            if (!value.tag().isEmpty()) {
+                Object nbt = loader.loadClass("net.minecraft.nbt.JsonToNBT").getMethod("func_150315_a", String.class).invoke(null, value.tag());
+                stackType.getField("field_77990_d").set(result, nbt);
+            }
         }
         stackType.getField("field_77994_a").setInt(result, value.count()); return result;
     }

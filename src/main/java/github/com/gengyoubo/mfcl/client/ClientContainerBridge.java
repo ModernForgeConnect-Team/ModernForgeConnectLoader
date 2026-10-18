@@ -54,6 +54,8 @@ public final class ClientContainerBridge {
     }
     private LegacyClientData.Stack snapshot(net.minecraft.world.item.ItemStack value) throws Exception {
         if(value.isEmpty())return null;
+        var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
+        if(content!=null){var old=content.snapshot(value);if(old!=null)return old;}
         if(value.hasTag())throw new UnsupportedOperationException("Host container NBT mapping is not available: "+value);
         if(reverse==null){reverse=new HashMap<>();for(var stack:services.items().catalog()){var modern=ModernItemMapping.renderStack(stack);if(!modern.isEmpty()&&!modern.hasTag())reverse.putIfAbsent(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(),stack);}}
         var old=reverse.get(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(value.getItem()).toString());

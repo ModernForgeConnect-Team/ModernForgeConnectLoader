@@ -25,6 +25,8 @@ public final class ModernItemMapping {
             Map.entry("golden_rail", "powered_rail"), Map.entry("slime_ball", "slime_ball"), Map.entry("web", "cobweb"));
     private ModernItemMapping() {}
     public static ItemStack renderStack(LegacyClientData.Stack old) {
+        var content = github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
+        if (content != null && content.items().containsKey(old.key())) return content.stack(old.key(), old.metadata(), old.count(), old.tag());
         String key = old.key(); int meta = old.metadata();
         if (key.startsWith("mfcl_host:")) key = key.substring(10).replaceFirst("/", ":");
         else if (key.startsWith("minecraft:")) {

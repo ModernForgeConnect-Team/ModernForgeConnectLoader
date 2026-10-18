@@ -38,6 +38,8 @@ public final class ClientWorldBridge {
                     @Override public void setDayTime(long time) { throw new UnsupportedOperationException("Client world cannot change authoritative time"); }
                     @Override public Block block(int x, int y, int z) {
                         var state = next.getBlockState(new BlockPos(x, y, z));
+                        var content = github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
+                        if (content != null) return content.legacyBlock(state);
                         if (!state.equals(state.getBlock().defaultBlockState())) throw new UnsupportedOperationException("Block state requires a legacy metadata mapping: " + state);
                         String key = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
                         if (key.equals("minecraft:grass_block")) key = "minecraft:grass";
