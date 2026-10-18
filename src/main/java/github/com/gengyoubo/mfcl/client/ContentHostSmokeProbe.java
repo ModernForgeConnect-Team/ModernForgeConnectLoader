@@ -62,16 +62,37 @@ final class ContentHostSmokeProbe {
                 proof.put("itemModelsChecked", checked); proof.put("missingIcons", bridge.pack().missingIcons());
                 proof.put("stitchedTexturesVerified", true);
                 CreativeModeTabs.tryRebuildTabContents(mc.player.connection.enabledFeatures(), true, mc.level.registryAccess());
-                var tab = Objects.requireNonNull(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.get(new net.minecraft.resources.ResourceLocation("mfcl", "legacy_1_7_10")));
-                int expected = bridge.declarations().items().stream().filter(LegacyContent.Item::creative).mapToInt(item -> item.variants().size()).sum();
-                if (tab.getDisplayItems().size() != expected) throw new IllegalStateException("Native creative tab lost declared variants");
-                for (var stack : tab.getDisplayItems()) if (!CreativeModeTabs.searchTab().contains(stack)) throw new IllegalStateException("Legacy content missing from native creative search");
+                if (net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.containsKey(net.minecraft.resources.ResourceLocation.tryParse("mfcl:legacy_1_7_10")))
+                    throw new IllegalStateException("Loader-owned merged category must not replace original tabs");
+                var tabProof = new ArrayList<Object>(); int displayed = 0;
+                for (var original : bridge.declarations().tabs()) {
+                    var target = bridge.creative().target(original); var expected = bridge.creative().stacks(original);
+                    if (!original.builtin()) {
+                        var actual = new ArrayList<>(target.getDisplayItems());
+                        if (actual.size() != expected.size()) throw new IllegalStateException("Original tab membership changed: " + original.key());
+                        for (int index = 0; index < expected.size(); index++) if (!ItemStack.isSameItemSameTags(actual.get(index), expected.get(index)))
+                            throw new IllegalStateException("Original tab order/metadata/NBT changed: " + original.key() + " #" + index);
+                        if (!target.getDisplayName().equals(net.minecraft.network.chat.Component.translatable(original.nameKey()))
+                                || !ItemStack.isSameItemSameTags(target.getIconItem(), bridge.creative().icon(original)))
+                            throw new IllegalStateException("Original tab title/icon changed: " + original.key());
+                        if (target.showTitle() != original.showTitle() || target.canScroll() != original.scroll() || target.hasSearchBar() != original.searchBar())
+                            throw new IllegalStateException("Original tab settings changed: " + original.key());
+                    }
+                    for (var stack : expected) if (!target.contains(stack) || !CreativeModeTabs.searchTab().contains(stack))
+                        throw new IllegalStateException("Original tab/search lost entry: " + original.key());
+                    tabProof.add(Map.of("originalKey", original.key(), "label", original.label(), "nameKey", original.nameKey(),
+                            "displayName", target.getDisplayName().getString(), "icon", original.icon(), "entries", expected.size(), "builtin", original.builtin()));
+                    displayed += expected.size();
+                }
+                var original = bridge.declarations().tabs().stream().filter(tab -> !tab.builtin() && !tab.contents().isEmpty()).findFirst().orElseThrow();
+                var tab = bridge.creative().target(original);
                 var screenType = net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen.class;
                 var selected = screenType.getDeclaredField("selectedTab"); selected.setAccessible(true); selected.set(null, tab);
                 var inventory = new net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen(mc.player, mc.player.connection.enabledFeatures(), true);
                 mc.setScreen(inventory);
-                if (inventory.getMenu().items.size() != expected) throw new IllegalStateException("Native creative inventory did not show legacy content");
-                proof.put("nativeCreativeItems", expected); proof.put("nativeCreativeSearch", true);
+                if (inventory.getMenu().items.size() != tab.getDisplayItems().size()) throw new IllegalStateException("Native creative inventory did not show original tab");
+                proof.put("nativeCreativeItems", displayed); proof.put("nativeCreativeSearch", true); proof.put("originalCreativeTabs", tabProof);
+                proof.put("originalTabOrderMetadataNbt", true); proof.put("originalTabNamesAndIcons", true);
                 stage = 3; frames = 0;
             } else if (stage == 3 && ++frames > 15) {
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory, "mfcl-content-creative.png", mc.getMainRenderTarget(), message -> screenshotSaved = true);
@@ -116,8 +137,8 @@ final class ContentHostSmokeProbe {
         if (placing.getCount() != 1 || level.getBlockState(position).getBlock() != bridge.blocks().get(blockKey)
                 || level.getBlockState(position).getValue(ModernContentBridge.METADATA) != 3) throw new IllegalStateException("Placement lost identity/metadata/count");
         var worlds = bridge.services().worlds();
-        // Supplying null proves that LevelEvent.Load already installed the real production host binding.
-        Object old = worlds.bind(level, null);
+        // Verify the production binding installed by LevelEvent.Load, without creating a test-only world adapter.
+        Object old = worlds.bound(level);
         {
             Class<?> world = bridge.services().loader().loadClass("net.minecraft.world.World");
             Object oldBlock = world.getMethod("func_147439_a", int.class, int.class, int.class).invoke(old, position.getX(), position.getY(), position.getZ());
@@ -129,6 +150,8 @@ final class ContentHostSmokeProbe {
             if (world.getMethod("func_147439_a", int.class, int.class, int.class).invoke(old, position.getX(), position.getY(), position.getZ()) != oldBlock)
                 throw new IllegalStateException("Old Block identity changed across roundtrip");
         }
+        var picked = level.getBlockState(position).getBlock().getCloneItemStack(level, position, level.getBlockState(position));
+        if (bridge.snapshot(picked) == null || ModernContentBridge.metadata(picked) != 5) throw new IllegalStateException("Pick block lost legacy metadata");
         if (!level.destroyBlock(position, true, player)) throw new IllegalStateException("Actual block break failed");
         var drops = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new AABB(position).inflate(2));
         if (drops.isEmpty() || drops.stream().anyMatch(drop -> bridge.snapshot(drop.getItem()) == null)) throw new IllegalStateException("Original block drops were not mapped");
@@ -145,6 +168,7 @@ final class ContentHostSmokeProbe {
         proof.put("block", blockKey); proof.put("item", itemKey); proof.put("placement", true); proof.put("breakDrops", drops.stream().map(drop -> bridge.snapshot(drop.getItem()).key()).toList());
         proof.put("oldWorldSynchronous", true); proof.put("oldObjectIdentity", true); proof.put("stackNbtRoundTrip", true); proof.put("generatedPack", bridge.pack().directory().toString());
         proof.put("actualOldStackNbt", true);
+        proof.put("pickBlockMetadata", true);
         var ordinaryDrops = new LinkedHashMap<String, Object>();
         for (var block : bridge.declarations().blocks()) if (block.simple()) {
             var state = bridge.modernBlock(new HostWorldAccess.Block(block.key(), 0));

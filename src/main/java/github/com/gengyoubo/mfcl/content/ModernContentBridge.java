@@ -32,6 +32,7 @@ public final class ModernContentBridge {
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final Map<Item, LegacyContent.Item> reverseItems = new IdentityHashMap<>();
     private final LegacyContentPack pack;
+    private final CreativeTabBridge creative;
     private boolean blocksRegistered, itemsRegistered;
 
     private ModernContentBridge(LegacyServices services) throws Exception {
@@ -39,11 +40,13 @@ public final class ModernContentBridge {
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         pack = new LegacyContentPack(services.gameDirectory(), declarations);
+        creative = new CreativeTabBridge(this);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
         try {
             var bridge = new ModernContentBridge(services); active = bridge;
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
+            bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
             LogUtils.getLogger().info("MFCL content barrier: {} blocks, {} items declared before modern registration", bridge.declarations.blocks().size(), bridge.declarations.items().size());
             return bridge;
@@ -53,6 +56,7 @@ public final class ModernContentBridge {
     public LegacyContent declarations() { return declarations; }
     public LegacyServices services() { return services; }
     public LegacyContentPack pack() { return pack; }
+    public CreativeTabBridge creative() { return creative; }
     public Map<String, Block> blocks() { return Collections.unmodifiableMap(blocks); }
     public Map<String, Item> items() { return Collections.unmodifiableMap(items); }
     public boolean registered() { return blocksRegistered && itemsRegistered; }
@@ -87,15 +91,10 @@ public final class ModernContentBridge {
             itemsRegistered = true;
             LogUtils.getLogger().info("MFCL_CONTENT_REGISTRATION_PASS: blocks={} items={}", blocks.size(), items.size());
         });
-        event.register(Registries.CREATIVE_MODE_TAB, registry -> {
-            if (items.isEmpty()) return;
-            registry.register(new ResourceLocation("mfcl", "legacy_1_7_10"), CreativeModeTab.builder()
-                    .title(Component.translatable("itemGroup.mfcl.legacy_1_7_10"))
-                    .icon(() -> stack(declarations.items().get(0).key(), 0, 1, ""))
-                    .displayItems((parameters, output) -> {
-                        for (var entry : declarations.items()) if (entry.creative()) for (var variant : entry.variants()) output.accept(stack(entry.key(), variant.metadata(), 1, ""));
-                    }).build());
-        });
+        event.register(Registries.CREATIVE_MODE_TAB, creative::register);
+    }
+    public ItemStack mapStack(LegacyClientData.Stack old) {
+        return items.containsKey(old.key()) ? stack(old.key(), old.metadata(), old.count(), old.tag()) : HostStackMapping.renderStack(old);
     }
     public ItemStack stack(String key, int metadata, int count, String tag) {
         Item item = items.get(key); if (item == null) return ItemStack.EMPTY;
@@ -114,6 +113,8 @@ public final class ModernContentBridge {
     }
     public LegacyClientData.Stack snapshot(ItemStack stack) {
         var item = reverseItems.get(stack.getItem()); if (item == null) return null;
+        if (stack.hasTag()) for (String key : stack.getTag().getAllKeys())
+            if (!key.equals(STACK_TAG) && !key.equals("Damage")) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
         CompoundTag tag = stack.getTagElement(STACK_TAG);
         return new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), stack.getHoverName().getString(), tag == null ? "" : tag.getString("snbt"));
     }
@@ -126,6 +127,7 @@ public final class ModernContentBridge {
     public BlockState modernBlock(HostWorldAccess.Block old) {
         Block block = blocks.get(old.legacyKey());
         if (block != null) {
+            if (!((MirroredBlock) block).entry.simple()) throw new UnsupportedOperationException("Legacy tile entity/special rendering bridge is pending: " + old.legacyKey());
             if (old.metadata() < 0 || old.metadata() > 15) throw new IllegalArgumentException("Legacy block metadata outside 0..15");
             return block.defaultBlockState().setValue(METADATA, old.metadata());
         }

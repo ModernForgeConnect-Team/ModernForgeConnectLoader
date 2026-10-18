@@ -17,14 +17,15 @@ public final class LegacyContent {
     private final LegacyClientData data;
     private final List<Item> items;
     private final List<Block> blocks;
+    private final List<LegacyCreativeTabs.Tab> tabs;
     private final Map<String, Object> oldBlocks = new HashMap<>();
 
     public LegacyContent(LegacyClientData data) throws Exception {
         this.data = data;
         var declarations = data.inLegacy(() -> read());
-        items = declarations.items; blocks = declarations.blocks;
+        items = declarations.items; blocks = declarations.blocks; tabs = declarations.tabs;
     }
-    private record Declarations(List<Item> items, List<Block> blocks) {}
+    private record Declarations(List<Item> items, List<Block> blocks, List<LegacyCreativeTabs.Tab> tabs) {}
     private Declarations read() throws Exception {
         ClassLoader loader = data.loader();
         Class<?> blockType = loader.loadClass("net.minecraft.block.Block"), itemType = loader.loadClass("net.minecraft.item.Item");
@@ -54,6 +55,12 @@ public final class LegacyContent {
             oldBlocks.put(key, block);
         }
         var itemValues = new ArrayList<Item>();
+        Set<String> customItems = new HashSet<>();
+        for (Object item : (Iterable<?>) itemRegistry) {
+            String key = (String) itemKey.invoke(itemRegistry, item);
+            if (key != null && !key.startsWith("minecraft:")) customItems.add(key);
+        }
+        var tabValues = LegacyCreativeTabs.read(data, customItems);
         for (Object item : (Iterable<?>) itemRegistry) {
             String key = (String) itemKey.invoke(itemRegistry, item);
             if (key == null || key.startsWith("minecraft:")) continue;
@@ -62,6 +69,7 @@ public final class LegacyContent {
             var variants = new ArrayList<Variant>();
             var metas = new TreeSet<Integer>();
             for (var stack : data.catalog()) if (stack.key().equals(key)) metas.add(stack.metadata());
+            for (var tab : tabValues) for (var stack : tab.contents()) if (stack.key().equals(key)) metas.add(stack.metadata());
             if (metas.isEmpty()) metas.add(0);
             int limit = 64, damage = 0;
             for (int meta : metas) {
@@ -78,13 +86,14 @@ public final class LegacyContent {
             itemValues.add(new Item(key, linkedBlock, Math.max(1, Math.min(64, limit)), damage, creative, variants));
         }
         blockValues.sort(Comparator.comparing(Block::key)); itemValues.sort(Comparator.comparing(Item::key));
-        return new Declarations(List.copyOf(itemValues), List.copyOf(blockValues));
+        return new Declarations(List.copyOf(itemValues), List.copyOf(blockValues), tabValues);
     }
     private static float number(Class<?> type, Object target, String name) throws Exception {
         Field field = type.getDeclaredField(name); field.setAccessible(true); return field.getFloat(target);
     }
     public List<Item> items() { return items; }
     public List<Block> blocks() { return blocks; }
+    public List<LegacyCreativeTabs.Tab> tabs() { return tabs; }
     public ClassLoader loader() { return data.loader(); }
     /** Execute the original vanilla-style drop methods, preserving custom ore drop identity and metadata. */
     public List<LegacyClientData.Stack> drops(String key, int metadata, long seed) throws Exception {

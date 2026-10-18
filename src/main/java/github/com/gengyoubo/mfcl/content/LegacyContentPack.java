@@ -52,7 +52,7 @@ public final class LegacyContentPack {
             json("assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json", model);
         }
         languages();
-        json("mfcl-content-manifest.json", Map.of("blocks", content.blocks(), "items", content.items(), "missingIcons", missingIcons,
+        json("mfcl-content-manifest.json", Map.of("blocks", content.blocks(), "items", content.items(), "creativeTabs", content.tabs(), "missingIcons", missingIcons,
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
     }
     private Map<String, Object> itemModel(LegacyContent.Item item, LegacyContent.Variant variant) throws Exception {
@@ -105,8 +105,8 @@ public final class LegacyContentPack {
                 }
             }
         }
-        languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.legacy_1_7_10", "Legacy mods · 1.7.10", "mfcl.content.special_block_pending", "This block needs a legacy tile entity or special renderer; placement is not available yet."));
-        languages.computeIfAbsent("zh_cn", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.legacy_1_7_10", "旧版模组 · 1.7.10", "mfcl.content.special_block_pending", "此方块需要旧版方块实体或特殊渲染桥，暂不支持放置。"));
+        languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "Other 1.7.10 items", "mfcl.content.special_block_pending", "This block needs a legacy tile entity or special renderer; placement is not available yet."));
+        languages.computeIfAbsent("zh_cn", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "其他 1.7.10 物品", "mfcl.content.special_block_pending", "此方块需要旧版方块实体或特殊渲染桥，暂不支持放置。"));
         for (var entry : languages.entrySet()) json("assets/mfcl/lang/" + entry.getKey() + ".json", entry.getValue());
     }
     private void json(String resource, Object value) throws IOException {

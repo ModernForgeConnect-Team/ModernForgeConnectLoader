@@ -2,7 +2,11 @@
 
 目标：在 Forge 1.20.1 / Java 17 中运行原始 Forge 1.7.10 模组。首个回归样本为 `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`，检查物品列表、搜索、配方和用途交互。当前 `runClient` 测试目录已切换为 AcademyCraft 1.0.7 与 LambdaLib 1.2.3；NEI 及 CodeChicken 前置已移至 `run/mfcl/disabled-mods/nei-20261018/`，独立的 NEI 回归夹具仍保留在构建测试目录。
 
-**AcademyCraft 已完成真实旧 FML 初始化，游戏行为桥接仍未完成。** 原始 AcademyCraft 和 LambdaLib 已通过构造、`PreInit`、`Init`、`PostInit`，状态为 `AVAILABLE`，旧注册表中有 23 个 AcademyCraft 方块和 58 个物品。纹理上传、mipmap、着色器编译和 uniform 使用现代宿主的真实 OpenGL，由渲染线程同步执行；GPU 像素读回、纹理删除重建与宿主状态恢复已实测。方块物品还未接入现代注册表，玩家能力、网络及完整世界绘制尚不可用，因此不能将初始化成功视为可完整游玩。调查过程和实际客户端报告见 `docs/academy-progress.json`。
+**AcademyCraft 已完成真实旧 FML 初始化，并接通基础内容注册，完整游戏行为仍未完成。** 原始 AcademyCraft 和 LambdaLib 已通过构造、`PreInit`、`Init`、`PostInit`，状态为 `AVAILABLE`。通用注册桥在现代注册窗口内提交 23 个方块和 58 个物品；原 JAR 中的纹理和语言生成独立资源包，metadata 保存在物品标签和方块状态中。普通机械框架与 4 种矿石接入基础放置、原始掉落方法、方块选取及保存重载；需要旧 TileEntity 或特殊渲染的 18 个方块暂不开放放置。玩家能力、机器运转、旧网络、世界生成及完整世界绘制仍不可用。调查过程和实际客户端报告见 `docs/academy-progress.json`。
+
+注册屏障位于现代模组构造与 `RegisterEvent` 之间：先完成真实旧 FML 并冻结内容声明，再在现代注册事件中提交代理对象。保留合法原 ID；含大写等新版不允许字符的旧 ID 使用 `mfcl:legacy/<原 ID 的 UTF-8 十六进制>`，对应关系可在 `<游戏目录>/mfcl/generated-packs/content-1.7.10-*/mfcl-content-manifest.json` 查询。创造栏为“旧版模组 · 1.7.10”，沿用旧物品的创造栏可见性。原始内部占位物品仍被注册，但不会因目录扫描而出现在创造栏。
+
+当前掉落桥执行原始 `getItemDropped`、`damageDropped`、`quantityDroppedWithBonus` 基础方法（时运等级暂为 0）；完整旧 `getDrops`、工具等级、精准采集与旧事件尚未覆盖。物品的旧 NBT 使用原格式封装，回到旧域时由真实旧 NBT 解析器恢复；额外现代 NBT 尚无映射时明确拒绝转换。客户端世界代理只读，服务端世界代理在服务器线程同步读写；时间、基础方块与 metadata 已覆盖，完整区块与方块实体接口仍待实现。
 
 **已接通原始 NEI 的背包附着界面和配方页，完整 NEI 兼容仍未完成。**原始 NEI 在同一个 Java 17 进程内完成真实旧 FML 生命周期，并应用其 CoreMod 转换器和 AT。默认驱动旧 `GuiContainer` 上的原始 NEI 布局、物品面板和搜索框，保留现代背包；配方页执行原始 `GuiCraftingRecipe`，通过通用绘制层显示。此前的独立浏览器仅保留为开发诊断选项。
 
@@ -27,7 +31,7 @@
 
 MFCL 使用 Forge 的 `FMLPaths.GAMEDIR`，自动建立 `mods/1.7.10`，只读取该目录直属的 JAR。不会改写原始输入。报告写入 `<游戏目录>/logs/mfcl/legacy-1.7.10.json`。
 
-Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。选择旧模组后显示“游戏版本：1.7.10”、来源 JAR 及实际加载状态；仅扫描到文件的条目不会标为已加载。该展示不向现代 FML 的容器和注册表插入旧模组。
+Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。选择旧模组后显示“游戏版本：1.7.10”、来源 JAR 及实际加载状态；仅扫描到文件的条目不会标为已加载。旧模组容器仍由隔离的旧 FML 持有；基础内容代理另由通用注册桥提交。
 
 启动完成提示和主菜单计数使用同一份运行时目录，只统计旧 FML 实际完成加载的模组。NEI 回归环境已验证总数为 5：现代环境 3 个，加上 1.7.10 的 CodeChickenCore 和 NEI；CodeChickenLib 依赖库及旧 FML 内置组件不重复计数。主菜单同时标明两个游戏版本的数量。AcademyCraft 环境现在为 6 个：现代 3 个，加上 AcademyCraft、LambdaLib 和 LambdaLib Core 容器。旧模组仍属于隔离的旧 FML，现代 `ModList` 的查询和网络握手不因此包含旧模组。启动提示和主菜单品牌缓存适配当前 Forge 47 的内部字段，升级 Forge 时需重新验证。
 
@@ -38,6 +42,17 @@ Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。�
 通用原生渲染桥按旧 GL 类身份绑定，每个运行时拥有独立纹理句柄；删除后重新绑定同一旧编号会创建新的宿主纹理。着色器与纹理调用会恢复宿主的程序、纹理、pixel-store 和像素传输缓冲状态。旧 `GL_CLAMP` 暂映射为 `GL_CLAMP_TO_EDGE`，边界采样行为存在差异；完整旧 GL 状态、Tessellator 和三维绘制仍未覆盖。Java 17 反射兼容只适配旧域中的 `Field.modifiers` 调用，不修改 JDK 全局反射过滤或启动参数。JDK XML 模块可共享，ASM 等宿主库仍严格隔离。
 
 原生 GPU 与模组列表复测使用 `runClient -PmfclOpenGlSmokeTest -PmfclModListSmokeTest`。`mfclOpenGlSmokeTest` 会通过真实旧 LWJGL 入口验证上传读回、着色器 uniform、纹理重建和宿主状态恢复；它需要图形客户端，独立无图形旧运行时不提供 GPU 服务。
+
+AcademyCraft 内容验收使用独立游戏目录（其中 `mods/1.7.10` 应只有原始 AcademyCraft 和 LambdaLib），自动新建平坦世界，测试放置、掉落、旧 World 同步读写、真实旧 ItemStack NBT、纹理图集与原生创造栏，再保存退出并重进验证：
+
+```powershell
+./gradlew.bat runClient `
+  '-PmfclRunDir=build/academy-smoke/game' `
+  '-PlegacyRuntimeDir=run/mfcl/runtime/1.7.10' `
+  -PmfclContentSmokeTest --offline --console=plain
+```
+
+验收报告为该游戏目录的 `logs/mfcl/content-1.7.10-smoke.json`。正常启动不启用测试参数。
 
 ## 构建与检查
 
@@ -63,18 +78,14 @@ Forge 的模组页面会合并显示旧模组，支持原有搜索和排序。�
 
 原始核心插件探针在独立诊断 JVM 中执行构造、`injectData`、版本检查、容器/转换器声明和 setup hook，记录原始 CodeSource。该进程隔离只用于开发检查，不是正式双运行时的架构；旧启动器的静态状态和资源缓存不能据此宣称可在宿主内卸载。
 
-准备默认 `runClient` 使用的目录并启动：
+当前默认 `runClient` 目录已准备好旧运行时，`mods/1.7.10` 中为 AcademyCraft 与 LambdaLib。启动：
 
 ```powershell
-./tools/prepare-legacy-runtime.ps1 `
-  -NeiJar 'C:/Users/gengy/Desktop/NotEnoughItems-1.7.10-1.0.5.120-universal.jar' `
-  -JavaHome 'C:/Users/gengy/.jdks/temurin-17.0.18' `
-  -GameDirectory "$PWD/run"
 $env:JAVA_HOME = 'C:/Users/gengy/.jdks/temurin-17.0.18'
 ./gradlew.bat runClient
 ```
 
-进入世界后打开背包，NEI 自动显示在背包周围。使用底部原版搜索框筛选，左键查看配方，右键查看用途，`Esc` 返回。原始 NEI 的配置与键位逻辑仍保留。`-PmfclLegacyBrowser` 可启用此前的独立诊断浏览器。
+AcademyCraft 测试中可在创造模式的“旧版模组 · 1.7.10”页取得内容。以下 NEI 操作只适用于独立 NEI 回归目录：进入世界后打开背包，NEI 自动显示在背包周围；使用底部原版搜索框筛选，左键查看配方，右键查看用途，`Esc` 返回。原始 NEI 的配置与键位逻辑仍保留。`-PmfclLegacyBrowser` 可启用此前的独立诊断浏览器。
 
 自动游戏验收使用独立目录，新建独立平坦世界，完成查询、截图、返回和退出后自动关闭：
 

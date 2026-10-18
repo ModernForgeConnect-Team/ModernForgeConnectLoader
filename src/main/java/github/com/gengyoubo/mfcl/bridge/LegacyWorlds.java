@@ -17,9 +17,15 @@ public final class LegacyWorlds implements AutoCloseable {
         void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Legacy world access must run on its host owner thread"); }
     }
     public LegacyWorlds(ClassLoader loader) { this.loader = loader; }
+    public synchronized Object bound(Object hostIdentity) {
+        Binding binding = worlds.get(hostIdentity);
+        if (binding == null) throw new IllegalStateException("Host world has no legacy binding");
+        binding.check(); return binding.world;
+    }
     public synchronized Object bind(Object hostIdentity, HostWorldAccess host) throws Exception {
         Binding existing = worlds.get(hostIdentity);
         if (existing != null) { existing.check(); return existing.world; }
+        Objects.requireNonNull(host, "Host world access");
         if (facade == null) facade = defineFacade();
         Object world = allocate(facade);
         Class<?> providerType = loader.loadClass("net.minecraft.world.WorldProvider");
