@@ -211,9 +211,26 @@ public final class GenericSemanticsProbe {
             var useResult = useBridge.rightClick(useWorld, usePlacer, bow);
             if (!useResult.used() || useResult.useDuration() != 72000)
                 throw new AssertionError("Legacy onItemRightClick did not open a held use");
-            useBridge.usingTick(useWorld, usePlacer, bow, 70000);
+            if (useBridge.usingTick(useWorld, usePlacer, bow, 70000) != null) throw new AssertionError("A non-scanning item reported a completed legacy scan");
         } finally { services.worlds().unbind(useIdentity); }
         report.put("genericItemUseCallbackVerified", true);
+        Object rayIdentity = new Object();
+        Object rayWorld = services.worlds().bind(rayIdentity, new HostWorldAccess() {
+            public String dimensionKey() { return "mfcl:ray"; } public int legacyDimensionId() { return 0; } public boolean clientSide() { return true; }
+            public long gameTime() { return 0; } public long dayTime() { return 0; } public void setDayTime(long time) { }
+            public Block block(int x, int y, int z) { return new Block("minecraft:air", 0); }
+            public boolean setBlock(int x, int y, int z, Block block, int flags) { return false; }
+            public Hit rayTrace(double sx, double sy, double sz, double ex, double ey, double ez) { return new Hit(3, 4, 5, 1, 3.5, 4.5, 5.5); }
+        });
+        try {
+            Class<?> vecType = loader.loadClass("net.minecraft.util.Vec3");
+            Object from = vecType.getMethod("func_72443_a", double.class, double.class, double.class).invoke(null, 0d, 0d, 0d);
+            Object to = vecType.getMethod("func_72443_a", double.class, double.class, double.class).invoke(null, 10d, 10d, 10d);
+            Object hit = rayWorld.getClass().getMethod("func_147447_a", vecType, vecType, boolean.class, boolean.class, boolean.class).invoke(rayWorld, from, to, false, false, false);
+            if (hit == null || hit.getClass().getField("field_72311_b").getInt(hit) != 3 || hit.getClass().getField("field_72310_e").getInt(hit) != 1)
+                throw new AssertionError("Legacy world ray trace did not surface the host hit");
+        } finally { services.worlds().unbind(rayIdentity); }
+        report.put("genericWorldRayTraceVerified", true);
     }
     private static Class<?> fixture(ClassLoader loader) throws Exception {
         String name = "mfcl/fixture/Gui"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

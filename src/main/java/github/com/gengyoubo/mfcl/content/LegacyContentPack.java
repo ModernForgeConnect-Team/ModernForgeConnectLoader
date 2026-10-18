@@ -91,7 +91,8 @@ public final class LegacyContentPack {
             for (var primitive : entry.getValue()) {
                 String texture = primitive.texture();
                 // IItemRenderer geometry keeps a full old texture path; ISBRH geometry keeps an icon name.
-                String id = texture.contains("textures/") ? texturePath(texture) : texture(texture, "blocks");
+                String id = texture.equals(github.com.gengyoubo.mfcl.bridge.LegacyItemRendering.PLAYER_SKIN) ? texture
+                        : texture.contains("textures/") ? texturePath(texture) : texture(texture, "blocks");
                 if (id.isEmpty()) continue;
                 resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), id, primitive.vertices(), primitive.state()));
             }

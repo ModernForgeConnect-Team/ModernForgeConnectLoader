@@ -65,6 +65,19 @@ public final class LegacyWorlds implements AutoCloseable {
         var host = binding(world).host; var old = host.block(x, y, z);
         return host.setBlock(x, y, z, new HostWorldAccess.Block(old.legacyKey(), metadata), flags);
     }
+    public static Object rayTrace(Object world, Object start, Object end, boolean stopOnLiquid, boolean ignoreBlockWithoutBoundingBox, boolean returnLastUncollidableBlock) {
+        var binding = binding(world);
+        try {
+            var vecType = binding.loader.loadClass("net.minecraft.util.Vec3");
+            double sx = vecType.getField("field_72450_a").getDouble(start), sy = vecType.getField("field_72448_b").getDouble(start), sz = vecType.getField("field_72449_c").getDouble(start);
+            double ex = vecType.getField("field_72450_a").getDouble(end), ey = vecType.getField("field_72448_b").getDouble(end), ez = vecType.getField("field_72449_c").getDouble(end);
+            var hit = binding.host.rayTrace(sx, sy, sz, ex, ey, ez);
+            if (hit == null) return null;
+            Object point = vecType.getMethod("func_72443_a", double.class, double.class, double.class).invoke(null, hit.hitX(), hit.hitY(), hit.hitZ());
+            return binding.loader.loadClass("net.minecraft.util.MovingObjectPosition")
+                    .getConstructor(int.class, int.class, int.class, int.class, vecType).newInstance(hit.x(), hit.y(), hit.z(), hit.side(), point);
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
+    }
     public static Object tile(Object world, int x, int y, int z) { return binding(world).host.tileEntity(x, y, z); }
     public static void tile(Object world, int x, int y, int z, Object tile) { binding(world).host.setTileEntity(x, y, z, tile); }
     public static void removeTile(Object world, int x, int y, int z) { binding(world).host.removeTileEntity(x, y, z); }
@@ -136,6 +149,7 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_147437_c", "(III)Z", "air", "(Ljava/lang/Object;III)Z", null);
         forward(writer, bridge, "func_147468_f", "(III)Z", "removeBlock", "(Ljava/lang/Object;III)Z", null);
         forward(writer, bridge, "func_147472_a", "(Lnet/minecraft/block/Block;IIIZILnet/minecraft/entity/Entity;Lnet/minecraft/item/ItemStack;)Z", "canPlace", "(Ljava/lang/Object;Ljava/lang/Object;IIIZILjava/lang/Object;Ljava/lang/Object;)Z", null);
+        forward(writer, bridge, "func_147447_a", "(Lnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;ZZZ)Lnet/minecraft/util/MovingObjectPosition;", "rayTrace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ZZZ)Ljava/lang/Object;", "net/minecraft/util/MovingObjectPosition");
         forward(writer, bridge, "isSideSolid", "(IIILnet/minecraftforge/common/util/ForgeDirection;Z)Z", "solid", "(Ljava/lang/Object;IIILjava/lang/Object;Z)Z", null);
         forward(writer, bridge, "func_72807_a", "(II)Lnet/minecraft/world/biome/BiomeGenBase;", "biome", "(Ljava/lang/Object;II)Ljava/lang/Object;", "net/minecraft/world/biome/BiomeGenBase");
         constant(writer, "func_72802_i", "(IIII)I", 0x00F000F0);
@@ -155,8 +169,6 @@ public final class LegacyWorlds implements AutoCloseable {
         var entities = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;",null,null);
         entities.visitCode(); entities.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList"); entities.visitInsn(Opcodes.DUP);
         entities.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false); entities.visitInsn(Opcodes.ARETURN); entities.visitMaxs(2,3); entities.visitEnd();
-        var ray = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_147447_a","(Lnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;ZZZ)Lnet/minecraft/util/MovingObjectPosition;",null,null);
-        ray.visitCode(); ray.visitInsn(Opcodes.ACONST_NULL); ray.visitInsn(Opcodes.ARETURN); ray.visitMaxs(1,6); ray.visitEnd();
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }

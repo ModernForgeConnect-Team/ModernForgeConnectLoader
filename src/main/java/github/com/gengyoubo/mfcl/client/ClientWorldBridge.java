@@ -46,11 +46,18 @@ public final class ClientWorldBridge {
                         return new Block(key, 0);
                     }
                     @Override public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new UnsupportedOperationException("Client world cannot change authoritative blocks"); }
+                    @Override public HostWorldAccess.Hit rayTrace(double sx, double sy, double sz, double ex, double ey, double ez) {
+                        var from = new net.minecraft.world.phys.Vec3(sx, sy, sz); var to = new net.minecraft.world.phys.Vec3(ex, ey, ez);
+                        var result = next.clip(new net.minecraft.world.level.ClipContext(from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, null));
+                        if (result.getType() == net.minecraft.world.phys.HitResult.Type.MISS) return null;
+                        var pos = result.getBlockPos();
+                        return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
+                    }
                     @Override public Object tileEntity(int x, int y, int z) {
                         var tile = next.getBlockEntity(new BlockPos(x, y, z));
-                        if (tile == null) return null;
+                        // A host block entity without an old counterpart is simply invisible to legacy code.
                         if (tile instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity legacy) return legacy.legacy();
-                        throw new UnsupportedOperationException("Modern block entity has no old representation: " + tile.getType());
+                        return null;
                     }
                     @Override public void markTileDirty(int x, int y, int z, Object old) {
                         // readCustomNBT may mark a client tile dirty while its host envelope is still loading.
@@ -71,3 +78,4 @@ public final class ClientWorldBridge {
         } catch (Exception failure) { throw new IllegalStateException("Cannot bind legacy client world", failure); }
     }
 }
+

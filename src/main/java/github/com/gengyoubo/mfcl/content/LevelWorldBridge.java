@@ -47,6 +47,14 @@ public final class LevelWorldBridge {
                 var state = candidate == null ? content.modernBlock(block) : candidate.defaultBlockState();
                 return level.isInWorldBounds(new BlockPos(x,y,z)) && level.isUnobstructed(state,new BlockPos(x,y,z),net.minecraft.world.phys.shapes.CollisionContext.empty());
             }
+            @Override public HostWorldAccess.Hit rayTrace(double sx, double sy, double sz, double ex, double ey, double ez) {
+                check();
+                var from = new net.minecraft.world.phys.Vec3(sx, sy, sz); var to = new net.minecraft.world.phys.Vec3(ex, ey, ez);
+                var result = level.clip(new net.minecraft.world.level.ClipContext(from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, null));
+                if (result.getType() == net.minecraft.world.phys.HitResult.Type.MISS) return null;
+                var pos = result.getBlockPos();
+                return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
+            }
             @Override public Object tileEntity(int x, int y, int z) {
                 check(); content.beforeMutation(level,new BlockPos(x,y,z)); var tile = level.getBlockEntity(new BlockPos(x, y, z));
                 if (tile == null) return null;
@@ -71,3 +79,4 @@ public final class LevelWorldBridge {
         };
     }
 }
+

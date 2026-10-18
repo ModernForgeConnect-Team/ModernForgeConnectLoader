@@ -50,19 +50,11 @@ public final class LegacyContent {
             Class<?> rendererType = loader.loadClass("net.minecraftforge.client.IItemRenderer");
             Class<?> renderType = loader.loadClass("net.minecraftforge.client.IItemRenderer$ItemRenderType");
             Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
-            Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
-            Class<?> renderBlocksType = loader.loadClass("net.minecraft.client.renderer.RenderBlocks");
             Method getRenderer = forgeClient.getMethod("getItemRenderer", stackType, renderType);
-            Method renderItem = rendererType.getMethod("renderItem", renderType, stackType, Object[].class);
-            Object renderBlocks = renderBlocksType.getConstructor().newInstance();
+            var pipeline = new LegacyItemRendering(loader);
             var renderTypes = new ArrayList<Object>();
-            // EQUIPPED_FIRST_PERSON bakes the old player's arm skins, so held contexts reuse the EQUIPPED model.
-            for (String name : List.of("INVENTORY", "EQUIPPED", "ENTITY")) renderTypes.add(renderType.getField(name).get(null));
+            for (String name : List.of("INVENTORY", "EQUIPPED", "EQUIPPED_FIRST_PERSON", "ENTITY")) renderTypes.add(renderType.getField(name).get(null));
             Object inventory = renderType.getField("INVENTORY").get(null);
-            // The held branches read the rendering entity from data[1]; use the old preview player.
-            Class<?> mcType = loader.loadClass("net.minecraft.client.Minecraft");
-            Object legacyClient = mcType.getMethod("func_71410_x").invoke(null);
-            Object viewer = mcType.getField("field_71439_g").get(legacyClient);
             var stacks = new ArrayList<LegacyClientData.Stack>(data.catalog());
             for (var tab : tabs) for (var entry : tab.contents()) if (stacks.stream().noneMatch(s -> s.key().equals(entry.key()) && s.metadata() == entry.metadata() && s.tag().equals(entry.tag()))) stacks.add(entry);
             for (var snapshot : stacks) {
@@ -74,14 +66,13 @@ public final class LegacyContent {
                     String typeName = ((Enum<?>)renderTypeValue).name();
                     Object renderer = getRenderer.invoke(null, stack, renderTypeValue);
                     if (renderer == null) continue;
-                    Object[] renderData = renderTypeValue == inventory ? new Object[]{renderBlocks, stack} : new Object[]{renderBlocks, viewer};
                     LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
                     boolean complete = false;
-                    try { data.inLegacy(() -> { renderItem.invoke(renderer, renderTypeValue, stack, renderData); return null; }); complete = true; }
+                    try { data.inLegacy(() -> { pipeline.render(renderTypeValue, renderer, stack); return null; }); complete = true; }
                     catch (Throwable failure) {
                         Throwable cause = failure;
                         while (cause.getCause() != null && cause != cause.getCause()) cause = cause.getCause();
-                        if (typeName.equals("INVENTORY")) captureDiagnostics.add("item renderer failed " + snapshot.key() + "@" + snapshot.metadata() + ": " + cause);
+                        captureDiagnostics.add(typeName + " item renderer failed " + snapshot.key() + "@" + snapshot.metadata() + ": " + cause);
                     }
                     List<LegacyVertexStream.Primitive> captured;
                     try { captured = frame.primitives(); }

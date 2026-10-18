@@ -10,12 +10,22 @@ public final class GuiCaptureTransformer implements IClassTransformer {
     public byte[] transform(String name,String transformedName,byte[] bytes) {
         if (bytes == null || !(name.equals("net.minecraft.client.gui.Gui") || name.equals("net.minecraft.client.gui.FontRenderer")
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
-                || name.equals("net.minecraft.client.Minecraft")
+                || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer")
                 || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (name.endsWith("AbstractClientPlayer") && m.name.equals("func_110306_p")) {
+                // Resolve preview arm textures at replay time, using the modern player's current skin.
+                InsnList skin = new InsnList(); LabelNode original = new LabelNode();
+                skin.add(new VarInsnNode(Opcodes.ALOAD,0));
+                skin.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyItemRendering","playerSkin","(Ljava/lang/Object;)Ljava/lang/Object;",false));
+                skin.add(new InsnNode(Opcodes.DUP)); skin.add(new JumpInsnNode(Opcodes.IFNULL,original));
+                skin.add(new TypeInsnNode(Opcodes.CHECKCAST,"net/minecraft/util/ResourceLocation")); skin.add(new InsnNode(Opcodes.ARETURN));
+                skin.add(original); skin.add(new InsnNode(Opcodes.POP)); m.instructions.insert(skin);
+                continue;
+            }
             InsnList code = new InsnList(); String target=null, descriptor=null;
             int ret=Opcodes.RETURN;
             if (name.endsWith(".Gui") && m.name.equals("func_73734_a")) { load(code,Opcodes.ILOAD,0,5); target="rect"; descriptor="(IIIII)V"; }

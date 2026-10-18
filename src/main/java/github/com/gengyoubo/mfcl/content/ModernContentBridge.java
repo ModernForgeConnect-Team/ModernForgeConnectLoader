@@ -64,6 +64,7 @@ public final class ModernContentBridge {
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
         try {
             var bridge = new ModernContentBridge(services); active = bridge;
+            ScanSyncChannel.register();
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
@@ -89,6 +90,16 @@ public final class ModernContentBridge {
     public static boolean canPlace(LegacyContent.Block entry) { return canPlace(entry, 0); }
     public static boolean canPlace(LegacyContent.Block entry, int metadata) {
         return entry.renderType() == 0 || active != null && active.blockRendering.supports(entry.key(), metadata);
+    }
+    /** Applies a client-reported legacy scan on the authoritative server thread. */
+    public void applyServerScan(net.minecraft.server.level.ServerPlayer player, ScanSyncChannel.ScanMessage message) {
+        try {
+            var world = services.worlds().bound(player.serverLevel());
+            itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.phenomena(), message.prefix());
+            LogUtils.getLogger().info("MFCL legacy server scan applied for {}: type={}, id={}, meta={}", player.getName().getString(), message.type(), message.id(), message.meta());
+        } catch (Exception failure) {
+            LogUtils.getLogger().error("MFCL legacy server scan application failed for {}", player.getName().getString(), failure);
+        }
     }
     public static ResourceLocation id(String key) {
         var parsed = ResourceLocation.tryParse(key);
@@ -200,6 +211,7 @@ public final class ModernContentBridge {
                 var result = itemUse.rightClick(services.worlds().bound(level), placer(player), snapshot(stack));
                 if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(stack);
                 if (result.useDuration() > 0) player.startUsingItem(hand);
+                if (result.prompt() != null && level.isClientSide) player.displayClientMessage(Component.literal(result.prompt()), true);
                 return net.minecraft.world.InteractionResultHolder.consume(stack);
             } catch (Exception failure) {
                 LogUtils.getLogger().error("MFCL legacy item use failed for {}", entry.key(), failure);
@@ -212,8 +224,10 @@ public final class ModernContentBridge {
         }
         @Override public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remaining) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
-            try { itemUse.usingTick(services.worlds().bound(level), placer(player), snapshot(stack), remaining); }
-            catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy using tick failed for {}", entry.key(), failure); }
+            try {
+                var scan = itemUse.usingTick(services.worlds().bound(level), placer(player), snapshot(stack), remaining);
+                if (scan != null && level.isClientSide) ScanSyncChannel.sendToServer(scan, "@");
+            } catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy using tick failed for {}", entry.key(), failure); }
         }
         @Override public void releaseUsing(ItemStack stack, Level level, LivingEntity living, int timeLeft) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
