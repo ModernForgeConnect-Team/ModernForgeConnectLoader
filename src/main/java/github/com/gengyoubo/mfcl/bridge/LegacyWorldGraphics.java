@@ -67,6 +67,8 @@ public final class LegacyWorldGraphics {
     public static void rotate(double angle, double x, double y, double z) { Frame f = frame(); if (f != null) { f.check(); LegacyVertexStream.rotate(f.matrix, angle, x, y, z); } }
 
     public static void bindTexture(int handle) { Frame f = frame(); if (f != null) { f.check(); f.texture = "legacy:" + handle; } }
+    /** Old TextureManager.bindTexture resource path, used by model-based item renderers. */
+    public static void texture(String resource) { Frame f = frame(); if (f != null) { f.check(); f.texture = resource; } }
 
     public static void glEnableClientState(int cap) { Frame f = frame(); if (f == null) return; f.check(); if (cap == 32884) f.vertexEnabled = true; else if (cap == 32888) f.texEnabled = true; else if (cap == 32886) f.colorEnabled = true; else if (cap == 32885) f.normalEnabled = true; }
     public static void glDisableClientState(int cap) { Frame f = frame(); if (f == null) return; f.check(); if (cap == 32884) f.vertexEnabled = false; else if (cap == 32888) f.texEnabled = false; else if (cap == 32886) f.colorEnabled = false; else if (cap == 32885) f.normalEnabled = false; }

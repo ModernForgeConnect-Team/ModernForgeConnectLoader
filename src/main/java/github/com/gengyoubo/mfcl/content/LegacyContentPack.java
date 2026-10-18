@@ -62,8 +62,13 @@ public final class LegacyContentPack {
         }
         for (var entry : content.geometry().entrySet()) {
             var resolved = new ArrayList<LegacyVertexStream.Primitive>();
-            for (var primitive : entry.getValue())
-                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), texture(primitive.texture(), "blocks"), primitive.vertices()));
+            for (var primitive : entry.getValue()) {
+                String source = primitive.texture();
+                // IItemRenderer geometry keeps a full old texture path; ISBRH geometry keeps an icon name.
+                String id = source.contains("textures/") ? texturePath(source) : texture(source, "blocks");
+                if (id.isEmpty()) continue;
+                resolved.add(new LegacyVertexStream.Primitive(primitive.mode(), id, primitive.vertices()));
+            }
             geometry.put(entry.getKey(), List.copyOf(resolved));
         }
         languages();
@@ -79,6 +84,26 @@ public final class LegacyContentPack {
             return new LinkedHashMap<>(Map.of("parent", id.getNamespace() + ":block/" + id.getPath() + "_" + (variant.metadata() & 15)));
         }
         return new LinkedHashMap<>(Map.of("parent", "minecraft:item/generated", "textures", Map.of("layer0", texture(variant.icon(), "items"))));
+    }
+    /** Copies a whole old texture resource (for IItemRenderer models) and returns its standalone modern path. */
+    private String texturePath(String resource) throws Exception {
+        String cacheKey = "path:" + resource;
+        if (textures.containsKey(cacheKey)) return textures.get(cacheKey);
+        int colon = resource.indexOf(':');
+        String namespace = colon < 0 ? "minecraft" : resource.substring(0, colon);
+        String path = colon < 0 ? resource : resource.substring(colon + 1);
+        try (var input = content.loader().getResourceAsStream("assets/" + namespace + "/" + path)) {
+            if (input == null) { missingIcons.add(cacheKey); textures.put(cacheKey, ""); return ""; }
+            byte[] bytes = input.readAllBytes();
+            String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(path.getBytes(StandardCharsets.UTF_8)));
+            Path target = directory.resolve("assets/mfcl/textures/block/legacy/" + hash + ".png");
+            Files.createDirectories(target.getParent()); Files.write(target, bytes);
+            try (var meta = content.loader().getResourceAsStream("assets/" + namespace + "/" + path + ".mcmeta")) {
+                if (meta != null) Files.write(target.resolveSibling(target.getFileName() + ".mcmeta"), meta.readAllBytes());
+            }
+            String id = "mfcl:textures/block/legacy/" + hash + ".png";
+            textures.put(cacheKey, id); return id;
+        }
     }
     private String texture(String icon, String preferred) throws Exception {
         String cacheKey = preferred + ":" + icon;

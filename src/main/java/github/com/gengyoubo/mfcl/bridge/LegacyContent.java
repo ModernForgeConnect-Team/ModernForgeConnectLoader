@@ -36,6 +36,47 @@ public final class LegacyContent {
         var declarations = data.inLegacy(() -> read());
         items = declarations.items; blocks = declarations.blocks; tabs = declarations.tabs;
         captureStaticGeometry();
+        captureItemRenderers();
+    }
+
+    /** Executes the real old Forge IItemRenderer (wands, banners, ...) and keeps its captured geometry. */
+    private void captureItemRenderers() {
+        try {
+            ClassLoader loader = data.loader();
+            Class<?> forgeClient = loader.loadClass("net.minecraftforge.client.MinecraftForgeClient");
+            Class<?> rendererType = loader.loadClass("net.minecraftforge.client.IItemRenderer");
+            Class<?> renderType = loader.loadClass("net.minecraftforge.client.IItemRenderer$ItemRenderType");
+            Object inventory = renderType.getField("INVENTORY").get(null);
+            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
+            Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
+            Class<?> renderBlocksType = loader.loadClass("net.minecraft.client.renderer.RenderBlocks");
+            Method getRenderer = forgeClient.getMethod("getItemRenderer", stackType, renderType);
+            Method renderItem = rendererType.getMethod("renderItem", renderType, stackType, Object[].class);
+            Object renderBlocks = renderBlocksType.getConstructor().newInstance();
+            var stacks = new ArrayList<LegacyClientData.Stack>(data.catalog());
+            for (var tab : tabs) for (var entry : tab.contents()) if (stacks.stream().noneMatch(s -> s.key().equals(entry.key()) && s.metadata() == entry.metadata() && s.tag().equals(entry.tag()))) stacks.add(entry);
+            for (var snapshot : stacks) {
+                if (snapshot.key().startsWith("minecraft:") || customItems.contains(snapshot.key())) continue;
+                Object stack = data.materialize(snapshot); // keeps the original NBT, e.g. a wand's rod and cap
+                Object renderer = getRenderer.invoke(null, stack, inventory);
+                if (renderer == null) { if (snapshot.key().contains("Wand")) captureDiagnostics.add("no item renderer for " + snapshot.key() + "@" + snapshot.metadata()); continue; }
+                LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
+                try { data.inLegacy(() -> { renderItem.invoke(renderer, inventory, stack, new Object[]{renderBlocks, stack}); return null; }); }
+                catch (Throwable failure) {
+                    Throwable cause = failure;
+                    while (cause.getCause() != null && cause != cause.getCause()) cause = cause.getCause();
+                    captureDiagnostics.add("item renderer failed " + snapshot.key() + "@" + snapshot.metadata() + ": " + cause);
+                }
+                List<LegacyVertexStream.Primitive> captured;
+                try { captured = frame.primitives(); } finally { frame.close(); }
+                if (snapshot.key().contains("Wand")) captureDiagnostics.add("wand renderer " + snapshot.key() + "@" + snapshot.metadata() + " -> " + captured.size() + " primitives, tag=" + snapshot.tag());
+                if (captured.isEmpty()) continue;
+                geometry.put(snapshot.key() + "@" + snapshot.metadata(), captured);
+                captureDiagnostics.add("captured item renderer " + snapshot.key() + "@" + snapshot.metadata() + ": " + captured.size() + " primitives, "
+                        + captured.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices");
+                customItems.add(snapshot.key());
+            }
+        } catch (Throwable unavailable) { captureDiagnostics.add("item renderer bridge unavailable: " + unavailable); }
     }
 
     /** Executes the real old inventory renderers once and keeps their geometry; texture stays the icon name. */
@@ -66,15 +107,6 @@ public final class LegacyContent {
                     if (!drawn || captured.isEmpty()) continue;
                     var resolved = resolveIcons(captured);
                     if (resolved.isEmpty()) { captureDiagnostics.add("unresolved icons " + block.key() + "@" + variant.metadata() + " (" + captured.size() + " primitives)"); continue; }
-                    if (item.key().equals("Thaumcraft:blockCustomOre") && variant.metadata() == 1) {
-                        for (int i = 0; i < captured.size(); i++) {
-                            var p = captured.get(i);
-                            float minU = Float.MAX_VALUE, maxU = -Float.MAX_VALUE, minV = Float.MAX_VALUE, maxV = -Float.MAX_VALUE;
-                            for (var vertex : p.vertices()) { minU = Math.min(minU, vertex.u()); maxU = Math.max(maxU, vertex.u()); minV = Math.min(minV, vertex.v()); maxV = Math.max(maxV, vertex.v()); }
-                            captureDiagnostics.add("debug primitive " + i + " raw u[" + minU + "," + maxU + "] v[" + minV + "," + maxV + "] icon=" + data.iconAt((minU + maxU) / 2, (minV + maxV) / 2));
-                        }
-                        captureDiagnostics.add("debug iconLayout size=" + data.iconLayout().size());
-                    }
                     geometry.put(item.key() + "@" + variant.metadata(), resolved);
                     captureDiagnostics.add("captured " + item.key() + "@" + variant.metadata() + ": " + resolved.size() + " primitives, "
                             + resolved.stream().mapToInt(p -> p.vertices().size()).sum() + " vertices, bounds " + bounds(resolved));

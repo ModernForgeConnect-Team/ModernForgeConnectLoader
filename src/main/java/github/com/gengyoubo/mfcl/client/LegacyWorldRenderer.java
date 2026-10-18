@@ -30,6 +30,24 @@ public final class LegacyWorldRenderer {
             }
         }
     }
+    /** Replays geometry whose UVs already address a standalone texture (old model renderers). */
+    public static void replayStandalone(PoseStack pose, VertexConsumer consumer, List<LegacyVertexStream.Primitive> primitives, int packedLight, int packedOverlay) {
+        Matrix4f matrix = pose.last().pose();
+        for (LegacyVertexStream.Primitive primitive : primitives) {
+            var vertices = primitive.vertices();
+            for (int[] triangle : triangles(primitive.mode(), vertices.size())) {
+                for (int index : triangle) {
+                    LegacyVertexStream.Vertex vertex = vertices.get(index);
+                    consumer.vertex(matrix, (float) vertex.x(), (float) vertex.y(), (float) vertex.z())
+                            .color(vertex.argb() >> 16 & 0xFF, vertex.argb() >> 8 & 0xFF, vertex.argb() & 0xFF, vertex.argb() >>> 24)
+                            .uv(vertex.u(), vertex.v())
+                            .overlayCoords(packedOverlay).uv2(packedLight)
+                            .normal(vertex.nx(), vertex.ny(), vertex.nz())
+                            .endVertex();
+                }
+            }
+        }
+    }
     static int[][] triangles(int mode, int count) {
         switch (mode) {
             case LegacyVertexStream.GL_QUADS -> {

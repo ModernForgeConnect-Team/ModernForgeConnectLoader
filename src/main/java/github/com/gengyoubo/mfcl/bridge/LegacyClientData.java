@@ -45,6 +45,7 @@ public final class LegacyClientData {
     }
 
     public ClassLoader loader() { return loader; }
+    public Object legacyItem(String key) throws Exception { return itemByName.invoke(registry, key); }
     public Map<String, float[]> iconLayout() { return iconLayout; }
     /** The original icon whose synthetic atlas cell contains the given legacy UV, or null. */
     public String iconAt(float u, float v) {
@@ -69,6 +70,7 @@ public final class LegacyClientData {
             Class<?> fmlClient = loader.loadClass("cpw.mods.fml.client.FMLClientHandler");
             setField(fmlClient, fmlClient.getMethod("instance").invoke(null), "client", client);
             setField(mcType, client, "field_71474_y", loader.loadClass("net.minecraft.client.settings.GameSettings").getConstructor().newInstance());
+            setField(mcType, client, "field_71428_T", loader.loadClass("net.minecraft.util.Timer").getConstructor(float.class).newInstance(20f));
             setField(mcType, client, "field_71443_c", 854); setField(mcType, client, "field_71440_d", 480);
             Class<?> fontType = loader.loadClass("net.minecraft.client.gui.FontRenderer");
             Object font = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, fontType);

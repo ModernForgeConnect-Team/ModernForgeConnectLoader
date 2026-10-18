@@ -22,7 +22,6 @@ import java.util.Map;
 /** Replays the captured original inventory-block geometry for one legacy block item. */
 public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
     private static final java.util.Set<String> missingSprites = new java.util.HashSet<>();
-    private static final java.util.Set<String> debugged = new java.util.HashSet<>();
     private final ModernContentBridge bridge;
     private final String itemKey;
     public LegacyItemRenderer(ModernContentBridge bridge, String itemKey) {
@@ -50,17 +49,14 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
         for (var entry : byTexture.entrySet()) {
             ResourceLocation spriteId = ResourceLocation.tryParse(entry.getKey());
             if (spriteId == null) continue;
+            if (entry.getKey().contains("textures/")) { // old model renderer texture, UVs already 0..1
+                LegacyWorldRenderer.replayStandalone(pose, buffer.getBuffer(RenderType.entityCutoutNoCull(spriteId)), entry.getValue(), light, overlay);
+                continue;
+            }
             TextureAtlasSprite sprite = atlas.apply(spriteId);
             if (sprite.contents().name().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation())) {
                 if (missingSprites.add(spriteId.toString())) com.mojang.logging.LogUtils.getLogger().warn("MFCL: captured sprite is not stitched: {}", spriteId);
                 continue;
-            }
-            if (debugged.add(itemKey + "@" + ModernContentBridge.metadata(stack) + ":" + entry.getKey())) {
-                var first = entry.getValue().get(0);
-                float minU = Float.MAX_VALUE, maxU = -Float.MAX_VALUE, minV = Float.MAX_VALUE, maxV = -Float.MAX_VALUE;
-                for (var vertex : first.vertices()) { minU = Math.min(minU, vertex.u()); maxU = Math.max(maxU, vertex.u()); minV = Math.min(minV, vertex.v()); maxV = Math.max(maxV, vertex.v()); }
-                com.mojang.logging.LogUtils.getLogger().info("MFCL item render {} sprite={} localU=[{},{}] localV=[{},{}] mode={} primitives={} argb={}",
-                        itemKey, sprite.contents().name(), minU, maxU, minV, maxV, first.mode(), entry.getValue().size(), Integer.toHexString(first.vertices().get(0).argb()));
             }
             LegacyWorldRenderer.replay(pose, buffer.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS)), sprite, entry.getValue(), light, overlay);
         }

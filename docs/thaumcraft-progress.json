@@ -85,7 +85,11 @@
     "The content smoke probe only requires mapped drops for blocks whose original drop methods actually return an item.",
     "Block items now resolve their icon from the linked block's getIcon(side, metadata); ItemBlock.getIconFromDamage ignores metadata and previously made every variant share the metadata-0 texture (for example all custom ores showed cinnabar).",
     "Block inventory models are chosen from the original render type: cube-like blocks (ores, logs, fluids, devices) render as cubes with their per-face textures, while crosses, crops, doors, fibres and candles stay flat sprites.",
-    "The content smoke world deadline was raised to ten minutes and failures are written to the smoke report so the acceptance script can detect them reliably."
+    "The content smoke world deadline was raised to ten minutes and failures are written to the smoke report so the acceptance script can detect them reliably.",
+    "Static legacy block models are captured by executing the real old ISimpleBlockRenderingHandler (RenderingRegistry.renderInventoryBlock) inside a LegacyWorldGraphics capture, then replayed through a modern custom item renderer.",
+    "Icon identity is recovered without running the old texture stitcher: IIcon proxies assign each texture a synthetic atlas cell, so a captured quad's UV range identifies its source icon, whose local UVs are remapped onto the modern block atlas sprite.",
+    "Fixed texture sampling: TextureAtlasSprite.getU/getV expect a 0..16 icon coordinate, not 0..1; using 0..1 sampled a single pixel column (uniform gray).",
+    "Custom item models use builtin/entity registered through Item.initializeClient (Forge 47.4.28 has no RegisterClientExtensionsEvent), and the captured geometry is shifted by +0.5 because BlockRenderer.drawFaces centers it with glTranslatef(-0.5)."
   ],
   "remaining": [
     "Modern registration covers blocks/items and simple or tile-backed placement; Thaumcraft's wands, alchemy, vis network, research and custom rendering are not functional yet.",
