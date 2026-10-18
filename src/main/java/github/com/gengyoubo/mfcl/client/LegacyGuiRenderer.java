@@ -11,7 +11,9 @@ import java.util.*;
 /** Replays common old GUI operations through the host renderer and private legacy texture resources. */
 final class LegacyGuiRenderer {
     private final LegacyServices services;
-    private final Map<String,ResourceLocation> textures=new HashMap<>();
+    private record Texture(ResourceLocation id,int width,int height) {}
+    private final Map<String,Texture> textures=new HashMap<>();
+    private final Set<String> missingIcons=new HashSet<>();
     LegacyGuiRenderer(LegacyServices services){this.services=services;}
     void draw(GuiGraphics graphics,List<LegacyGuiGraphics.Command> commands) throws Exception {
         var mc=Minecraft.getInstance();
@@ -22,22 +24,37 @@ final class LegacyGuiRenderer {
             } else if(command instanceof LegacyGuiGraphics.Text t) {
                 graphics.drawString(mc.font,t.text(),t.x(),t.y(),t.color(),t.shadow());
             } else if(command instanceof LegacyGuiGraphics.Texture t) {
-                graphics.blit(texture(t.resource()),t.x(),t.y(),t.u(),t.v(),t.width(),t.height(),256,256);
+                graphics.blit(texture(t.resource()).id(),t.x(),t.y(),t.u(),t.v(),t.width(),t.height(),256,256);
             } else if(command instanceof LegacyGuiGraphics.Item i) {
                 var stack=ModernItemMapping.renderStack(services.items().snapshot(i.stack()));
-                if(stack.isEmpty()) continue;
+                if(stack.isEmpty()) { if(!i.overlay()) legacyIcon(graphics,i);continue; }
                 if(i.overlay())graphics.renderItemDecorations(mc.font,stack,i.x(),i.y(),i.label());
                 else graphics.renderItem(stack,i.x(),i.y());
             }
         }
     }
-    private ResourceLocation texture(String key) throws Exception {
-        ResourceLocation cached=textures.get(key);if(cached!=null)return cached;
-        ResourceLocation old=new ResourceLocation(key);
+    private void legacyIcon(GuiGraphics graphics,LegacyGuiGraphics.Item item) throws Exception {
+        Object icon=item.stack().getClass().getMethod("func_77954_c").invoke(item.stack());
+        if(icon!=null) {
+            String name=(String)services.loader().loadClass("net.minecraft.util.IIcon").getMethod("func_94215_i").invoke(icon);
+            ResourceLocation id=ResourceLocation.tryParse(name);
+            if(id!=null)for(String directory:List.of("blocks","items")) {
+                String key=id.getNamespace()+":textures/"+directory+"/"+id.getPath()+".png";
+                if(services.loader().getResource("assets/"+id.getNamespace()+"/textures/"+directory+"/"+id.getPath()+".png")==null)continue;
+                Texture texture=texture(key);int size=Math.min(texture.width(),texture.height());
+                graphics.blit(texture.id(),item.x(),item.y(),16,16,0,0,size,size,texture.width(),texture.height());return;
+            }
+        }
+        var snapshot=services.items().snapshot(item.stack());String key=snapshot.key()+"@"+snapshot.metadata();
+        if(missingIcons.add(key))com.mojang.logging.LogUtils.getLogger().warn("MFCL: no modern model or original 2D icon for {}",key);
+    }
+    private Texture texture(String key) throws Exception {
+        Texture cached=textures.get(key);if(cached!=null)return cached;
+        ResourceLocation old=Objects.requireNonNull(ResourceLocation.tryParse(key));
         try(var input=services.loader().getResourceAsStream("assets/"+old.getNamespace()+"/"+old.getPath())) {
             if(input==null)throw new IllegalArgumentException("Missing original GUI texture: "+key);
             var image=NativeImage.read(input);var location=Minecraft.getInstance().getTextureManager().register("mfcl/legacy_gui",new DynamicTexture(image));
-            textures.put(key,location);return location;
+            Texture texture=new Texture(location,image.getWidth(),image.getHeight());textures.put(key,texture);return texture;
         }
     }
 }

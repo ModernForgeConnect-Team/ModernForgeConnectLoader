@@ -39,11 +39,65 @@ public final class NeiHostSmokeProbe {
                     if (ModernRecipeProjection.lastResult() == null || ModernRecipeProjection.lastResult().projected() == 0)
                         throw new IllegalStateException("Modern recipe sync did not reach the original NEI handlers");
                     var inventory = new net.minecraft.client.gui.screens.inventory.InventoryScreen(mc.player); mc.setScreen(inventory);
+                    if (github.com.gengyoubo.mfcl.bridge.LegacyScreens.guiBridgeEnabled()) {
+                        Object search=NeiClientUi.activeBridge().data().loader().loadClass("codechicken.nei.LayoutManager").getField("searchField").get(null);
+                        MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,search.getClass().getField("x").getInt(search)+4,search.getClass().getField("y").getInt(search)+4,1));
+                        stage=20;frames=0;return;
+                    }
                     var button = inventory.children().stream().filter(w -> w instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals("NEI"))
                             .map(w -> (net.minecraft.client.gui.components.Button) w).findFirst().orElseThrow(() -> new IllegalStateException("Inventory NEI button missing"));
                     button.onPress();
                     if (!(mc.screen instanceof NeiClientUi.Browser)) throw new IllegalStateException("Inventory button did not open NEI");
                     browser = (NeiClientUi.Browser) mc.screen; stage = 1; frames = 0;
+                } else if(stage==20 && ++frames>8) {
+                    var commands=github.com.gengyoubo.mfcl.client.ClientContainerBridge.active().commands(mc.screen);
+                    if(commands.stream().noneMatch(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::isInstance)
+                            ||commands.stream().noneMatch(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Text.class::isInstance))throw new IllegalStateException("Original NEI did not draw through generic container bridge");
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_GUI_DRAW_PASS: {} captured commands on actual host inventory",commands.size());
+                    net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-original-nei-overlay.png",mc.getMainRenderTarget(),c->screenshotSaved=true);stage=21;
+                } else if(stage==21 && screenshotSaved) {
+                    Object search=NeiClientUi.activeBridge().data().loader().loadClass("codechicken.nei.LayoutManager").getField("searchField").get(null);
+                    int x=search.getClass().getField("x").getInt(search)+4,y=search.getClass().getField("y").getInt(search)+4;
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,x,y,1));
+                    for(char c:"crafting".toCharArray())MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.CharacterTyped.Pre(mc.screen,c,0));
+                    if(!search.getClass().getMethod("text").invoke(search).equals("crafting"))throw new IllegalStateException("Original search field did not receive host input");
+                    stage=22;frames=0;
+                } else if(stage==22 && ++frames>12) {
+                    var commands=github.com.gengyoubo.mfcl.client.ClientContainerBridge.active().commands(mc.screen);
+                    if(commands.stream().filter(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::isInstance).count()>4)throw new IllegalStateException("Original item panel did not filter");
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_GUI_SEARCH_PASS: original search field and item panel filtered through host input events");
+                    var item=commands.stream().filter(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::isInstance).map(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::cast).filter(i->!i.overlay()).findFirst().orElseThrow();
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,item.x()+4,item.y()+4,0));
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre(mc.screen,item.x()+4,item.y()+4,0));
+                    stage=24;frames=0;
+                } else if(stage==24&&++frames>10) {
+                    var active=github.com.gengyoubo.mfcl.client.ClientContainerBridge.active();Object old=active.legacyScreen(mc.screen);
+                    if(!old.getClass().getName().equals("codechicken.nei.recipe.GuiCraftingRecipe"))throw new IllegalStateException("Original recipe page was not opened: "+old.getClass());
+                    if(mc.screen.isPauseScreen())throw new IllegalStateException("Old container pause policy was not preserved");
+                    var commands=active.commands(mc.screen);if(commands.isEmpty())throw new IllegalStateException("Original recipe page did not draw");
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_RECIPE_GUI_PASS: actual {} rendered {} commands",old.getClass().getName(),commands.size());
+                    screenshotSaved=false;net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-original-nei-recipe.png",mc.getMainRenderTarget(),c->screenshotSaved=true);stage=25;
+                } else if(stage==25&&screenshotSaved) {
+                    mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE,0,0);stage=26;frames=0;
+                } else if(stage==26&&++frames>8) {
+                    if(!(mc.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen))throw new IllegalStateException("Original recipe ESC did not return to host inventory");
+                    var item=github.com.gengyoubo.mfcl.client.ClientContainerBridge.active().commands(mc.screen).stream().filter(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::isInstance).map(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::cast).filter(i->!i.overlay()).findFirst().orElseThrow();
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,item.x()+4,item.y()+4,1));
+                    MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre(mc.screen,item.x()+4,item.y()+4,1));
+                    stage=27;frames=0;
+                } else if(stage==27&&++frames>8) {
+                    var active=github.com.gengyoubo.mfcl.client.ClientContainerBridge.active();Object old=active.legacyScreen(mc.screen);
+                    if(!old.getClass().getName().equals("codechicken.nei.recipe.GuiUsageRecipe")||active.commands(mc.screen).isEmpty())throw new IllegalStateException("Original usage GUI did not open and render");
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_USAGE_GUI_PASS");
+                    mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE,0,0);stage=28;frames=0;
+                } else if(stage==28&&++frames>8) {
+                    if(!(mc.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen))throw new IllegalStateException("Original usage ESC did not return to inventory");
+                    mc.screen.resize(mc,mc.screen.width,mc.screen.height);stage=29;frames=0;
+                } else if(stage==29&&++frames>8) {
+                    if(github.com.gengyoubo.mfcl.client.ClientContainerBridge.active().commands(mc.screen).isEmpty())throw new IllegalStateException("Original GUI did not survive resize");
+                    mc.level.disconnect();mc.clearLevel();mc.setScreen(new TitleScreen());stage=23;
+                } else if(stage==23&&mc.getSingleplayerServer()==null&&mc.screen instanceof TitleScreen) {
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_GUI_SMOKE_PASS");completed=true;mc.stop();
                 } else if (stage == 1 && browser.renderedFrames > 3) { browser.smokeSearch(); stage = 2; frames = browser.renderedFrames; }
                 else if (stage == 2 && browser.renderedFrames > frames + 3) {
                     int recipes = browser.smokeRecipeClick(false), usages = browser.smokeRecipeClick(true);

@@ -10,7 +10,8 @@ public final class LegacyContainers {
     public interface InputHooks {
         boolean mouse(Object screen, int x, int y, int button) throws Exception;
         boolean key(Object screen, char character, int key) throws Exception;
-        void release(Object screen, int x, int y, int button) throws Exception;
+        boolean release(Object screen, int x, int y, int button) throws Exception;
+        boolean scroll(Object screen, int x, int y, int delta) throws Exception;
     }
     private final LegacyServices services;
     private final ClassLoader loader;
@@ -20,7 +21,8 @@ public final class LegacyContainers {
     public void addInputHooks(InputHooks hook) { hooks.add(Objects.requireNonNull(hook)); }
     public boolean mouse(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)if(hook.mouse(screen,x,y,button))return true; return false; }
     public boolean key(Object screen,char character,int key) throws Exception { for(var hook:hooks)if(hook.key(screen,character,key))return true; return false; }
-    public void release(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)hook.release(screen,x,y,button); }
+    public boolean release(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)if(hook.release(screen,x,y,button))return true;return false; }
+    public boolean scroll(Object screen,int x,int y,int delta) throws Exception { for(var hook:hooks)if(hook.scroll(screen,x,y,delta))return true;return false; }
     public Object create(int width,int height,int left,int top,int imageWidth,int imageHeight,List<Slot> slots) throws Exception {
         preparePlayer();
         Class<?> mc=loader.loadClass("net.minecraft.client.Minecraft");Object client=mc.getMethod("func_71410_x").invoke(null);
@@ -55,6 +57,8 @@ public final class LegacyContainers {
         if(mc.getField("field_71439_g").get(client)!=null)return;
         Object player=allocate(loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP"));
         var type=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+        var profile=type.getDeclaredField("field_146106_i");profile.setAccessible(true);profile.set(player,
+                loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(java.util.UUID.class,String.class).newInstance(new java.util.UUID(0,0),"MFCL"));
         type.getField("field_71071_by").set(player,loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(type).newInstance(player));
         type.getField("field_71075_bZ").set(player,loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance());
         Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(loader.loadClass("net.minecraft.entity.Entity")).newInstance(player);

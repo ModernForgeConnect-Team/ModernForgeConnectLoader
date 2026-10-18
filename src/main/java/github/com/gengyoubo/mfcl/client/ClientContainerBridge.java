@@ -15,20 +15,23 @@ public final class ClientContainerBridge {
     private final LegacyServices services;
     private final LegacyGuiRenderer renderer;
     private final Map<Screen,Bound> bindings=new IdentityHashMap<>();
+    private final Map<Object,Screen> origins=new IdentityHashMap<>();
     private Map<String,LegacyClientData.Stack> reverse;
     private static ClientContainerBridge active;
     public static ClientContainerBridge active(){return active;}
     public static void install(LegacyServices services) {
-        if(!Boolean.getBoolean("mfcl.legacyGui"))return;
+        if(!LegacyScreens.guiBridgeEnabled())return;
         var bridge=new ClientContainerBridge(services);active=bridge;
         MinecraftForge.EVENT_BUS.addListener(bridge::init);
         MinecraftForge.EVENT_BUS.addListener(bridge::render);
         MinecraftForge.EVENT_BUS.addListener(bridge::mouse);
         MinecraftForge.EVENT_BUS.addListener(bridge::release);
+        MinecraftForge.EVENT_BUS.addListener(bridge::scroll);
         MinecraftForge.EVENT_BUS.addListener(bridge::character);
         MinecraftForge.EVENT_BUS.addListener(bridge::key);
         MinecraftForge.EVENT_BUS.addListener(bridge::close);
         MinecraftForge.EVENT_BUS.addListener(bridge::tick);
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RecipesUpdatedEvent event)->bridge.reverse=null);
     }
     private ClientContainerBridge(LegacyServices services){this.services=services;renderer=new LegacyGuiRenderer(services);}
     private static final class Bound {
@@ -46,6 +49,7 @@ public final class ClientContainerBridge {
             var session=services.screens().open(gui,screen.width,screen.height);
             services.containers().position(gui,screen.getGuiLeft(),screen.getGuiTop());
             bindings.put(screen,new Bound(gui,session));
+            origins.put(gui,screen);
         } catch(Exception failure){LogUtils.getLogger().error("MFCL legacy container initialization failed",failure);}
     }
     private LegacyClientData.Stack snapshot(net.minecraft.world.item.ItemStack value) throws Exception {
@@ -65,32 +69,42 @@ public final class ClientContainerBridge {
     }
     private void tick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
-        var screen=Minecraft.getInstance().screen;var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return;
+        var screen=Minecraft.getInstance().screen;
+        if(Minecraft.getInstance().level==null&&bindings.isEmpty()){origins.clear();reverse=null;return;}
+        var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return;
         dispatch(screen,0,0,b->{
             if(screen instanceof AbstractContainerScreen<?> container){var slots=new ArrayList<LegacyContainers.Slot>();for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));services.containers().update(b.gui,slots);}
             b.session.tick();return false;
         });
     }
-    private void mouse(ScreenEvent.MouseButtonPressed.Pre event){if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().mouse(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
-    private void release(ScreenEvent.MouseButtonReleased.Pre event){dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->{services.containers().release(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton());return false;});}
-    private void character(ScreenEvent.CharacterTyped.Pre event){if(dispatch(event.getScreen(),0,0,b->services.containers().key(b.gui,event.getCodePoint(),0)))event.setCanceled(true);}
-    private void key(ScreenEvent.KeyPressed.Pre event){int legacy=switch(event.getKeyCode()){case GLFW.GLFW_KEY_BACKSPACE->14;case GLFW.GLFW_KEY_ENTER->28;case GLFW.GLFW_KEY_R->19;case GLFW.GLFW_KEY_U->22;case GLFW.GLFW_KEY_O->24;default->0;};if(legacy!=0&&dispatch(event.getScreen(),0,0,b->services.containers().key(b.gui,'\0',legacy)))event.setCanceled(true);}
+    private void mouse(ScreenEvent.MouseButtonPressed.Pre event){if(event.getScreen() instanceof HostedScreen)return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().mouse(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
+    private void release(ScreenEvent.MouseButtonReleased.Pre event){if(event.getScreen() instanceof HostedScreen)return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().release(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
+    private void scroll(ScreenEvent.MouseScrolled.Pre event){if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().scroll(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getScrollDelta()>0?1:-1)))event.setCanceled(true);}
+    private void character(ScreenEvent.CharacterTyped.Pre event){if(event.getScreen() instanceof HostedScreen)return;int[] point=pointer(event.getScreen());if(dispatch(event.getScreen(),point[0],point[1],b->services.containers().key(b.gui,event.getCodePoint(),0)))event.setCanceled(true);}
+    private void key(ScreenEvent.KeyPressed.Pre event){if(event.getScreen() instanceof HostedScreen)return;int legacy=legacyKey(event.getKeyCode());int[] point=pointer(event.getScreen());if(legacy!=0&&dispatch(event.getScreen(),point[0],point[1],b->services.containers().key(b.gui,'\0',legacy)))event.setCanceled(true);}
+    private static int legacyKey(int key){return switch(key){case GLFW.GLFW_KEY_ESCAPE->1;case GLFW.GLFW_KEY_BACKSPACE->14;case GLFW.GLFW_KEY_ENTER->28;case GLFW.GLFW_KEY_R->19;case GLFW.GLFW_KEY_U->22;case GLFW.GLFW_KEY_O->24;default->0;};}
+    private static int[] pointer(Screen screen){var mc=Minecraft.getInstance();return new int[]{(int)(mc.mouseHandler.xpos()*screen.width/mc.getWindow().getScreenWidth()),(int)(mc.mouseHandler.ypos()*screen.height/mc.getWindow().getScreenHeight())};}
     private interface Action{boolean run(Bound bound)throws Exception;}
-    private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=action.run(bound);Object requested=frame.requestedScreen();if(requested!=null)Minecraft.getInstance().tell(()->transition(screen,requested));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
+    private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=action.run(bound);Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
     private void transition(Screen parent,Object requested) {
-        for(var entry:bindings.entrySet())if(entry.getValue().gui==requested){Minecraft.getInstance().setScreen(entry.getKey());return;}
+        if(requested==null){Minecraft.getInstance().setScreen(null);return;}
+        Screen original=origins.get(requested);if(original!=null){Minecraft.getInstance().setScreen(original);return;}
         Minecraft.getInstance().setScreen(new HostedScreen(parent,requested));
     }
     private final class HostedScreen extends Screen {
         private final Screen parent;private final Object old;
         HostedScreen(Screen parent,Object old){super(net.minecraft.network.chat.Component.empty());this.parent=parent;this.old=old;}
-        @Override protected void init(){try(var frame=LegacyGuiGraphics.begin(width,height,0,0,keys())){bindings.put(this,new Bound(old,services.screens().open(old,width,height)));}catch(Exception failure){throw new IllegalStateException("Cannot open original legacy screen",failure);}}
+        @Override protected void init(){try(var frame=LegacyGuiGraphics.begin(width,height,0,0,keys())){bindings.put(this,new Bound(old,services.screens().open(old,width,height)));origins.put(old,this);}catch(Exception failure){throw new IllegalStateException("Cannot open original legacy screen",failure);}}
         @Override public void render(net.minecraft.client.gui.GuiGraphics graphics,int x,int y,float partialTick){renderBackground(graphics);}
+        @Override public boolean isPauseScreen(){try{return (Boolean)old.getClass().getMethod("func_73868_f").invoke(old);}catch(Exception failure){throw new IllegalStateException("Cannot read legacy GUI pause policy",failure);}}
         @Override public boolean mouseClicked(double x,double y,int button){return dispatch(this,(int)x,(int)y,b->{b.session.mousePressed((int)x,(int)y,button);return true;});}
-        @Override public boolean keyPressed(int key,int scan,int modifiers){if(key==GLFW.GLFW_KEY_ESCAPE){onClose();return true;}return super.keyPressed(key,scan,modifiers);}
+        @Override public boolean mouseReleased(double x,double y,int button){return dispatch(this,(int)x,(int)y,b->{b.session.mouseReleased((int)x,(int)y,button);return true;});}
+        @Override public boolean keyPressed(int key,int scan,int modifiers){int[] p=pointer(this);return dispatch(this,p[0],p[1],b->{b.session.keyPressed('\0',legacyKey(key));return true;});}
+        @Override public boolean charTyped(char character,int modifiers){int[] p=pointer(this);return dispatch(this,p[0],p[1],b->{if(!services.containers().key(b.gui,character,0))b.session.keyPressed(character,0);return true;});}
         @Override public void onClose(){Minecraft.getInstance().setScreen(parent);}
     }
     private void close(ScreenEvent.Closing event){Bound bound=bindings.remove(event.getScreen());if(bound!=null)try{bound.session.close();}catch(Exception failure){LogUtils.getLogger().error("MFCL legacy GUI close failed",failure);}}
     private static Set<Integer> keys(){var result=new HashSet<Integer>();if(Screen.hasControlDown())result.add(29);if(Screen.hasShiftDown())result.add(42);if(Screen.hasAltDown())result.add(56);return result;}
     public List<LegacyGuiGraphics.Command> commands(Screen screen){var bound=bindings.get(screen);if(bound==null)throw new IllegalStateException("No old GUI binding");if(bound.failure!=null)throw new IllegalStateException("Old GUI failed",bound.failure);return bound.commands;}
+    public Object legacyScreen(Screen screen){return bindings.get(screen).gui;}
 }

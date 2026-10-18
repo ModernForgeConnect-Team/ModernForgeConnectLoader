@@ -20,10 +20,18 @@ public final class NeiAdapter implements LegacyModAdapter {
             public boolean mouse(Object screen,int x,int y,int button) throws Exception { var m=manager(screen);return (Boolean)m.getClass().getMethod("mouseClicked",int.class,int.class,int.class).invoke(m,x,y,button); }
             public boolean key(Object screen,char character,int key) throws Exception { var m=manager(screen);return (Boolean)m.getClass().getMethod("firstKeyTyped",char.class,int.class).invoke(m,character,key)
                     ||(Boolean)m.getClass().getMethod("lastKeyTyped",int.class,char.class).invoke(m,key,character); }
-            public void release(Object screen,int x,int y,int button) throws Exception { var m=manager(screen);m.getClass().getMethod("mouseUp",int.class,int.class,int.class).invoke(m,x,y,button); }
+            public boolean release(Object screen,int x,int y,int button) throws Exception { var m=manager(screen);return (Boolean)m.getClass().getMethod("overrideMouseUp",int.class,int.class,int.class).invoke(m,x,y,button); }
+            public boolean scroll(Object screen,int x,int y,int delta) throws Exception { var m=manager(screen);if(!(Boolean)m.getClass().getMethod("objectUnderMouse",int.class,int.class).invoke(m,x,y))return false;m.getClass().getMethod("mouseScrolled",int.class).invoke(m,delta);return true; }
         });
         var result = new LinkedHashMap<String, Object>();
         result.put("data", backend.initialize()); result.put("status", "READY");
+        if (LegacyScreens.guiBridgeEnabled()) {
+            // The host currently supplies read-only container semantics, without old give/weather/network actions.
+            // Use NEI's original recipe mode for this capability set.
+            services.loader().loadClass("codechicken.nei.NEIClientConfig").getMethod("setIntSetting",String.class,int.class)
+                    .invoke(null,"inventory.cheatmode",0);
+            result.put("guiActionMode","RECIPE_ONLY");
+        }
         var table = backend.search("crafting").stream().filter(s -> s.key().equals("minecraft:crafting_table")).findFirst().orElseThrow();
         result.put("craftingTableRecipes", backend.recipes(table, false).size());
         result.put("craftingTableUsages", backend.recipes(table, true).size());

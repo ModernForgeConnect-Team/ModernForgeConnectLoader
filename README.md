@@ -2,9 +2,11 @@
 
 目标：在 Forge 1.20.1 / Java 17 中运行原始 Forge 1.7.10 模组。第一阶段验收样本固定为 `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`，验收包括物品列表、搜索、配方和用途交互。
 
-**已通过真实客户端的基础浏览验收，完整 NEI 兼容仍未完成。**原始 NEI 在同一个 Java 17 进程内完成真实旧 FML 生命周期，并应用其 CoreMod 转换器和 AT。已验证进世界、背包入口、搜索、配方与用途查询、返回背包和退出世界。界面目前由现代客户端呈现，查询由原始 NEI 执行。
+**已接通原始 NEI 的背包附着界面和配方页，完整 NEI 兼容仍未完成。**原始 NEI 在同一个 Java 17 进程内完成真实旧 FML 生命周期，并应用其 CoreMod 转换器和 AT。默认驱动旧 `GuiContainer` 上的原始 NEI 布局、物品面板和搜索框，保留现代背包；配方页执行原始 `GuiCraftingRecipe`，通过通用绘制层显示。此前的独立浏览器仅保留为开发诊断选项。
 
-核心提供通用旧 `Item` / `ItemStack`、`World` / `WorldProvider`、`GuiScreen` 类型桥接；CodeChicken 与 NEI 通过可选适配器接入。World 当前仅覆盖时间、部分方块读写及对象身份；实际客户端绑定拒绝修改服务端状态。GuiScreen 已覆盖尺寸、输入和关闭生命周期，尚未实现旧 OpenGL 渲染捕获。
+核心提供通用旧 `Item` / `ItemStack`、`World` / `WorldProvider`、`GuiScreen` / `GuiContainer` 类型桥接；CodeChicken 与 NEI 通过可选适配器接入。GUI 桥覆盖生命周期、槽位镜像、输入、矩形、文字、原始纹理和物品绘制，使用现代渲染器重放，不创建旧 OpenGL 上下文。尚未支持的底层绘制调用会明确失败；这不是完整 OpenGL 模拟器。World 当前仅覆盖时间、部分方块读写及对象身份，实际客户端绑定拒绝修改服务端状态。
+
+当前 NEI 使用其自带的配方模式：给予物品、时间天气、旧网络操作尚未接入。现代背包仍由宿主处理操作；旧槽位仅镜像读取。复杂 NBT 槽位、自定义渲染及所有旧模组兼容均未完成。部分图标使用原始 2D 贴图回退；目录条目数不代表全部具有完整游戏行为。
 
 ## 正式目录约定
 
@@ -63,7 +65,7 @@ $env:JAVA_HOME = 'C:/Users/gengy/.jdks/temurin-17.0.18'
 ./gradlew.bat runClient
 ```
 
-进入世界后打开背包，点击左上角 `NEI`，或按 `Ctrl+O`。输入名称搜索，左键／`R` 查看配方，右键／`U` 查看用途，`Esc` 返回。
+进入世界后打开背包，NEI 自动显示在背包周围。使用底部原版搜索框筛选，左键查看配方，右键查看用途，`Esc` 返回。原始 NEI 的配置与键位逻辑仍保留。`-PmfclLegacyBrowser` 可启用此前的独立诊断浏览器。
 
 自动游戏验收使用独立目录，新建独立平坦世界，完成查询、截图、返回和退出后自动关闭：
 
@@ -72,7 +74,7 @@ $env:JAVA_HOME = 'C:/Users/gengy/.jdks/temurin-17.0.18'
 ./tools/test-nei-host.ps1 -JavaHome $env:JAVA_HOME -World
 ```
 
-本次实测记录见 `build/nei-investigation/refactor-world-smoke.log`；投影 839 条现代配方，335 条暂不支持。原始 JAR 保持不变。复杂 NBT、特殊配方、旧 GUI 自定义渲染、作弊与网络操作仍未完成。
+原版界面实测记录见 `build/nei-investigation/original-gui-world.log`，截图为 `build/nei-smoke/game/screenshots/mfcl-original-nei-overlay.png` 与 `mfcl-original-nei-recipe.png`。现代配方投影支持的数量取决于当前映射；特殊配方与复杂 NBT 仍有限制。原始 JAR 保持不变。
 
 ## 第一阶段剩余验收
 
@@ -81,7 +83,8 @@ $env:JAVA_HOME = 'C:/Users/gengy/.jdks/temurin-17.0.18'
 - [x] 在 Java 17 独立诊断进程执行原始 NEICorePlugin 握手。
 - [x] 在现代宿主内准备真实旧 Forge/Minecraft 输入并完成旧 FML 生命周期。
 - [x] 应用 CodeChickenCore/NEI 的变换和 AT，保持现代同名类不变。
-- [ ] 接通旧客户端、GuiContainer、字体、纹理、输入与渲染。
+- [x] 接通旧 GuiContainer、基础字体/纹理/物品绘制及输入，驱动原始 NEI 布局与配方界面。
+- [ ] 完整旧客户端、任意自定义 GUI 与渲染兼容。
 - [x] 基础现代物品与配方映射，以及 NEI 列表、搜索、配方／用途查询和界面返回。
 - [x] 实际进入世界、打开背包入口并退出世界。
 - [ ] 验证进出世界、资源重载、库存操作及关闭过程。

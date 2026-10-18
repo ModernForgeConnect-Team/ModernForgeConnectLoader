@@ -80,6 +80,7 @@ minecraft {
             if (project.hasProperty('mfclNeiWorldSmokeTest')) property 'mfcl.test.neiWorldSmoke', 'true'
             if (project.hasProperty('mfclModListSmokeTest')) property 'mfcl.test.modListSmoke', 'true'
             if (project.hasProperty('mfclLegacyGui')) property 'mfcl.legacyGui', 'true'
+            if (project.hasProperty('mfclLegacyBrowser')) property 'mfcl.legacyGui', 'false'
             if (project.hasProperty('legacyRuntimeDir')) {
                 property 'mfcl.legacyRuntimeDir', file(project.property('legacyRuntimeDir')).absolutePath
             }

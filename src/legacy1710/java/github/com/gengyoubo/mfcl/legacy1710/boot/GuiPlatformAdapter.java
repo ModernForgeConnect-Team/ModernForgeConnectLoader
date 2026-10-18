@@ -31,13 +31,29 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             else if (name.endsWith("Mouse") && method.equals("getX")) call(m,"mouseX","()I");
             else if (name.endsWith("Mouse") && method.equals("getY")) call(m,"mouseY","()I");
             else if (method.equals("isCreated")) m.instructions.add(new InsnNode(Opcodes.ICONST_1));
-            else if (method.equals("getKeyName")) { m.instructions.add(new LdcInsnNode("KEY")); }
-            else if (method.equals("getKeyIndex") || method.equals("getDWheel") || method.equals("next") || method.equals("isButtonDown")) m.instructions.add(new InsnNode(Opcodes.ICONST_0));
+            else if (name.endsWith("Keyboard") && (method.equals("getKeyName") || method.equals("getKeyIndex"))) { keyNames(node,m);continue; }
+            else if (method.equals("getDWheel") || method.equals("next") || method.equals("isButtonDown")) m.instructions.add(new InsnNode(Opcodes.ICONST_0));
             else if (method.equals("enableRepeatEvents") || method.equals("setGrabbed")) { }
             else { unsupported(m,name+"."+method+desc); continue; }
             m.instructions.add(new InsnNode(Type.getReturnType(desc).getOpcode(Opcodes.IRETURN)));
         }
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS); node.accept(writer); return writer.toByteArray();
+    }
+    private static void keyNames(ClassNode node,MethodNode method) {
+        for(FieldNode field:node.fields)if(field.name.startsWith("KEY_") && field.value instanceof Integer) {
+            LabelNode next=new LabelNode();
+            if(method.name.equals("getKeyName")) {
+                method.instructions.add(new VarInsnNode(Opcodes.ILOAD,0));method.instructions.add(new LdcInsnNode(field.value));
+                method.instructions.add(new JumpInsnNode(Opcodes.IF_ICMPNE,next));method.instructions.add(new LdcInsnNode(field.name.substring(4)));method.instructions.add(new InsnNode(Opcodes.ARETURN));
+            } else {
+                method.instructions.add(new LdcInsnNode(field.name.substring(4)));method.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));
+                method.instructions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,"java/lang/String","equals","(Ljava/lang/Object;)Z",false));
+                method.instructions.add(new JumpInsnNode(Opcodes.IFEQ,next));method.instructions.add(new LdcInsnNode(field.value));method.instructions.add(new InsnNode(Opcodes.IRETURN));
+            }
+            method.instructions.add(next);
+        }
+        method.instructions.add(new InsnNode(method.name.equals("getKeyName")?Opcodes.ACONST_NULL:Opcodes.ICONST_0));
+        method.instructions.add(new InsnNode(method.name.equals("getKeyName")?Opcodes.ARETURN:Opcodes.IRETURN));
     }
     private static void call(MethodNode m,String name,String desc) { m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,API,name,desc,false)); }
     private static void unsupported(MethodNode m,String name) {

@@ -34,6 +34,7 @@ class LegacyRuntimeIntegrationTest {
             assertTrue(report.get("legacyFmlStarted").getAsBoolean());
             assertEquals("READY", report.getAsJsonObject("adapters").getAsJsonObject("nei").get("status").getAsString());
             assertTrue(report.get("genericItemWorldGuiSemanticsVerified").getAsBoolean());
+            assertTrue(report.get("originalGuiCaptureVerified").getAsBoolean());
             assertTrue(report.get("registrationSealed").getAsBoolean());
             assertTrue(report.get("lateRegistrationRejected").getAsBoolean());
             assertTrue(report.get("modernClassIsolationVerified").getAsBoolean());

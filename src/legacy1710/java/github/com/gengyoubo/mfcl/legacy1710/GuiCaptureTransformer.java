@@ -10,7 +10,8 @@ public final class GuiCaptureTransformer implements IClassTransformer {
     public byte[] transform(String name,String transformedName,byte[] bytes) {
         if (bytes == null || !(name.equals("net.minecraft.client.gui.Gui") || name.equals("net.minecraft.client.gui.FontRenderer")
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
-                || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
+                || name.equals("net.minecraft.client.Minecraft")
+                || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
@@ -18,7 +19,7 @@ public final class GuiCaptureTransformer implements IClassTransformer {
             int ret=Opcodes.RETURN;
             if (name.endsWith(".Gui") && m.name.equals("func_73734_a")) { load(code,Opcodes.ILOAD,0,5); target="rect"; descriptor="(IIIII)V"; }
             else if (name.endsWith(".Minecraft") && m.name.equals("func_147108_a")) { code.add(new VarInsnNode(Opcodes.ALOAD,1)); target="showScreen";descriptor="(Ljava/lang/Object;)V"; }
-            else if (name.endsWith(".GuiContainer") && m.name.equals("func_146281_b")) { }
+            else if (name.endsWith(".GuiButton") && m.name.equals("func_146113_a")) { target="clickSound";descriptor="()V"; }
             else if (name.endsWith(".Gui") && m.name.equals("func_73733_a")) { load(code,Opcodes.ILOAD,1,6); target="gradient"; descriptor="(IIIIII)V"; }
             else if (name.endsWith(".Gui") && m.name.equals("func_73729_b")) { load(code,Opcodes.ILOAD,1,6); target="texture"; descriptor="(IIIIII)V"; }
             else if (name.endsWith("FontRenderer") && m.name.equals("func_85187_a")) {

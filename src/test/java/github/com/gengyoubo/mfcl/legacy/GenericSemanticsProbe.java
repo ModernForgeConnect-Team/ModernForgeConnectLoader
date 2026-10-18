@@ -55,6 +55,20 @@ public final class GenericSemanticsProbe {
         if (oldGui.getClass().getField("closed").getInt(oldGui) != 1) throw new AssertionError("Old GuiScreen did not close");
         try { session.mousePressed(0, 0, 0); throw new AssertionError("Closed screen accepted input"); } catch (IllegalStateException expected) {}
         report.put("genericItemWorldGuiSemanticsVerified", true);
+        try(var capture=LegacyGuiGraphics.begin(320,240,12,34,Set.of(29))) {
+            Class<?> gl=loader.loadClass("org.lwjgl.opengl.GL11");gl.getMethod("glPushMatrix").invoke(null);gl.getMethod("glTranslatef",float.class,float.class,float.class).invoke(null,10f,20f,0f);
+            loader.loadClass("net.minecraft.client.gui.Gui").getMethod("func_73734_a",int.class,int.class,int.class,int.class,int.class).invoke(null,1,2,4,5,0xff00ff00);
+            gl.getMethod("glPopMatrix").invoke(null);
+            Class<?> mc=loader.loadClass("net.minecraft.client.Minecraft");Object client=mc.getMethod("func_71410_x").invoke(null);
+            Object font=mc.getField("field_71466_p").get(client);font.getClass().getMethod("func_78276_b",String.class,int.class,int.class,int.class).invoke(font,"generic",3,7,0xffffff);
+            if(!capture.commands().contains(new LegacyGuiGraphics.Rect(11,22,14,25,0xff00ff00,0xff00ff00))
+                    ||capture.commands().stream().noneMatch(LegacyGuiGraphics.Text.class::isInstance))throw new AssertionError("Generic old GUI drawing did not cross the render boundary");
+            Class<?> keyboard=loader.loadClass("org.lwjgl.input.Keyboard");
+            if(!(Boolean)keyboard.getMethod("isKeyDown",int.class).invoke(null,29)||!(Integer.valueOf(19).equals(keyboard.getMethod("getKeyIndex",String.class).invoke(null,"R"))))throw new AssertionError("Legacy keyboard semantics were not preserved");
+            try{gl.getMethod("glClear",int.class).invoke(null,0);throw new AssertionError("Unsupported native draw operation was silently accepted");}
+            catch(InvocationTargetException expected){if(!(expected.getCause() instanceof UnsupportedOperationException))throw expected;}
+        }
+        report.put("genericGuiCaptureVerified",true);
     }
     private static Class<?> fixture(ClassLoader loader) throws Exception {
         String name = "mfcl/fixture/Gui"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

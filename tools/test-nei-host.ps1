@@ -8,7 +8,7 @@ $gameDirectory = Join-Path $workspaceRoot 'build/nei-smoke/game'
 $runtime = Join-Path $gameDirectory 'mfcl/runtime/1.7.10'
 if (!(Test-Path -LiteralPath (Join-Path $runtime 'minecraft-forge-1.7.10-srg.jar'))) { throw 'Run tools/prepare-legacy-runtime.ps1 first' }
 $mode = if ($World) { '-PmfclNeiWorldSmokeTest' } else { '-PmfclNeiUiSmokeTest' }
-$marker = if ($World) { 'MFCL_NEI_WORLD_SMOKE_PASS' } else { 'MFCL_NEI_UI_SMOKE_PASS' }
+$marker = if ($World) { 'MFCL_ORIGINAL_NEI_GUI_SMOKE_PASS' } else { 'MFCL_NEI_UI_SMOKE_PASS' }
 $log = Join-Path $workspaceRoot 'build/nei-investigation/host-acceptance.log'
 $previousJavaHome = $env:JAVA_HOME
 Push-Location $workspaceRoot

@@ -31,7 +31,7 @@ public final class NeiClientUi {
         activeBridge = bridge;
         activeScreens = screens;
         ModernRecipeProjection.install(bridge.data());
-        if (Boolean.getBoolean("mfcl.legacyGui")) return;
+        if (LegacyScreens.guiBridgeEnabled()) return;
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> {
             if (event.getScreen() instanceof AbstractContainerScreen<?> screen) {
                 event.addListener(Button.builder(Component.literal("NEI"), b -> Minecraft.getInstance().setScreen(new Browser(screen, bridge)))

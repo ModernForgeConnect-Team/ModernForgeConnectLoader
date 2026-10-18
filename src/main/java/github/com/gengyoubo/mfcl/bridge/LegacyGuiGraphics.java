@@ -25,11 +25,14 @@ public final class LegacyGuiGraphics {
         private Matrix matrix = new Matrix(0, 0, 1, 1);
         private String texture;
         private Object requestedScreen;
+        private boolean screenRequested, clickSound;
         private Frame(int width, int height, int x, int y, Set<Integer> keys) {
             this.width = width; this.height = height; mouseX = x; mouseY = y; this.keys = Set.copyOf(keys);
         }
         public List<Command> commands() { check(); return List.copyOf(commands); }
         public Object requestedScreen() { check(); return requestedScreen; }
+        public boolean hasScreenRequest() { check(); return screenRequested; }
+        public boolean hasClickSound() { check(); return clickSound; }
         private void check() { if (Thread.currentThread() != owner || CURRENT.get() != this) throw new IllegalStateException("Expired or foreign GUI capture"); }
         @Override public void close() { check(); CURRENT.remove(); if (!matrices.isEmpty()) throw new IllegalStateException("Unbalanced legacy GUI matrix stack"); }
         private int x(double value) { return (int)Math.round(matrix.x + matrix.sx * value); }
@@ -54,9 +57,14 @@ public final class LegacyGuiGraphics {
     public static void pop() { Frame f = frame(); f.matrix = f.matrices.pop(); }
     public static void translate(double x, double y, double z) { Frame f = frame(); var m = f.matrix; f.matrix = new Matrix(m.x + x * m.sx, m.y + y * m.sy, m.sx, m.sy); }
     public static void scale(double x, double y, double z) { Frame f = frame(); var m = f.matrix; f.matrix = new Matrix(m.x, m.y, m.sx * x, m.sy * y); }
-    public static int integer(int value) { return value == 2979 ? frame().matrices.size() + 1 : 0; }
+    public static int integer(int value) {
+        if(value==2979)return frame().matrices.size()+1;
+        if(value==3415)return 0; // No legacy stencil buffer exists.
+        throw new UnsupportedOperationException("Unsupported legacy GL integer query: "+value);
+    }
     public static boolean key(int key) { return CURRENT.get() != null && frame().keys.contains(key); }
-    public static void showScreen(Object screen) { frame().requestedScreen = screen; }
+    public static void showScreen(Object screen) { Frame f=frame();f.requestedScreen=screen;f.screenRequested=true; }
+    public static void clickSound() { frame().clickSound=true; }
     public static int mouseX() { return frame().mouseX; }
     public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }
     public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy GUI backend does not support " + name); }
