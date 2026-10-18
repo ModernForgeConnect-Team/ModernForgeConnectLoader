@@ -193,6 +193,7 @@ final class ContentHostSmokeProbe {
         proof.put("pickBlockMetadata", true);
         var ordinaryDrops = new LinkedHashMap<String, Object>();
         for (var block : bridge.declarations().blocks()) if (block.simple()) {
+            if (bridge.declarations().drops(block.key(), 0, level.random.nextLong()).isEmpty()) continue;
             var state = bridge.modernBlock(new HostWorldAccess.Block(block.key(), 0));
             var generated = net.minecraft.world.level.block.Block.getDrops(state, level, position, null);
             if (generated.isEmpty() || generated.stream().anyMatch(drop -> bridge.snapshot(drop) == null)) throw new IllegalStateException("Unmapped original drops for " + block.key());
@@ -216,24 +217,27 @@ final class ContentHostSmokeProbe {
             String tileClass = "";
             if (declaration.tileEntity()) {
                 var envelope = (github.com.gengyoubo.mfcl.content.LegacyBlockEntity) level.getBlockEntity(target);
-                Object original = envelope.legacy(); tileClass = original.getClass().getName();
-                if ((int) oldTileType.getMethod("func_145832_p").invoke(original) != metadata)
-                    throw new IllegalStateException("Original tile cached metadata disagrees with host block state: " + declaration.key());
-                try {
-                    Object owner = original.getClass().getMethod("getPlacerName").invoke(original);
-                    if (!player.getName().getString().equals(owner)) throw new IllegalStateException("Original placement callback lost the player name: " + declaration.key());
-                } catch (NoSuchMethodException ignored) { }
-                Object throughWorld = old.getClass().getMethod("func_147438_o", int.class, int.class, int.class).invoke(old, target.getX(), target.getY(), target.getZ());
-                if (original != throughWorld || envelope.legacy() != original) throw new IllegalStateException("Original tile identity was not stable");
-                if (oldInventory.isInstance(original) && (int) oldInventory.getMethod("func_70302_i_").invoke(original) > 0) {
-                    Object content = bridge.services().items().materialize(new LegacyClientData.Stack(itemKey, 2, 3, "", "{mfcl_inventory:1}"));
-                    oldInventory.getMethod("func_70299_a", int.class, bridge.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(original, 0, content);
-                    var dropStacks = net.minecraft.world.level.block.Block.getDrops(level.getBlockState(target), level, target, envelope);
-                    if (dropStacks.stream().noneMatch(drop -> bridge.snapshot(drop) != null && bridge.snapshot(drop).tag().contains("mfcl_inventory")))
-                        throw new IllegalStateException("Original tile inventory NBT missing from block drops: " + declaration.key());
+                Object original = envelope.legacyOrNull();
+                if (original != null) {
+                    tileClass = original.getClass().getName();
+                    if ((int) oldTileType.getMethod("func_145832_p").invoke(original) != metadata)
+                        throw new IllegalStateException("Original tile cached metadata disagrees with host block state: " + declaration.key());
+                    try {
+                        Object owner = original.getClass().getMethod("getPlacerName").invoke(original);
+                        if (!player.getName().getString().equals(owner)) throw new IllegalStateException("Original placement callback lost the player name: " + declaration.key());
+                    } catch (NoSuchMethodException ignored) { }
+                    Object throughWorld = old.getClass().getMethod("func_147438_o", int.class, int.class, int.class).invoke(old, target.getX(), target.getY(), target.getZ());
+                    if (original != throughWorld || envelope.legacy() != original) throw new IllegalStateException("Original tile identity was not stable");
+                    if (oldInventory.isInstance(original) && (int) oldInventory.getMethod("func_70302_i_").invoke(original) > 0) {
+                        Object content = bridge.services().items().materialize(new LegacyClientData.Stack(itemKey, 2, 3, "", "{mfcl_inventory:1}"));
+                        oldInventory.getMethod("func_70299_a", int.class, bridge.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(original, 0, content);
+                        var dropStacks = net.minecraft.world.level.block.Block.getDrops(level.getBlockState(target), level, target, envelope);
+                        if (dropStacks.stream().noneMatch(drop -> bridge.snapshot(drop) != null && bridge.snapshot(drop).tag().contains("mfcl_inventory")))
+                            throw new IllegalStateException("Original tile inventory NBT missing from block drops: " + declaration.key());
+                    }
+                    oldTileType.getMethod("func_70296_d").invoke(original);
+                    tileChecks.add(new TileCheck(declaration.key(), target, metadata, bridge.services().tiles().save(original), original));
                 }
-                oldTileType.getMethod("func_70296_d").invoke(original);
-                tileChecks.add(new TileCheck(declaration.key(), target, metadata, bridge.services().tiles().save(original), original));
             }
             placements.add(Map.of("key", declaration.key(), "metadata", metadata, "oldTileClass", tileClass));
         }

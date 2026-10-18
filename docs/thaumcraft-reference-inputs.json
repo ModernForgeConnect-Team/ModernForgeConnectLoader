@@ -1,0 +1,17 @@
+{
+  "minecraft": "1.7.10",
+  "thaumcraft": {
+    "file": "Thaumcraft-1.7.10-4.2.3.5.jar",
+    "sha256": "3dba9786966974701578a658d1bb369bf35bdf5f363079f5ac9c4910a39113be",
+    "source": "User-provided original JAR",
+    "corePlugin": "thaumcraft.codechicken.core.launch.DepLoader"
+  },
+  "dependencies": [
+    {
+      "file": "Baubles-1.7.10-1.0.1.10.jar",
+      "url": "https://raw.githubusercontent.com/julioyusei/mods/main/Baubles-1.7.10-1.0.1.10.jar",
+      "sha256": "05ae8f11b8f9012ebebbf179227b010829739c6284e30da5dd3db220ee682f8a",
+      "note": "The original distribution host dl.dropboxusercontent.com/u/47135879 is offline. Thaumcraft's DepLoader coremod tries to fetch this exact file at load time; placing the unmodified jar in mods/1.7.10 satisfies the dependency and prevents the dead download."
+    }
+  ]
+}

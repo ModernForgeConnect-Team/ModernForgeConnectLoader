@@ -23,13 +23,18 @@ public final class LegacyBlockEntity extends BlockEntity {
             if (legacy == null) {
                 if (savedBlock != null && !savedBlock.equals(key())) throw new IllegalStateException("Saved legacy tile belongs to " + savedBlock + ", not " + key());
                 legacy = content.services().tiles().create(key(), getBlockState().getValue(ModernContentBridge.METADATA), world, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
-                if (saved.length != 0) {
+                if (legacy != null && saved.length != 0) {
                     content.services().tiles().load(legacy, saved);
                     content.services().tiles().attach(legacy, key(), getBlockState().getValue(ModernContentBridge.METADATA), world, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
                 }
             }
             return legacy;
         } catch (Exception failure) { legacy = null; throw new IllegalStateException("Cannot create/load original TileEntity " + key() + " at " + worldPosition, failure); }
+    }
+    public Object legacyOrNull() {
+        var entry = content.declarations().blocks().stream().filter(block -> block.key().equals(key())).findFirst().orElse(null);
+        if (entry == null || !entry.hasTile(getBlockState().getValue(ModernContentBridge.METADATA))) return null;
+        return legacy();
     }
     public void replace(Object value) {
         try {

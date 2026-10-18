@@ -212,7 +212,7 @@ public final class ModernContentBridge {
         @Override public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
             if (level.isClientSide) return;
             try {
-                if (state.hasBlockEntity()) {
+                if (state.hasBlockEntity() && entry.hasTile(state.getValue(METADATA))) {
                     if (!(level.getBlockEntity(pos) instanceof LegacyBlockEntity tile)) throw new IllegalStateException("Missing host tile envelope");
                     tile.legacy();
                 }
@@ -230,12 +230,14 @@ public final class ModernContentBridge {
                     if (mapped.isEmpty()) throw new UnsupportedOperationException("Unmapped original block drop: " + drop.key());
                     result.add(mapped);
                 }
-                if (params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof LegacyBlockEntity tile)
-                    for (var drop : services.tiles().inventory(tile.legacy())) {
+                if (params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof LegacyBlockEntity tile) {
+                    Object legacy = tile.legacyOrNull();
+                    if (legacy != null) for (var drop : services.tiles().inventory(legacy)) {
                         ItemStack mapped = mapStack(drop);
                         if (mapped.isEmpty()) throw new UnsupportedOperationException("Unmapped original inventory drop: " + drop.key());
                         result.add(mapped);
                     }
+                }
                 return result;
             } catch (Exception failure) { throw new IllegalStateException("Cannot execute original block drops for " + entry.key(), failure); }
         }
