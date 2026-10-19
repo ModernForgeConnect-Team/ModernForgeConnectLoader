@@ -1,0 +1,15 @@
+{
+  "fourOriginalBiomesRegistered": true,
+  "allNativeBiomeNamesMapped": true,
+  "zeroWeightsAndFlatPresetPreserved": true,
+  "naturalBiomeChunks": {
+    "thaumcraft:magical_forest": "7104, 64, -3240",
+    "thaumcraft:tainted_land": "3004, 64, -7208"
+  },
+  "nativeBiomesAndCavesPreserved": true,
+  "negativeCoordinatesAndAdjacentColumnPreserved": true,
+  "originalMutationAndNativeClientSync": true,
+  "legacyIdentityColorsAndRenderQuery": true,
+  "paletteAndGeneratorSurvivedReload": true,
+  "status": "PASS"
+}
