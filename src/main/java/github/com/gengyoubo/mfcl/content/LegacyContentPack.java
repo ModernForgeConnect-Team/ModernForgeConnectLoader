@@ -34,10 +34,20 @@ public final class LegacyContentPack {
             try (var jar = new JarFile(archive.toFile())) {
                 for (var entries = jar.entries(); entries.hasMoreElements();) {
                     var entry = entries.nextElement(); String path = entry.getName();
-                    if (entry.isDirectory() || !path.matches("assets/(?!minecraft/)[^/]+/textures/.*\\.(png|mcmeta)")) continue;
-                    Path target = directory.resolve(path).normalize();
+                    boolean definition=path.matches("assets/(?!minecraft/)[^/]+/sounds\\.json");
+                    boolean audio=path.matches("assets/(?!minecraft/)[^/]+/sounds/.*\\.ogg");
+                    if (entry.isDirectory() || !definition&&!audio&&!path.matches("assets/(?!minecraft/)[^/]+/textures/.*\\.(png|mcmeta)")) continue;
+                    Path target = directory.resolve(audio?path.toLowerCase(Locale.ROOT):path).normalize();
                     if (!target.startsWith(directory)) throw new IllegalArgumentException(path);
-                    Files.createDirectories(target.getParent()); try (var input = jar.getInputStream(entry)) { Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING); }
+                    Files.createDirectories(target.getParent()); try (var input = jar.getInputStream(entry)) {
+                        if(definition) {
+                            var converted=github.com.gengyoubo.mfcl.bridge.LegacySounds.definitions(path.split("/")[1],new String(input.readAllBytes(),StandardCharsets.UTF_8));
+                            if(Files.exists(target)) {
+                                var prior=com.google.gson.JsonParser.parseString(Files.readString(target)).getAsJsonObject();converted.entrySet().forEach(value->prior.add(value.getKey(),value.getValue()));converted=prior;
+                            }
+                            Files.writeString(target,converted.toString(),StandardCharsets.UTF_8);
+                        }else Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
+                    }
                 }
             }
         }

@@ -34,6 +34,11 @@ public final class LevelWorldBridge {
             @Override public String dimensionKey() { return level.dimension().location().toString(); }
             @Override public int legacyDimensionId() { return dimension; }
             @Override public boolean clientSide() { return false; }
+            @Override public void playSound(Sound sound) {
+                check();var id=net.minecraft.resources.ResourceLocation.parse(github.com.gengyoubo.mfcl.bridge.LegacySounds.modernId(sound.id()));
+                var excluded=sound.excludedPlayer()==null?null:level.getServer().getPlayerList().getPlayer(sound.excludedPlayer());
+                content.afterCommit(level,()->level.playSound(excluded,sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch()));
+            }
             @Override public long gameTime() { check(); return level.getGameTime(); }
             @Override public long dayTime() { check(); return level.getDayTime(); }
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }

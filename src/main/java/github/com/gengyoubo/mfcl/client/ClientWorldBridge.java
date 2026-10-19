@@ -43,6 +43,11 @@ public final class ClientWorldBridge {
                     @Override public String dimensionKey() { return dimension; }
                     @Override public int legacyDimensionId() { return oldDimension; }
                     @Override public boolean clientSide() { return true; }
+                    @Override public void playSound(Sound sound) {
+                        if(sound.excludedPlayer()!=null&&Minecraft.getInstance().player!=null&&sound.excludedPlayer().equals(Minecraft.getInstance().player.getUUID()))return;
+                        var id=net.minecraft.resources.ResourceLocation.parse(LegacySounds.modernId(sound.id()));
+                        next.playLocalSound(sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch(),sound.distanceDelay());
+                    }
                     @Override public long gameTime() { return next.getGameTime(); }
                     @Override public long dayTime() { return next.getDayTime(); }
                     @Override public boolean powered(int x, int y, int z) { return next.hasNeighborSignal(new BlockPos(x,y,z)); }

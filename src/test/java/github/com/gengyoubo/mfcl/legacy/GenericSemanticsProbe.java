@@ -47,7 +47,7 @@ public final class GenericSemanticsProbe {
         first.getClass().getField("field_77994_a").setInt(first, 17);
         if (services.items().snapshot(second).count() != diamond.count()) throw new AssertionError("Stack copy leaked mutable count");
         // The old parser predates modern SNBT typed-array notation; preserve old NBT syntax at this boundary.
-        var withNbt = new LegacyClientData.Stack(diamond.key(), 7, 11, diamond.name(), "{mfcl_probe:{value:23},label:\"bridge\",numbers:[1,2,3]}");
+        var withNbt = new LegacyClientData.Stack(diamond.key(), 7, 11, diamond.name(), "{mfcl_probe:{value:23},label:\"bridge\",numbers:[1,2,3],indexed:[{key:terra,amount:2},{key:aer,amount:3}]}");
         Object nbtStack = services.items().materialize(withNbt);
         Object nbt = nbtStack.getClass().getField("field_77990_d").get(nbtStack);
         Object child = nbt.getClass().getMethod("func_74775_l", String.class).invoke(nbt, "mfcl_probe");
@@ -56,6 +56,16 @@ public final class GenericSemanticsProbe {
             throw new AssertionError("Fresh legacy NBT was not materialized with original types");
         Object copiedNbt = services.items().materialize(services.items().snapshot(nbtStack));
         if (copiedNbt.getClass().getField("field_77990_d").get(copiedNbt) == nbt) throw new AssertionError("Legacy NBT aliases across stack copies");
+        var originalSnapshot=services.items().snapshot(nbtStack);
+        var preview=services.items().renderTags(originalSnapshot,7,0x123456,"Anvil preview");
+        Object previewStack=services.items().materialize(preview),previewTag=previewStack.getClass().getField("field_77990_d").get(previewStack);
+        Object previewChild=previewTag.getClass().getMethod("func_74775_l",String.class).invoke(previewTag,"mfcl_probe");
+        if((int)previewChild.getClass().getMethod("func_74762_e",String.class).invoke(previewChild,"value")!=23
+                ||(int)previewTag.getClass().getMethod("func_74762_e",String.class).invoke(previewTag,"RepairCost")!=7
+                ||!services.items().snapshot(nbtStack).equals(originalSnapshot))throw new AssertionError("Render NBT merge lost old data or mutated its source");
+        Object numbers=previewTag.getClass().getMethod("func_150295_c",String.class,int.class).invoke(previewTag,"indexed",10);
+        if((int)numbers.getClass().getMethod("func_74745_c").invoke(numbers)!=2)throw new AssertionError("Render NBT merge lost an old indexed list");
+        report.put("genericRenderNbtCopyPreservesIndexedLists",true);
         report.put("genericFreshNbtRoundTripVerified", true);
         Class<?> tabFixture = creativeFixture(loader);
         var tabConstructor = tabFixture.getConstructor(String.class, loader.loadClass("net.minecraft.item.ItemStack"), List.class);

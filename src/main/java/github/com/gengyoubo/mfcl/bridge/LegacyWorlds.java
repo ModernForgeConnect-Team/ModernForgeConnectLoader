@@ -57,13 +57,31 @@ public final class LegacyWorlds implements AutoCloseable {
         Binding binding = DISPATCH.get(world); if (binding == null) throw new IllegalStateException("Legacy world binding has expired"); binding.check(); return binding;
     }
     public static long time(Object world, boolean total) { var binding = binding(world); return total ? binding.host.gameTime() : binding.host.dayTime(); }
+    public static void sound(Object world,double x,double y,double z,String id,float volume,float pitch) {
+        binding(world).host.playSound(new HostWorldAccess.Sound(x,y,z,id,volume,pitch,false,null));
+    }
+    public static void localSound(Object world,double x,double y,double z,String id,float volume,float pitch,boolean delay) {
+        var host=binding(world).host;
+        // World.playSound is a client-only effect in 1.7.10; the server implementation is intentionally empty.
+        if(host.clientSide())host.playSound(new HostWorldAccess.Sound(x,y,z,id,volume,pitch,delay,null));
+    }
+    public static void entitySound(Object world,Object entity,String id,float volume,float pitch,boolean exclude) throws ReflectiveOperationException {
+        var bound=binding(world);var type=bound.loader.loadClass("net.minecraft.entity.Entity");java.util.UUID except=null;
+        if(exclude) {
+            Object profile=entity.getClass().getMethod("func_146103_bH").invoke(entity);
+            except=(java.util.UUID)profile.getClass().getMethod("getId").invoke(profile);
+        }
+        bound.host.playSound(new HostWorldAccess.Sound(type.getField("field_70165_t").getDouble(entity),
+                type.getField("field_70163_u").getDouble(entity)-type.getField("field_70129_M").getFloat(entity),
+                type.getField("field_70161_v").getDouble(entity),id,volume,pitch,false,except));
+    }
     public static void setTime(Object world, long time) { binding(world).host.setDayTime(time); }
     public static Object block(Object world, int x, int y, int z) {
         Binding binding = binding(world); var block = binding.host.block(x, y, z);
         try {
             Object registry = binding.loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
             var keys = (Set<?>) registry.getClass().getMethod("func_148742_b").invoke(registry);
-            if (!keys.contains(block.legacyKey())) throw new UnsupportedOperationException("No old Block representation: " + block.legacyKey());
+            if (!keys.contains(block.legacyKey())) throw new UnmappedLegacyBlockException("No old Block representation: " + block.legacyKey());
             return registry.getClass().getMethod("func_82594_a", String.class).invoke(registry, block.legacyKey());
         } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
@@ -186,11 +204,14 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer,bridge,"func_147464_a","(IIILnet/minecraft/block/Block;I)V","schedule","(Ljava/lang/Object;IIILjava/lang/Object;I)V",null);
         forward(writer,bridge,"func_147453_f","(IIILnet/minecraft/block/Block;)V","comparators","(Ljava/lang/Object;IIILjava/lang/Object;)V",null);
         constant(writer, "func_72904_c", "(IIIIII)Z", 1);
-        var sound = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72908_a","(DDDLjava/lang/String;FF)V",null,null);
-        sound.visitCode(); sound.visitInsn(Opcodes.RETURN); sound.visitMaxs(0,10); sound.visitEnd();
-        // WorldClient/Vanilla sounds reach for client singletons the facade does not own.
-        var sound2 = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72980_b","(DDDLjava/lang/String;FFZ)V",null,null);
-        sound2.visitCode(); sound2.visitInsn(Opcodes.RETURN); sound2.visitMaxs(0,10); sound2.visitEnd();
+        forward(writer,bridge,"func_72908_a","(DDDLjava/lang/String;FF)V","sound","(Ljava/lang/Object;DDDLjava/lang/String;FF)V",null);
+        forward(writer,bridge,"func_72980_b","(DDDLjava/lang/String;FFZ)V","localSound","(Ljava/lang/Object;DDDLjava/lang/String;FFZ)V",null);
+        for(String method:List.of("func_72956_a","func_85173_a")) {
+            var sound=writer.visitMethod(Opcodes.ACC_PUBLIC,method,"("+(method.equals("func_72956_a")?"Lnet/minecraft/entity/Entity;":"Lnet/minecraft/entity/player/EntityPlayer;")+"Ljava/lang/String;FF)V",null,null);
+            sound.visitCode();sound.visitVarInsn(Opcodes.ALOAD,0);sound.visitVarInsn(Opcodes.ALOAD,1);sound.visitVarInsn(Opcodes.ALOAD,2);sound.visitVarInsn(Opcodes.FLOAD,3);sound.visitVarInsn(Opcodes.FLOAD,4);
+            sound.visitInsn(method.equals("func_85173_a")?Opcodes.ICONST_1:Opcodes.ICONST_0);
+            sound.visitMethodInsn(Opcodes.INVOKESTATIC,bridge,"entitySound","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;FFZ)V",false);sound.visitInsn(Opcodes.RETURN);sound.visitMaxs(6,5);sound.visitEnd();
+        }
         // Entity/ray queries must answer without a live world; an empty list and a miss keep item logic running.
         var entities = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;",null,null);
         entities.visitCode(); entities.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList"); entities.visitInsn(Opcodes.DUP);

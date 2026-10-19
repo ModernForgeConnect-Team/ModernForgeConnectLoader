@@ -21,10 +21,30 @@ final class ScannerHostSmokeProbe {
     private String world;
     private java.util.concurrent.CompletableFuture<?> pending;
     private boolean renderNbtChecked;
+    private final java.util.concurrent.ConcurrentMap<String,java.util.concurrent.atomic.AtomicInteger> playedSounds=new java.util.concurrent.ConcurrentHashMap<>();
+    private record TargetCase(net.minecraft.world.level.block.state.BlockState state,String oldKey,int metadata) {}
+    private final List<TargetCase> targetCases=List.of(
+            new TargetCase(Blocks.OAK_FENCE.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.EAST,true),"fence",0),
+            new TargetCase(Blocks.OAK_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS,net.minecraft.core.Direction.Axis.X),"log",4),
+            new TargetCase(Blocks.SPRUCE_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS,net.minecraft.core.Direction.Axis.Z),"log",9),
+            new TargetCase(Blocks.BLUE_WOOL.defaultBlockState(),"wool",11),
+            new TargetCase(Blocks.BLACK_STAINED_GLASS_PANE.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.NORTH,true),"stained_glass_pane",15),
+            new TargetCase(Blocks.OAK_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,net.minecraft.world.level.block.state.properties.SlabType.TOP),"wooden_slab",8),
+            new TargetCase(Blocks.COBBLESTONE_STAIRS.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING,net.minecraft.core.Direction.WEST).setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HALF,net.minecraft.world.level.block.state.properties.Half.TOP),"stone_stairs",5),
+            new TargetCase(Blocks.QUARTZ_PILLAR.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS,net.minecraft.core.Direction.Axis.Z),"quartz_block",4),
+            new TargetCase(Blocks.GRASS_BLOCK.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SNOWY,true),"grass",0),
+            new TargetCase(Blocks.SNOW_BLOCK.defaultBlockState(),"snow",0),
+            new TargetCase(Blocks.DEEPSLATE.defaultBlockState(),null,0),
+            new TargetCase(Blocks.MANGROVE_FENCE.defaultBlockState(),null,0),
+            new TargetCase(Blocks.STONE.defaultBlockState(),"stone",0));
+    private int targetCase;
     private final BlockPos target=new BlockPos(0,-58,3);
     private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
     private ScannerHostSmokeProbe(ModernContentBridge content){this.content=content;}
-    static void install(ModernContentBridge content){var probe=new ScannerHostSmokeProbe(content);MinecraftForge.EVENT_BUS.addListener(probe::tick);MinecraftForge.EVENT_BUS.addListener(probe::renderNbt);}
+    static void install(ModernContentBridge content){var probe=new ScannerHostSmokeProbe(content);MinecraftForge.EVENT_BUS.addListener(probe::tick);MinecraftForge.EVENT_BUS.addListener(probe::renderNbt);MinecraftForge.EVENT_BUS.addListener(probe::soundStarted);}
+    private void soundStarted(net.minecraftforge.client.event.sound.PlaySoundSourceEvent event) {
+        if(event.getChannel()!=null)playedSounds.computeIfAbsent(event.getSound().getLocation().toString(),key->new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet();
+    }
     private void renderNbt(net.minecraftforge.client.event.RenderGuiEvent.Post event) {
         if(renderNbtChecked||stage==99)return;var mc=Minecraft.getInstance();if(mc.level==null)return;
         try {
@@ -37,6 +57,14 @@ final class ScannerHostSmokeProbe {
             if(!prior.equals(anvil.getTag()))throw new IllegalStateException("Rendering mutated host NBT");
             boolean strict=false;try{content.snapshot(anvil);}catch(UnsupportedOperationException expected){strict=true;}
             if(!strict)throw new IllegalStateException("Gameplay NBT validation was weakened");
+            int variants=0;
+            for(var original:content.services().items().catalog())if(original.key().startsWith("Thaumcraft:")&&!original.tag().isEmpty()) {
+                var baseVariant=content.stack(original.key(),original.metadata(),1,original.tag());
+                var preview=baseVariant.copy();preview.getOrCreateTag().putInt("RepairCost",3);preview.setHoverName(net.minecraft.network.chat.Component.literal("NBT preview"));
+                for(int tint=0;tint<2;tint++)if(mc.getItemColors().getColor(preview,tint)!=mc.getItemColors().getColor(baseVariant,tint))throw new IllegalStateException("Preview lost original tint: "+original.key()+" "+original.tag());
+                event.getGuiGraphics().renderFakeItem(preview,2,20);variants++;
+            }
+            event.getGuiGraphics().flush();proof.put("originalNbtVariantsRendered",variants);
             proof.put("jeiAnvilPreviewRenderedWithHostNbt",true);proof.put("renderPreservedHostNbtAndGameplayValidation",true);renderNbtChecked=true;
         }catch(Throwable failure){finish(mc,failure);}
     }
@@ -65,6 +93,8 @@ final class ScannerHostSmokeProbe {
                 });stage=4;
             } else if(stage==4&&pending.isDone()) {
                 awarded=(int)pending.join();if(pool(mc,false)!=awarded)return;
+                if(!playedSounds.containsKey("thaumcraft:cameraticks")||!playedSounds.containsKey("minecraft:entity.experience_orb.pickup"))throw new IllegalStateException("Scan sounds never reached an audio channel: "+playedSounds);
+                proof.put("scanTicksPlayedOnAudioChannel",playedSounds.get("thaumcraft:cameraticks").get());proof.put("scanRewardSoundPlayed",true);
                 var drawing=LiveLegacyItemCapture.firstPerson(content,mc.player.getMainHandItem());
                 if(drawing.primitives().stream().noneMatch(p->p.texture().contains("textures/aspects/terra.png")))throw new IllegalStateException("Live lens did not show the scanned terra icon");
                 proof.put("nativeHeldScanAwarded",true);proof.put("serverTerraAfterScan",awarded);proof.put("clientTerraAfterScan",pool(mc,false));proof.put("liveLensContainsAspect",true);
@@ -105,7 +135,27 @@ final class ScannerHostSmokeProbe {
                 pending=server(mc,()->{if(pool(mc,true)!=awarded||!scanned(mc,true,"minecraft:stone"))throw new IllegalStateException("Original research was lost on reload");return true;});stage=14;frames=0;
             } else if(stage==14&&pending.isDone()&&++frames>20) {
                 pending.join();if(pool(mc,false)!=awarded||!scanned(mc,false,"minecraft:stone"))throw new IllegalStateException("Reloaded scan state did not reach the client");
-                proof.put("knowledgeSurvivedReload",true);proof.put("status","PASS");finish(mc,null);
+                proof.put("knowledgeSurvivedReload",true);stage=15;
+            } else if(stage==15) {
+                var check=targetCases.get(targetCase);
+                if(check.oldKey()!=null) {
+                    var old=content.legacyBlock(check.state());
+                    if(!old.legacyKey().equals("minecraft:"+check.oldKey())||old.metadata()!=check.metadata())throw new IllegalStateException("Wrong block flattening: "+check+" -> "+old);
+                }else {
+                    boolean unmapped=false;try{content.legacyBlock(check.state());}catch(UnmappedLegacyBlockException expected){unmapped=true;}
+                    if(!unmapped)throw new IllegalStateException("New block was aliased to an unrelated old block: "+check.state());
+                }
+                pending=server(mc,()->{mc.getSingleplayerServer().overworld().setBlockAndUpdate(target,check.state());return true;});stage=16;frames=0;
+            } else if(stage==16&&pending.isDone()&&ready(mc,targetCases.get(targetCase).state().getBlock())&&++frames>5) {
+                pending.join();var immediate=mc.renderBuffers().bufferSource();
+                mc.getItemRenderer().renderStatic(mc.player.getMainHandItem(),net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_RIGHT_HAND,0xF000F0,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,new com.mojang.blaze3d.vertex.PoseStack(),immediate,mc.level,0);
+                immediate.endBatch();
+                if(targetCases.get(targetCase).oldKey()!=null) {
+                    var drawing=LiveLegacyItemCapture.firstPerson(content,mc.player.getMainHandItem());
+                    if(drawing.primitives().isEmpty())throw new IllegalStateException("Mapped target lost the lens: "+targetCases.get(targetCase));
+                }
+                if(++targetCase<targetCases.size())stage=15;
+                else {proof.put("blockTargetsRenderedWithoutCrash",targetCases.size());proof.put("oldBlockNamesAndMetadataVerified",true);proof.put("newBlocksUseIdleLensWithoutInventedAspects",true);proof.put("status","PASS");finish(mc,null);}
             }
         }catch(Throwable failure){finish(mc,failure);}
     }
@@ -115,7 +165,15 @@ final class ScannerHostSmokeProbe {
     private <T> java.util.concurrent.CompletableFuture<T> server(Minecraft mc,java.util.concurrent.Callable<T> action) {
         return mc.getSingleplayerServer().submit(()->{try{return action.call();}catch(Exception failure){throw new IllegalStateException(failure);}});
     }
-    private void hold(Minecraft mc) {mc.player.setYRot(0);mc.player.setXRot(0);mc.player.yRotO=0;mc.player.xRotO=0;mc.options.keyUse.setDown(true);mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);}
+    private void hold(Minecraft mc) {
+        mc.player.setYRot(0);mc.player.setXRot(0);mc.player.yRotO=0;mc.player.xRotO=0;mc.options.keyUse.setDown(true);
+        var hit=mc.player.pick(4.5,0,false);
+        if(!(hit instanceof net.minecraft.world.phys.BlockHitResult block)||hit.getType()!=net.minecraft.world.phys.HitResult.Type.BLOCK)throw new IllegalStateException("Scanner test is not looking at a block");
+        if(mc.gameMode.useItemOn(mc.player,InteractionHand.MAIN_HAND,block).consumesAction())throw new IllegalStateException("Block interaction swallowed scanner held use");
+        mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);
+        if(!mc.player.isUsingItem())throw new IllegalStateException("Scanner did not enter held-use state");
+        proof.put("rightClickBlockStartsHeldUse",true);
+    }
     private void release(Minecraft mc) {mc.options.keyUse.setDown(false);mc.gameMode.releaseUsingItem(mc.player);}
     private <T> T knowledge(Minecraft mc,boolean server,java.util.concurrent.Callable<T> action) throws Exception {
         if(server&&!mc.getSingleplayerServer().isSameThread())return mc.getSingleplayerServer().submit(()->{try{return knowledge(mc,true,action);}catch(Exception failure){throw new IllegalStateException(failure);}}).join();

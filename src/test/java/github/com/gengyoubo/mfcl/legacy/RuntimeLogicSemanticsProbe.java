@@ -8,6 +8,7 @@ import java.util.*;
 final class RuntimeLogicSemanticsProbe {
     static void verify(LegacyServices services, Map<String,Object> report) throws Exception {
         var loader = services.loader(); var notifications = new ArrayList<String>();
+        var sounds=new ArrayList<HostWorldAccess.Sound>();
         Object identity = new Object();
         Object world = services.worlds().bind(identity,new HostWorldAccess() {
             public String dimensionKey() { return "mfcl:logic-test"; } public int legacyDimensionId() { return 0; }
@@ -18,11 +19,21 @@ final class RuntimeLogicSemanticsProbe {
             public boolean loaded(int x,int y,int z) { return x == 1; }
             public void blockEvent(int x,int y,int z,String block,int event,int data) { notifications.add("event:"+block+":"+event+":"+data); }
             public void schedule(int x,int y,int z,String block,int delay) { notifications.add("schedule:"+block+":"+delay); }
+            public void playSound(Sound sound) {sounds.add(sound);}
         });
         try {
             if (!loader.loadClass("net.minecraft.world.WorldServer").isInstance(world)) throw new AssertionError("Server logic received a client-only world type");
             Object actor=services.tiles().actor(world,new LegacyTiles.Placer(new UUID(1,2),"ServerActor",0,64,0,0,0),null);
             if(!loader.loadClass("net.minecraft.entity.player.EntityPlayerMP").isInstance(actor))throw new AssertionError("Server item callbacks received a client player type");
+            var worldType=loader.loadClass("net.minecraft.world.World");
+            worldType.getMethod("func_72908_a",double.class,double.class,double.class,String.class,float.class,float.class).invoke(world,1.25,65.5,-3.75,"thaumcraft:wand",.4f,.7f);
+            worldType.getMethod("func_72980_b",double.class,double.class,double.class,String.class,float.class,float.class,boolean.class).invoke(world,0d,0d,0d,"thaumcraft:cameraticks",1f,1f,false);
+            loader.loadClass("net.minecraft.entity.Entity").getMethod("func_85030_a",String.class,float.class,float.class).invoke(actor,"random.orb",.2f,.9f);
+            worldType.getMethod("func_85173_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),String.class,float.class,float.class).invoke(world,actor,"random.click",.5f,1.1f);
+            if(sounds.size()!=3||!sounds.get(0).equals(new HostWorldAccess.Sound(1.25,65.5,-3.75,"thaumcraft:wand",.4f,.7f,false,null))
+                    ||!sounds.get(1).id().equals("random.orb")||sounds.get(1).y()!=64||!new UUID(1,2).equals(sounds.get(2).excludedPlayer()))
+                throw new AssertionError("Old positional/entity sound semantics were lost: "+sounds);
+            report.put("genericWorldAndEntitySoundsForwarded",true);
             var oldWorld = loader.loadClass("net.minecraft.world.World"); var oldTile = loader.loadClass("net.minecraft.tileentity.TileEntity");
             var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String name = "mfcl/fixture/LogicTile";

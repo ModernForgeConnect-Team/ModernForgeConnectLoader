@@ -1,0 +1,19 @@
+{
+  "originalNbtVariantsRendered": 116,
+  "jeiAnvilPreviewRenderedWithHostNbt": true,
+  "renderPreservedHostNbtAndGameplayValidation": true,
+  "initialTerra": 16,
+  "rightClickBlockStartsHeldUse": true,
+  "nativeHeldScanAwarded": true,
+  "serverTerraAfterScan": 18,
+  "clientTerraAfterScan": 18,
+  "liveLensContainsAspect": true,
+  "repeatScanNoDuplicateReward": true,
+  "cancelledScanRejected": true,
+  "originalPrerequisiteAndFeedback": true,
+  "knowledgeSurvivedReload": true,
+  "blockTargetsRenderedWithoutCrash": 13,
+  "oldBlockNamesAndMetadataVerified": true,
+  "newBlocksUseIdleLensWithoutInventedAspects": true,
+  "status": "PASS"
+}

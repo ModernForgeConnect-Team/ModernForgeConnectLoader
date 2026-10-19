@@ -1,0 +1,37 @@
+package github.com.gengyoubo.mfcl.bridge;
+
+import com.google.gson.*;
+import java.util.*;
+
+/** Old sound identifiers and resource definitions, independent of either audio engine. */
+public final class LegacySounds {
+    private static final Map<String,String> VANILLA=Map.ofEntries(
+            Map.entry("random.orb","entity.experience_orb.pickup"),Map.entry("random.pop","entity.item.pickup"),
+            Map.entry("random.click","block.lever.click"),Map.entry("gui.button.press","ui.button.click"),
+            Map.entry("random.bow","entity.arrow.shoot"),Map.entry("random.break","entity.item.break"),
+            Map.entry("random.fizz","block.fire.extinguish"),Map.entry("random.explode","entity.generic.explode"),
+            Map.entry("random.drink","entity.generic.drink"),Map.entry("random.eat","entity.generic.eat"),
+            Map.entry("fire.ignite","item.flintandsteel.use"),Map.entry("mob.endermen.portal","entity.enderman.teleport"),
+            Map.entry("liquid.splash","entity.generic.splash"),Map.entry("liquid.swim","entity.generic.swim"));
+    private LegacySounds() {}
+    public static String modernId(String name) {
+        String id=name.contains(":")?name:"minecraft:"+name;
+        id=id.toLowerCase(Locale.ROOT);
+        return id.startsWith("minecraft:")?"minecraft:"+VANILLA.getOrDefault(id.substring(10),id.substring(10)):id;
+    }
+    public static JsonObject definitions(String namespace,String json) {
+        var result=new JsonObject();
+        for(var entry:JsonParser.parseString(json).getAsJsonObject().entrySet()) {
+            var definition=entry.getValue().getAsJsonObject().deepCopy();definition.remove("category");
+            var sounds=definition.getAsJsonArray("sounds");
+            if(sounds!=null)for(int index=0;index<sounds.size();index++) {
+                JsonElement sound=sounds.get(index);
+                if(sound.isJsonPrimitive())sounds.set(index,new JsonPrimitive(qualified(namespace,sound.getAsString())));
+                else if(sound.getAsJsonObject().has("name"))sound.getAsJsonObject().addProperty("name",qualified(namespace,sound.getAsJsonObject().get("name").getAsString()));
+            }
+            result.add(entry.getKey().toLowerCase(Locale.ROOT),definition);
+        }
+        return result;
+    }
+    private static String qualified(String namespace,String name) {return (name.contains(":")?name:namespace+":"+name).toLowerCase(Locale.ROOT);}
+}

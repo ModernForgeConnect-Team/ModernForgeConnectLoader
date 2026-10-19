@@ -16,6 +16,7 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
     private final ModernContentBridge bridge;
     private final String itemKey;
     private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> guiFits = new IdentityHashMap<>();
+    private final Set<String> unmappedTargets=new HashSet<>();
     public LegacyItemRenderer(ModernContentBridge bridge, String itemKey) {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         this.bridge = bridge; this.itemKey = itemKey;
@@ -36,7 +37,12 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
         List<LegacyWorldGraphics.Text> texts=List.of();
         if(type.equals("EQUIPPED_FIRST_PERSON")&&itemKey.equals("Thaumcraft:ItemThaumometer")&&Minecraft.getInstance().level!=null&&Minecraft.getInstance().player!=null) {
             try {var live=LiveLegacyItemCapture.firstPerson(bridge,stack);primitives=live.primitives();texts=live.texts();originalPipeline=true;}
-            catch(Exception failure) {throw new IllegalStateException("Cannot render live thaumometer target",failure);}
+            catch(Exception failure) {
+                var unmapped=UnmappedLegacyBlockException.find(failure);
+                if(unmapped==null)throw new IllegalStateException("Cannot render live thaumometer target",failure);
+                // Keep the original idle lens/hands, without inventing aspects for a post-1.7 block.
+                if(unmappedTargets.add(unmapped.getMessage()))com.mojang.logging.LogUtils.getLogger().warn("MFCL thaumometer overlay unavailable: {}",unmapped.getMessage());
+            }
         }
         pose.pushPose();
         try {

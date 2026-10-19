@@ -37,6 +37,7 @@ public final class ModernContentBridge {
     private final LegacyBlockShapes blockShapes;
     private final LegacyItemUse itemUse;
     private final Set<String> legacyBlockKeys;
+    private final HostBlockMapping hostBlocks;
     private final ThreadLocal<PlacementTransaction> placement = new ThreadLocal<>();
     private final Map<String, Block> blocks = new LinkedHashMap<>();
     private final Map<String, Item> items = new LinkedHashMap<>();
@@ -56,6 +57,7 @@ public final class ModernContentBridge {
             itemUse = new LegacyItemUse(services);
             var registry = services.loader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
             legacyBlockKeys = Set.copyOf((Set<String>)registry.getClass().getMethod("func_148742_b").invoke(registry));
+            hostBlocks = new HostBlockMapping(legacyBlockKeys);
         }
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
@@ -226,9 +228,7 @@ public final class ModernContentBridge {
     }
     public HostWorldAccess.Block legacyBlock(BlockState state) {
         if (state.getBlock() instanceof MirroredBlock mirrored) return new HostWorldAccess.Block(mirrored.entry.key(), state.getValue(METADATA));
-        if (!state.equals(state.getBlock().defaultBlockState())) throw new UnsupportedOperationException("Block state requires a legacy metadata mapping: " + state);
-        String key = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-        return new HostWorldAccess.Block(key.equals("minecraft:grass_block") ? "minecraft:grass" : key, 0);
+        return hostBlocks.read(state);
     }
     public BlockState modernBlock(HostWorldAccess.Block old) {
         Block block = blocks.get(old.legacyKey());
