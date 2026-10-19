@@ -22,7 +22,7 @@ public final class LegacyItemUse {
     public Result rightClick(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader();
-            try(var knowledge=github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.server(loader,world)) {
+            try(var knowledge=services.playerState().enter(world)) {
             Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
             Class<?> playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer");
@@ -101,12 +101,12 @@ public final class LegacyItemUse {
     public Object clientActor(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack snapshot) throws Exception {return actor(world,placer,snapshot);}
     /** Restores previously persisted old player data into the cached actor before any legacy logic reads it. */
     public void loadPersisted(Object world, LegacyTiles.Placer placer, byte[] data) throws Exception {
-        services.items().inLegacy(() -> {try(var state=github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.server(services.loader(),world)) {
+        services.items().inLegacy(() -> {try(var state=services.playerState().enter(world)) {
             Object player=actor(world,placer,null);if(data!=null&&data.length!=0)services.playerData().write(player,data);return null;
         }});
     }
     public byte[] savePersisted(Object world,LegacyTiles.Placer placer) throws Exception {
-        return services.items().inLegacy(()->{try(var state=github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.server(services.loader(),world)){return services.playerData().read(actor(world,placer,null));}});
+        return services.items().inLegacy(()->{try(var state=services.playerState().enter(world)){return services.playerData().read(actor(world,placer,null));}});
     }
     /**
      * Runs the original {@code ScanManager.completeScan} against the authoritative (server) old player. The
@@ -116,7 +116,7 @@ public final class LegacyItemUse {
     public AppliedScan applyScan(Object world, LegacyTiles.Placer placer, byte type, int id, int meta, String phenomena, String prefix, byte[] priorData) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader();
-            try(var knowledge=github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.server(loader,world);var packets=LegacyPackets.capture(placer.id())) {
+            try(var knowledge=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id())) {
             var held=new LegacyClientData.Stack("Thaumcraft:ItemThaumometer",0,1,"","");
             Object player = actor(world, placer, held);
             if (priorData != null && priorData.length != 0) services.playerData().write(player, priorData);
@@ -134,7 +134,7 @@ public final class LegacyItemUse {
         });
     }
     public List<LegacyPackets.Message> sync(Object world,LegacyTiles.Placer placer) throws Exception {
-        return services.items().inLegacy(()->{try(var state=github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.server(services.loader(),world);var packets=LegacyPackets.capture(placer.id())) {
+        return services.items().inLegacy(()->{try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id())) {
             syncPlayer(actor(world,placer,null));return packets.messages();
         }});
     }
@@ -183,7 +183,7 @@ public final class LegacyItemUse {
         Object actor = actors.get(key);
         if (actor == null) {
             actor = services.tiles().actor(world, placer, snapshot);
-            github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.initialize(loader,actor);
+            services.playerState().initialize(actor);
             actors.put(key, actor);
         }
         else refresh(actor, world, placer, snapshot);

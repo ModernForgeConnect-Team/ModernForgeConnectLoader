@@ -19,7 +19,7 @@ class ResolverTest {
         Files.writeString(project.resolve("settings.gradle"), "rootProject.name = 'resolver-fixture'\n");
         return GradleRunner.create().withProjectDir(project.toFile()).withPluginClasspath()
                 .withGradleInstallation(Path.of(System.getProperty("mfcl.gradleHome")).toFile())
-                .withTestKitDir(project.resolve("test-kit").toFile())
+                .withTestKitDir(Path.of(System.getProperty("mfcl.testKitDir")).toFile())
                 .withArguments("resolveLegacyDependencies", "--offline", "--stacktrace");
     }
     private void build(String declarations) throws Exception {

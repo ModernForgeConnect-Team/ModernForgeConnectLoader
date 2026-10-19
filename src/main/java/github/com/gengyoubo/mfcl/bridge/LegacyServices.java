@@ -14,6 +14,8 @@ public final class LegacyServices {
     private final LegacyPlayerData playerData;
     private final LegacyBlockLogic logic;
     private final LegacyInventoryAccess inventories;
+    private final LegacyPlayerState playerState = new LegacyPlayerState();
+    private final LegacyDynamicItems dynamicItems = new LegacyDynamicItems();
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
         this(gameDirectory, loader, new LegacyClientData(loader));
     }
@@ -38,4 +40,6 @@ public final class LegacyServices {
     public LegacyPlayerData playerData() { return playerData; }
     public LegacyBlockLogic logic() { return logic; }
     public LegacyInventoryAccess inventories() { return inventories; }
+    public LegacyPlayerState playerState() { return playerState; }
+    public LegacyDynamicItems dynamicItems() { return dynamicItems; }
 }

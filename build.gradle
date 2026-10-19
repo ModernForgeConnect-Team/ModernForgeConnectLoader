@@ -170,6 +170,11 @@ publishing {
             artifact tasks.named('apiJar')
             artifact tasks.named('apiSourcesJar')
         }
+        register('developerApi', MavenPublication) {
+            artifactId = 'mfcl-api'
+            artifact(tasks.named('apiJar')) { classifier = null }
+            artifact(tasks.named('apiSourcesJar')) { classifier = 'sources' }
+        }
     }
     repositories {
         maven {

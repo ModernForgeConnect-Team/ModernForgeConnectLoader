@@ -2,7 +2,6 @@ package github.com.gengyoubo.mfcl.client;
 
 import github.com.gengyoubo.mfcl.bridge.*;
 import github.com.gengyoubo.mfcl.content.ModernContentBridge;
-import github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.core.BlockPos;
@@ -95,7 +94,7 @@ final class ScannerHostSmokeProbe {
                 awarded=(int)pending.join();if(pool(mc,false)!=awarded)return;
                 if(!playedSounds.containsKey("thaumcraft:cameraticks")||!playedSounds.containsKey("minecraft:entity.experience_orb.pickup"))throw new IllegalStateException("Scan sounds never reached an audio channel: "+playedSounds);
                 proof.put("scanTicksPlayedOnAudioChannel",playedSounds.get("thaumcraft:cameraticks").get());proof.put("scanRewardSoundPlayed",true);
-                var drawing=LiveLegacyItemCapture.firstPerson(content,mc.player.getMainHandItem());
+                var drawing=content.services().dynamicItems().capture(content.renderSnapshot(mc.player.getMainHandItem()),"EQUIPPED_FIRST_PERSON").orElseThrow();
                 if(drawing.primitives().stream().noneMatch(p->p.texture().contains("textures/aspects/terra.png")))throw new IllegalStateException("Live lens did not show the scanned terra icon");
                 proof.put("nativeHeldScanAwarded",true);proof.put("serverTerraAfterScan",awarded);proof.put("clientTerraAfterScan",pool(mc,false));proof.put("liveLensContainsAspect",true);
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-scanner-aspects.png",mc.getMainRenderTarget(),message->{});
@@ -151,7 +150,7 @@ final class ScannerHostSmokeProbe {
                 mc.getItemRenderer().renderStatic(mc.player.getMainHandItem(),net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_RIGHT_HAND,0xF000F0,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,new com.mojang.blaze3d.vertex.PoseStack(),immediate,mc.level,0);
                 immediate.endBatch();
                 if(targetCases.get(targetCase).oldKey()!=null) {
-                    var drawing=LiveLegacyItemCapture.firstPerson(content,mc.player.getMainHandItem());
+                    var drawing=content.services().dynamicItems().capture(content.renderSnapshot(mc.player.getMainHandItem()),"EQUIPPED_FIRST_PERSON").orElseThrow();
                     if(drawing.primitives().isEmpty())throw new IllegalStateException("Mapped target lost the lens: "+targetCases.get(targetCase));
                 }
                 if(++targetCase<targetCases.size())stage=15;
@@ -177,7 +176,7 @@ final class ScannerHostSmokeProbe {
     private void release(Minecraft mc) {mc.options.keyUse.setDown(false);mc.gameMode.releaseUsingItem(mc.player);}
     private <T> T knowledge(Minecraft mc,boolean server,java.util.concurrent.Callable<T> action) throws Exception {
         if(server&&!mc.getSingleplayerServer().isSameThread())return mc.getSingleplayerServer().submit(()->{try{return knowledge(mc,true,action);}catch(Exception failure){throw new IllegalStateException(failure);}}).join();
-        return content.services().items().inLegacy(()->{try(var scope=server?ThaumcraftKnowledge.server(content.services().loader(),content.services().worlds().bound(mc.getSingleplayerServer().overworld())):new ThaumcraftKnowledge.Scope(null,null,null)){return action.call();}});
+        return content.services().items().inLegacy(()->{try(var scope=server?content.services().playerState().enter(content.services().worlds().bound(mc.getSingleplayerServer().overworld())):(AutoCloseable)()->{}){return action.call();}});
     }
     private int pool(Minecraft mc,boolean server) throws Exception {
         return knowledge(mc,server,()->{var loader=content.services().loader();Object proxy=loader.loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null);Object knowledge=proxy.getClass().getMethod("getPlayerKnowledge").invoke(proxy);var aspect=loader.loadClass("thaumcraft.api.aspects.Aspect");return ((Number)knowledge.getClass().getMethod("getAspectPoolFor",String.class,aspect).invoke(knowledge,"Dev",aspect.getField("EARTH").get(null))).intValue();});

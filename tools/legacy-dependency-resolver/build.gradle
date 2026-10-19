@@ -20,5 +20,6 @@ tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.
 tasks.named('test') {
     useJUnitPlatform()
     systemProperty 'mfcl.gradleHome', gradle.gradleHomeDir.absolutePath
+    systemProperty 'mfcl.testKitDir', layout.buildDirectory.dir('test-kit').get().asFile.absolutePath
     maxParallelForks = 1
 }

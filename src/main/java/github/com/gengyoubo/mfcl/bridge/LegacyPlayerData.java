@@ -14,7 +14,7 @@ public final class LegacyPlayerData {
         return services.items().inLegacy(() -> {
             var loader = services.loader();
             Object nbt = loader.loadClass("net.minecraft.entity.Entity").getMethod("getEntityData").invoke(player);
-            github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.nbt(loader,player,nbt,true);
+            services.playerState().save(player, nbt);
             Class<?> nbtType = loader.loadClass("net.minecraft.nbt.NBTTagCompound");
             return (byte[]) loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_74798_a", nbtType).invoke(null, nbt);
         });
@@ -27,7 +27,7 @@ public final class LegacyPlayerData {
             Object nbt = loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_152457_a", byte[].class, trackerType).invoke(null, bytes, tracker);
             Field field = loader.loadClass("net.minecraft.entity.Entity").getDeclaredField("customEntityData");
             field.setAccessible(true); field.set(player, nbt);
-            github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftKnowledge.nbt(loader,player,nbt,false);
+            services.playerState().load(player, nbt);
             return null;
         });
     }

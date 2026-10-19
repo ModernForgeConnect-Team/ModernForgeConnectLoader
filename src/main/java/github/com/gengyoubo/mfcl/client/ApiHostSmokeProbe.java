@@ -67,6 +67,8 @@ final class ApiHostSmokeProbe {
                 if (api.mappings().toHost(LegacyMappings.WORLD, clientWorld, Level.class).orElseThrow() != mc.level) throw new IllegalStateException("Client world identity differs");
                 pending = mc.getSingleplayerServer().submit(() -> {
                     var level = mc.getSingleplayerServer().overworld();
+                    if (mc.getSingleplayerServer().getCommands().performPrefixedCommand(mc.getSingleplayerServer().createCommandSourceStack(), "mfclapi") != 1)
+                        throw new IllegalStateException("API operator diagnostic command failed");
                     var world = api.mappings().toLegacy(LegacyMappings.WORLD, level).orElseThrow();
                     if (api.accessor(World.class, world).dayTime() != level.getDayTime()) throw new IllegalStateException("Server world mapping differs");
                     return world;
@@ -76,6 +78,7 @@ final class ApiHostSmokeProbe {
                 try { api.accessor(World.class, world); throw new IllegalStateException("Server world accepted on render thread"); }
                 catch (LegacyAccessException expected) { /* thread guard */ }
                 proof.put("clientServerWorldIdentityAndThreadGuards", true);
+                proof.put("operatorDiagnosticCommand", true);
                 mc.level.disconnect(); mc.clearLevel(); stage = 3;
             } else if (stage == 3 && mc.level == null) {
                 var api = MfclApi.runtime().orElseThrow();

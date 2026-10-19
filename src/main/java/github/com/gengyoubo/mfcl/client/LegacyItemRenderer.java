@@ -16,7 +16,6 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
     private final ModernContentBridge bridge;
     private final String itemKey;
     private final Map<List<LegacyVertexStream.Primitive>, LegacyItemLayout.GuiFit> guiFits = new IdentityHashMap<>();
-    private final Set<String> unmappedTargets=new HashSet<>();
     public LegacyItemRenderer(ModernContentBridge bridge, String itemKey) {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         this.bridge = bridge; this.itemKey = itemKey;
@@ -33,17 +32,15 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
             primitives = bridge.pack().geometry().get(key);
             if (primitives == null) primitives = bridge.pack().geometry().get(base);
         }
-        if (primitives == null || primitives.isEmpty()) return;
+        if (primitives == null) primitives = List.of();
         List<LegacyWorldGraphics.Text> texts=List.of();
-        if(type.equals("EQUIPPED_FIRST_PERSON")&&itemKey.equals("Thaumcraft:ItemThaumometer")&&Minecraft.getInstance().level!=null&&Minecraft.getInstance().player!=null) {
-            try {var live=LiveLegacyItemCapture.firstPerson(bridge,stack);primitives=live.primitives();texts=live.texts();originalPipeline=true;}
-            catch(Exception failure) {
-                var unmapped=UnmappedLegacyBlockException.find(failure);
-                if(unmapped==null)throw new IllegalStateException("Cannot render live thaumometer target",failure);
-                // Keep the original idle lens/hands, without inventing aspects for a post-1.7 block.
-                if(unmappedTargets.add(unmapped.getMessage()))com.mojang.logging.LogUtils.getLogger().warn("MFCL thaumometer overlay unavailable: {}",unmapped.getMessage());
-            }
+        if(bridge.services().dynamicItems().supports(itemKey,type)) {
+            try {
+                var live=bridge.services().dynamicItems().capture(bridge.renderSnapshot(stack),type);
+                if(live.isPresent()) {primitives=live.get().primitives();texts=live.get().texts();originalPipeline=true;}
+            } catch(Exception failure) {throw new IllegalStateException("Cannot render dynamic legacy item "+itemKey,failure);}
         }
+        if (primitives.isEmpty() && texts.isEmpty()) return;
         pose.pushPose();
         try {
             pose.translate(.5,.5,.5); // ItemRenderer already translated by (-.5,-.5,-.5).
@@ -51,7 +48,7 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
                 boolean left = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
                 if (type.equals("EQUIPPED")) LegacyItemTransformBridge.handToArm(pose,left);
                 else if (type.equals("EQUIPPED_FIRST_PERSON") && left) pose.scale(-1,1,1);
-                else if (context == ItemDisplayContext.GUI) {
+                else if (context == ItemDisplayContext.GUI && !primitives.isEmpty()) {
                     var fit = guiFits.computeIfAbsent(primitives,p -> LegacyItemLayout.fit(LegacyItemLayout.bounds(p,LegacyVertexStream.identity())));
                     pose.translate(fit.x(),fit.y(),0); pose.scale((float)fit.scale(),(float)fit.scale(),(float)fit.scale());
                 }

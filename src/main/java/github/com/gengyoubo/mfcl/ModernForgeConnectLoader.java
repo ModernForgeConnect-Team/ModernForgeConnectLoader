@@ -30,6 +30,7 @@ public final class ModernForgeConnectLoader {
         }
         var catalog = github.com.gengyoubo.mfcl.legacy.LegacyModCatalog.from(result, runtimeService.loadedModIds());
         github.com.gengyoubo.mfcl.legacy.RuntimeModAccounting.install(catalog);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(github.com.gengyoubo.mfcl.internal.api.ApiDebugCommand::register);
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModBranding.install(catalog));
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModListScreen.install(catalog));
         if (result.legacyFmlStarted() && runtimeService.runtime() != null) {
