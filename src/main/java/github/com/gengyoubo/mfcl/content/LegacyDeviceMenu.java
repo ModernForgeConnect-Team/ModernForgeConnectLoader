@@ -76,13 +76,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         content.services().playerInventory().write(original.player(),stacks);content.services().playerInventory().select(original.player(),inventory.selected);
     }
     private <T> T originalAction(java.util.concurrent.Callable<T> action) throws Exception {
-        return content.services().items().inLegacy(()->LegacyDeviceContainers.withDrops(entity->{
-            var type=content.services().loader().loadClass("net.minecraft.entity.Entity");
-            ItemStack stack=modern(entity.getClass().getMethod("func_92059_d").invoke(entity));
-            var drop=new net.minecraft.world.entity.item.ItemEntity(inventory.player.level(),type.getField("field_70165_t").getDouble(entity),type.getField("field_70163_u").getDouble(entity),type.getField("field_70161_v").getDouble(entity),stack);
-            drop.setDeltaMovement(type.getField("field_70159_w").getDouble(entity),type.getField("field_70181_x").getDouble(entity),type.getField("field_70179_y").getDouble(entity));drop.setDefaultPickUpDelay();drop.setThrower(inventory.player.getUUID());
-            content.afterCommit(inventory.player.level(),()->inventory.player.level().addFreshEntity(drop));
-        },action));
+        return LegacyItemDrops.capture(content,inventory.player,action);
     }
     @Override public void broadcastChanges() {
         if(original!=null)try {
@@ -125,6 +119,8 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             var result=services.items().inLegacy(()->{
                 Object world=services.worlds().bound(player.serverLevel());
                 try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(player.getUUID())) {
+                    byte[] persisted=player.getPersistentData().getByteArray(ModernContentBridge.LEGACY_ENTITY_DATA);
+                    if(persisted.length!=0)services.playerData().write(original.player(),persisted);
                     services.playerState().initialize(original.player());
                     byte[] prior=services.playerData().read(original.player());
                     try {
@@ -138,7 +134,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             });
             player.getPersistentData().putByteArray(ModernContentBridge.LEGACY_ENTITY_DATA,result.data());
             result.messages().forEach(message->ScanSyncChannel.sendToPlayer(player,message));broadcastChanges();
-        }catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL original device packet failed",failure);}
+        }catch(Exception failure){failed=true;com.mojang.logging.LogUtils.getLogger().error("MFCL original device packet failed",failure);player.closeContainer();}
     }
     private record PacketResult(byte[] data,List<LegacyPackets.Message> messages) {}
     @Override public void removed(Player player) {

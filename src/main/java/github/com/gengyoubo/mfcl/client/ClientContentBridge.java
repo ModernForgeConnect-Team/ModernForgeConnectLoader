@@ -10,6 +10,7 @@ public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
         LegacyScanNotifications.install(bridge);
+        LegacyItemTooltips.install(bridge);
         bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge)));
         bus.addListener((net.minecraftforge.client.event.ModelEvent.ModifyBakingResult event) -> {

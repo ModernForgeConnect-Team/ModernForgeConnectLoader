@@ -33,6 +33,8 @@ public final class LegacyWorldGraphics {
         private double[] matrix = LegacyVertexStream.identity();
         private double[] textureMatrix = LegacyVertexStream.identity();
         private final Deque<double[]> textureStack = new ArrayDeque<>();
+        private double[] projectionMatrix = LegacyVertexStream.identity();
+        private final Deque<double[]> projectionStack = new ArrayDeque<>();
         private int matrixMode = 5888;
         private final boolean[] generated = new boolean[4];
         private final double[][] planes = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
@@ -106,11 +108,12 @@ public final class LegacyWorldGraphics {
         throw new UnsupportedOperationException("Unsupported legacy world GL integer query: " + value);
     }
 
-    public static void glMatrixMode(int mode) { Frame f = frame(); if (f != null) { f.check(); if (mode != 5888 && mode != 5890) throw new UnsupportedOperationException("Legacy matrix mode " + mode); f.matrixMode = mode; } }
-    private static double[] activeMatrix(Frame f) { return f.matrixMode == 5890 ? f.textureMatrix : f.matrix; }
-    public static void push() { Frame f = frame(); if (f != null) { f.check(); if (f.matrixMode == 5890) f.textureStack.push(f.textureMatrix.clone()); else f.stack.push(f.matrix.clone()); } }
-    public static void pop() { Frame f = frame(); if (f != null) { f.check(); if (f.matrixMode == 5890) f.textureMatrix = f.textureStack.pop(); else f.matrix = f.stack.pop(); } }
-    public static void loadIdentity() { Frame f = frame(); if (f != null) { f.check(); if (f.matrixMode == 5890) f.textureMatrix = LegacyVertexStream.identity(); else f.matrix = LegacyVertexStream.identity(); } }
+    public static void glMatrixMode(int mode) { Frame f = frame(); if (f != null) { f.check(); if (mode != 5888 && mode != 5890 && !(mode==5889&&LegacyGuiGraphics.capturing())) throw new UnsupportedOperationException("Legacy matrix mode " + mode); f.matrixMode = mode; } }
+    public static boolean modelView(){Frame f=frame();return f==null||f.matrixMode==5888;}
+    private static double[] activeMatrix(Frame f) { return f.matrixMode == 5890 ? f.textureMatrix : f.matrixMode==5889?f.projectionMatrix:f.matrix; }
+    public static void push() { Frame f = frame(); if (f != null) { f.check(); if (f.matrixMode == 5890) f.textureStack.push(f.textureMatrix.clone()); else if(f.matrixMode==5889)f.projectionStack.push(f.projectionMatrix.clone());else f.stack.push(f.matrix.clone()); } }
+    public static void pop() { Frame f = frame(); if (f != null) { f.check(); if (f.matrixMode == 5890) f.textureMatrix = f.textureStack.pop(); else if(f.matrixMode==5889)f.projectionMatrix=f.projectionStack.pop();else f.matrix = f.stack.pop(); } }
+    public static void loadIdentity() { Frame f = frame(); if (f != null) { f.check(); if (f.matrixMode == 5890) f.textureMatrix = LegacyVertexStream.identity(); else if(f.matrixMode==5889)f.projectionMatrix=LegacyVertexStream.identity();else f.matrix = LegacyVertexStream.identity(); } }
     public static void translate(double x, double y, double z) { Frame f = frame(); if (f != null) { f.check(); LegacyVertexStream.translate(activeMatrix(f), x, y, z); } }
     public static void scale(double x, double y, double z) { Frame f = frame(); if (f != null) { f.check(); LegacyVertexStream.scale(activeMatrix(f), x, y, z); } }
     public static void rotate(double angle, double x, double y, double z) { Frame f = frame(); if (f != null) { f.check(); LegacyVertexStream.rotate(activeMatrix(f), angle, x, y, z); } }

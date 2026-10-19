@@ -60,6 +60,8 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
                     for (int i=0;i<4;i++) m.instructions.add(new VarInsnNode(Opcodes.DLOAD,i*2));
                     call(m,DISPATCH,"rotate","(DDDD)V");
                 } else if (method.equals("glLoadIdentity")) call(m,DISPATCH,"loadIdentity","()V");
+                else if(method.equals("glClear")&&desc.equals("(I)V")){m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0));call(m,DISPATCH,"clear","(I)V");}
+                else if(method.equals("glOrtho")&&desc.equals("(DDDDDD)V")){for(int i=0;i<6;i++)m.instructions.add(new VarInsnNode(Opcodes.DLOAD,i*2));call(m,DISPATCH,"ortho","(DDDDDD)V");}
                 else if (method.equals("glGetInteger") && desc.equals("(I)I")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0)); call(m,DISPATCH,"integer","(I)I"); }
                 else if (WORLD_METHODS.contains(method+desc)) routeWorld(m);
                 else if (method.matches("gl(Enable|Disable|BlendFunc|DepthMask|DepthFunc|ColorMask|ShadeModel|AlphaFunc|LineWidth|PushAttrib|PopAttrib|MatrixMode|ColorMaterial|DepthRange|Hint)")) { }

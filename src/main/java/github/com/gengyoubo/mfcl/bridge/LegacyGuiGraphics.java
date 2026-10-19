@@ -80,6 +80,11 @@ public final class LegacyGuiGraphics {
         Frame f = frame();f.flushGeometry();if (stack != null) f.commands.add(new Item(stack, f.x(x), f.y(y), overlay, label,f.matrix.sx,f.matrix.sy));
     }
     public static void push() { Frame f = frame(); f.matrices.push(f.matrix); }
+    public static void loadIdentity() { Frame f=frame();f.flushGeometry();f.matrix=new Matrix(0,0,1,1); }
+    public static void pixelProjection(double left,double right,double bottom,double top) {
+        Frame f=frame();
+        if(left!=0||top!=0||right!=f.width||bottom!=f.height)throw new UnsupportedOperationException("Legacy GUI projection is not in host pixel coordinates");
+    }
     public static void pop() { Frame f = frame(); f.matrix = f.matrices.pop(); }
     public static void translate(double x, double y, double z) { Frame f = frame(); var m = f.matrix; f.matrix = new Matrix(m.x + x * m.sx, m.y + y * m.sy, m.sx, m.sy); }
     public static void scale(double x, double y, double z) { Frame f = frame(); var m = f.matrix; f.matrix = new Matrix(m.x, m.y, m.sx * x, m.sy * y); }

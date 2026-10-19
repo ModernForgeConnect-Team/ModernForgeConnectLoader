@@ -21,5 +21,16 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         });
         return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge");
     }
-    @Override public void installClient() { ThaumcraftDynamicItems.install(services); }
+    @Override public void installClient() {
+        ThaumcraftDynamicItems.install(services);
+        try {services.items().inLegacy(()->{
+            var loader=services.loader();var tc=loader.loadClass("thaumcraft.common.Thaumcraft");
+            Object instance=tc.getField("instance").get(null);var renderField=tc.getField("renderEventHandler");Object renderer=renderField.get(instance);
+            if(renderer==null){renderer=loader.loadClass("thaumcraft.client.lib.RenderEventHandler").getConstructor().newInstance();renderField.set(instance,renderer);}
+            // TC normally initializes this in its old HUD event before research GUIs render notifications.
+            var notifications=renderer.getClass().getField("notifyHandler");
+            if(notifications.get(renderer)==null)notifications.set(renderer,loader.loadClass("thaumcraft.client.lib.REHNotifyHandler").getConstructor().newInstance());
+            return null;
+        });}catch(Exception failure){throw new IllegalStateException("Cannot initialize original TC4 GUI notifications",failure);}
+    }
 }

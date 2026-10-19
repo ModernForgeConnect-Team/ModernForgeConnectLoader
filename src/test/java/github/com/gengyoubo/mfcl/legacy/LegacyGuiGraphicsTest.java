@@ -2,6 +2,7 @@ package github.com.gengyoubo.mfcl.legacy;
 
 import github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics;
 import github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics;
+import github.com.gengyoubo.mfcl.bridge.LegacyRenderBridge;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -10,6 +11,19 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyGuiGraphicsTest {
+    @Test void notificationProjectionUsesAbsolutePixelsAndRestoresForegroundTranslation() {
+        try(var frame=LegacyGuiGraphics.begin(320,240,0,0,Set.of())) {
+            LegacyRenderBridge.translate(70,35,0);LegacyRenderBridge.push();
+            LegacyRenderBridge.clear(256);LegacyWorldGraphics.glMatrixMode(5889);LegacyRenderBridge.loadIdentity();
+            LegacyRenderBridge.ortho(0,320,240,0,1000,3000);
+            LegacyWorldGraphics.glMatrixMode(5888);LegacyRenderBridge.loadIdentity();LegacyRenderBridge.translate(0,0,-2000);
+            LegacyGuiGraphics.text("Notice",5,6,0xffffff,false);LegacyRenderBridge.pop();
+            LegacyGuiGraphics.text("Slot",5,6,0xffffff,false);
+            assertEquals(List.of(new LegacyGuiGraphics.Text("Notice",5,6,0xffffff,false,1,1),new LegacyGuiGraphics.Text("Slot",75,41,0xffffff,false,1,1)),frame.commands());
+            assertThrows(UnsupportedOperationException.class,()->LegacyRenderBridge.clear(16384));
+        }
+        assertThrows(UnsupportedOperationException.class,()->LegacyRenderBridge.clear(256));
+    }
     @Test void tooltipDepthChangesStayBetweenItemsAndOverlayDrawing() {
         try (var frame = LegacyGuiGraphics.begin(320,240,0,0,Set.of())) {
             Object item = new Object();

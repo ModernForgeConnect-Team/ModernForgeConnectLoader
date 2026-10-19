@@ -257,6 +257,7 @@ public final class GenericSemanticsProbe {
             if (!useResult.used() || useResult.useDuration() != 72000)
                 throw new AssertionError("Legacy onItemRightClick did not open a held use");
             if (useBridge.usingTick(useWorld, usePlacer, bow, 70000) != null) throw new AssertionError("A non-scanning item reported a completed legacy scan");
+            RuntimeItemUseSemanticsProbe.verify(services,useWorld,report);
         } finally { services.worlds().unbind(useIdentity); }
         report.put("genericItemUseCallbackVerified", true);
         Object projectileIdentity = new Object();
@@ -366,6 +367,7 @@ public final class GenericSemanticsProbe {
     }
     public static void main(String[] args) throws Exception {
         Path game = Path.of(args[0]);
+        RuntimeItemUseSemanticsProbe.install(game);
         try (var runtime = new EmbeddedLegacyRuntime(game, Path.of(args[1]), new LegacyRuntimeService().inspect(game))) {
             var report = runtime.boot(); verify(runtime, report);
             Files.writeString(game.resolve("logs/mfcl/runtime-1.7.10.json"), new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(report));

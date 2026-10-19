@@ -91,6 +91,7 @@ public final class LegacyClientData {
                 setField(fontType, font, "field_78287_e", in == null ? new byte[65536] : in.readAllBytes());
             }
             setField(mcType, client, "field_71466_p", font); setField(mcType, client, "field_71464_q", font);
+            setField(mcType,client,"field_71456_v",loader.loadClass("net.minecraft.client.gui.GuiIngame").getConstructor(mcType).newInstance(client));
             Object textureManager = loader.loadClass("net.minecraft.client.renderer.texture.TextureManager")
                     .getConstructor(loader.loadClass("net.minecraft.client.resources.IResourceManager"))
                     .newInstance(mcType.getMethod("func_110442_L").invoke(client));
@@ -184,6 +185,15 @@ public final class LegacyClientData {
     }
     public void close() throws java.io.IOException { if (resourceContext != null) resourceContext.close(); }
     public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
+    public String displayName(Stack value) throws Exception {
+        return inLegacy(()->(String)stackType.getMethod("func_82833_r").invoke(materialize(value)));
+    }
+    public List<String> tooltip(Stack value,Object player,boolean advanced) throws Exception {
+        return inLegacy(()->{
+            @SuppressWarnings("unchecked") var lines=(List<String>)stackType.getMethod("func_82840_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),boolean.class).invoke(materialize(value),player,advanced);
+            return List.copyOf(lines);
+        });
+    }
     /** Evaluate the original item's per-pass color on the full stack, including its opaque old NBT. */
     public int itemColor(Stack value, int pass) throws Exception {
         return inLegacy(() -> {

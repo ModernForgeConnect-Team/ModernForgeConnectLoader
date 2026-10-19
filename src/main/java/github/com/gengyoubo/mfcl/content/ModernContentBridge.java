@@ -221,14 +221,14 @@ public final class ModernContentBridge {
         if (stack.hasTag()) for (String key : stack.getTag().getAllKeys())
             if (!key.equals(STACK_TAG) && !key.equals("Damage")) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
         CompoundTag tag = stack.getTagElement(STACK_TAG);
-        return new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), stack.getHoverName().getString(), tag == null ? "" : tag.getString("snbt"));
+        return new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", tag == null ? "" : tag.getString("snbt"));
     }
     /** Read-only view for old renderers/tooltips. Host-only tags must not prevent drawing an item. */
     public LegacyClientData.Stack renderSnapshot(ItemStack stack) throws Exception {
         var item = reverseItems.get(stack.getItem()); if (item == null) return null;
         CompoundTag stored = stack.getTagElement(STACK_TAG);
         String snbt = stored == null ? "" : stored.getString("snbt");
-        var original = new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), stack.getHoverName().getString(), snbt);
+        var original = new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", snbt);
         CompoundTag host = stack.getTag(); if (host == null) return original;
         CompoundTag display = host.getCompound("display");
         Integer cost = host.contains("RepairCost", 3) ? host.getInt("RepairCost") : null;
@@ -255,6 +255,10 @@ public final class ModernContentBridge {
         return BuiltInRegistries.BLOCK.get(id).defaultBlockState();
     }
     private Component name(LegacyContent.Item entry, ItemStack stack) {
+        try {
+            CompoundTag stored=stack.getTagElement(STACK_TAG);
+            return Component.literal(services.items().displayName(new LegacyClientData.Stack(entry.key(),metadata(stack),stack.getCount(),"",stored==null?"":stored.getString("snbt"))));
+        }catch(Exception failure){LogUtils.getLogger().debug("Cannot evaluate original item name for {}",entry.key(),failure);}
         int metadata = metadata(stack);
         var variant = entry.variants().stream().filter(v -> v.metadata() == metadata).findFirst().orElse(entry.variants().get(0));
         return Component.translatable(variant.nameKey());
@@ -281,21 +285,27 @@ public final class ModernContentBridge {
             ItemStack stack = player.getItemInHand(hand);
             try {
                 var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
-                var before = hostInventory(player); Object actor = exposeLegacyInventory(player, world, before, held);
+                if(!level.isClientSide)itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
+                var before = hostInventory(player);
+                if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
+                Object actor = exposeLegacyInventory(player, world, before, held);
                 LegacyItemUse.Result result;
                 try {
                     result = level.isClientSide
                             ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(world,source,held))
-                            : itemUse.rightClick(world, source, held);
-                } finally { if (!level.isClientSide) collectLegacyInventory(player, actor, before); }
+                            : logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.rightClick(world,source,held)),true);
+                } catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
+                if(!level.isClientSide)collectLegacyInventory(player,actor,before,hand);
                 if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                     result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
+                    result.feedback().forEach(message->serverPlayer.displayClientMessage(Component.literal(message),false));
                     serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
                 }
-                if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(stack);
+                ItemStack updated=player.getItemInHand(hand);
+                if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(updated);
                 if (result.useDuration() > 0) player.startUsingItem(hand);
                 if (result.prompt() != null && level.isClientSide) player.displayClientMessage(Component.literal(result.prompt()), true);
-                return net.minecraft.world.InteractionResultHolder.consume(stack);
+                return net.minecraft.world.InteractionResultHolder.consume(updated);
             } catch (Exception failure) {
                 LogUtils.getLogger().error("MFCL legacy item use failed for {}", entry.key(), failure);
                 return net.minecraft.world.InteractionResultHolder.fail(stack);
@@ -345,10 +355,16 @@ public final class ModernContentBridge {
         return actor;
     }
     private void collectLegacyInventory(net.minecraft.world.entity.player.Player player, Object actor, List<LegacyClientData.Stack> before) throws Exception {
+        collectLegacyInventory(player,actor,before,net.minecraft.world.InteractionHand.MAIN_HAND);
+    }
+    private void collectLegacyInventory(net.minecraft.world.entity.player.Player player,Object actor,List<LegacyClientData.Stack> before,net.minecraft.world.InteractionHand hand) throws Exception {
         var after = services.playerInventory().read(actor); var inventory = player.getInventory();
         for (int slot = 0; slot < after.size() && slot < 36; slot++) {
             if (sameLegacy(before.get(slot), after.get(slot))) continue;
-            try { inventory.setItem(slot, after.get(slot) == null ? ItemStack.EMPTY : gameplayStack(after.get(slot))); }
+            try {
+                var updated=after.get(slot)==null?ItemStack.EMPTY:gameplayStack(after.get(slot));
+                if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
+            }
             catch (Exception unmapped) { }
         }
         inventory.setChanged();

@@ -5,6 +5,12 @@ import java.lang.reflect.*;
 /** Original gameplay callbacks. Scheduling, authority and rollback belong to the host level. */
 public final class LegacyBlockLogic {
     private static final ThreadLocal<java.util.List<String>> MESSAGES = new ThreadLocal<>();
+    public static final class ChatCapture implements AutoCloseable {
+        private final java.util.List<String> previous=MESSAGES.get(), messages=new java.util.ArrayList<>();
+        public ChatCapture(){MESSAGES.set(messages);}
+        public java.util.List<String> messages(){return java.util.List.copyOf(messages);}
+        @Override public void close(){if(previous==null)MESSAGES.remove();else MESSAGES.set(previous);}
+    }
     public record Activation(boolean handled, java.util.List<LegacyClientData.Stack> inventory, java.util.List<String> messages, LegacyDeviceContainers.Open device) {}
     public static boolean chat(Object component) throws Exception {
         var messages = MESSAGES.get(); if (messages == null) return false;

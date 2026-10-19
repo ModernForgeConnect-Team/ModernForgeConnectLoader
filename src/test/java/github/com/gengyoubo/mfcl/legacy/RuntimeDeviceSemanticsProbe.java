@@ -46,6 +46,17 @@ final class RuntimeDeviceSemanticsProbe {
                 Object gui=services.containers().create(320,240,0,0,176,166,layout);
                 if(!services.containers().sameLayout(gui,layout)||services.containers().sameLayout(gui,List.of(layout.get(0)))
                         ||services.containers().sameLayout(gui,List.of(layout.get(0),new LegacyContainers.Slot(44,18,null))))throw new AssertionError("Dynamic creative slot layout change was missed");
+                try(var session=services.screens().open(gui,320,240);var input=new LegacyDeviceInput()) {
+                    // Native slots must never enter the old PlayerController's absent network connection.
+                    session.mousePressed(88,63,0);session.mouseReleased(88,63,0);
+                    var buttons=loader.loadClass("net.minecraft.client.gui.GuiScreen").getDeclaredField("field_146292_n");buttons.setAccessible(true);
+                    Object button=loader.loadClass("net.minecraft.client.gui.GuiButton").getConstructor(int.class,int.class,int.class,int.class,int.class,String.class).newInstance(7,40,40,20,20,"Go");
+                    @SuppressWarnings("unchecked") var controls=(List<Object>)buttons.get(gui);controls.add(button);
+                    session.mousePressed(45,45,0);session.mouseReleased(45,45,0);
+                    if(!frame.hasClickSound()||!input.packets().isEmpty())throw new AssertionError("Native slot suppression also suppressed original GUI buttons");
+                }
+                if(LegacyDeviceInput.active())throw new AssertionError("Device input scope leaked into another screen");
+                report.put("genericDeviceButtonInputVerified",true);
             }
             byte[] saved=services.tiles().save(chest[0]);
             if(services.tiles().snapshotInstance(chest[0],saved)!=chest[0])throw new AssertionError("Same-type synchronization replaced an open GUI tile");

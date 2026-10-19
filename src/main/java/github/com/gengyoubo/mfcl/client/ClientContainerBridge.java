@@ -46,7 +46,7 @@ public final class ClientContainerBridge {
         if(opened) {
             if(active==null)throw new UnsupportedOperationException("Legacy GUI bridge is disabled");
             active.transition(mc.screen,requested);
-            return new LegacyItemUse.Result(true,result.useDuration(),result.prompt(),result.messages());
+            return new LegacyItemUse.Result(true,result.useDuration(),result.prompt(),result.messages(),result.feedback());
         }
         return result;
     }

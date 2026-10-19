@@ -9,8 +9,9 @@ import java.util.*;
  * other per-player state survive across the begin/tick/stop sequence the modern engine drives.
  */
 public final class LegacyItemUse {
-    public record Result(boolean used, int useDuration, String prompt, List<LegacyPackets.Message> messages) {
-        public Result(boolean used,int useDuration,String prompt) { this(used,useDuration,prompt,List.of()); }
+    public record Result(boolean used, int useDuration, String prompt, List<LegacyPackets.Message> messages,List<String> feedback) {
+        public Result(boolean used,int useDuration,String prompt) { this(used,useDuration,prompt,List.of(),List.of()); }
+        public Result(boolean used,int useDuration,String prompt,List<LegacyPackets.Message> messages) {this(used,useDuration,prompt,messages,List.of());}
     }
     /** A finished legacy scan, ready to be replayed against the authoritative player. */
     public record Scan(byte type, int id, int meta, String phenomena) {}
@@ -30,17 +31,24 @@ public final class LegacyItemUse {
             Object stack = services.items().materialize(snapshot);
             Object item = stackType.getMethod("func_77973_b").invoke(stack);
             Object player = actor(world, placer, snapshot);
-            Object returned; List<LegacyPackets.Message> messages;
-            try(var packets=LegacyPackets.capture(placer.id())) {
+            Object inventory=playerType.getField("field_71071_by").get(player);
+            int selected=inventory.getClass().getField("field_70461_c").getInt(inventory);
+            // The callback and inventory must share the same stack, just as in the original game.
+            inventory.getClass().getMethod("func_70299_a",int.class,stackType).invoke(inventory,selected,stack);
+            Object returned; List<LegacyPackets.Message> messages;List<String> feedback;
+            try(var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture()) {
                 returned = itemType.getMethod("func_77659_a", stackType, worldType, playerType).invoke(item, stack, world, player);
-                messages=packets.messages();
+                messages=packets.messages();feedback=chat.messages();
             }
+            if(returned!=null&&stackType.getField("field_77994_a").getInt(returned)<=0)returned=null;
+            inventory.getClass().getMethod("func_70299_a",int.class,stackType).invoke(inventory,selected,returned);
             int duration = (int) itemType.getMethod("func_77626_a", stackType).invoke(item, stack);
-            boolean used = duration > 0 || !messages.isEmpty() || returned==null || !services.items().snapshot(returned).equals(snapshot);
+            var after=returned==null?null:services.items().snapshot(returned);
+            boolean used = duration > 0 || !messages.isEmpty() || !feedback.isEmpty() || after==null || !after.key().equals(snapshot.key())||after.metadata()!=snapshot.metadata()||after.count()!=snapshot.count()||!after.tag().equals(snapshot.tag());
             String prompt = scanPrompt(item, loader);
             boolean remote = loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world);
             LogUtils.getLogger().info("MFCL legacy use {}@{}: remote={}, duration={}, target={}", snapshot.key(), snapshot.metadata(), remote, duration, prompt);
-            return new Result(used, duration, prompt, messages);
+            return new Result(used, duration, prompt, messages,feedback);
             }
         });
     }

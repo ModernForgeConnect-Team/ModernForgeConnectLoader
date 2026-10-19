@@ -29,7 +29,7 @@ public final class LegacyPlayerInventory {
         return services.items().inLegacy(() -> {
             Object[] slots = (Object[]) mainField.get(inventoryField.get(player));
             var result = new ArrayList<LegacyClientData.Stack>(slots.length);
-            for (Object slot : slots) result.add(slot == null ? null : services.items().snapshot(slot));
+            for (Object slot : slots) result.add(slot == null || slot.getClass().getField("field_77994_a").getInt(slot)<=0 ? null : services.items().snapshot(slot));
             return result;
         });
     }
