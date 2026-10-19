@@ -263,6 +263,8 @@ public final class LegacyClientData {
             return imported;
         });
     }
+    public synchronized void preserveCrafting(List<Object> recipes) {ownCrafting=List.copyOf(recipes);}
+    public boolean tagsEqual(Stack first,Stack second) throws Exception {return inLegacy(()->(boolean)stackType.getMethod("func_77970_a",stackType,stackType).invoke(null,materialize(first),materialize(second)));}
     /** Build the replacement entirely before publishing it; reloads replace rather than append. */
     @SuppressWarnings("unchecked")
     public synchronized int projectHostRecipes(List<HostRecipe> recipes) throws Exception {

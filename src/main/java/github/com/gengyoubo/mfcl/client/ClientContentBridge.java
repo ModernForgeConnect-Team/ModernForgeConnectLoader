@@ -30,7 +30,8 @@ public final class ClientContentBridge {
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.items().get(entry.key()));
         });
-        if (Boolean.getBoolean("mfcl.test.scanner")) ScannerHostSmokeProbe.install(bridge);
+        if (Boolean.getBoolean("mfcl.test.crafting")) CraftingHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.scanner")) ScannerHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.book")) BookHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.logic")) LogicHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.content")) ContentHostSmokeProbe.install(bridge);

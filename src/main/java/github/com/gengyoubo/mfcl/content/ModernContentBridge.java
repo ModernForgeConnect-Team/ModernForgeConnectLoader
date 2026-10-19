@@ -36,6 +36,7 @@ public final class ModernContentBridge {
     private final LegacyBlockRendering blockRendering;
     private final LegacyBlockShapes blockShapes;
     private final LegacyItemUse itemUse;
+    private final LegacyCrafting crafting;
     private final Set<String> legacyBlockKeys;
     private final HostBlockMapping hostBlocks;
     private final ThreadLocal<PlacementTransaction> placement = new ThreadLocal<>();
@@ -55,6 +56,7 @@ public final class ModernContentBridge {
             blockShapes = new LegacyBlockShapes(services);
             blockRendering = new LegacyBlockRendering(services, declarations);
             itemUse = new LegacyItemUse(services);
+            crafting = new LegacyCrafting(services);
             var registry = services.loader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
             legacyBlockKeys = Set.copyOf((Set<String>)registry.getClass().getMethod("func_148742_b").invoke(registry));
             hostBlocks = new HostBlockMapping(legacyBlockKeys);
@@ -62,12 +64,14 @@ public final class ModernContentBridge {
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
+        for(var recipe:crafting.definitions())pack.craftingRecipe(recipe.hash());
         creative = new CreativeTabBridge(this);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
         try {
             var bridge = new ModernContentBridge(services); active = bridge;
             ScanSyncChannel.register();
+            LegacyCraftingRecipes.install(bus);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::playerLoggedIn);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
@@ -86,6 +90,7 @@ public final class ModernContentBridge {
     public LegacyBlockShapes blockShapes() { return blockShapes; }
     public LegacyServices services() { return services; }
     public LegacyItemUse itemUse() {return itemUse;}
+    public LegacyCrafting crafting() {return crafting;}
     public LegacyContentPack pack() { return pack; }
     public CreativeTabBridge creative() { return creative; }
     public Map<String, Block> blocks() { return Collections.unmodifiableMap(blocks); }

@@ -12,7 +12,8 @@ public final class LegacySounds {
             Map.entry("random.fizz","block.fire.extinguish"),Map.entry("random.explode","entity.generic.explode"),
             Map.entry("random.drink","entity.generic.drink"),Map.entry("random.eat","entity.generic.eat"),
             Map.entry("fire.ignite","item.flintandsteel.use"),Map.entry("mob.endermen.portal","entity.enderman.teleport"),
-            Map.entry("liquid.splash","entity.generic.splash"),Map.entry("liquid.swim","entity.generic.swim"));
+            Map.entry("liquid.splash","entity.generic.splash"),Map.entry("liquid.swim","entity.generic.swim"),
+            Map.entry("game.neutral.swim","entity.generic.swim"));
     private LegacySounds() {}
     public static String modernId(String name) {
         String id=name.contains(":")?name:"minecraft:"+name;

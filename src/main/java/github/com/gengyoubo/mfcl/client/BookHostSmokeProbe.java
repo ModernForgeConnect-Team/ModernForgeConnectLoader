@@ -17,8 +17,10 @@ final class BookHostSmokeProbe {
     private java.util.concurrent.CompletableFuture<?> pending;
     private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
     private final Map<String,Object> proof=new LinkedHashMap<>();
+    private final Set<String> playedSounds=java.util.concurrent.ConcurrentHashMap.newKeySet();
     private BookHostSmokeProbe(ModernContentBridge bridge){this.bridge=bridge;}
-    static void install(ModernContentBridge bridge){MinecraftForge.EVENT_BUS.addListener(new BookHostSmokeProbe(bridge)::tick);}
+    static void install(ModernContentBridge bridge){var probe=new BookHostSmokeProbe(bridge);MinecraftForge.EVENT_BUS.addListener(probe::tick);MinecraftForge.EVENT_BUS.addListener(probe::soundStarted);}
+    private void soundStarted(net.minecraftforge.client.event.sound.PlaySoundSourceEvent event){if(event.getChannel()!=null)playedSounds.add(event.getSound().getLocation().toString());}
     private void tick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END||stage==99)return;
         var mc=Minecraft.getInstance();
@@ -33,6 +35,7 @@ final class BookHostSmokeProbe {
             } else if(stage==1&&mc.player!=null&&mc.level!=null&&mc.screen==null) {
                 pending=mc.getSingleplayerServer().submit(()->{
                     var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
+                    github.com.gengyoubo.mfcl.bridge.LegacyWorlds.sound(bridge.services().worlds().bound(player.serverLevel()),player.getX(),player.getY(),player.getZ(),"thaumcraft:wand",.3f,1.2f);
                     player.getInventory().setItem(0,bridge.stack("Thaumcraft:ItemThaumonomicon",0,1,""));player.inventoryMenu.broadcastChanges();return true;
                 });stage=2;
             } else if(stage==2&&pending.isDone()&&mc.player!=null&&bridge.snapshot(mc.player.getMainHandItem())!=null) {
@@ -65,6 +68,8 @@ final class BookHostSmokeProbe {
                 ClientContainerBridge.active().commands(mc.screen);proof.put("originalCategoryNavigation",true);
                 mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE,0,0);stage=5;
             } else if(stage==5&&mc.screen==null) {
+                if(!playedSounds.contains("thaumcraft:wand")||!playedSounds.contains("thaumcraft:cameraclack"))throw new IllegalStateException("Server/GUI sound did not reach an audio channel: "+playedSounds);
+                proof.put("serverSoundBroadcastPlayed",true);proof.put("originalGuiClickSoundPlayed",true);
                 proof.put("originalCloseKey",true);proof.put("status","PASS");finish(mc,null);
             }
         } catch(Throwable failure){finish(mc,failure);}

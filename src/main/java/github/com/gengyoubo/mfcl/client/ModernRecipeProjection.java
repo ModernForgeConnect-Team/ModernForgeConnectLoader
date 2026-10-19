@@ -49,6 +49,7 @@ public final class ModernRecipeProjection {
     public Result update(RecipeManager manager, RegistryAccess access) throws Exception {
         var recipes = new ArrayList<LegacyClientData.HostRecipe>(); int skipped = 0;
         for (Recipe<?> recipe : manager.getRecipes()) {
+            if(recipe.getId().getNamespace().equals("mfcl")&&recipe.getId().getPath().startsWith("legacy_crafting/"))continue;
             String kind;
             if (recipe instanceof ShapedRecipe) kind = "shaped";
             else if (recipe instanceof ShapelessRecipe) kind = "shapeless";

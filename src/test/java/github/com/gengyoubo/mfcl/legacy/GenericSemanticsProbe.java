@@ -274,6 +274,7 @@ public final class GenericSemanticsProbe {
                 throw new AssertionError("Legacy world ray trace did not surface the host hit");
         } finally { services.worlds().unbind(rayIdentity); }
         report.put("genericWorldRayTraceVerified", true);
+        RuntimeCraftingSemanticsProbe.verify(services,report);
     }
     private static Class<?> fixture(ClassLoader loader) throws Exception {
         String name = "mfcl/fixture/Gui"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

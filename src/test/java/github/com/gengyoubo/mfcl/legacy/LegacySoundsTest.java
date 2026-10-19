@@ -10,6 +10,7 @@ class LegacySoundsTest {
         assertEquals("minecraft:ui.button.click",LegacySounds.modernId("minecraft:gui.button.press"));
         assertEquals("thaumcraft:cameraticks",LegacySounds.modernId("thaumcraft:cameraticks"));
         assertEquals("thaumcraft:runicshieldcharge",LegacySounds.modernId("thaumcraft:runicShieldCharge"));
+        assertEquals("minecraft:entity.generic.swim",LegacySounds.modernId("game.neutral.swim"));
     }
     @Test void convertsOldNamespaceAndCaseWithoutLosingSoundOptions() {
         var converted=LegacySounds.definitions("thaumcraft","""

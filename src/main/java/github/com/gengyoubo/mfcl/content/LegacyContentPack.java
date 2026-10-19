@@ -207,12 +207,12 @@ public final class LegacyContentPack {
     }
     public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, resource); }
     public Path directory() { return directory; }
+    public void craftingRecipe(String hash) throws IOException {json("data/mfcl/recipes/legacy_crafting/"+hash+".json",Map.of("type","mfcl:legacy_crafting","original",hash));}
     public Set<String> missingIcons() { return Collections.unmodifiableSet(missingIcons); }
     public void findPacks(AddPackFindersEvent event) {
-        if (event.getPackType() != PackType.CLIENT_RESOURCES) return;
         event.addRepositorySource(consumer -> {
             Pack pack = Pack.readMetaAndCreate("mfcl_legacy_1_7_10", Component.literal("MFCL 1.7.10"), true,
-                    name -> new PathPackResources(name, directory, false), PackType.CLIENT_RESOURCES, Pack.Position.TOP, PackSource.BUILT_IN);
+                    name -> new PathPackResources(name, directory, false), event.getPackType(), Pack.Position.TOP, PackSource.BUILT_IN);
             consumer.accept(Objects.requireNonNull(pack, "Generated legacy pack metadata"));
         });
     }
