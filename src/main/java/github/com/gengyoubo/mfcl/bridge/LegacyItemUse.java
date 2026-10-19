@@ -216,8 +216,10 @@ public final class LegacyItemUse {
         Field bbox = entity.getDeclaredField("field_70121_D"); bbox.setAccessible(true); bbox.set(actor, box);
         entity.getField("field_70130_N").setFloat(actor, 0.6f); entity.getField("field_70131_O").setFloat(actor, 1.8f);
         var inventory = services.loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(actor);
-        if (inventory != null && snapshot != null)
+        if (inventory != null && snapshot != null) {
+            int selected = inventory.getClass().getField("field_70461_c").getInt(inventory);
             inventory.getClass().getMethod("func_70299_a", int.class, services.loader().loadClass("net.minecraft.item.ItemStack"))
-                    .invoke(inventory, 0, services.items().materialize(snapshot));
+                    .invoke(inventory, selected, services.items().materialize(snapshot));
+        }
     }
 }

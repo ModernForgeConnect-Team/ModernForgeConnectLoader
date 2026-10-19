@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-19",
+  "issue": "https://github.com/gengyoubo/ModernForgeConnectLoader/issues/1",
+  "scope": "Experimental Developer API / MLA foundation and TC4 adapter boundaries",
+  "issueComplete": false,
+  "environment": {
+    "hostMinecraft": "1.20.1",
+    "hostForge": "47.4.28",
+    "legacyMinecraft": "1.7.10",
+    "legacyForge": "10.13.4.1614",
+    "java": "17.0.18",
+    "gradle": "8.8",
+    "graphicalHost": "Windows 11 client with integrated server"
+  },
+  "checks": {
+    "coreTests": 64,
+    "coreSkipped": 4,
+    "coreFailures": 0,
+    "coreErrors": 0,
+    "resolverTests": 3,
+    "resolverSkipped": 0,
+    "resolverFailures": 0,
+    "resolverPluginValidation": "PASS",
+    "testAssemble": "PASS",
+    "apiOnlyExampleCompilation": "PASS",
+    "realLegacyRuntimeAccessorAndIndexedNbt": "PASS"
+  },
+  "graphicalApiAcceptance": {
+    "publicProviderAndReadyCallback": true,
+    "nativeItemCopiesMetadataAndOriginalNbt": true,
+    "clientServerWorldIdentityAndThreadGuards": true,
+    "unloadedWorldReferenceRejected": true,
+    "operatorDiagnosticCommand": true,
+    "status": "PASS"
+  },
+  "tc4AdapterRegression": {
+    "knowledgeViaGenericPlayerStateHooks": true,
+    "liveLensViaGenericDynamicItemRenderer": true,
+    "originalNbtVariantsRendered": 116,
+    "targetBlockCasesWithoutCrash": 13,
+    "heldScanAwardedOnServerAndSyncedToClient": true,
+    "cancelledAndRepeatScanChecks": true,
+    "originalPrerequisitesAndFeedback": true,
+    "knowledgeSurvivedReload": true,
+    "scanTickAndRewardSound": true,
+    "unmappedTargetsUseIdleLensWithoutInventedAspects": true,
+    "status": "PASS"
+  },
+  "artifacts": {
+    "standaloneApiContainsMinecraftClasses": false,
+    "standaloneApiContainsHostImplementation": false,
+    "standaloneApiClasses": 14,
+    "apiAndFullModIncludeMplLicense": true,
+    "standaloneApiPublication": "github.com.gengyoubo.mfcl:mfcl-api:0.1.0",
+    "apiPomHasRuntimeDependencies": false,
+    "originalModJarsRedistributed": false
+  },
+  "machineLocalReports": {
+    "core": "build/logic-unit-validation/reports/tests/test/index.html",
+    "resolver": "tools/legacy-dependency-resolver/build/reports/tests/test/index.html",
+    "api": "build/item-context-smoke/game/logs/mfcl/api-smoke.json",
+    "scanner": "build/item-context-smoke/game/logs/mfcl/scanner-smoke.json"
+  },
+  "pending": [
+    "Generic entity/player conversion and complete event forwarding",
+    "Generic legacy networking and migration of PacketScannedToServer capture",
+    "Migration of ItemThaumometer.doScan-specific logic",
+    "Separate TC Modern Lib compatibility artifact",
+    "Broader mod and dedicated-server compatibility"
+  ]
+}

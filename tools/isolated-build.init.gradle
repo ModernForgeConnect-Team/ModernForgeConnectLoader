@@ -1,0 +1,7 @@
+// Separate the output as well as --project-cache-dir when another development client is running.
+gradle.beforeProject { p ->
+    if (p.path == ':') {
+        def output = p.providers.gradleProperty('mfclValidationBuildDir').getOrElse('build/validation')
+        p.layout.buildDirectory.set(new File(p.projectDir, output))
+    }
+}

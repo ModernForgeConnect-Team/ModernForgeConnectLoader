@@ -4,7 +4,7 @@ This is a historical snapshot of the former Chinese project homepage, retained o
 
 # Modern Forge Connect Loader
 
-**开发 API / MLA 第一阶段：** 现代附属模组现在可以通过独立 API JAR 查询旧运行时、访问旧注册表、按精确签名调用旧方法与字段，并转换物品堆和已绑定世界。接入方式、范围和测试见 [开发 API](developer-api.md)，独立依赖导入工具见 [Legacy Dependency Resolver](tools/legacy-dependency-resolver/README.md)。这是 [issue #1](https://github.com/gengyoubo/ModernForgeConnectLoader/issues/1) 的基础版本，实体 / 玩家通用映射、事件转发和模组专属适配库仍待实现。
+**开发 API / MLA 第一阶段：** 现代附属模组现在可以通过独立 API JAR 查询旧运行时、访问旧注册表、按精确签名调用旧方法与字段，并转换物品堆和已绑定世界。接入方式、范围和测试见 [开发 API](developer-api.md)，独立依赖导入工具见 [Legacy Dependency Resolver](../tools/legacy-dependency-resolver/README.md)。这是 [issue #1](https://github.com/gengyoubo/ModernForgeConnectLoader/issues/1) 的基础版本，实体 / 玩家通用映射、事件转发和模组专属适配库仍待实现。
 
 目标：在 Forge 1.20.1 / Java 17 中运行原始 Forge 1.7.10 模组。首个回归样本为 `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`，检查物品列表、搜索、配方和用途交互。当前 `runClient` 测试目录已切换为 AcademyCraft 1.0.7 与 LambdaLib 1.2.3；NEI 及 CodeChicken 前置已移至 `run/mfcl/disabled-mods/nei-20261018/`，独立的 NEI 回归夹具仍保留在构建测试目录。
 

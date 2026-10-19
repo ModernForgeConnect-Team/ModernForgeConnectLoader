@@ -131,12 +131,14 @@ tasks.named('processResources', ProcessResources).configure {
 tasks.register('apiJar', Jar) {
     archiveClassifier = 'api'
     from sourceSets.api.output
+    from('LICENSE')
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
 tasks.register('apiSourcesJar', Jar) {
     archiveClassifier = 'api-sources'
     from sourceSets.api.allSource
+    from('LICENSE')
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
@@ -149,6 +151,7 @@ tasks.register('compileApiExample', JavaCompile) {
     options.release = 17
 }
 tasks.named('jar', Jar).configure {
+    from('LICENSE')
     from sourceSets.api.output
     manifest {
         attributes([

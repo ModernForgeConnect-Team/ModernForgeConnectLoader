@@ -40,6 +40,18 @@ public final class LevelWorldBridge {
                 content.afterCommit(level,()->level.playSound(excluded,sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch()));
             }
             @Override public long gameTime() { check(); return level.getGameTime(); }
+            @Override public void spawnProjectile(Projectile projectile) {
+                check();
+                var arrow = new net.minecraft.world.entity.projectile.Arrow(level, projectile.x(), projectile.y(), projectile.z());
+                if (projectile.owner() != null) {
+                    var owner = level.getServer().getPlayerList().getPlayer(projectile.owner());
+                    if (owner != null) arrow.setOwner(owner);
+                }
+                arrow.setDeltaMovement(projectile.motionX(), projectile.motionY(), projectile.motionZ());
+                if (projectile.damage() > 0) arrow.setBaseDamage(projectile.damage());
+                if (projectile.burning()) arrow.setSecondsOnFire(100);
+                content.afterCommit(level, () -> level.addFreshEntity(arrow));
+            }
             @Override public long dayTime() { check(); return level.getDayTime(); }
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }
             @Override public boolean powered(int x, int y, int z) { check(); return level.hasNeighborSignal(new BlockPos(x,y,z)); }

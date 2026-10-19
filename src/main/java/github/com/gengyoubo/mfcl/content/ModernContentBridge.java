@@ -274,12 +274,17 @@ public final class ModernContentBridge {
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
             ItemStack stack = player.getItemInHand(hand);
             try {
-                var result = level.isClientSide
-                        ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(services.worlds().bound(level),placer(player),snapshot(stack)))
-                        : itemUse.rightClick(services.worlds().bound(level), placer(player), snapshot(stack));
+                var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
+                var before = hostInventory(player); Object actor = exposeLegacyInventory(player, world, before, held);
+                LegacyItemUse.Result result;
+                try {
+                    result = level.isClientSide
+                            ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(world,source,held))
+                            : itemUse.rightClick(world, source, held);
+                } finally { if (!level.isClientSide) collectLegacyInventory(player, actor, before); }
                 if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                     result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
-                    serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(services.worlds().bound(level),placer(player)));
+                    serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
                 }
                 if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(stack);
                 if (result.useDuration() > 0) player.startUsingItem(hand);
@@ -303,15 +308,48 @@ public final class ModernContentBridge {
         }
         @Override public void releaseUsing(ItemStack stack, Level level, LivingEntity living, int timeLeft) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
-            try { itemUse.release(services.worlds().bound(level), placer(player), snapshot(stack), timeLeft); }
-            catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy release failed for {}", entry.key(), failure); }
+            try {
+                var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
+                var before = hostInventory(player); Object actor = exposeLegacyInventory(player, world, before, held);
+                try { itemUse.release(world, source, held, timeLeft); }
+                finally { if (!level.isClientSide) collectLegacyInventory(player, actor, before); }
+            } catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy release failed for {}", entry.key(), failure); }
         }
         @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
         }
     }
     private static LegacyTiles.Placer placer(net.minecraft.world.entity.player.Player player) {
-        return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+        return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(),
+                player.getAbilities().instabuild, player.isShiftKeyDown());
+    }
+    /** The host main inventory as old stacks; unmappable host items become empty slots old logic can ignore. */
+    private List<LegacyClientData.Stack> hostInventory(net.minecraft.world.entity.player.Player player) {
+        var inventory = player.getInventory(); var result = new ArrayList<LegacyClientData.Stack>(36);
+        for (int slot = 0; slot < 36; slot++) { var stack = inventory.getItem(slot); result.add(stack.isEmpty() ? null : toLegacy(stack)); }
+        return result;
+    }
+    private LegacyClientData.Stack toLegacy(ItemStack stack) {
+        try { return gameplayStack(stack); } catch (Exception unmapped) { return null; }
+    }
+    private Object exposeLegacyInventory(net.minecraft.world.entity.player.Player player, Object world, List<LegacyClientData.Stack> contents, LegacyClientData.Stack held) throws Exception {
+        var actor = itemUse.clientActor(world, placer(player), held);
+        services.playerInventory().write(actor, contents);
+        services.playerInventory().select(actor, player.getInventory().selected);
+        return actor;
+    }
+    private void collectLegacyInventory(net.minecraft.world.entity.player.Player player, Object actor, List<LegacyClientData.Stack> before) throws Exception {
+        var after = services.playerInventory().read(actor); var inventory = player.getInventory();
+        for (int slot = 0; slot < after.size() && slot < 36; slot++) {
+            if (sameLegacy(before.get(slot), after.get(slot))) continue;
+            try { inventory.setItem(slot, after.get(slot) == null ? ItemStack.EMPTY : gameplayStack(after.get(slot))); }
+            catch (Exception unmapped) { }
+        }
+        inventory.setChanged();
+    }
+    private static boolean sameLegacy(LegacyClientData.Stack left, LegacyClientData.Stack right) {
+        if (left == null || right == null) return left == right;
+        return left.key().equals(right.key()) && left.metadata() == right.metadata() && left.count() == right.count() && left.tag().equals(right.tag());
     }
     /** Item's constructor invokes this before the subclass sets its entry, so the key is resolved lazily. */
     private net.minecraftforge.client.extensions.common.IClientItemExtensions customRenderer(java.util.function.Supplier<String> key) {

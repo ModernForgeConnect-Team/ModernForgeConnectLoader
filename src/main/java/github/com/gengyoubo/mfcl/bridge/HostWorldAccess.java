@@ -6,6 +6,8 @@ public interface HostWorldAccess {
     /** A block hit from the host ray trace, in old World/Item coordinates. */
     record Hit(int x, int y, int z, int side, double hitX, double hitY, double hitZ) {}
     record Sound(double x,double y,double z,String id,float volume,float pitch,boolean distanceDelay,java.util.UUID excludedPlayer) {}
+    /** A legacy projectile reduced to host-neutral data so the modern side can spawn an equivalent entity. */
+    record Projectile(double x,double y,double z,double motionX,double motionY,double motionZ,double damage,boolean burning,java.util.UUID owner) {}
     String dimensionKey();
     int legacyDimensionId();
     boolean clientSide();
@@ -19,6 +21,7 @@ public interface HostWorldAccess {
     default int power(int x, int y, int z, int side) { return 0; }
     default boolean loaded(int x, int y, int z) { return true; }
     default void playSound(Sound sound) { }
+    default void spawnProjectile(Projectile projectile) { }
     default void updateComparators(int x, int y, int z) { }
     default void blockEvent(int x, int y, int z, String block, int event, int data) { throw new UnsupportedOperationException("Host block events are not available"); }
     default void schedule(int x, int y, int z, String block, int delay) { throw new UnsupportedOperationException("Host block scheduling is not available"); }

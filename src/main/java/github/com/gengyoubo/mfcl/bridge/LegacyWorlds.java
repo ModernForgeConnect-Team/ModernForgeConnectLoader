@@ -88,6 +88,25 @@ public final class LegacyWorlds implements AutoCloseable {
                 type.getField("field_70161_v").getDouble(entity),id,volume,pitch,false,except));
     }
     public static void setTime(Object world, long time) { binding(world).host.setDayTime(time); }
+    /** Translates a legacy projectile into host-neutral data; unsupported entities are ignored so old logic keeps running. */
+    public static boolean spawn(Object world, Object entity) {
+        var bound = binding(world);
+        if (bound.host.clientSide()) return false;
+        try {
+            ClassLoader loader = bound.loader;
+            Class<?> arrowType = loader.loadClass("net.minecraft.entity.projectile.EntityArrow");
+            if (!arrowType.isInstance(entity)) return false;
+            Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
+            double x = entityType.getField("field_70165_t").getDouble(entity), y = entityType.getField("field_70163_u").getDouble(entity), z = entityType.getField("field_70161_v").getDouble(entity);
+            double mx = entityType.getField("field_70159_w").getDouble(entity), my = entityType.getField("field_70181_x").getDouble(entity), mz = entityType.getField("field_70179_y").getDouble(entity);
+            double damage = (double) arrowType.getMethod("func_70242_d").invoke(entity);
+            boolean burning = (boolean) entityType.getMethod("func_70027_ad").invoke(entity);
+            Object shooter = arrowType.getField("field_70250_c").get(entity);
+            java.util.UUID owner = shooter == null ? null : (java.util.UUID) entityType.getMethod("func_110124_au").invoke(shooter);
+            bound.host.spawnProjectile(new HostWorldAccess.Projectile(x, y, z, mx, my, mz, damage, burning, owner));
+            return true;
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException("Cannot translate legacy projectile", error); }
+    }
     public static Object block(Object world, int x, int y, int z) {
         Binding binding = binding(world); var block = binding.host.block(x, y, z);
         try {
@@ -228,6 +247,7 @@ public final class LegacyWorlds implements AutoCloseable {
         var entities = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;",null,null);
         entities.visitCode(); entities.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList"); entities.visitInsn(Opcodes.DUP);
         entities.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false); entities.visitInsn(Opcodes.ARETURN); entities.visitMaxs(2,3); entities.visitEnd();
+        forward(writer, bridge, "func_72838_d", "(Lnet/minecraft/entity/Entity;)Z", "spawn", "(Ljava/lang/Object;Ljava/lang/Object;)Z", null);
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }

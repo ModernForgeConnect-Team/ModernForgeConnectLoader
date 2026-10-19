@@ -56,7 +56,10 @@ public final class LegacyContent {
             for (String name : List.of("INVENTORY", "EQUIPPED", "EQUIPPED_FIRST_PERSON", "ENTITY")) renderTypes.add(renderType.getField(name).get(null));
             Object inventory = renderType.getField("INVENTORY").get(null);
             var stacks = new ArrayList<LegacyClientData.Stack>(data.catalog());
-            for (var tab : tabs) for (var entry : tab.contents()) if (stacks.stream().noneMatch(s -> s.key().equals(entry.key()) && s.metadata() == entry.metadata() && s.tag().equals(entry.tag()))) stacks.add(entry);
+            for (var tab : tabs) {
+                for (var entry : tab.contents()) if (!contains(stacks, entry)) stacks.add(entry);
+                if (tab.icon() != null && !contains(stacks, tab.icon())) stacks.add(tab.icon());
+            }
             for (var snapshot : stacks) {
                 if (snapshot.key().startsWith("minecraft:")) continue;
                 Object stack = data.materialize(snapshot); // keeps the original NBT, e.g. a wand's rod and cap
@@ -95,6 +98,9 @@ public final class LegacyContent {
                 }
             }
         } catch (Throwable unavailable) { captureDiagnostics.add("item renderer bridge unavailable: " + unavailable); }
+    }
+    private static boolean contains(List<LegacyClientData.Stack> stacks, LegacyClientData.Stack stack) {
+        return stacks.stream().anyMatch(s -> s.key().equals(stack.key()) && s.metadata() == stack.metadata() && s.tag().equals(stack.tag()));
     }
 
     /** Executes the real old inventory renderers once and keeps their geometry; texture stays the icon name. */

@@ -27,8 +27,9 @@ public final class CreativeTabBridge {
     }
     public static ResourceLocation id(LegacyCreativeTabs.Tab tab) {
         String[] key = tab.key().split(":", 2);
-        ResourceLocation parsed = ResourceLocation.tryParse(key[0] + ":creative/" + key[1]);
-        if (parsed == null) parsed = ResourceLocation.tryParse(key[0] + ":creative/" + HexFormat.of().formatHex(key[1].getBytes(StandardCharsets.UTF_8)));
+        String namespace = key[0].toLowerCase(Locale.ROOT);
+        ResourceLocation parsed = ResourceLocation.tryParse(namespace + ":creative/" + key[1].toLowerCase(Locale.ROOT));
+        if (parsed == null) parsed = ResourceLocation.tryParse(namespace + ":creative/" + HexFormat.of().formatHex(key[1].getBytes(StandardCharsets.UTF_8)));
         return parsed != null ? parsed : ModernContentBridge.id("legacy_tab:" + tab.key());
     }
     public List<ItemStack> stacks(LegacyCreativeTabs.Tab tab) {

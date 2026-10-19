@@ -14,6 +14,7 @@ public final class LegacyServices {
     private final LegacyPlayerData playerData;
     private final LegacyBlockLogic logic;
     private final LegacyInventoryAccess inventories;
+    private final LegacyPlayerInventory playerInventory;
     private final LegacyPlayerState playerState = new LegacyPlayerState();
     private final LegacyDynamicItems dynamicItems = new LegacyDynamicItems();
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
@@ -29,6 +30,7 @@ public final class LegacyServices {
         this.tiles = new LegacyTiles(this);
         this.playerData = new LegacyPlayerData(this);
         this.logic = new LegacyBlockLogic(this); this.inventories = new LegacyInventoryAccess(this);
+        this.playerInventory = new LegacyPlayerInventory(this);
     }
     public Path gameDirectory() { return gameDirectory; }
     public ClassLoader loader() { return loader; }
@@ -40,6 +42,7 @@ public final class LegacyServices {
     public LegacyPlayerData playerData() { return playerData; }
     public LegacyBlockLogic logic() { return logic; }
     public LegacyInventoryAccess inventories() { return inventories; }
+    public LegacyPlayerInventory playerInventory() { return playerInventory; }
     public LegacyPlayerState playerState() { return playerState; }
     public LegacyDynamicItems dynamicItems() { return dynamicItems; }
 }

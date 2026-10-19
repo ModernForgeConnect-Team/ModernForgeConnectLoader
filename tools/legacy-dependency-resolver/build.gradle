@@ -17,6 +17,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 17 }
+tasks.named('jar') { from('../../LICENSE') }
 tasks.named('test') {
     useJUnitPlatform()
     systemProperty 'mfcl.gradleHome', gradle.gradleHomeDir.absolutePath
