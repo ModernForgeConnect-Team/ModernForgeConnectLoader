@@ -18,15 +18,24 @@ public final class LegacyPackets {
         CHANNELS.get(wrapper).handlers.add(new Handler(handler,message,discriminator,side.toString()));
     }
     public static Scope capture(UUID recipient) { return new Scope(recipient); }
+    public static Scope captureScan(UUID recipient) {var scope=new Scope(recipient);scope.scan=true;return scope;}
     public static final class Scope implements AutoCloseable {
         private final UUID recipient;
         private final List<Message> messages = new ArrayList<>();
+        private boolean scan;
+        private Object scanRequest;
         private Scope(UUID recipient) {
             if (CURRENT.get()!=null) throw new IllegalStateException("Nested old packet capture");
             this.recipient=recipient;CURRENT.set(this);
         }
         public List<Message> messages() { return List.copyOf(messages); }
+        public Object scanRequest() {return scanRequest;}
         @Override public void close() { CURRENT.remove(); }
+    }
+    public static boolean sendToServer(Object message) {
+        Scope scope=CURRENT.get();if(scope==null||!scope.scan)return false;
+        if(!message.getClass().getName().equals("thaumcraft.common.lib.network.playerdata.PacketScannedToServer"))throw new UnsupportedOperationException("Unexpected packet during scan: "+message.getClass().getName());
+        scope.scanRequest=message;return true;
     }
     public static boolean sendTo(Object wrapper, Object message, Object player) throws Exception {
         Scope scope=CURRENT.get();if(scope==null)return false;

@@ -28,6 +28,9 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 } else if(m.name.equals("registerMessage")&&m.desc.startsWith("(Lcpw/mods/fml/common/network/simpleimpl/IMessageHandler;")) {
                     InsnList register=new InsnList();register.add(new VarInsnNode(Opcodes.ALOAD,0));register.add(new VarInsnNode(Opcodes.ALOAD,1));register.add(new VarInsnNode(Opcodes.ALOAD,2));register.add(new VarInsnNode(Opcodes.ILOAD,3));register.add(new VarInsnNode(Opcodes.ALOAD,4));
                     register.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"register","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Class;ILjava/lang/Object;)V",false));m.instructions.insert(register);
+                } else if(m.name.equals("sendToServer")) {
+                    InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,1));
+                    send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendToServer","(Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);
                 } else if(m.name.equals("sendTo")) {
                     InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,0));send.add(new VarInsnNode(Opcodes.ALOAD,1));send.add(new VarInsnNode(Opcodes.ALOAD,2));
                     send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendTo","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);

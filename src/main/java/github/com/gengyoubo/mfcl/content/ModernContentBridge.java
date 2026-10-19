@@ -83,6 +83,7 @@ public final class ModernContentBridge {
     public LegacyBlockRendering blockRendering() { return blockRendering; }
     public LegacyBlockShapes blockShapes() { return blockShapes; }
     public LegacyServices services() { return services; }
+    public LegacyItemUse itemUse() {return itemUse;}
     public LegacyContentPack pack() { return pack; }
     public CreativeTabBridge creative() { return creative; }
     public Map<String, Block> blocks() { return Collections.unmodifiableMap(blocks); }
@@ -97,9 +98,9 @@ public final class ModernContentBridge {
     private void playerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
         byte[] data = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
-        if (data.length == 0) return;
         try {
             itemUse.loadPersisted(services.worlds().bound(player.serverLevel()), placer(player), data);
+            itemUse.sync(services.worlds().bound(player.serverLevel()),placer(player)).forEach(message->ScanSyncChannel.sendToPlayer(player,message));
         } catch (Exception failure) {
             LogUtils.getLogger().error("MFCL legacy player data restore failed for {}", player.getName().getString(), failure);
         }
@@ -107,11 +108,14 @@ public final class ModernContentBridge {
     /** Applies a client-reported legacy scan on the authoritative server thread and persists the resulting research. */
     public void applyServerScan(net.minecraft.server.level.ServerPlayer player, ScanSyncChannel.ScanMessage message) {
         try {
+            var held=snapshot(player.getUseItem());
+            if(!player.isUsingItem()||held==null||!held.key().equals("Thaumcraft:ItemThaumometer")||player.getUseItemRemainingTicks()>8)return;
             var world = services.worlds().bound(player.serverLevel());
             byte[] prior = player.getPersistentData().contains(LEGACY_ENTITY_DATA) ? player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA) : null;
-            byte[] updated = itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.phenomena(), message.prefix(), prior);
-            player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, updated);
-            LogUtils.getLogger().info("MFCL legacy server scan applied for {}: type={}, id={}, meta={}", player.getName().getString(), message.type(), message.id(), message.meta());
+            var updated = itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.phenomena(), message.prefix(), prior);
+            player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, updated.data());
+            updated.messages().forEach(packet->ScanSyncChannel.sendToPlayer(player,packet));
+            LogUtils.getLogger().info("MFCL legacy server scan for {}: accepted={}, type={}, id={}, meta={}", player.getName().getString(),updated.accepted(), message.type(), message.id(), message.meta());
         } catch (Exception failure) {
             LogUtils.getLogger().error("MFCL legacy server scan application failed for {}", player.getName().getString(), failure);
         }
@@ -206,6 +210,20 @@ public final class ModernContentBridge {
         CompoundTag tag = stack.getTagElement(STACK_TAG);
         return new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), stack.getHoverName().getString(), tag == null ? "" : tag.getString("snbt"));
     }
+    /** Read-only view for old renderers/tooltips. Host-only tags must not prevent drawing an item. */
+    public LegacyClientData.Stack renderSnapshot(ItemStack stack) throws Exception {
+        var item = reverseItems.get(stack.getItem()); if (item == null) return null;
+        CompoundTag stored = stack.getTagElement(STACK_TAG);
+        String snbt = stored == null ? "" : stored.getString("snbt");
+        var original = new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), stack.getHoverName().getString(), snbt);
+        CompoundTag host = stack.getTag(); if (host == null) return original;
+        CompoundTag display = host.getCompound("display");
+        Integer cost = host.contains("RepairCost", 3) ? host.getInt("RepairCost") : null;
+        Integer color = display.contains("color", 3) ? display.getInt("color") : null;
+        String name = stack.hasCustomHoverName() ? stack.getHoverName().getString() : null;
+        // 1.7.10 SNBT uses indexed lists and cannot be read by the modern TagParser.
+        return cost == null && color == null && name == null ? original : services.items().renderTags(original, cost, color, name);
+    }
     public HostWorldAccess.Block legacyBlock(BlockState state) {
         if (state.getBlock() instanceof MirroredBlock mirrored) return new HostWorldAccess.Block(mirrored.entry.key(), state.getValue(METADATA));
         if (!state.equals(state.getBlock().defaultBlockState())) throw new UnsupportedOperationException("Block state requires a legacy metadata mapping: " + state);
@@ -243,15 +261,21 @@ public final class ModernContentBridge {
         MirroredItem(Properties properties, LegacyContent.Item entry) { super(properties); this.entry = entry; }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
-        @Override public InteractionResult useOn(UseOnContext context) { return useLegacyItem(context); }
+        @Override public InteractionResult useOn(UseOnContext context) {
+            // The original scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
+            if(entry.key().equals("Thaumcraft:ItemThaumometer"))return InteractionResult.PASS;
+            return useLegacyItem(context);
+        }
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
             ItemStack stack = player.getItemInHand(hand);
             try {
                 var result = level.isClientSide
                         ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(services.worlds().bound(level),placer(player),snapshot(stack)))
                         : itemUse.rightClick(services.worlds().bound(level), placer(player), snapshot(stack));
-                if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)
+                if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                     result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
+                    serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(services.worlds().bound(level),placer(player)));
+                }
                 if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(stack);
                 if (result.useDuration() > 0) player.startUsingItem(hand);
                 if (result.prompt() != null && level.isClientSide) player.displayClientMessage(Component.literal(result.prompt()), true);

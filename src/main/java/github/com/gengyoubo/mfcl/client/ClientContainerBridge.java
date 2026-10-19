@@ -17,6 +17,7 @@ public final class ClientContainerBridge {
     private final Map<Screen,Bound> bindings=new IdentityHashMap<>();
     private final Map<Object,Screen> origins=new IdentityHashMap<>();
     private Map<String,LegacyClientData.Stack> reverse;
+    private final Queue<LegacyPackets.Message> pendingPackets=new java.util.concurrent.ConcurrentLinkedQueue<>();
     private static ClientContainerBridge active;
     public static ClientContainerBridge active(){return active;}
     public static void install(LegacyServices services) {
@@ -50,10 +51,7 @@ public final class ClientContainerBridge {
         return result;
     }
     public static void receive(LegacyPackets.Message message) {
-        try {
-            if(active==null||Minecraft.getInstance().player==null)return;
-            active.services.containers().preparePlayer();LegacyPackets.receiveClient(active.services,message);
-        } catch(Exception failure) {LogUtils.getLogger().error("MFCL old client packet failed: {}:{}",message.channel(),message.discriminator(),failure);}
+        if(active!=null)active.pendingPackets.add(message);
     }
     private static final class Bound {
         final Object gui;final LegacyScreens.Session session;
@@ -79,7 +77,7 @@ public final class ClientContainerBridge {
     private LegacyClientData.Stack snapshot(net.minecraft.world.item.ItemStack value) throws Exception {
         if(value.isEmpty())return null;
         var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
-        if(content!=null){var old=content.snapshot(value);if(old!=null)return old;}
+        if(content!=null){var old=content.renderSnapshot(value);if(old!=null)return old;}
         if(value.hasTag())return null; // unmapped host NBT items are simply not mirrored, never fatal
         if(reverse==null){reverse=new HashMap<>();for(var stack:services.items().catalog()){var modern=ModernItemMapping.renderStack(stack);if(!modern.isEmpty()&&!modern.hasTag())reverse.putIfAbsent(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(),stack);}}
         var old=reverse.get(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(value.getItem()).toString());
@@ -90,7 +88,7 @@ public final class ClientContainerBridge {
         Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
         bound.tooltipReady=false;bound.graphics=event.getGuiGraphics();
         try(var frame=LegacyGuiGraphics.begin(event.getScreen().width,event.getScreen().height,event.getMouseX(),event.getMouseY(),keys())) {
-            bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());bound.commands=frame.commands();
+            services.items().inLegacy(()->{bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());return null;});bound.commands=frame.commands();
             bound.tooltipReady=frame.hasTooltip();
         } catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI drawing failed",failure);}
     }
@@ -107,6 +105,14 @@ public final class ClientContainerBridge {
     }
     private void tick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
+        var mc=Minecraft.getInstance();
+        if(mc.level!=null&&mc.player!=null&&!pendingPackets.isEmpty())try {
+            var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
+            services.items().inLegacy(()->{
+                content.itemUse().clientActor(services.worlds().bound(mc.level),new LegacyTiles.Placer(mc.player.getUUID(),mc.player.getName().getString(),mc.player.getX(),mc.player.getY(),mc.player.getZ(),mc.player.getYRot(),mc.player.getXRot()),null);
+                LegacyPackets.Message message;while((message=pendingPackets.poll())!=null)LegacyPackets.receiveClient(services,message);return null;
+            });
+        }catch(Exception failure){LogUtils.getLogger().error("MFCL old client packet failed",failure);pendingPackets.clear();}
         var screen=Minecraft.getInstance().screen;
         if(Minecraft.getInstance().level==null&&bindings.isEmpty()){origins.clear();reverse=null;return;}
         var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return;
@@ -123,7 +129,7 @@ public final class ClientContainerBridge {
     private static int legacyKey(int key){return switch(key){case GLFW.GLFW_KEY_ESCAPE->1;case GLFW.GLFW_KEY_BACKSPACE->14;case GLFW.GLFW_KEY_ENTER->28;case GLFW.GLFW_KEY_R->19;case GLFW.GLFW_KEY_U->22;case GLFW.GLFW_KEY_O->24;default->0;};}
     private static int[] pointer(Screen screen){var mc=Minecraft.getInstance();return new int[]{(int)(mc.mouseHandler.xpos()*screen.width/mc.getWindow().getScreenWidth()),(int)(mc.mouseHandler.ypos()*screen.height/mc.getWindow().getScreenHeight())};}
     private interface Action{boolean run(Bound bound)throws Exception;}
-    private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=action.run(bound);Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
+    private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=services.items().inLegacy(()->action.run(bound));Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
     private void transition(Screen parent,Object requested) {
         if(requested==null){Minecraft.getInstance().setScreen(null);return;}
         Screen original=origins.get(requested);if(original!=null){Minecraft.getInstance().setScreen(original);return;}

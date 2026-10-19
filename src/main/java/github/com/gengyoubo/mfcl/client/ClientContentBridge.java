@@ -9,6 +9,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
+        LegacyScanNotifications.install(bridge);
         bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge)));
         bus.addListener((net.minecraftforge.client.event.ModelEvent.ModifyBakingResult event) -> {
@@ -25,11 +26,12 @@ public final class ClientContentBridge {
         }));
         bus.addListener((net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) -> {
             for (var entry : bridge.declarations().items()) event.register((stack, tint) -> {
-                try { return bridge.services().items().itemColor(bridge.snapshot(stack), tint); }
+                try { return bridge.services().items().itemColor(bridge.renderSnapshot(stack), tint); }
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.items().get(entry.key()));
         });
-        if (Boolean.getBoolean("mfcl.test.book")) BookHostSmokeProbe.install(bridge);
+        if (Boolean.getBoolean("mfcl.test.scanner")) ScannerHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.book")) BookHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.logic")) LogicHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.content")) ContentHostSmokeProbe.install(bridge);
     }

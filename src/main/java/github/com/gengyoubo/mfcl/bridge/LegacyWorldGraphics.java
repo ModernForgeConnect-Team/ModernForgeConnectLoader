@@ -16,6 +16,7 @@ import java.util.List;
  * geometry is submitted (EXECUTE) or stored raw inside a display list (COMPILE).
  */
 public final class LegacyWorldGraphics {
+    public record Text(String text,int x,int y,int color,boolean shadow,double[] matrix) {public Text {matrix=matrix.clone();}}
     private static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
     private LegacyWorldGraphics() { }
 
@@ -37,6 +38,7 @@ public final class LegacyWorldGraphics {
         private final double[][] planes = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
         private String texture = "";
         private final List<LegacyVertexStream.Primitive> primitives = new ArrayList<>();
+        private final List<Text> texts=new ArrayList<>();
         private final List<LegacyVertexStream.Vertex> pending = new ArrayList<>();
         private int mode = -1;
         private float u, v, nx, ny = 0, nz = 1;
@@ -51,6 +53,7 @@ public final class LegacyWorldGraphics {
         private final Deque<LegacyVertexStream.RenderState> attributes = new ArrayDeque<>();
 
         public List<LegacyVertexStream.Primitive> primitives() { check(); return List.copyOf(primitives); }
+        public List<Text> texts() {check();return List.copyOf(texts);}
         public List<LegacyVertexStream.Primitive> takePrimitives() { check();var result=List.copyOf(primitives);primitives.clear();return result; }
         private void check() { if (Thread.currentThread() != owner || CURRENT.get() != this) throw new IllegalStateException("Expired or foreign legacy world capture"); }
         @Override public void close() {
@@ -91,6 +94,10 @@ public final class LegacyWorldGraphics {
     }
 
     private static Frame frame() { return CURRENT.get(); }
+    public static void text(String text,int x,int y,int color,boolean shadow) {
+        Frame frame=java.util.Objects.requireNonNull(frame(),"Text outside a legacy render frame");frame.check();
+        if(text!=null)frame.texts.add(new Text(text,x,y,color,shadow,frame.matrix));
+    }
 
     public static int integer(int value) {
         Frame f = frame();

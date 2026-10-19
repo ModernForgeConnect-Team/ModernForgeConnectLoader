@@ -33,6 +33,11 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
             if (primitives == null) primitives = bridge.pack().geometry().get(base);
         }
         if (primitives == null || primitives.isEmpty()) return;
+        List<LegacyWorldGraphics.Text> texts=List.of();
+        if(type.equals("EQUIPPED_FIRST_PERSON")&&itemKey.equals("Thaumcraft:ItemThaumometer")&&Minecraft.getInstance().level!=null&&Minecraft.getInstance().player!=null) {
+            try {var live=LiveLegacyItemCapture.firstPerson(bridge,stack);primitives=live.primitives();texts=live.texts();originalPipeline=true;}
+            catch(Exception failure) {throw new IllegalStateException("Cannot render live thaumometer target",failure);}
+        }
         pose.pushPose();
         try {
             pose.translate(.5,.5,.5); // ItemRenderer already translated by (-.5,-.5,-.5).
@@ -46,6 +51,11 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
                 }
             } else blockTransform(context,pose,primitives);
             replay(primitives,pose,buffer,light,overlay);
+            for(var text:texts) {
+                float[] values=new float[16];for(int index=0;index<16;index++)values[index]=(float)text.matrix()[index];
+                var matrix=new org.joml.Matrix4f(pose.last().pose()).mul(new org.joml.Matrix4f().set(values));
+                Minecraft.getInstance().font.drawInBatch(text.text(),text.x(),text.y(),text.color(),text.shadow(),matrix,buffer,net.minecraft.client.gui.Font.DisplayMode.NORMAL,0,0xF000F0);
+            }
         } finally { pose.popPose(); }
     }
     private void replay(List<LegacyVertexStream.Primitive> primitives, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {

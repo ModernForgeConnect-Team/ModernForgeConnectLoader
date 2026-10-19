@@ -71,8 +71,14 @@ public final class LegacyTiles {
             Object movement = loader.loadClass("net.minecraft.util.MovementInput").getConstructor().newInstance();
             movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
             actorType.getField("field_71158_b").set(actor,movement);
+        } else {
+            Class<?> manager=loader.loadClass("net.minecraft.server.management.ItemInWorldManager");
+            Object access=manager.getConstructor(worldType).newInstance(world);manager.getField("field_73090_b").set(access,actor);
+            var interaction=actorType.getField("field_71134_c");interaction.setAccessible(true);interaction.set(actor,access);
         }
         Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
+        player.getField("eyeHeight").setFloat(actor,client?.12f:1.62f);
+        entity.getField("field_70129_M").setFloat(actor,client?1.62f:0);
         var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);
         profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));
         Object inventory = loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(player).newInstance(actor);
@@ -86,7 +92,7 @@ public final class LegacyTiles {
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?2:0));
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
         entity.getField("field_70170_p").set(actor, world);
-        entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()); entity.getField("field_70161_v").setDouble(actor, placer.z());
+        entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()+(client?1.62:0)); entity.getField("field_70161_v").setDouble(actor, placer.z());
         entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
         // Range/ray-trace helpers read the player's bounding box; the allocated actor has none, so build one directly.
         Object box = loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a", double.class, double.class, double.class, double.class, double.class, double.class)

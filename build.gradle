@@ -31,6 +31,7 @@ minecraft {
             if (project.hasProperty('mfclContentSmokeTest')) property 'mfcl.test.content', 'true'
             if (project.hasProperty('mfclLogicSmokeTest')) property 'mfcl.test.logic', 'true'
             if (project.hasProperty('mfclBookSmokeTest')) property 'mfcl.test.book', 'true'
+            if (project.hasProperty('mfclScannerSmokeTest')) property 'mfcl.test.scanner', 'true'
             if (project.hasProperty('mfclSmokePrefix')) property 'mfcl.test.smokePrefix', project.property('mfclSmokePrefix')
             if (project.hasProperty('mfclLegacyGui')) property 'mfcl.legacyGui', 'true'
             if (project.hasProperty('mfclLegacyBrowser')) property 'mfcl.legacyGui', 'false'
@@ -62,6 +63,9 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 repositories {
     maven { url = 'https://libraries.minecraft.net' }
+    maven {
+        url "https://cursemaven.com"
+    }
 }
 sourceSets {
     create('preparation')
@@ -99,6 +103,7 @@ tasks.register('prepareLegacyRuntime', JavaExec) {
 }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    runtimeOnly fg.deobf("curse.maven:jei-238222:9205046")
     implementation 'org.ow2.asm:asm:9.7.1'
     implementation 'org.apache.maven:maven-artifact:3.8.5'
     testImplementation platform('org.junit:junit-bom:5.11.4')

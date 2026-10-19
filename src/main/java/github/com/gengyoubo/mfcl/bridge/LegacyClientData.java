@@ -333,6 +333,23 @@ public final class LegacyClientData {
         }
         stackType.getField("field_77994_a").setInt(result, value.count()); return result;
     }
+    /** Adds host presentation tags to a copy using the old NBT implementation, preserving old indexed lists. */
+    public Stack renderTags(Stack source,Integer repairCost,Integer color,String name) throws Exception {
+        return inLegacy(()->{
+            Object stack=materialize(source);
+            var compound=loader.loadClass("net.minecraft.nbt.NBTTagCompound");
+            var field=stackType.getField("field_77990_d");Object tag=field.get(stack);
+            if(tag==null){tag=compound.getConstructor().newInstance();field.set(stack,tag);}
+            if(repairCost!=null)compound.getMethod("func_74768_a",String.class,int.class).invoke(tag,"RepairCost",repairCost);
+            if(color!=null||name!=null) {
+                Object display=compound.getMethod("func_74775_l",String.class).invoke(tag,"display");
+                if(color!=null)compound.getMethod("func_74768_a",String.class,int.class).invoke(display,"color",color);
+                if(name!=null)compound.getMethod("func_74778_a",String.class,String.class).invoke(display,"Name",name);
+                compound.getMethod("func_74782_a",String.class,loader.loadClass("net.minecraft.nbt.NBTBase")).invoke(tag,"display",display);
+            }
+            return snapshot(stack);
+        });
+    }
     public synchronized Stack snapshot(Object value) throws Exception {
         Object item = itemOfStack.invoke(value);
         Object nbt = stackType.getField("field_77990_d").get(value);

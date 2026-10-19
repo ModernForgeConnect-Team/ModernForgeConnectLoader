@@ -11,15 +11,25 @@ import java.util.*;
 
 /** Binds the actual host level to a typed old client world. Client bindings never mutate server authority. */
 public final class ClientWorldBridge {
+    private static ClientWorldBridge active;
     private final LegacyServices services;
     private final Map<String, Integer> dimensions = new HashMap<>(Map.of("minecraft:overworld", 0, "minecraft:the_nether", -1, "minecraft:the_end", 1));
     private Level current;
     private ClientWorldBridge(LegacyServices services) { this.services = services; }
     public static void install(LegacyServices services) {
-        var bridge = new ClientWorldBridge(services); MinecraftForge.EVENT_BUS.addListener(bridge::tick);
+        var bridge = new ClientWorldBridge(services); active=bridge;MinecraftForge.EVENT_BUS.addListener(bridge::tick);
+    }
+    /** A loaded level can render before the first client tick, especially after reopening a save. */
+    static Object world(LegacyServices services) throws Exception {
+        if(active==null||active.services!=services)throw new IllegalStateException("Client world bridge is not installed");
+        return services.items().inLegacy(()->{active.refresh();return services.worlds().bound(active.current);});
     }
     private void tick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        try {services.items().inLegacy(()->{refresh();return null;});}
+        catch(Exception failure){throw new IllegalStateException("Cannot refresh legacy client world",failure);}
+    }
+    private void refresh() {
         Level next = Minecraft.getInstance().level;
         if (next == current) return;
         try {

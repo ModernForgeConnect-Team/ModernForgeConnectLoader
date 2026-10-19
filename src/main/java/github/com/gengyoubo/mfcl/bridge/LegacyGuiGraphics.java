@@ -62,7 +62,7 @@ public final class LegacyGuiGraphics {
         Frame f = frame();f.flushGeometry();if (text != null) f.commands.add(new Text(text, f.x(x), f.y(y), color, shadow,f.matrix.sx,f.matrix.sy)); return x + (text == null ? 0 : text.length() * 6);
     }
     public static int fontText(Object font,String text,int x,int y,int color,boolean shadow) throws Exception {
-        text(text,x,y,color,shadow);
+        if(capturing())text(text,x,y,color,shadow);else LegacyWorldGraphics.text(text,x,y,color,shadow);
         return x+(text==null?0:(int)font.getClass().getMethod("func_78256_a",String.class).invoke(font,text));
     }
     public static void item(Object stack, int x, int y, boolean overlay, String label) {
