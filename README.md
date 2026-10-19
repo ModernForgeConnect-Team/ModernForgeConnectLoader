@@ -95,6 +95,8 @@ MfclApi.whenReady(runtime -> {
 
 MLA uses exact legacy SRG names and JVM descriptors. Legacy references stay opaque and belong to one runtime; gameplay calls must run on the appropriate game thread. See the [compilable example](examples/legacy-accessor/) and [API guide](docs/developer-api.md) for imports, fields/constructors, conversions, lifecycle and limitations. `/mfclapi` provides operator diagnostics.
 
+Since MFCL 0.1.4, modern addons can declare original 1.7.10 prerequisites in `[[mfclDependencies.<addon-id>]]` tables in their `mods.toml`. MFCL validates actual loading and versions. `MfclApi.isModLoaded("Thaumcraft")`, `mod(...)` and `loadedMods()` expose original mod metadata; IDs retain their legacy case. See [legacy dependency declarations](docs/legacy-dependencies.md) and the [TOML example](examples/legacy-accessor/thaumcraft.mods.toml.example).
+
 ## Legacy Dependency Resolver
 
 The [standalone Gradle plugin](tools/legacy-dependency-resolver/) reuses Gradle dependency resolution and accepts explicit local JAR imports. Inputs require pinned SHA-256 hashes, origin records and license/distribution notes. It does not add remote repositories, resolve transitive dependencies or install old JARs on the modern runtime classpath.

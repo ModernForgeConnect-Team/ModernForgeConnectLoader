@@ -5,3 +5,5 @@
 在现代 Forge 模组构造器调用 `LegacyAddon.initialize()`，并在 `mods.toml` 中声明对 `mfcl` 的必需依赖。完整接入、线程规则和签名说明见 [开发 API](../../docs/developer-api.md)。
 
 示例在 API 就绪时通过 MLA 调用真实旧 ItemStack 的复制方法与数量字段。专属模组 API 可以在自己的适配库声明类似接口；旧类名只作为字符串描述符出现，不把原始 JAR 加进现代运行时。
+
+需要 TC4 等必需旧前置时，参考 [完整 TOML 示例](thaumcraft.mods.toml.example) 和 [声明说明](../../docs/legacy-dependencies.md)。示例要求 MFCL 0.1.4+ 并通过 `mfclDependencies` 检查原始 `Thaumcraft` 版本；`LegacyAddon` 本身仍是仅使用原版旧 ItemStack 的通用示例。

@@ -102,8 +102,13 @@ public final class RuntimeDriver {
             Loader.instance().initializeMods(); completed.add(stage);
             LegacyRegistrationSeal.seal(); result.put("registrationSealed", true);
             List<String> modIds = new ArrayList<String>();
-            for (cpw.mods.fml.common.ModContainer mod : Loader.instance().getActiveModList()) modIds.add(mod.getModId());
+            Map<String, String> modVersions = new LinkedHashMap<String, String>();
+            for (cpw.mods.fml.common.ModContainer mod : Loader.instance().getActiveModList()) {
+                modIds.add(mod.getModId());
+                modVersions.put(mod.getModId(), mod.getVersion());
+            }
             result.put("loadedMods", modIds);
+            result.put("loadedModVersions", modVersions);
             result.put("legacyFmlStarted", true);
             result.put("stage", "AVAILABLE");
         } catch (Throwable failure) {

@@ -8,6 +8,7 @@
 | --- | --- |
 | 独立 Java 17 API JAR，无 Minecraft / Forge 编译依赖 | 已实现 |
 | 运行时就绪回调、实际加载的 mod ID、关闭失效 | 已实现 |
+| 现代附属声明旧前置、大小写 ID / 版本 / 来源查询 | 已实现，MFCL 0.1.4 起；见 [旧版前置](legacy-dependencies.md) |
 | MLA 精确签名的方法、字段、构造器访问，描述符可推断，接口返回值自动代理包装 | 已实现 |
 | 旧物品 / 方块注册表查询 | 已实现，只读；不绕过注册屏障添加内容 |
 | ItemStack 和旧 NBT 的复制 / 快照 | 已实现，保留原始 1.7.10 SNBT |
@@ -61,6 +62,8 @@ dependencies {
 也可执行 `publishDeveloperApiPublicationToMavenRepository`，发布到本仓库 `mcmodsrepo` 的坐标为 `github.com.gengyoubo.mfcl:mfcl-api:0.1.0`，POM 不引入旧 Minecraft、Forge 或旧模组依赖。此仓库尚未发布到公共 Maven 服务。
 
 运行游戏时安装完整 MFCL，并按现有运行时约定准备原始旧模组及旧运行时。在现代附属模组的 `mods.toml` 声明对 `mfcl` 的必需依赖。旧 Forge / Minecraft JAR 不能作为现代附属模组的普通 `implementation` 或 `runtimeOnly` 依赖。
+
+需要原始 Thaumcraft 等旧前置时，另用 `[[mfclDependencies.<现代modId>]]` 声明，MFCL 会检查实际加载结果和版本。普通现代 Forge 依赖表无法匹配隔离域内的旧 ID。`MfclApi.isModLoaded("Thaumcraft")`、`mod(...)`、`loadedMods()` 提供独立元数据查询；声明格式和生命周期见 [旧版前置](legacy-dependencies.md)。
 
 `examples/legacy-accessor/src/example/LegacyAddon.java` 是可编译示例，`compileApiExample` 的类路径**只有 API 输出**，证明示例不需要引用任何一个版本的 Minecraft 类。
 

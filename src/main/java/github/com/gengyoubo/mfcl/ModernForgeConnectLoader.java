@@ -29,6 +29,17 @@ public final class ModernForgeConnectLoader {
             else LOGGER.warn("MFCL [{}] {}", diagnostic.code(), diagnostic.message());
         }
         var catalog = github.com.gengyoubo.mfcl.legacy.LegacyModCatalog.from(result, runtimeService.loadedModIds());
+        var loadedMods = catalog.loadedMods(runtimeService.loadedModVersions());
+        var dependencyErrors = new java.util.ArrayList<String>();
+        for (var file : net.minecraftforge.fml.ModList.get().getModFiles()) {
+            var owners = file.getMods().stream().map(net.minecraftforge.forgespi.language.IModInfo::getModId)
+                    .collect(java.util.stream.Collectors.toSet());
+            dependencyErrors.addAll(github.com.gengyoubo.mfcl.legacy.LegacyAddonDependencies.validateFile(
+                    owners, file.getConfig(), loadedMods, net.minecraftforge.fml.loading.FMLEnvironment.dist));
+        }
+        if (!dependencyErrors.isEmpty()) throw new IllegalStateException("MFCL legacy dependency checks failed:\n"
+                + String.join("\n", dependencyErrors));
+        github.com.gengyoubo.mfcl.internal.api.ApiRuntimeProvider.installMods(loadedMods);
         github.com.gengyoubo.mfcl.legacy.RuntimeModAccounting.install(catalog);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(github.com.gengyoubo.mfcl.internal.api.ApiDebugCommand::register);
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyModBranding.install(catalog));

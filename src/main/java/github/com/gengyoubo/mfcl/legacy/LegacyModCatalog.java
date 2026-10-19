@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.legacy;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -33,6 +34,16 @@ public record LegacyModCatalog(String targetMinecraft, String sourceMinecraft, L
     }
 
     public int loadedCount() { return (int) entries.stream().filter(Entry::loaded).count(); }
+    /** Runtime container versions take precedence over discovery metadata, including dynamic coremods. */
+    public Map<String, github.com.gengyoubo.mfcl.api.LegacyModInfo> loadedMods(Map<String, String> versions) {
+        var result = new LinkedHashMap<String, github.com.gengyoubo.mfcl.api.LegacyModInfo>();
+        for (var entry : entries) if (entry.loaded()) {
+            var mod = entry.mod();
+            result.put(mod.id(), new github.com.gengyoubo.mfcl.api.LegacyModInfo(mod.id(), mod.name(),
+                    versions.getOrDefault(mod.id(), mod.version()), sourceMinecraft));
+        }
+        return Map.copyOf(result);
+    }
     public int totalLoaded(int modernCount) { return Math.addExact(modernCount, loadedCount()); }
 
     /** Preserve every other Forge status, especially errors. Only count completed legacy FML mods. */

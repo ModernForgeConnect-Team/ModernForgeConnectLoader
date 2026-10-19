@@ -152,6 +152,23 @@ class LegacyAccessorTest {
         assertTrue(runtime.mappings().supported().isEmpty());
         assertThrows(LegacyAccessException.class, () -> runtime.mappings().toLegacy("missing:converter", "value"));
     }
+    @Test void loadedModQueriesWorkBeforeGameplayApiReadinessAndClearOnClose() {
+        assertTrue(MfclApi.loadedMods().isEmpty());
+        assertFalse(MfclApi.isModLoaded("fixture"));
+        var metadata = new LegacyModInfo("fixture", "Fixture", "1.2", "1.7.10");
+        var mods = new HashMap<String, LegacyModInfo>(); mods.put("fixture", metadata);
+        ApiRuntimeProvider.installMods(mods); mods.clear();
+        assertTrue(MfclApi.runtime().isEmpty());
+        assertTrue(MfclApi.isModLoaded("fixture"));
+        assertFalse(MfclApi.isModLoaded("Fixture"));
+        assertEquals(metadata, MfclApi.mod("fixture").orElseThrow());
+        assertEquals("1.2", MfclApi.mod("fixture").orElseThrow().version());
+        assertThrows(UnsupportedOperationException.class, () -> MfclApi.loadedMods().clear());
+        ApiRuntimeProvider.publish(runtime);
+        runtime.close();
+        assertTrue(MfclApi.loadedMods().isEmpty());
+        assertTrue(MfclApi.mod("fixture").isEmpty());
+    }
     @Test void readyCallbacksCanCancelAndFailureDoesNotBlockOtherAddons() throws Exception {
         var provider = new ApiRuntimeProvider(); var calls = new ArrayList<LegacyRuntime>();
         var canceled = provider.whenReady(calls::add); canceled.close();

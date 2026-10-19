@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.legacy;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,8 +29,20 @@ class LegacyModCatalogTest {
             assertEquals(1, catalog.entries().size());
             assertFalse(catalog.entries().get(0).loaded());
             assertEquals(0, catalog.loadedCount());
+            assertTrue(catalog.loadedMods(Map.of("pending", "2.0")).isEmpty());
             assertEquals("Mod loading complete - 3 mods loaded", catalog.completionMessage("Mod loading complete - 3 mods loaded"));
         }
+    }
+
+    @Test void publicMetadataUsesRuntimeVersionsAndIncludesDynamicContainers() {
+        var catalog = catalog(true, Set.of("Thaumcraft", "dynamic", "Forge"),
+                archive("tc.jar", mod("Thaumcraft")), archive("pending.jar", mod("pending")));
+        var mods = catalog.loadedMods(Map.of("Thaumcraft", "4.2.3.5", "dynamic", "2.3"));
+        assertEquals(Set.of("Thaumcraft", "dynamic"), mods.keySet());
+        assertEquals("4.2.3.5", mods.get("Thaumcraft").version());
+        assertEquals("2.3", mods.get("dynamic").version());
+        assertEquals("1.7.10", mods.get("Thaumcraft").sourceMinecraft());
+        assertThrows(UnsupportedOperationException.class, mods::clear);
     }
 
     @Test void deduplicatesMetadataAndIncludesActualDynamicCoremodContainers() {

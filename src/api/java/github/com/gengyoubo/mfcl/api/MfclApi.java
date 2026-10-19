@@ -2,6 +2,7 @@ package github.com.gengyoubo.mfcl.api;
 
 import github.com.gengyoubo.mfcl.api.spi.RuntimeProvider;
 import java.util.Optional;
+import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.function.Consumer;
 
@@ -21,6 +22,20 @@ public final class MfclApi {
     }
     public static Optional<LegacyRuntime> runtime() {
         return Provider.INSTANCE.flatMap(RuntimeProvider::current);
+    }
+    /**
+     * Loaded original mods, keyed by case-sensitive legacy ID (for example, "Thaumcraft").
+     * Query from common setup or later; before MFCL finishes construction this is empty.
+     * This metadata does not require gameplay API readiness and never includes merely discovered JARs.
+     */
+    public static Map<String, LegacyModInfo> loadedMods() {
+        return Provider.INSTANCE.map(RuntimeProvider::loadedMods).orElseGet(Map::of);
+    }
+    public static Optional<LegacyModInfo> mod(String id) {
+        return Optional.ofNullable(loadedMods().get(java.util.Objects.requireNonNull(id)));
+    }
+    public static boolean isModLoaded(String id) {
+        return mod(id).isPresent();
     }
     /** Called once on the host setup thread, or immediately if already ready. Closing cancels a pending callback. */
     public static AutoCloseable whenReady(Consumer<LegacyRuntime> listener) {

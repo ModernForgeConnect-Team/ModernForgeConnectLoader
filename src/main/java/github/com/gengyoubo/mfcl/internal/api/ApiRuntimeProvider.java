@@ -7,7 +7,12 @@ import java.util.function.Consumer;
 
 public final class ApiRuntimeProvider implements RuntimeProvider {
     private static LegacyApiRuntime active;
+    private static Map<String, LegacyModInfo> mods = Map.of();
     private static final List<Consumer<LegacyRuntime>> pending = new ArrayList<>();
+    public static synchronized void installMods(Map<String, LegacyModInfo> loaded) { mods = Map.copyOf(loaded); }
+    @Override public Map<String, LegacyModInfo> loadedMods() {
+        synchronized (ApiRuntimeProvider.class) { return active != null && !active.isOpen() ? Map.of() : mods; }
+    }
     @Override public Optional<LegacyRuntime> current() {
         synchronized (ApiRuntimeProvider.class) { return active != null && active.isOpen() ? Optional.of(active) : Optional.empty(); }
     }
@@ -30,7 +35,9 @@ public final class ApiRuntimeProvider implements RuntimeProvider {
         }
         listeners.forEach(listener -> deliver(runtime, listener));
     }
-    static synchronized void remove(LegacyApiRuntime runtime) { if (active == runtime) active = null; }
+    static synchronized void remove(LegacyApiRuntime runtime) {
+        if (active == runtime) { active = null; mods = Map.of(); }
+    }
     private static void deliver(LegacyApiRuntime runtime, Consumer<LegacyRuntime> listener) {
         try { listener.accept(runtime); }
         catch (VirtualMachineError | ThreadDeath fatal) { throw fatal; }

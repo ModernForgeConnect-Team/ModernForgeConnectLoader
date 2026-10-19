@@ -16,13 +16,17 @@ public final class LegacyRuntimeService {
     public enum State { NO_LEGACY_MODS, DEPENDENCY_ERRORS, RUNTIME_NOT_READY, RUNTIME_FAILED, FML_AVAILABLE, CLIENT_DATA_AVAILABLE }
     private EmbeddedLegacyRuntime runtime;
     private java.util.Set<String> loadedModIds = java.util.Set.of();
+    private java.util.Map<String, String> loadedModVersions = java.util.Map.of();
     public EmbeddedLegacyRuntime runtime() { return runtime; }
     public java.util.Set<String> loadedModIds() { return loadedModIds; }
+    public java.util.Map<String, String> loadedModVersions() { return loadedModVersions; }
 
     public Report start(Path gameDirectory, Path runtimeDirectory) {
         return start(gameDirectory, runtimeDirectory, null);
     }
     public Report start(Path gameDirectory, Path runtimeDirectory, github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend backend) {
+        loadedModIds = java.util.Set.of();
+        loadedModVersions = java.util.Map.of();
         Report inspected = inspect(gameDirectory);
         if (inspected.state() != State.RUNTIME_NOT_READY) return inspected;
         List<LegacyDiagnostic> diagnostics = new ArrayList<>(inspected.diagnostics());
@@ -38,6 +42,11 @@ public final class LegacyRuntimeService {
                 var stages = runtime.boot();
                 if (stages.get("loadedMods") instanceof List<?> loaded) {
                     loadedModIds = loaded.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet());
+                }
+                if (stages.get("loadedModVersions") instanceof java.util.Map<?, ?> versions) {
+                    var values = new java.util.HashMap<String, String>();
+                    versions.forEach((id, version) -> values.put(String.valueOf(id), version == null ? "" : String.valueOf(version)));
+                    loadedModVersions = java.util.Map.copyOf(values);
                 }
                 writeReport(gameDirectory.resolve("logs/mfcl/runtime-1.7.10.json"), stages);
                 started = Boolean.TRUE.equals(stages.get("legacyFmlStarted"));

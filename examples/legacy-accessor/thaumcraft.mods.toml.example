@@ -1,0 +1,23 @@
+modLoader="javafml"
+loaderVersion="[47,48)"
+license="MPL-2.0"
+
+[[mods]]
+modId="exampleaddon"
+version="1.0.0"
+displayName="Example TC4 Addon"
+
+# Modern Forge checks that this build of MFCL is installed.
+[[dependencies.exampleaddon]]
+modId="mfcl"
+mandatory=true
+versionRange="[0.1.4,)"
+ordering="AFTER"
+side="BOTH"
+
+# MFCL checks the original, successfully loaded Forge 1.7.10 mod.
+[[mfclDependencies.exampleaddon]]
+modId="Thaumcraft"
+mandatory=true
+versionRange="[4.2.3.5,5.0)"
+side="BOTH"

@@ -5,6 +5,10 @@ import github.com.gengyoubo.mfcl.api.mla.*;
 
 /** Invoke initialize() in the modern addon constructor. No old Minecraft compile dependency is needed. */
 public final class LegacyAddon {
+    /** Query from the modern common setup event or later; no gameplay API readiness is needed. */
+    public static String thaumcraftVersion() {
+        return MfclApi.mod("Thaumcraft").map(LegacyModInfo::version).orElse("");
+    }
     @LegacyType("net.minecraft.item.ItemStack")
     public interface OriginalStack {
         @LegacyMethod(name="func_77946_l") OriginalStack copy();
