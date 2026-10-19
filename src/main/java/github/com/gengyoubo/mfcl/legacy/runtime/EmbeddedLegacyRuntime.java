@@ -16,6 +16,11 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     private final Map<Path, String> originalHashes = new LinkedHashMap<>();
     private github.com.gengyoubo.mfcl.bridge.LegacyServices services;
     private github.com.gengyoubo.mfcl.bridge.LegacyClientData earlyClient;
+    private github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime developerApi;
+    public synchronized github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime developerApi(Set<String> loadedMods) {
+        if (developerApi == null) developerApi = github.com.gengyoubo.mfcl.internal.api.ApiRuntimeFactory.create(services(), loadedMods);
+        return developerApi;
+    }
     private github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend openGlBackend;
     public void openGlBackend(github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend backend) { this.openGlBackend = backend; }
     private final List<github.com.gengyoubo.mfcl.bridge.LegacyModAdapter> adapters = new ArrayList<>();
@@ -148,6 +153,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         return target;
     }
     @Override public void close() throws IOException {
+        if (developerApi != null) developerApi.close();
         if (services != null) services.worlds().close();
         if (earlyClient != null) earlyClient.close();
         if (openGlBackend != null) {

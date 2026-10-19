@@ -36,6 +36,10 @@ public final class ModernForgeConnectLoader {
             @SuppressWarnings("removal")
             var bus = net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
             var content = github.com.gengyoubo.mfcl.content.ModernContentBridge.install(runtimeService.runtime().services(), bus);
+            var developerApi = runtimeService.runtime().developerApi(runtimeService.loadedModIds());
+            github.com.gengyoubo.mfcl.internal.api.ApiRuntimeFactory.installHostMappings(developerApi, content);
+            bus.addListener((net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent event) -> event.enqueueWork(
+                    () -> github.com.gengyoubo.mfcl.internal.api.ApiRuntimeProvider.publish(developerApi)));
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContentBridge.install(content, bus));
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientWorldBridge.install(runtimeService.runtime().services()));
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContainerBridge.install(runtimeService.runtime().services()));

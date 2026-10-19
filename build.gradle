@@ -12,6 +12,7 @@ base {
     archivesName = mod_id
 }
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+sourceSets.create('api')
 println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 minecraft {
     mappings channel: mapping_channel, version: mapping_version
@@ -42,6 +43,7 @@ minecraft {
             mods {
                 "${mod_id}" {
                     source sourceSets.main
+                    source sourceSets.api
                 }
             }
         }
@@ -73,6 +75,7 @@ sourceSets {
     create('legacy1710')
 }
 dependencies {
+    implementation sourceSets.api.output
     preparationImplementation 'org.ow2.asm:asm:9.7.1'
     preparationImplementation 'org.ow2.asm:asm-commons:9.7.1'
     preparationImplementation 'org.glavo:pack200:0.3.0'
@@ -124,7 +127,28 @@ tasks.named('processResources', ProcessResources).configure {
         expand replaceProperties + [project: project]
     }
 }
+tasks.register('apiJar', Jar) {
+    archiveClassifier = 'api'
+    from sourceSets.api.output
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+tasks.register('apiSourcesJar', Jar) {
+    archiveClassifier = 'api-sources'
+    from sourceSets.api.allSource
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+tasks.named('assemble') { dependsOn 'apiJar', 'apiSourcesJar', 'compileApiExample' }
+tasks.register('compileApiExample', JavaCompile) {
+    description = 'Compile the addon example against only the standalone API, without either Minecraft version.'
+    source = fileTree('examples/legacy-accessor/src') { include '**/*.java' }
+    classpath = sourceSets.api.output
+    destinationDirectory = layout.buildDirectory.dir('api-example')
+    options.release = 17
+}
 tasks.named('jar', Jar).configure {
+    from sourceSets.api.output
     manifest {
         attributes([
                 'Specification-Title'     : mod_id,
@@ -142,6 +166,8 @@ publishing {
     publications {
         register('mavenJava', MavenPublication) {
             artifact jar
+            artifact tasks.named('apiJar')
+            artifact tasks.named('apiSourcesJar')
         }
     }
     repositories {

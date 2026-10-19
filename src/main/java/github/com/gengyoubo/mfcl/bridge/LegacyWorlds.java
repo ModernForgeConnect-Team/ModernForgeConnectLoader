@@ -22,6 +22,18 @@ public final class LegacyWorlds implements AutoCloseable {
         if (binding == null) throw new IllegalStateException("Host world has no legacy binding");
         binding.check(); return binding.world;
     }
+    /** Read-only API lookup; never creates a world on an arbitrary addon thread. */
+    public synchronized Object findBound(Object hostIdentity) {
+        Binding binding = worlds.get(hostIdentity);
+        if (binding == null) return null;
+        binding.check(); return binding.world;
+    }
+    public synchronized Object host(Object legacyWorld) {
+        for (var entry : worlds.entrySet()) if (entry.getValue().world == legacyWorld) {
+            entry.getValue().check(); return entry.getKey();
+        }
+        return null;
+    }
     public synchronized Object bind(Object hostIdentity, HostWorldAccess host) throws Exception {
         Binding existing = worlds.get(hostIdentity);
         if (existing != null) { existing.check(); return existing.world; }
