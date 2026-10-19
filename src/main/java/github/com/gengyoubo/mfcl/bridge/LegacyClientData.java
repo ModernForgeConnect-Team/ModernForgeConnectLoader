@@ -13,8 +13,11 @@ public final class LegacyClientData {
     public record Recipe(String handler, String name, List<Ingredient> ingredients, Stack result, List<Ingredient> other) {
         public Recipe { ingredients = List.copyOf(ingredients); other = List.copyOf(other); }
     }
-    public record HostRecipe(String id, String kind, int width, int height, List<List<Stack>> ingredients, Stack result) {
+    public record HostRecipe(String id, String kind, int width, int height, List<List<Stack>> ingredients, Stack result, float experience) {
         public HostRecipe { ingredients = ingredients.stream().map(List::copyOf).toList(); }
+        public HostRecipe(String id, String kind, int width, int height, List<List<Stack>> ingredients, Stack result) {
+            this(id, kind, width, height, ingredients, result, 0f);
+        }
     }
     public record HostItem(String key, String name, int stackLimit, int maxDamage) {}
     private final ClassLoader loader;
@@ -27,6 +30,8 @@ public final class LegacyClientData {
     private final List<String> diagnostics = new ArrayList<>();
     private boolean ready;
     private List<Object> ownCrafting;
+    private List<FurnaceRecipe> ownFurnace;
+    private record FurnaceRecipe(Object input, Object output, float experience) {}
     private final Map<Object, HostItem> hostItems = new IdentityHashMap<>();
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
@@ -291,11 +296,12 @@ public final class LegacyClientData {
                 }
             }
             var replacement = new ArrayList<>(ownCrafting);
-            var furnace = new LinkedHashMap<Object, Object>();
+            var furnace = new ArrayList<FurnaceRecipe>();
             for (HostRecipe recipe : recipes) {
                 Object output = materialize(recipe.result());
                 if (recipe.kind().equals("smelting")) {
-                    for (Stack ingredient : recipe.ingredients().get(0)) furnace.put(materialize(ingredient), copyStack.invoke(output));
+                    if (recipe.ingredients().isEmpty() || recipe.ingredients().get(0).isEmpty()) continue;
+                    for (Stack ingredient : recipe.ingredients().get(0)) furnace.add(new FurnaceRecipe(materialize(ingredient), copyStack.invoke(output), recipe.experience()));
                 } else if (recipe.kind().equals("shaped")) {
                     if (recipe.width() < 1 || recipe.width() > 3 || recipe.height() < 1 || recipe.height() > 3 || recipe.ingredients().size() != recipe.width() * recipe.height())
                         throw new IllegalArgumentException("Invalid crafting grid: " + recipe.id());
@@ -316,7 +322,22 @@ public final class LegacyClientData {
             Class<?> furnaceType = loader.loadClass("net.minecraft.item.crafting.FurnaceRecipes");
             Object furnaceOwner = furnaceType.getMethod("func_77602_a").invoke(null);
             Map<Object, Object> furnaceTarget = (Map<Object, Object>) furnaceType.getMethod("func_77599_b").invoke(furnaceOwner);
-            target.clear(); target.addAll(replacement); furnaceTarget.clear(); furnaceTarget.putAll(furnace);
+            if (ownFurnace == null) {
+                var captured = new ArrayList<FurnaceRecipe>();
+                var experience = furnaceType.getMethod("func_151398_b", stackType);
+                for (var entry : furnaceTarget.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) continue;
+                    captured.add(new FurnaceRecipe(copyStack.invoke(entry.getKey()), copyStack.invoke(entry.getValue()), (float) experience.invoke(furnaceOwner, entry.getKey())));
+                }
+                ownFurnace = captured;
+            }
+            Field experienceField = furnaceType.getDeclaredField("field_77605_c"); experienceField.setAccessible(true);
+            Map<Object, Object> experienceTarget = (Map<Object, Object>) experienceField.get(furnaceOwner);
+            var addSmelting = furnaceType.getMethod("func_151394_a", stackType, stackType, float.class);
+            target.clear(); target.addAll(replacement);
+            furnaceTarget.clear(); experienceTarget.clear();
+            for (var stored : ownFurnace) addSmelting.invoke(furnaceOwner, copyStack.invoke(stored.input()), copyStack.invoke(stored.output()), stored.experience());
+            for (var projected : furnace) addSmelting.invoke(furnaceOwner, projected.input(), projected.output(), projected.experience());
             return recipes.size();
         });
     }

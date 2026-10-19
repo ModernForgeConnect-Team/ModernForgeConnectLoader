@@ -30,24 +30,27 @@ public final class LegacyCraftingRecipes {
         var content=bridge();var definition=content.crafting().definition(hash);var ingredients=NonNullList.<Ingredient>create();
         if(definition.dynamic())return new Dynamic(id,hash);
         try {
-            for(var input:definition.inputs()) {
-                if(input.isEmpty()){ingredients.add(Ingredient.EMPTY);continue;}
-                var variants=new ArrayList<Option>();
-                for(var old:input) {
-                    boolean wildcard=old.metadata()==32767;
-                    var candidates=wildcard?content.services().items().catalog().stream().filter(s->s.key().equals(old.key())&&s.metadata()!=32767).toList():List.of(old);
-                    if(candidates.isEmpty())candidates=List.of(new LegacyClientData.Stack(old.key(),0,1,"",old.tag()));
-                    for(var candidate:candidates) {
-                        ItemStack mapped=content.mapStack(candidate);if(mapped.isEmpty())continue;
-                        if(variants.stream().noneMatch(o->o.wildcard()==wildcard&&ItemStack.isSameItemSameTags(o.stack(),mapped)))variants.add(new Option(mapped,wildcard,definition.strictNbt()));
-                    }
-                }
-                if(variants.isEmpty())throw new JsonParseException("No host ingredient representation in ordinary recipe "+hash+": "+input);
-                ingredients.add(new StackIngredient(variants));
-            }
+            for(var input:definition.inputs()) ingredients.add(ingredient(input,definition.strictNbt()));
             ItemStack result=content.gameplayStack(definition.output());
             return definition.shaped()?new Shaped(id,hash,definition.width(),definition.height(),ingredients,result):new Shapeless(id,hash,ingredients,result);
         }catch(Exception failure){throw new JsonParseException("Cannot publish original ordinary recipe "+hash,failure);}
+    }
+    /** Host representation of one original ingredient; metadata 32767 becomes a wildcard option set. */
+    static Ingredient ingredient(List<LegacyClientData.Stack> input,boolean strictNbt) throws Exception {
+        var content=bridge();
+        if(input.isEmpty())return Ingredient.EMPTY;
+        var variants=new ArrayList<Option>();
+        for(var old:input) {
+            boolean wildcard=old.metadata()==32767;
+            var candidates=wildcard?content.services().items().catalog().stream().filter(s->s.key().equals(old.key())&&s.metadata()!=32767).toList():List.of(old);
+            if(candidates.isEmpty())candidates=List.of(new LegacyClientData.Stack(old.key(),0,1,"",old.tag()));
+            for(var candidate:candidates) {
+                ItemStack mapped=content.mapStack(candidate);if(mapped.isEmpty())continue;
+                if(variants.stream().noneMatch(o->o.wildcard()==wildcard&&ItemStack.isSameItemSameTags(o.stack(),mapped)))variants.add(new Option(mapped,wildcard,strictNbt));
+            }
+        }
+        if(variants.isEmpty())throw new JsonParseException("No host ingredient representation for original stack: "+input);
+        return new StackIngredient(variants);
     }
     private static List<LegacyClientData.Stack> input(CraftingContainer grid) throws Exception {
         var result=new ArrayList<LegacyClientData.Stack>();var content=bridge();
@@ -109,8 +112,8 @@ public final class LegacyCraftingRecipes {
         public CraftingRecipe fromNetwork(ResourceLocation id,FriendlyByteBuf data){return create(id,data.readUtf(64));}
         public void toNetwork(FriendlyByteBuf data,CraftingRecipe recipe){data.writeUtf(((Original)recipe).original(),64);}
     }
-    private record Option(ItemStack stack,boolean wildcard,boolean strictNbt) {}
-    private static final class StackIngredient extends AbstractIngredient {
+    record Option(ItemStack stack,boolean wildcard,boolean strictNbt) {}
+    static final class StackIngredient extends AbstractIngredient {
         private final List<Option> options;
         StackIngredient(List<Option> options){this.options=List.copyOf(options);}
         public boolean isSimple(){return false;}

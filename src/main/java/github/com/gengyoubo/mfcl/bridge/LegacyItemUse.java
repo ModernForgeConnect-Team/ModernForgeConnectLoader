@@ -202,6 +202,9 @@ public final class LegacyItemUse {
         var profile=playerType.getDeclaredField("field_146106_i");profile.setAccessible(true);
         profile.set(actor,services.loader().loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(placer.id(),placer.name()));
         Class<?> entity = services.loader().loadClass("net.minecraft.entity.Entity");
+        // Entity queries exclude the actor by UUID; the reused client player must carry the host player's identity,
+        // otherwise its own host entity is returned as the pointed target.
+        var uuid=entity.getDeclaredField("field_96093_i");uuid.setAccessible(true);uuid.set(actor,placer.id());
         boolean client=services.loader().loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world);
         playerType.getField("eyeHeight").setFloat(actor,client?.12f:1.62f);
         entity.getField("field_70129_M").setFloat(actor,client?1.62f:0);

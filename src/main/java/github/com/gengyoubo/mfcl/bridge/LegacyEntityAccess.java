@@ -20,8 +20,22 @@ final class LegacyEntityAccess {
         if(existing==null) {
             for(var entry:Map.of("field_96093_i",(Object)snapshot.id(),"field_70146_Z",new Random()).entrySet()){var field=base.getDeclaredField(entry.getKey());field.setAccessible(true);field.set(entity,entry.getValue());}
             Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(base).newInstance(entity);
-            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(snapshot.sneaking()?2:0));
+            var add=watcher.getClass().getMethod("func_75682_a",int.class,Object.class);
+            // Entity mirrors bypass constructors, so reproduce the vanilla DataWatcher entries old code reads.
+            add.invoke(watcher,0,(byte)(snapshot.sneaking()?2:0));
+            add.invoke(watcher,1,(short)300);
+            Class<?> livingBase=loader.loadClass("net.minecraft.entity.EntityLivingBase");
+            if(livingBase.isAssignableFrom(type)) {
+                add.invoke(watcher,6,1f);add.invoke(watcher,7,0);add.invoke(watcher,8,(byte)0);add.invoke(watcher,9,(byte)0);
+                if(loader.loadClass("net.minecraft.entity.EntityLiving").isAssignableFrom(type)) {add.invoke(watcher,10,"");add.invoke(watcher,11,(byte)0);}
+            }
             var watched=base.getDeclaredField("field_70180_af");watched.setAccessible(true);watched.set(entity,watcher);
+            Class<?> playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+            if(playerType.isAssignableFrom(type)) {
+                add.invoke(watcher,16,(byte)0);add.invoke(watcher,17,0f);add.invoke(watcher,18,0);
+                var profile=playerType.getDeclaredField("field_146106_i");profile.setAccessible(true);
+                profile.set(entity,loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(snapshot.id(),snapshot.name()));
+            }
         }
         double half=snapshot.width()/2;
         Object box=loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a",double.class,double.class,double.class,double.class,double.class,double.class).invoke(null,snapshot.x()-half,snapshot.y(),snapshot.z()-half,snapshot.x()+half,snapshot.y()+snapshot.height(),snapshot.z()+half);

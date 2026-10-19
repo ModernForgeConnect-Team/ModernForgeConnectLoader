@@ -49,7 +49,7 @@ public final class ModernRecipeProjection {
     public Result update(RecipeManager manager, RegistryAccess access) throws Exception {
         var recipes = new ArrayList<LegacyClientData.HostRecipe>(); int skipped = 0;
         for (Recipe<?> recipe : manager.getRecipes()) {
-            if(recipe.getId().getNamespace().equals("mfcl")&&recipe.getId().getPath().startsWith("legacy_crafting/"))continue;
+            if(recipe.getId().getNamespace().equals("mfcl")&&(recipe.getId().getPath().startsWith("legacy_crafting/")||recipe.getId().getPath().startsWith("legacy_smelting/")))continue;
             String kind;
             if (recipe instanceof ShapedRecipe) kind = "shaped";
             else if (recipe instanceof ShapelessRecipe) kind = "shapeless";
@@ -71,7 +71,8 @@ public final class ModernRecipeProjection {
             if (!supported) { skipped++; continue; }
             int width = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : 0;
             int height = recipe instanceof ShapedRecipe shaped ? shaped.getHeight() : 0;
-            recipes.add(new LegacyClientData.HostRecipe(recipe.getId().toString(), kind, width, height, ingredients, result));
+            float experience = recipe instanceof AbstractCookingRecipe cooking ? cooking.getExperience() : 0f;
+            recipes.add(new LegacyClientData.HostRecipe(recipe.getId().toString(), kind, width, height, ingredients, result, experience));
         }
         int count = bridge.projectHostRecipes(recipes);
         LogUtils.getLogger().info("MFCL: projected {} modern recipes into legacy runtime; {} recipes not representable yet", count, skipped);

@@ -5,12 +5,15 @@ import java.lang.reflect.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/** Frozen ordinary workbench recipes. Arcane/crucible/infusion registries are never consulted. */
+/** Frozen ordinary workbench and furnace recipes. Arcane/crucible/infusion registries are never consulted. */
 public final class LegacyCrafting {
     public record Definition(String hash,boolean shaped,boolean dynamic,boolean strictNbt,int width,int height,List<List<LegacyClientData.Stack>> inputs,LegacyClientData.Stack output) {}
+    public record Smelting(String hash,List<LegacyClientData.Stack> inputs,LegacyClientData.Stack output,float experience) {}
     private final LegacyServices services;
     private final Map<String,Object> originals=new LinkedHashMap<>();
     private final List<Definition> definitions=new ArrayList<>();
+    private final List<Smelting> smelting=new ArrayList<>();
+    private final Set<String> smeltingHashes=new HashSet<>();
     private final List<String> diagnostics=new ArrayList<>();
     public LegacyCrafting(LegacyServices services) throws Exception {
         this.services=services;
@@ -53,8 +56,25 @@ public final class LegacyCrafting {
                 boolean strictNbt=!(recipe.getClass()==plainShaped||recipe.getClass()==plainShapeless||recipe.getClass()==oreShaped||recipe.getClass()==oreShapeless);
                 if(originals.putIfAbsent(hash,recipe)==null)definitions.add(new Definition(hash,shaped,false,strictNbt,width,height,input.stream().map(List::copyOf).toList(),output));
             }
+            captureSmelting(loader);
             services.items().preserveCrafting(retained);return null;
         });
+    }
+    /** The original furnace table is not a crafting recipe list; snapshot it before host projection replaces it. */
+    private void captureSmelting(ClassLoader loader) throws Exception {
+        Class<?> furnaceType=loader.loadClass("net.minecraft.item.crafting.FurnaceRecipes");
+        Object owner=furnaceType.getMethod("func_77602_a").invoke(null);
+        Map<?,?> recipes=(Map<?,?>)furnaceType.getMethod("func_77599_b").invoke(owner);
+        for(var entry:recipes.entrySet()) {
+            Object key=entry.getKey(),value=entry.getValue();
+            if(key==null||value==null)continue;
+            var input=services.items().snapshot(key);var output=services.items().snapshot(value);
+            boolean mod=!input.key().startsWith("minecraft:")||!output.key().startsWith("minecraft:");
+            if(!mod)continue;
+            float experience=(float)furnaceType.getMethod("func_151398_b",loader.loadClass("net.minecraft.item.ItemStack")).invoke(owner,key);
+            String hash=hash("smelting|"+identity(input)+"|"+identity(output));
+            if(smeltingHashes.add(hash))smelting.add(new Smelting(hash,List.of(input),output,experience));
+        }
     }
     private static String identity(LegacyClientData.Stack stack){return stack.key()+"@"+stack.metadata()+"x"+stack.count()+stack.tag();}
     private List<LegacyClientData.Stack> alternatives(Object value) throws Exception {
@@ -65,8 +85,10 @@ public final class LegacyCrafting {
     private static String hash(String input) throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}
     private static Object field(Object owner,String name) throws Exception {for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())try{var field=type.getDeclaredField(name);field.setAccessible(true);return field.get(owner);}catch(NoSuchFieldException absent){}throw new NoSuchFieldException(name);}
     public List<Definition> definitions(){return List.copyOf(definitions);}
+    public List<Smelting> smelting(){return List.copyOf(smelting);}
     public List<String> diagnostics(){return List.copyOf(diagnostics);}
     public Definition definition(String hash){return definitions.stream().filter(d->d.hash().equals(hash)).findFirst().orElseThrow(()->new IllegalArgumentException("Unknown original crafting recipe: "+hash));}
+    public Smelting smeltingDefinition(String hash){return smelting.stream().filter(d->d.hash().equals(hash)).findFirst().orElseThrow(()->new IllegalArgumentException("Unknown original smelting recipe: "+hash));}
     private Object grid(int width,int height,List<LegacyClientData.Stack> input) throws Exception {
         var loader=services.loader();var type=loader.loadClass("net.minecraft.inventory.InventoryCrafting");
         Object grid=type.getConstructor(loader.loadClass("net.minecraft.inventory.Container"),int.class,int.class).newInstance(null,width,height);

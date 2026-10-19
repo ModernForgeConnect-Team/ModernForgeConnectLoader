@@ -8,7 +8,7 @@ public interface HostWorldAccess {
     record Sound(double x,double y,double z,String id,float volume,float pitch,boolean distanceDelay,java.util.UUID excludedPlayer) {}
     /** A legacy projectile reduced to host-neutral data so the modern side can spawn an equivalent entity. */
     record Projectile(double x,double y,double z,double motionX,double motionY,double motionZ,double damage,boolean burning,java.util.UUID owner) {}
-    record Entity(java.util.UUID id,String legacyClass,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable) {}
+    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable) {}
     record Motion(java.util.UUID id,double x,double y,double z,float fallDistance) {}
     String dimensionKey();
     int legacyDimensionId();

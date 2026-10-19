@@ -67,6 +67,7 @@ public final class ModernContentBridge {
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
         for(var recipe:crafting.definitions())pack.craftingRecipe(recipe.hash());
+        for(var recipe:crafting.smelting())pack.smeltingRecipe(recipe.hash());
         creative = new CreativeTabBridge(this);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
@@ -74,6 +75,7 @@ public final class ModernContentBridge {
             var bridge = new ModernContentBridge(services); active = bridge;
             ScanSyncChannel.register();
             LegacyCraftingRecipes.install(bus);
+            LegacySmeltingRecipes.install(bus);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::playerLoggedIn);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
