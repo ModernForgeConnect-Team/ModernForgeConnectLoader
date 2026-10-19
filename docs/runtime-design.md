@@ -32,6 +32,8 @@ World facades preserve old `World` / `WorldProvider` types while forwarding supp
 
 Selected block-entity callbacks, inventory, redstone and persistence are bridged. Unsupported operations fail explicitly; they are not proof that arbitrary old machines or world generation work. Current scope and acceptance details are in [runtime logic](runtime-logic.md).
 
+Biome identities and column queries use an explicit old-object mapping. TC4 biome definitions, modern climate selection for new overworld presets, palette mutation and native client synchronization are described in [biome bridge](biome-bridge.md). This does not activate arbitrary legacy world generators, custom entity spawns or TC4's complete decoration/taint systems.
+
 ## Rendering and sound
 
 Old drawing is captured as geometry, render state, transforms, textures and text, then replayed through the modern host. Supported display-list commands remain ordered and scoped to their old GL identity. Selected native GPU calls use a host backend with state restoration. This is not unrestricted OpenGL emulation.

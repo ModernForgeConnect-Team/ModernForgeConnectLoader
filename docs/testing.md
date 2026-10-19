@@ -84,6 +84,7 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | --- | --- | --- |
 | `mfclApiSmokeTest` | Public provider/ready callback, native stack/NBT copies, world identity/thread/unload guards, diagnostic command | `api-smoke.json` |
 | `mfclScannerSmokeTest` | TC4 held block/drop scans, real rewards/audio, cancellation/repeat/prerequisites, drop metadata and entity-ID validation, unmapped drops, persistence and dynamic lens/target coverage | `scanner-smoke.json` |
+| `mfclBiomeSmokeTest` | TC4 dynamic biome registry/colors, normal-world natural biome chunks, original biome mutation, native sync, negative coordinates/neighbors and save reload | `biome-smoke.json` |
 | `mfclBookSmokeTest` | Original Thaumonomicon GUI and interaction | Consult the book [acceptance record](thaumonomicon-progress.json) |
 | `mfclLogicSmokeTest` | Supported native/legacy block and inventory logic | Consult the logic [acceptance record](runtime-logic-progress.json) |
 | `mfclCraftingSmokeTest` | Standard workbench recipes, native output consumption, JEI projection and reload | `crafting-smoke.json` |

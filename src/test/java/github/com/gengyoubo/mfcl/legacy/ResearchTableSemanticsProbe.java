@@ -109,6 +109,9 @@ public final class ResearchTableSemanticsProbe {
         try(var runtime=new EmbeddedLegacyRuntime(game,Path.of(args[1]),new LegacyRuntimeService().inspect(game))) {
             var report=runtime.boot();if(!Boolean.TRUE.equals(report.get("legacyFmlStarted")))throw new AssertionError(report);
             var services=runtime.services();services.items().inLegacy(()->{
+                var biomes=new java.util.LinkedHashMap<String,Object>();RuntimeBiomeProbe.verify(services,biomes);
+                if(!Boolean.TRUE.equals(biomes.get("originalThaumcraftBiomeMutationsVerified")))throw new AssertionError(biomes);
+                System.out.println("MFCL_TC_BIOMES_PASS");
                 var probe=new ResearchTableSemanticsProbe(services);
                 try(var state=services.playerState().enter(probe.world)) {
                     probe.verify();

@@ -25,6 +25,7 @@ class ThaumcraftResearchIntegrationTest {
             String output=new String(Files.readAllBytes(log),java.nio.charset.StandardCharsets.UTF_8);
             assertEquals(0,process.exitValue(),output);
             assertTrue(output.contains("MFCL_RESEARCH_TABLE_PASS"),output);
+            assertTrue(output.contains("MFCL_TC_BIOMES_PASS"),output);
         } finally {if(process.isAlive()){process.destroyForcibly();process.waitFor(10,TimeUnit.SECONDS);}}
     }
 }

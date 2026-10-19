@@ -1,4 +1,8 @@
 {
+  "biome.thaumcraft.magical_forest": "Magical Forest",
+  "biome.thaumcraft.tainted_land": "Tainted Land",
+  "biome.thaumcraft.eerie": "Eerie",
+  "biome.thaumcraft.eldritch": "Eldritch",
   "mfcl.mods.version": "Version: %s",
   "mfcl.mods.game_version": "Game version: %s",
   "mfcl.mods.status": "Status: %s",

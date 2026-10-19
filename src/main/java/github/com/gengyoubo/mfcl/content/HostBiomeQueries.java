@@ -16,7 +16,9 @@ public final class HostBiomeQueries {
         return key(level,new BlockPos(x,y,z));
     }
     public static String key(LevelReader level,BlockPos pos){
-        return level.getBiome(pos).unwrapKey().orElseThrow(()->new IllegalStateException("Unregistered host biome")).location().toString();
+        // Legacy getBiomeGenForCoords reads the stored column, without modern Voronoi display smoothing.
+        return level.getNoiseBiome(QuartPos.fromBlock(pos.getX()),QuartPos.fromBlock(pos.getY()),QuartPos.fromBlock(pos.getZ()))
+                .unwrapKey().orElseThrow(()->new IllegalStateException("Unregistered host biome")).location().toString();
     }
     public static void set(ServerLevel level,int x,int z,String key){
         if(!level.getServer().isSameThread())throw new IllegalStateException("Biome mutation requires the server thread");

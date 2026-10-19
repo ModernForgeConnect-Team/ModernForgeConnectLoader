@@ -40,9 +40,13 @@ final class LegacyBiomePack {
         pack.json("mfcl-biomes.json",definitions);
     }
     private static JsonObject vanilla(String path) throws IOException {
-        try(var in=LegacyBiomePack.class.getResourceAsStream("/data/minecraft/"+path)){
-            if(in==null)throw new FileNotFoundException("Vanilla worldgen template: "+path);
-            return JsonParser.parseReader(new InputStreamReader(in,StandardCharsets.UTF_8)).getAsJsonObject();
+        // ModLauncher isolates modules' classpath resources; use Minecraft's actual built-in pack.
+        try(var resources=net.minecraft.server.packs.repository.ServerPacksSource.createVanillaPackSource()){
+            var supplier=resources.getResource(net.minecraft.server.packs.PackType.SERVER_DATA,net.minecraft.resources.ResourceLocation.parse("minecraft:"+path));
+            if(supplier==null)throw new FileNotFoundException("Vanilla worldgen template: "+path);
+            try(var in=supplier.get()){
+                return JsonParser.parseReader(new InputStreamReader(in,StandardCharsets.UTF_8)).getAsJsonObject();
+            }
         }
     }
 }

@@ -1,4 +1,8 @@
 {
+  "biome.thaumcraft.magical_forest": "魔法森林",
+  "biome.thaumcraft.tainted_land": "腐化之地",
+  "biome.thaumcraft.eerie": "诡异之地",
+  "biome.thaumcraft.eldritch": "邪术之地",
   "mfcl.mods.version": "版本：%s",
   "mfcl.mods.game_version": "游戏版本：%s",
   "mfcl.mods.status": "状态：%s",

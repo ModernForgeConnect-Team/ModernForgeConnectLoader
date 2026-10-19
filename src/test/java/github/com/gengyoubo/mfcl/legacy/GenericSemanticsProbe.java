@@ -17,6 +17,7 @@ public final class GenericSemanticsProbe {
         RuntimeLogicSemanticsProbe.verify(services,report);
         RuntimeDeviceSemanticsProbe.verify(services,report);
         RuntimeDroppedItemProbe.verify(services,report);
+        RuntimeBiomeProbe.verify(services,report);
         if (loader.loadClass("org.w3c.dom.Node") != org.w3c.dom.Node.class) throw new AssertionError("JDK XML types were not shared");
         if (loader.loadClass("org.objectweb.asm.Type").getClassLoader() != loader) throw new AssertionError("Host ASM escaped into the private runtime");
         Class<?> reflection = loader.loadClass("github.com.gengyoubo.mfcl.legacy1710.LegacyReflection");

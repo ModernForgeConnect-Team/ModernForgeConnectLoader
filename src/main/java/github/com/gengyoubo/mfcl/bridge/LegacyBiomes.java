@@ -14,10 +14,10 @@ public final class LegacyBiomes {
         type=loader.loadClass("net.minecraft.world.biome.BiomeGenBase");
         // Renames and nearest 1.7 counterparts are explicit; TC4 identities are registered separately.
         vanilla(0,"ocean","warm_ocean","lukewarm_ocean","cold_ocean");
-        vanilla(1,"plains","meadow");vanilla(2,"desert");vanilla(3,"windswept_hills","stony_peaks");
+        vanilla(1,"plains","sunflower_plains","meadow");vanilla(2,"desert");vanilla(3,"windswept_hills","stony_peaks");
         vanilla(4,"forest","flower_forest");vanilla(5,"taiga");vanilla(6,"swamp","mangrove_swamp");
         vanilla(7,"river");vanilla(8,"nether_wastes","crimson_forest","warped_forest","soul_sand_valley","basalt_deltas");
-        vanilla(9,"the_end","end_highlands","end_midlands","small_end_islands","end_barrens");
+        vanilla(9,"the_end","end_highlands","end_midlands","small_end_islands","end_barrens","the_void");
         vanilla(10,"frozen_ocean","deep_frozen_ocean");vanilla(11,"frozen_river");
         vanilla(12,"snowy_plains","ice_spikes","snowy_slopes","frozen_peaks","jagged_peaks","grove");
         vanilla(14,"mushroom_fields");vanilla(16,"beach");vanilla(21,"jungle","bamboo_jungle");
@@ -26,7 +26,7 @@ public final class LegacyBiomes {
         vanilla(29,"dark_forest");vanilla(30,"snowy_taiga");vanilla(32,"old_growth_pine_taiga","old_growth_spruce_taiga");
         vanilla(34,"windswept_forest","windswept_gravelly_hills");vanilla(35,"savanna","windswept_savanna");
         vanilla(36,"savanna_plateau");vanilla(37,"badlands","eroded_badlands");vanilla(38,"wooded_badlands");
-        vanilla(3,"dripstone_caves");vanilla(4,"lush_caves");vanilla(9,"deep_dark");
+        vanilla(3,"dripstone_caves","deep_dark");vanilla(4,"lush_caves");
     }
     private void vanilla(int id,String... names) throws Exception {
         Object value=type.getMethod("func_150568_d",int.class).invoke(null,id);
