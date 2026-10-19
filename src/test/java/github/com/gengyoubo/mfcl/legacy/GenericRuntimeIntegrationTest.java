@@ -24,6 +24,7 @@ class GenericRuntimeIntegrationTest {
             assertTrue(result.get("genericGuiCaptureVerified").getAsBoolean());
             assertTrue(result.get("genericContainerPlayerPotionStateVerified").getAsBoolean());
             assertTrue(result.get("genericItemUseCallbackVerified").getAsBoolean());
+            assertTrue(result.get("genericLegacyProjectileAndInventoryVerified").getAsBoolean());
             assertTrue(result.get("genericWorldRayTraceVerified").getAsBoolean());
             assertTrue(result.get("genericPlayerDataBridgeVerified").getAsBoolean());
             assertTrue(result.get("genericOriginalGameplayCallbacksVerified").getAsBoolean());

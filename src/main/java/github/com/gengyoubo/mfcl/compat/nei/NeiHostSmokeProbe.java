@@ -80,6 +80,18 @@ public final class NeiHostSmokeProbe {
                     if(commands.stream().filter(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::isInstance).count()>4)throw new IllegalStateException("Original item panel did not filter");
                     LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_GUI_SEARCH_PASS: original search field and item panel filtered through host input events");
                     var item=commands.stream().filter(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::isInstance).map(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Item.class::cast).filter(i->!i.overlay()).findFirst().orElseThrow();
+                    var hoverGraphics=new net.minecraft.client.gui.GuiGraphics(mc,mc.renderBuffers().bufferSource());
+                    net.minecraftforge.client.ForgeHooksClient.drawScreen(mc.screen,hoverGraphics,item.x()+14,item.y()+14,0);hoverGraphics.flush();
+                    boolean overlay=false,tooltipText=false;
+                    for(var command:github.com.gengyoubo.mfcl.client.ClientContainerBridge.active().commands(mc.screen)) {
+                        if(command instanceof github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.DepthTest state)overlay=!state.enabled();
+                        else if(overlay&&command instanceof github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Text)tooltipText=true;
+                    }
+                    if(!tooltipText)throw new IllegalStateException("Original item tooltip did not preserve disabled depth testing");
+                    try(var image=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+                        image.writeToFile(mc.gameDirectory.toPath().resolve("screenshots/mfcl-original-nei-tooltip.png"));
+                    }
+                    LogUtils.getLogger().info("MFCL_ORIGINAL_NEI_TOOLTIP_DEPTH_PASS");
                     MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre(mc.screen,item.x()+4,item.y()+4,0));
                     MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre(mc.screen,item.x()+4,item.y()+4,0));
                     stage=24;frames=0;

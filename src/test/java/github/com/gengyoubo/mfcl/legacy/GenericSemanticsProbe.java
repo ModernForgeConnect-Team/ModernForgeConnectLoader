@@ -258,6 +258,52 @@ public final class GenericSemanticsProbe {
             if (useBridge.usingTick(useWorld, usePlacer, bow, 70000) != null) throw new AssertionError("A non-scanning item reported a completed legacy scan");
         } finally { services.worlds().unbind(useIdentity); }
         report.put("genericItemUseCallbackVerified", true);
+        Object projectileIdentity = new Object();
+        final Object[] spawned = new Object[1];
+        Object projectileWorld = services.worlds().bind(projectileIdentity, new HostWorldAccess() {
+            public String dimensionKey() { return "mfcl:projectile"; } public int legacyDimensionId() { return 0; } public boolean clientSide() { return false; }
+            public long gameTime() { return 0; } public long dayTime() { return 0; } public void setDayTime(long time) { }
+            public Block block(int x, int y, int z) { return new Block("minecraft:air", 0); }
+            public boolean setBlock(int x, int y, int z, Block block, int flags) { return false; }
+            public void spawnProjectile(Projectile projectile) { spawned[0] = projectile; }
+        });
+        try {
+            Class<?> movingType = loader.loadClass("net.minecraft.entity.Entity");
+            Class<?> arrowType = loader.loadClass("net.minecraft.entity.projectile.EntityArrow");
+            Object arrow = arrowType.getConstructor(loader.loadClass("net.minecraft.world.World")).newInstance(projectileWorld);
+            movingType.getField("field_70165_t").setDouble(arrow, 4); movingType.getField("field_70163_u").setDouble(arrow, 70); movingType.getField("field_70161_v").setDouble(arrow, -9);
+            movingType.getField("field_70159_w").setDouble(arrow, 0.5); movingType.getField("field_70181_x").setDouble(arrow, 0.25); movingType.getField("field_70179_y").setDouble(arrow, -1.5);
+            arrowType.getMethod("func_70239_b", double.class).invoke(arrow, 3.5d);
+            arrowType.getField("field_70250_c").set(arrow, clientPlayer);
+            if (!(Boolean) projectileWorld.getClass().getMethod("func_72838_d", movingType).invoke(projectileWorld, arrow))
+                throw new AssertionError("Legacy projectile spawn was not accepted");
+            var projectile = (HostWorldAccess.Projectile) spawned[0];
+            java.util.UUID owner = (java.util.UUID) movingType.getMethod("func_110124_au").invoke(clientPlayer);
+            if (projectile == null || projectile.x() != 4 || projectile.y() != 70 || projectile.z() != -9
+                    || projectile.motionX() != 0.5 || projectile.motionY() != 0.25 || projectile.motionZ() != -1.5
+                    || projectile.damage() != 3.5 || !owner.equals(projectile.owner()))
+                throw new AssertionError("Legacy projectile fields were not transferred to host-neutral data");
+            Object unsupported = loader.loadClass("net.minecraft.entity.item.EntityItem").getConstructor(loader.loadClass("net.minecraft.world.World"), double.class, double.class, double.class, loader.loadClass("net.minecraft.item.ItemStack"))
+                    .newInstance(projectileWorld, 0d, 0d, 0d, services.items().materialize(diamond));
+            if ((Boolean) projectileWorld.getClass().getMethod("func_72838_d", movingType).invoke(projectileWorld, unsupported))
+                throw new AssertionError("An unsupported legacy entity was reported as spawned");
+            if (spawned[0] != projectile) throw new AssertionError("An unsupported entity replaced the accepted projectile");
+        } finally { services.worlds().unbind(projectileIdentity); }
+        var inventoryBridge = services.playerInventory();
+        var inventoryBow = services.items().catalog().stream().filter(s -> s.key().equals("minecraft:bow")).findFirst().orElseThrow();
+        var hostContents = new ArrayList<LegacyClientData.Stack>(36);
+        for (int slot = 0; slot < 36; slot++) hostContents.add(null);
+        hostContents.set(7, inventoryBow); hostContents.set(9, originalSnapshot);
+        inventoryBridge.write(clientPlayer, hostContents); inventoryBridge.select(clientPlayer, 9);
+        var readBack = inventoryBridge.read(clientPlayer);
+        var normalizedNbt = services.items().snapshot(services.items().materialize(originalSnapshot));
+        if (readBack.get(7) == null || !readBack.get(7).equals(inventoryBow) || readBack.get(8) != null
+                || readBack.get(9) == null || !readBack.get(9).equals(normalizedNbt))
+            throw new AssertionError("Legacy player inventory did not round-trip through the host bridge");
+        Object hostInventory = loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(clientPlayer);
+        if (loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getField("field_70461_c").getInt(hostInventory) != 9)
+            throw new AssertionError("Legacy player selected slot was not synchronized");
+        report.put("genericLegacyProjectileAndInventoryVerified", true);
         Object rayIdentity = new Object();
         Object rayWorld = services.worlds().bind(rayIdentity, new HostWorldAccess() {
             public String dimensionKey() { return "mfcl:ray"; } public int legacyDimensionId() { return 0; } public boolean clientSide() { return true; }

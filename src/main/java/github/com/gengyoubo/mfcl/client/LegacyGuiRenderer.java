@@ -1,9 +1,12 @@
 package github.com.gengyoubo.mfcl.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import github.com.gengyoubo.mfcl.bridge.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import java.util.*;
@@ -17,28 +20,44 @@ final class LegacyGuiRenderer {
     LegacyGuiRenderer(LegacyServices services){this.services=services;}
     void draw(GuiGraphics graphics,List<LegacyGuiGraphics.Command> commands) throws Exception {
         var mc=Minecraft.getInstance();
-        for(var command:commands) {
-            if(command instanceof LegacyGuiGraphics.Rect r) {
-                int x1=Math.min(r.x1(),r.x2()),x2=Math.max(r.x1(),r.x2()),y1=Math.min(r.y1(),r.y2()),y2=Math.max(r.y1(),r.y2());
-                graphics.fillGradient(x1,y1,x2,y2,r.top(),r.bottom());
-            } else if(command instanceof LegacyGuiGraphics.Text t) {
-                graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
-                graphics.drawString(mc.font,t.text(),0,0,t.color(),t.shadow());graphics.pose().popPose();
-            } else if(command instanceof LegacyGuiGraphics.Texture t) {
-                graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
-                graphics.blit(texture(t.resource()).id(),0,0,t.u(),t.v(),t.width(),t.height(),256,256);graphics.pose().popPose();
-            } else if(command instanceof LegacyGuiGraphics.Item i) {
-                var stack=ModernItemMapping.renderStack(services.items().snapshot(i.stack()));
-                graphics.pose().pushPose();graphics.pose().translate(i.x(),i.y(),0);graphics.pose().scale((float)i.sx(),(float)i.sy(),1);
-                try {
-                    if(stack.isEmpty()) { if(!i.overlay()) legacyIcon(graphics,new LegacyGuiGraphics.Item(i.stack(),0,0,false,i.label(),1,1)); }
-                    else if(i.overlay())graphics.renderItemDecorations(mc.font,stack,0,0,i.label());
-                    else graphics.renderItem(stack,0,0);
-                } finally {graphics.pose().popPose();}
-            } else if(command instanceof LegacyGuiGraphics.Mesh mesh) {
-                mesh(graphics,mesh.primitives());
+        boolean depthTest=true;
+        graphics.flush();
+        try {
+            for(var command:commands) {
+                if(command instanceof LegacyGuiGraphics.DepthTest state) {
+                    // Flush before changing state so buffered item/text batches cannot cross the tooltip boundary.
+                    graphics.flush();depthTest=state.enabled();
+                } else if(command instanceof LegacyGuiGraphics.Rect r) {
+                    int x1=Math.min(r.x1(),r.x2()),x2=Math.max(r.x1(),r.x2()),y1=Math.min(r.y1(),r.y2()),y2=Math.max(r.y1(),r.y2());
+                    graphics.fillGradient(depthTest?RenderType.gui():RenderType.guiOverlay(),x1,y1,x2,y2,r.top(),r.bottom(),0);
+                } else if(command instanceof LegacyGuiGraphics.Text t) {
+                    graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
+                    try {
+                        if(depthTest)graphics.drawString(mc.font,t.text(),0,0,t.color(),t.shadow());
+                        else mc.font.drawInBatch(t.text(),0,0,t.color(),t.shadow(),graphics.pose().last().pose(),graphics.bufferSource(),Font.DisplayMode.SEE_THROUGH,0,15728880,mc.font.isBidirectional());
+                    } finally {graphics.pose().popPose();}
+                } else if(command instanceof LegacyGuiGraphics.Texture t) {
+                    graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
+                    try {
+                        graphics.flush();
+                        if(depthTest)RenderSystem.enableDepthTest();else RenderSystem.disableDepthTest();
+                        graphics.blit(texture(t.resource()).id(),0,0,t.u(),t.v(),t.width(),t.height(),256,256);
+                    } finally {graphics.pose().popPose();RenderSystem.enableDepthTest();}
+                } else if(command instanceof LegacyGuiGraphics.Item i) {
+                    var stack=ModernItemMapping.renderStack(services.items().snapshot(i.stack()));
+                    graphics.pose().pushPose();graphics.pose().translate(i.x(),i.y(),0);graphics.pose().scale((float)i.sx(),(float)i.sy(),1);
+                    try {
+                        if(stack.isEmpty()) { if(!i.overlay()) legacyIcon(graphics,new LegacyGuiGraphics.Item(i.stack(),0,0,false,i.label(),1,1)); }
+                        else if(i.overlay())graphics.renderItemDecorations(mc.font,stack,0,0,i.label());
+                        else graphics.renderItem(stack,0,0);
+                    } finally {graphics.pose().popPose();}
+                } else if(command instanceof LegacyGuiGraphics.Mesh mesh) {
+                    mesh(graphics,mesh.primitives());
+                }
+                // Overlay backgrounds and glyphs use different render types; preserve their original draw order.
+                if(!depthTest)graphics.flush();
             }
-        }
+        } finally {graphics.flush();RenderSystem.enableDepthTest();}
     }
     private void mesh(GuiGraphics graphics,List<LegacyVertexStream.Primitive> primitives) throws Exception {
         graphics.flush();

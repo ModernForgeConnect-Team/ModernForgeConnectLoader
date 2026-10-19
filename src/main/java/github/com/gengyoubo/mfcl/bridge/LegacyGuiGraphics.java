@@ -4,13 +4,15 @@ import java.util.*;
 
 /** Thread-confined GUI command capture. No legacy OpenGL context or native input library is entered. */
 public final class LegacyGuiGraphics {
-    public sealed interface Command permits Rect, Text, Texture, Item, Mesh {}
+    public sealed interface Command permits Rect, Text, Texture, Item, Mesh, DepthTest {}
+    public record DepthTest(boolean enabled) implements Command {}
     public record Rect(int x1, int y1, int x2, int y2, int top, int bottom) implements Command {}
     public record Text(String text, int x, int y, int color, boolean shadow, double sx, double sy) implements Command {}
     public record Texture(String resource, int x, int y, int u, int v, int width, int height, double sx, double sy) implements Command {}
     public record Item(Object stack, int x, int y, boolean overlay, String label, double sx, double sy) implements Command {}
     public record Mesh(List<LegacyVertexStream.Primitive> primitives) implements Command {}
     private record Matrix(double x, double y, double sx, double sy) {}
+    private record DepthAttribute(boolean enabled, boolean restore) {}
     private static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
     private LegacyGuiGraphics() {}
     public static Frame begin(int width, int height, int mouseX, int mouseY, Set<Integer> keys) {
@@ -23,6 +25,8 @@ public final class LegacyGuiGraphics {
         private final Set<Integer> keys;
         private final List<Command> commands = new ArrayList<>();
         private final Deque<Matrix> matrices = new ArrayDeque<>();
+        private final Deque<DepthAttribute> depthAttributes = new ArrayDeque<>();
+        private boolean depthTest = true;
         private Matrix matrix = new Matrix(0, 0, 1, 1);
         private String texture;
         private final LegacyWorldGraphics.Frame geometry=LegacyWorldGraphics.active()?null:LegacyWorldGraphics.begin();
@@ -44,6 +48,13 @@ public final class LegacyGuiGraphics {
     }
     private static Frame frame() { return Objects.requireNonNull(CURRENT.get(), "Legacy GUI operation outside a host frame"); }
     public static boolean capturing() { return CURRENT.get() != null; }
+    public static void depthTest(boolean enabled) {
+        Frame f = CURRENT.get();
+        if (f == null || f.depthTest == enabled) return;
+        f.flushGeometry();f.commands.add(new DepthTest(enabled));f.depthTest = enabled;
+    }
+    public static void pushDepthAttributes(int mask) { Frame f = CURRENT.get();if(f!=null)f.depthAttributes.push(new DepthAttribute(f.depthTest,(mask&0x2100)!=0)); }
+    public static void popDepthAttributes() { Frame f = CURRENT.get();if(f!=null){var saved=f.depthAttributes.pop();if(saved.restore())depthTest(saved.enabled());} }
     public static void tooltip(List<?> lines) { if (!lines.isEmpty()) frame().tooltip = true; }
     public static void rect(int x1, int y1, int x2, int y2, int color) { gradient(x1, y1, x2, y2, color, color); }
     public static void gradient(int x1, int y1, int x2, int y2, int a, int b) {

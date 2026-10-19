@@ -134,6 +134,7 @@ public final class LegacyWorldGraphics {
     public static void glEnable(int cap) { state(cap, true); }
     public static void glDisable(int cap) { state(cap, false); }
     private static void state(int cap, boolean enabled) {
+        if (cap == 2929) LegacyGuiGraphics.depthTest(enabled);
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
         if (cap >= 3168 && cap <= 3171) f.generated[cap-3168] = enabled;
         f.state = new LegacyVertexStream.RenderState(cap == 3042 ? enabled : s.blend(), s.sourceBlend(), s.destinationBlend(), s.depthWrite(), cap == 2884 ? enabled : s.cull());
@@ -146,8 +147,8 @@ public final class LegacyWorldGraphics {
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
         f.state = new LegacyVertexStream.RenderState(s.blend(), s.sourceBlend(), s.destinationBlend(), enabled, s.cull());
     }
-    public static void glPushAttrib(int mask) { Frame f = frame(); if (f != null) { f.check(); f.attributes.push(f.state); } }
-    public static void glPopAttrib() { Frame f = frame(); if (f != null) { f.check(); f.state = f.attributes.pop(); } }
+    public static void glPushAttrib(int mask) { LegacyGuiGraphics.pushDepthAttributes(mask);Frame f = frame(); if (f != null) { f.check(); f.attributes.push(f.state); } }
+    public static void glPopAttrib() { LegacyGuiGraphics.popDepthAttributes();Frame f = frame(); if (f != null) { f.check(); f.state = f.attributes.pop(); } }
 
     public static void clientActiveTexture(int unit) { Frame f = frame(); if (f != null) { f.check(); f.clientTextureUnit = unit; } }
     public static void glEnableClientState(int cap) { Frame f = frame(); if (f == null) return; f.check(); if (cap == 32884) f.vertexEnabled = true; else if (cap == 32888 && f.clientTextureUnit == 33984) f.texEnabled = true; else if (cap == 32886) f.colorEnabled = true; else if (cap == 32885) f.normalEnabled = true; }
