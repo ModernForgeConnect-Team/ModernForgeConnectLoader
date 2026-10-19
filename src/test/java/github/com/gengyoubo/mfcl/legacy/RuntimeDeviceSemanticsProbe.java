@@ -13,7 +13,7 @@ final class RuntimeDeviceSemanticsProbe {
             public long gameTime(){return 0;}public long dayTime(){return 0;}public void setDayTime(long time){}
             public Block block(int x,int y,int z){return new Block("minecraft:chest",0);}public boolean setBlock(int x,int y,int z,Block block,int flags){return false;}
             public Object tileEntity(int x,int y,int z){return chest[0];}public void blockEvent(int x,int y,int z,String block,int event,int data){}
-            public List<Entity> entities(double a,double b,double c,double d,double e,double f){return List.of(new Entity(id,"net.minecraft.entity.EntityLiving",1,2,3,0,-.1,0,5,.6f,1.8f,false,true));}
+            public List<Entity> entities(double a,double b,double c,double d,double e,double f){return List.of(new Entity(id,"net.minecraft.entity.EntityLiving","Device",1,2,3,0,-.1,0,5,.6f,1.8f,false,true));}
             public void applyMotion(Motion motion){motions.add(motion);}
         });
         try {

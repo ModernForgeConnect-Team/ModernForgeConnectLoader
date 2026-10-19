@@ -34,6 +34,8 @@ public final class LevelWorldBridge {
             @Override public String dimensionKey() { return level.dimension().location().toString(); }
             @Override public int legacyDimensionId() { return dimension; }
             @Override public boolean clientSide() { return false; }
+            @Override public String biome(int x,int z) {check();return HostBiomeQueries.key(level,x,z);}
+            @Override public void setBiome(int x,int z,String key) {check();content.afterCommit(level,()->HostBiomeQueries.set(level,x,z,key));}
             @Override public void playSound(Sound sound) {
                 check();var id=net.minecraft.resources.ResourceLocation.parse(github.com.gengyoubo.mfcl.bridge.LegacySounds.modernId(sound.id()));
                 var excluded=sound.excludedPlayer()==null?null:level.getServer().getPlayerList().getPlayer(sound.excludedPlayer());

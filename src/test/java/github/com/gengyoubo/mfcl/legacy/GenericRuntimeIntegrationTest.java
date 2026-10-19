@@ -32,6 +32,7 @@ class GenericRuntimeIntegrationTest {
             assertTrue(result.get("genericDeviceContainersAndEntityQueriesVerified").getAsBoolean());
             assertTrue(result.get("genericTileSnapshotSubtypeVerified").getAsBoolean());
             assertTrue(result.get("genericDeviceButtonInputVerified").getAsBoolean());
+            assertTrue(result.get("genericDroppedItemStackAndIdentityVerified").getAsBoolean());
             assertEquals(0, result.getAsJsonObject("adapters").size());
             assertFalse(result.getAsJsonArray("loadedMods").asList().stream().anyMatch(v -> v.getAsString().equals("NotEnoughItems")));
         } finally { if (process.isAlive()) { process.destroyForcibly(); assertTrue(process.waitFor(10, TimeUnit.SECONDS)); } }

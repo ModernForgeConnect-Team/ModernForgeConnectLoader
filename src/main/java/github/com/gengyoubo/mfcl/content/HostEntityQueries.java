@@ -1,6 +1,7 @@
 package github.com.gengyoubo.mfcl.content;
 
 import github.com.gengyoubo.mfcl.bridge.HostWorldAccess;
+import github.com.gengyoubo.mfcl.bridge.LegacyClientData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -17,9 +18,17 @@ public final class HostEntityQueries {
             String type=entity instanceof Player?(level.isClientSide?"net.minecraft.client.entity.EntityClientPlayerMP":"net.minecraft.entity.player.EntityPlayerMP"):
                     entity instanceof ItemEntity?"net.minecraft.entity.item.EntityItem":entity instanceof AbstractHorse?"net.minecraft.entity.passive.EntityHorse":
                     entity instanceof LivingEntity?"net.minecraft.entity.EntityLiving":"net.minecraft.entity.Entity";
+            LegacyClientData.Stack item=null;
+            if(entity instanceof ItemEntity drop) {
+                try {if(ModernContentBridge.active()!=null)item=ModernContentBridge.active().gameplayStack(drop.getItem());}
+                catch(UnsupportedOperationException unmapped) { }
+                catch(Exception failure) {throw new IllegalStateException("Cannot snapshot dropped item for the legacy world",failure);}
+                // An unsupported stack must not become EntityItem's vanilla fallback stone stack.
+                if(item==null)return null;
+            }
             var motion=entity.getDeltaMovement();
-            return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable());
-        }).toList();
+            return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable(),entity.getId(),item);
+        }).filter(Objects::nonNull).toList();
     }
     public static void apply(Level level,HostWorldAccess.Motion motion) {
         if(!(level instanceof net.minecraft.server.level.ServerLevel server))return;

@@ -43,6 +43,7 @@ public final class ClientWorldBridge {
                     @Override public String dimensionKey() { return dimension; }
                     @Override public int legacyDimensionId() { return oldDimension; }
                     @Override public boolean clientSide() { return true; }
+                    @Override public String biome(int x,int z) {return github.com.gengyoubo.mfcl.content.HostBiomeQueries.key(next,x,z);}
                     @Override public void playSound(Sound sound) {
                         if(sound.excludedPlayer()!=null&&Minecraft.getInstance().player!=null&&sound.excludedPlayer().equals(Minecraft.getInstance().player.getUUID()))return;
                         var id=net.minecraft.resources.ResourceLocation.parse(LegacySounds.modernId(sound.id()));

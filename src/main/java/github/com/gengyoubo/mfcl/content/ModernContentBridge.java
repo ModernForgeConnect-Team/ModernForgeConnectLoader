@@ -66,6 +66,7 @@ public final class ModernContentBridge {
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
+        LegacyBiomePack.generate(pack,services.biomes());
         for(var recipe:crafting.definitions())pack.craftingRecipe(recipe.hash());
         for(var recipe:crafting.smelting())pack.smeltingRecipe(recipe.hash());
         creative = new CreativeTabBridge(this);
@@ -77,6 +78,7 @@ public final class ModernContentBridge {
             LegacyCraftingRecipes.install(bus);
             LegacySmeltingRecipes.install(bus);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::playerLoggedIn);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::missingMappings);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
@@ -123,7 +125,7 @@ public final class ModernContentBridge {
             if(!player.isUsingItem()||held==null||!held.key().equals("Thaumcraft:ItemThaumometer")||player.getUseItemRemainingTicks()>8)return;
             var world = services.worlds().bound(player.serverLevel());
             byte[] prior = player.getPersistentData().contains(LEGACY_ENTITY_DATA) ? player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA) : null;
-            var updated = itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.phenomena(), message.prefix(), prior);
+            var updated = itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.entityId(), message.phenomena(), message.prefix(), prior);
             player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, updated.data());
             updated.messages().forEach(packet->ScanSyncChannel.sendToPlayer(player,packet));
             LogUtils.getLogger().info("MFCL legacy server scan for {}: accepted={}, type={}, id={}, meta={}", player.getName().getString(),updated.accepted(), message.type(), message.id(), message.meta());
@@ -132,14 +134,17 @@ public final class ModernContentBridge {
         }
     }
     public static ResourceLocation id(String key) {
-        var parsed = ResourceLocation.tryParse(key);
-        return parsed != null ? parsed : ResourceLocation.fromNamespaceAndPath("mfcl", "legacy/" + HexFormat.of().formatHex(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        return LegacyRegistryIds.id(key);
     }
     private static void validateIds(List<String> keys) {
-        Set<ResourceLocation> ids = new HashSet<>();
-        for (String key : keys) if (!ids.add(id(key))) throw new IllegalArgumentException("Legacy registry ID collision: " + key);
+        LegacyRegistryIds.validate(keys);
+    }
+    private void missingMappings(net.minecraftforge.registries.MissingMappingsEvent event) {
+        LegacyRegistryIds.remap(event.getMappings(Registries.ITEM,"mfcl"),items);
+        LegacyRegistryIds.remap(event.getMappings(Registries.BLOCK,"mfcl"),blocks);
     }
     private void register(RegisterEvent event) {
+        event.register(Registries.BIOME_SOURCE,registry->registry.register(ResourceLocation.parse("mfcl:thaumcraft_biomes"),github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftBiomeSource.CODEC));
         event.register(Registries.BLOCK, registry -> {
             if (blocksRegistered) throw new IllegalStateException("Legacy block registration repeated");
             for (var entry : declarations.blocks()) {
@@ -568,6 +573,10 @@ public final class ModernContentBridge {
     }
     public LegacyBlockRendering.View renderView(BlockGetter level, BlockPos origin, BlockState center) {
         return new LegacyBlockRendering.View() {
+            public String biome(int x,int z) {
+                var pos=origin.offset(x,0,z);
+                return level instanceof LevelReader reader?HostBiomeQueries.key(reader,pos):github.com.gengyoubo.mfcl.client.ClientBiomeQueries.key(pos);
+            }
             public HostWorldAccess.Block block(int x, int y, int z) {
                 var state = x == 0 && y == 0 && z == 0 ? center : level.getBlockState(origin.offset(x,y,z));
                 if (state.hasProperty(METADATA)) return legacyBlock(state);

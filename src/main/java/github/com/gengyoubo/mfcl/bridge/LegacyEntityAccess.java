@@ -1,18 +1,21 @@
 package github.com.gengyoubo.mfcl.bridge;
 
 import org.objectweb.asm.*;
+import java.lang.reflect.Method;
 import java.util.*;
 
 /** Entity query snapshots; only motion/fall changes are committed back to the owning host world. */
 final class LegacyEntityAccess {
     private static final Map<ClassLoader,Map<String,Class<?>>> FACADES=Collections.synchronizedMap(new WeakHashMap<>());
     private LegacyEntityAccess() {}
-    static Object mirror(ClassLoader loader,Object world,HostWorldAccess.Entity snapshot,Object existing) throws Exception {
+    static Object mirror(LegacyClientData items,Object world,HostWorldAccess.Entity snapshot,Object existing) throws Exception {
+        ClassLoader loader=items.loader();
         boolean generic=snapshot.legacyClass().equals("net.minecraft.entity.Entity")||snapshot.legacyClass().equals("net.minecraft.entity.EntityLiving");
         Class<?> type=generic?facade(loader,snapshot.legacyClass()):loader.loadClass(snapshot.legacyClass());
         var unsafeField=Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");unsafeField.setAccessible(true);Object unsafe=unsafeField.get(null);
         Object entity=existing==null?unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,type):existing;
         var base=loader.loadClass("net.minecraft.entity.Entity");
+        base.getMethod("func_145769_d",int.class).invoke(entity,snapshot.entityId());
         base.getField("field_70170_p").set(entity,world);
         base.getField("field_70165_t").setDouble(entity,snapshot.x());base.getField("field_70163_u").setDouble(entity,snapshot.y());base.getField("field_70161_v").setDouble(entity,snapshot.z());
         base.getField("field_70159_w").setDouble(entity,snapshot.motionX());base.getField("field_70181_x").setDouble(entity,snapshot.motionY());base.getField("field_70179_y").setDouble(entity,snapshot.motionZ());
@@ -21,27 +24,46 @@ final class LegacyEntityAccess {
             for(var entry:Map.of("field_96093_i",(Object)snapshot.id(),"field_70146_Z",new Random()).entrySet()){var field=base.getDeclaredField(entry.getKey());field.setAccessible(true);field.set(entity,entry.getValue());}
             Object watcher=loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(base).newInstance(entity);
             var add=watcher.getClass().getMethod("func_75682_a",int.class,Object.class);
-            // Entity mirrors bypass constructors, so reproduce the vanilla DataWatcher entries old code reads.
+            var exists=watcher.getClass().getDeclaredMethod("func_75691_i",int.class);exists.setAccessible(true);
+            // Entity mirrors bypass constructors, so reproduce the vanilla DataWatcher bootstrap. The subclass hook adds
+            // per-type slots (name, age, profession, ...) that old rendering/scanning code reads directly.
             add.invoke(watcher,0,(byte)(snapshot.sneaking()?2:0));
             add.invoke(watcher,1,(short)300);
+            var watched=base.getDeclaredField("field_70180_af");watched.setAccessible(true);watched.set(entity,watcher);
+            try { initializeDataWatcher(type,entity); } catch (Throwable ignored) { }
             Class<?> livingBase=loader.loadClass("net.minecraft.entity.EntityLivingBase");
             if(livingBase.isAssignableFrom(type)) {
-                add.invoke(watcher,6,1f);add.invoke(watcher,7,0);add.invoke(watcher,8,(byte)0);add.invoke(watcher,9,(byte)0);
-                if(loader.loadClass("net.minecraft.entity.EntityLiving").isAssignableFrom(type)) {add.invoke(watcher,10,"");add.invoke(watcher,11,(byte)0);}
+                watch(watcher,add,exists,6,1f);watch(watcher,add,exists,7,0);watch(watcher,add,exists,8,(byte)0);watch(watcher,add,exists,9,(byte)0);
+                if(loader.loadClass("net.minecraft.entity.EntityLiving").isAssignableFrom(type)) {watch(watcher,add,exists,10,"");watch(watcher,add,exists,11,(byte)0);}
+                if(loader.loadClass("net.minecraft.entity.EntityAgeable").isAssignableFrom(type)) watch(watcher,add,exists,12,0);
+                else if(loader.loadClass("net.minecraft.entity.monster.EntityZombie").isAssignableFrom(type)) {watch(watcher,add,exists,12,(byte)0);watch(watcher,add,exists,13,(byte)0);watch(watcher,add,exists,14,(byte)0);}
             }
-            var watched=base.getDeclaredField("field_70180_af");watched.setAccessible(true);watched.set(entity,watcher);
             Class<?> playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
             if(playerType.isAssignableFrom(type)) {
-                add.invoke(watcher,16,(byte)0);add.invoke(watcher,17,0f);add.invoke(watcher,18,0);
+                watch(watcher,add,exists,16,(byte)0);watch(watcher,add,exists,17,0f);watch(watcher,add,exists,18,0);
                 var profile=playerType.getDeclaredField("field_146106_i");profile.setAccessible(true);
                 profile.set(entity,loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(snapshot.id(),snapshot.name()));
             }
+        }
+        if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity)) {
+            if(snapshot.item()==null)throw new IllegalArgumentException("Dropped item mirror requires its actual stack");
+            entity.getClass().getMethod("func_92058_a",loader.loadClass("net.minecraft.item.ItemStack")).invoke(entity,items.materialize(snapshot.item()));
         }
         double half=snapshot.width()/2;
         Object box=loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a",double.class,double.class,double.class,double.class,double.class,double.class).invoke(null,snapshot.x()-half,snapshot.y(),snapshot.z()-half,snapshot.x()+half,snapshot.y()+snapshot.height(),snapshot.z()+half);
         var bounds=base.getField("field_70121_D");bounds.setAccessible(true);bounds.set(entity,box);
         if(generic&&existing==null)type.getField("mfclPushable").setBoolean(entity,snapshot.pushable());
         return entity;
+    }
+    private static void initializeDataWatcher(Class<?> type,Object entity) throws ReflectiveOperationException {
+        for(Class<?> current=type;current!=null;current=current.getSuperclass()) {
+            try {
+                var method=current.getDeclaredMethod("func_70088_a");method.setAccessible(true);method.invoke(entity);return;
+            } catch(NoSuchMethodException ignored) { }
+        }
+    }
+    private static void watch(Object watcher,Method add,Method exists,int index,Object value) throws Exception {
+        if(exists.invoke(watcher,index)==null) add.invoke(watcher,index,value);
     }
     static HostWorldAccess.Motion motion(ClassLoader loader,Object entity,UUID id) throws Exception {
         var type=loader.loadClass("net.minecraft.entity.Entity");

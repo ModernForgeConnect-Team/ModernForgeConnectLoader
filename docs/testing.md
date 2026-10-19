@@ -83,14 +83,16 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | Gradle property | Scope | Report under the selected game's `logs/mfcl/` |
 | --- | --- | --- |
 | `mfclApiSmokeTest` | Public provider/ready callback, native stack/NBT copies, world identity/thread/unload guards, diagnostic command | `api-smoke.json` |
-| `mfclScannerSmokeTest` | TC4 held scan, real rewards/audio, cancellation/repeat/prerequisites, persistence and dynamic lens/target coverage | `scanner-smoke.json` |
+| `mfclScannerSmokeTest` | TC4 held block/drop scans, real rewards/audio, cancellation/repeat/prerequisites, drop metadata and entity-ID validation, unmapped drops, persistence and dynamic lens/target coverage | `scanner-smoke.json` |
 | `mfclBookSmokeTest` | Original Thaumonomicon GUI and interaction | Consult the book [acceptance record](thaumonomicon-progress.json) |
 | `mfclLogicSmokeTest` | Supported native/legacy block and inventory logic | Consult the logic [acceptance record](runtime-logic-progress.json) |
 | `mfclCraftingSmokeTest` | Standard workbench recipes, native output consumption, JEI projection and reload | `crafting-smoke.json` |
-| `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence and lifter motion | `device-smoke.json` |
+| `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence, note insertion/place/erase/sync, native reveal/learning and lifter motion | `device-smoke.json` |
 | `mfclTooltipSmokeTest` | Actual JEI single/batch item rendering followed by tooltip depth verification | `jei-tooltip-smoke.json` |
 | `mfclContentSmokeTest` | Reference content registration, rendering, placement and persistence | `content-1.7.10-smoke.json` |
 
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
 
 Check both the process exit status and the probe JSON `status` / recorded assertions. A clean Gradle exit alone is not sufficient evidence that every in-game assertion passed. Preserve logs when reporting a new failure; source-controlled acceptance JSON is a dated summary, not a promise about untested mod combinations.
+
+Plain `runClient` uses `run/` unless `-PmfclRunDir` is supplied. Preparing `build/thaumcraft-smoke/game` does not populate that default directory. To use TC4 in a normal development session, install original TC4/Baubles into `run/mods/1.7.10/` and the prepared runtime plus its verified manifest into `run/mfcl/runtime/1.7.10/`, or launch with the fixture directory and `-PlegacyRuntimeDir` explicitly. `run/logs/mfcl/legacy-1.7.10.json` reporting `NO_LEGACY_MODS` means no old mod archives were found in that run's directory.

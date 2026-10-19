@@ -20,6 +20,7 @@ final class ScannerHostSmokeProbe {
     private String world;
     private java.util.concurrent.CompletableFuture<?> pending;
     private boolean renderNbtChecked;
+    private DroppedItemScannerAcceptance drops;
     private final java.util.concurrent.ConcurrentMap<String,java.util.concurrent.atomic.AtomicInteger> playedSounds=new java.util.concurrent.ConcurrentHashMap<>();
     private record TargetCase(net.minecraft.world.level.block.state.BlockState state,String oldKey,int metadata) {}
     private final List<TargetCase> targetCases=List.of(
@@ -125,15 +126,21 @@ final class ScannerHostSmokeProbe {
                 });stage=11;
             } else if(stage==11&&pending.isDone()) {
                 pending.join();proof.put("repeatScanNoDuplicateReward",true);proof.put("cancelledScanRejected",true);proof.put("originalPrerequisiteAndFeedback",true);
+                drops=new DroppedItemScannerAcceptance(content,proof);stage=20;
+            } else if(stage==20&&drops.tick(mc)) {
+                pending=server(mc,()->{awarded=pool(mc,true);mc.getSingleplayerServer().saveEverything(false,true,true);return true;});stage=21;
+            } else if(stage==21&&pending.isDone()) {
+                pending.join();
                 mc.level.disconnect();mc.clearLevel();mc.setScreen(new TitleScreen());stage=12;
             } else if(stage==12&&mc.getSingleplayerServer()==null) {
                 var loader=content.services().loader();Object proxy=loader.loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null);
                 Object knowledge=proxy.getClass().getMethod("getPlayerKnowledge").invoke(proxy);knowledge.getClass().getMethod("wipePlayerKnowledge",String.class).invoke(knowledge,"Dev");
                 mc.createWorldOpenFlows().loadLevel(mc.screen,world);stage=13;
             } else if(stage==13&&mc.player!=null&&mc.level!=null&&mc.screen==null) {
-                pending=server(mc,()->{if(pool(mc,true)!=awarded||!scanned(mc,true,"minecraft:stone"))throw new IllegalStateException("Original research was lost on reload");return true;});stage=14;frames=0;
+                pending=server(mc,()->{if(pool(mc,true)!=awarded||!scanned(mc,true,"minecraft:stone"))throw new IllegalStateException("Original research was lost on reload");drops.verifyPersisted(mc,true);return true;});stage=14;frames=0;
             } else if(stage==14&&pending.isDone()&&++frames>20) {
                 pending.join();if(pool(mc,false)!=awarded||!scanned(mc,false,"minecraft:stone"))throw new IllegalStateException("Reloaded scan state did not reach the client");
+                drops.verifyPersisted(mc,false);proof.put("dropKnowledgeSurvivedReload",true);
                 proof.put("knowledgeSurvivedReload",true);stage=15;
             } else if(stage==15) {
                 var check=targetCases.get(targetCase);

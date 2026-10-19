@@ -14,7 +14,7 @@ public final class LegacyItemUse {
         public Result(boolean used,int useDuration,String prompt,List<LegacyPackets.Message> messages) {this(used,useDuration,prompt,messages,List.of());}
     }
     /** A finished legacy scan, ready to be replayed against the authoritative player. */
-    public record Scan(byte type, int id, int meta, String phenomena) {}
+    public record Scan(byte type, int id, int meta, int entityId, String phenomena) {}
     public record AppliedScan(boolean accepted,byte[] data,List<LegacyPackets.Message> messages) {}
     private final LegacyServices services;
     // The same UUID exists on both the integrated server and the client; keep their actors apart.
@@ -100,7 +100,7 @@ public final class LegacyItemUse {
                     snapshot.key(), snapshot.metadata(), remaining, scanPrompt(item, loader));
             // Only the original successful completion branch emits this packet; clearing startScan also happens on cancellation.
             if(request!=null) {
-                return new Scan((byte)packetField(request,"type"),(int)packetField(request,"id"),(int)packetField(request,"md"),(String)packetField(request,"phenomena"));
+                return new Scan((byte)packetField(request,"type"),(int)packetField(request,"id"),(int)packetField(request,"md"),(int)packetField(request,"entityid"),(String)packetField(request,"phenomena"));
             }
             return null;
         });
@@ -121,7 +121,7 @@ public final class LegacyItemUse {
      * caller passes the player's previously persisted old entity data (or null) and gets the updated bytes back,
      * so research survives across sessions.
      */
-    public AppliedScan applyScan(Object world, LegacyTiles.Placer placer, byte type, int id, int meta, String phenomena, String prefix, byte[] priorData) throws Exception {
+    public AppliedScan applyScan(Object world, LegacyTiles.Placer placer, byte type, int id, int meta, int entityId, String phenomena, String prefix, byte[] priorData) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader();
             try(var knowledge=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id())) {
@@ -132,7 +132,9 @@ public final class LegacyItemUse {
             var target=item.getClass().getDeclaredMethod("doScan",loader.loadClass("net.minecraft.item.ItemStack"),loader.loadClass("net.minecraft.world.World"),loader.loadClass("net.minecraft.entity.player.EntityPlayer"),int.class);target.setAccessible(true);
             Object scan=target.invoke(item,stack,world,player,0);
             boolean accepted=false;
-            if(scan!=null&&scan.getClass().getField("type").getByte(scan)==type&&scan.getClass().getField("id").getInt(scan)==id&&scan.getClass().getField("meta").getInt(scan)==meta&&Objects.equals(scan.getClass().getField("phenomena").get(scan),phenomena))
+            Object targetEntity=scan==null?null:scan.getClass().getField("entity").get(scan);
+            if(scan!=null&&scan.getClass().getField("type").getByte(scan)==type&&scan.getClass().getField("id").getInt(scan)==id&&scan.getClass().getField("meta").getInt(scan)==meta&&Objects.equals(scan.getClass().getField("phenomena").get(scan),phenomena)
+                    &&(type!=2||targetEntity!=null&&(int)loader.loadClass("net.minecraft.entity.Entity").getMethod("func_145782_y").invoke(targetEntity)==entityId))
                 accepted=(boolean)loader.loadClass("thaumcraft.common.lib.research.ScanManager")
                     .getMethod("completeScan", loader.loadClass("net.minecraft.entity.player.EntityPlayer"), loader.loadClass("thaumcraft.api.research.ScanResult"), String.class)
                     .invoke(null, player, scan, "@");

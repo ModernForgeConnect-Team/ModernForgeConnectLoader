@@ -29,6 +29,7 @@ final class DeviceHostSmokeProbe {
     private UUID lifted;
     private double initialY;
     private ResearchNoteHostAcceptance noteAcceptance;
+    private ResearchTableHostAcceptance tableAcceptance;
     private final long deadline=System.nanoTime()+TimeUnit.MINUTES.toNanos(5);
     private DeviceHostSmokeProbe(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){MinecraftForge.EVENT_BUS.addListener(new DeviceHostSmokeProbe(content)::tick);}
@@ -43,7 +44,7 @@ final class DeviceHostSmokeProbe {
                 org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(2);mc.options.languageCode="zh_cn";
                 mc.createWorldOpenFlows().createFreshLevel("mfcl-device-smoke-"+System.currentTimeMillis(),new LevelSettings("MFCL device acceptance",GameType.CREATIVE,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());stage=1;
             }else if(stage==1&&mc.player!=null&&mc.level!=null&&mc.screen==null) {
-                pending=server(mc,()->{setup(mc);return true;});
+                pending=server(mc,()->{verifyReadableGiveIds(mc);setup(mc);return true;});
                 mc.setScreen(new CreativeModeInventoryScreen(mc.player,mc.level.enabledFeatures(),false));stage=2;frames=0;
             }else if(stage==2&&pending.isDone()&&++frames>8) {
                 pending.join();select(mc,CreativeModeTabs.INVENTORY);stage=3;frames=0;
@@ -156,6 +157,8 @@ final class DeviceHostSmokeProbe {
                 if(pool(mc,"aer")!=18||pool(mc,"ignis")!=18||pool(mc,"lux")!=2)throw new IllegalStateException("Second research click was dropped or applied twice: "+pool(mc,"aer")+","+pool(mc,"ignis")+","+pool(mc,"lux"));
                 proof.put("researchCombineRepeatedClickExactlyOnce",true);
                 screenshot(mc,"research-combined");
+                tableAcceptance=new ResearchTableHostAcceptance(content,proof);stage=83;frames=0;
+            }else if(stage==83&&tableAcceptance.tick(mc)) {
                 pending=server(mc,()->{mc.getSingleplayerServer().getPlayerList().getPlayers().get(0).closeContainer();activate(mc,deconstruction);return true;});stage=12;frames=0;
             }else if(stage==12&&pending.isDone()&&mc.screen instanceof LegacyDeviceScreen&&++frames>8) {
                 pending.join();verifyScreen(mc,"GuiDeconstructionTable");screenshot(mc,"deconstruction-table");proof.put("deconstructionTableOriginalGui",true);
@@ -166,6 +169,18 @@ final class DeviceHostSmokeProbe {
                 proof.put("status","PASS");finish(mc,null);
             }
         }catch(Throwable failure){finish(mc,failure);}
+    }
+    private void verifyReadableGiveIds(Minecraft mc) throws Exception {
+        var server=mc.getSingleplayerServer();var player=server.getPlayerList().getPlayers().get(0);
+        var ring=content.items().get("Baubles:Ring");
+        if(ring==null||!BuiltInRegistries.ITEM.getKey(ring).toString().equals("baubles:ring")
+                ||!BuiltInRegistries.ITEM.getKey(content.items().get("Thaumcraft:ItemResearchNotes")).toString().equals("thaumcraft:item_research_notes"))throw new IllegalStateException("Legacy give IDs are not readable");
+        var source=player.createCommandSourceStack().withPermission(2);var commands=server.getCommands();
+        var suggestions=commands.getDispatcher().getCompletionSuggestions(commands.getDispatcher().parse("give @s baubles:",source)).join();
+        if(suggestions.getList().stream().noneMatch(value->value.getText().equals("baubles:ring")))throw new IllegalStateException("Give completion does not expose the readable ring ID");
+        int count=player.getInventory().countItem(ring);
+        if(commands.performPrefixedCommand(source,"give @s baubles:ring 1")!=1||player.getInventory().countItem(ring)!=count+1)throw new IllegalStateException("Give command did not grant the original Baubles ring");
+        proof.put("readableLegacyGiveIdsAndCompletion",true);
     }
     private void setup(Minecraft mc) throws Exception {
         var level=mc.getSingleplayerServer().overworld();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var origin=player.blockPosition();

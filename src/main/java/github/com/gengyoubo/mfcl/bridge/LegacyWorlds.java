@@ -10,16 +10,18 @@ public final class LegacyWorlds implements AutoCloseable {
     private static final Map<Object, Binding> DISPATCH = Collections.synchronizedMap(new IdentityHashMap<>());
     private final Map<Object, Binding> worlds = new IdentityHashMap<>();
     private final ClassLoader loader;
+    private final LegacyClientData items;
+    private final LegacyBiomes biomes;
     private Class<?> clientFacade, serverFacade;
     private static final class Binding {
-        final Object world; final HostWorldAccess host; final Thread owner; final ClassLoader loader;
+        final Object world; final HostWorldAccess host; final Thread owner; final ClassLoader loader; final LegacyClientData items; final LegacyBiomes biomes;
         final Map<java.util.UUID,Object> queried=new LinkedHashMap<>();
         final Map<java.util.UUID,HostWorldAccess.Entity> snapshots=new LinkedHashMap<>();
         boolean motionCapture;
-        Binding(Object world, HostWorldAccess host, ClassLoader loader) { this.world = world; this.host = host; this.loader = loader; owner = Thread.currentThread(); }
+        Binding(Object world, HostWorldAccess host, LegacyClientData items,LegacyBiomes biomes) { this.world = world; this.host = host; this.loader = items.loader(); this.items=items;this.biomes=biomes; owner = Thread.currentThread(); }
         void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Legacy world access must run on its host owner thread"); }
     }
-    public LegacyWorlds(ClassLoader loader) { this.loader = loader; }
+    public LegacyWorlds(LegacyClientData items,LegacyBiomes biomes) { this.loader = items.loader(); this.items=items;this.biomes=biomes; }
     public synchronized Object bound(Object hostIdentity) {
         Binding binding = worlds.get(hostIdentity);
         if (binding == null) throw new IllegalStateException("Host world has no legacy binding");
@@ -61,7 +63,7 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_96442_D", loader.loadClass("net.minecraft.scoreboard.Scoreboard").getConstructor().newInstance());
         set(providerType, provider, "field_76574_g", host.legacyDimensionId());
         set(providerType, provider, "field_76579_a", world);
-        var binding = new Binding(world, host, loader); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
+        var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
         return world;
     }
     public synchronized void unbind(Object hostIdentity) {
@@ -156,7 +158,7 @@ public final class LegacyWorlds implements AutoCloseable {
             var result=new ArrayList<Object>();
             for(var snapshot:snapshots) {
                 Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
-                if(entity==null){entity=LegacyEntityAccess.mirror(binding.loader,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
+                if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
                 if(type.isInstance(entity)&&(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",binding.loader.loadClass("net.minecraft.entity.Entity")).invoke(selector,entity)))result.add(entity);
             }
             return result;
@@ -197,8 +199,14 @@ public final class LegacyWorlds implements AutoCloseable {
     public static boolean air(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).legacyKey().equals("minecraft:air"); }
     public static Object biome(Object world, int x, int z) {
         var binding = binding(world);
-        try { return binding.loader.loadClass("net.minecraft.world.biome.BiomeGenBase").getField("field_76772_c").get(null); }
-        catch (Exception error) { throw new IllegalStateException(error); }
+        return binding.biomes.resolve(binding.host.biome(x,z));
+    }
+    /** Used by adapters for old mods that mutate the obsolete byte[] chunk biome array. */
+    public static void setBiome(Object world,int x,int z,Object biome) {
+        if(biome==null)return;
+        var binding=binding(world);
+        if(binding.host.clientSide())throw new UnsupportedOperationException("Legacy client cannot mutate authoritative biomes");
+        binding.host.setBiome(x,z,binding.biomes.key(biome));
     }
     public static boolean canPlace(Object world, Object target, int x, int y, int z, boolean ignoreCollision, int side, Object entity, Object stack) {
         var binding = binding(world);

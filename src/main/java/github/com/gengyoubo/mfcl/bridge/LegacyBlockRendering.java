@@ -9,6 +9,7 @@ public final class LegacyBlockRendering {
         HostWorldAccess.Block block(int x, int y, int z);
         default byte[] tileData(int x, int y, int z) { return null; }
         default long time() { return 0; }
+        default String biome(int x,int z) { return "minecraft:plains"; }
     }
     public record Layer(int pass, List<LegacyVertexStream.Primitive> geometry) {
         public Layer { geometry = List.copyOf(geometry); }
@@ -155,7 +156,7 @@ public final class LegacyBlockRendering {
             if (name.equals("func_72802_i")) return 0x00F000F0; // Host chunk lighting is applied to the baked quads.
             if (name.equals("func_72800_K")) return 256;
             if (name.equals("func_72806_s")) return view.block((int)args[0], (int)args[1], (int)args[2]).legacyKey().equals("minecraft:air");
-            if (name.equals("func_72807_a")) return data.loader().loadClass("net.minecraft.world.biome.BiomeGenBase").getField("field_76772_c").get(null);
+            if (name.equals("func_72807_a")) return services.biomes().resolve(view.biome((int)args[0],(int)args[1]));
             if (name.equals("func_72879_k")) return false;
             if (name.equals("isSideSolid")) {
                 Object neighbor = block(view.block((int)args[0], (int)args[1], (int)args[2]).legacyKey());

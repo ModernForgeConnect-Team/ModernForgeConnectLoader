@@ -8,6 +8,8 @@
 
 TC4 研究台要素合成使用原始 `PacketAspectCombinationToServer` handler。服务端核对窗口、交互距离、维度和桌子坐标，从实际设备读取奖励要素，并绑定发送者身份。知识变化与设备事务一起处理，成功后保存至宿主玩家数据，原始回复包同步客户端。旧维度和实体 ID 查找仅在本次调用范围内绑定。
 
+研究笔记的六边格放置和擦除使用原始 `PacketAspectPlaceToServer` handler。服务端从当前笔记重新读取格子，验证笔记未完成、目标格存在且可修改，以及放置要素已经发现并有可用点数；原版代码负责墨水、要素扣除、擦除返还和连线完成判定。完成笔记的 metadata/NBT 继续通过宿主槽位与设备快照同步。
+
 客户端同类型的设备 NBT 更新保留旧对象身份，以维持打开界面的引用。NBT 中的旧 TileEntity 注册 ID 决定实际类型；普通桌转换为研究台等类型变化会替换对象。保存后的恢复也使用该 ID，避免只根据方块和 metadata 猜测类型。
 
 旧世界的范围实体查询映射到宿主实体。设备更新范围内的速度与坠落距离变化在事务成功后提交；已验收原始升降机驱动现代掉落物。此接口不是完整旧实体 AI 或实体状态模拟。
@@ -22,4 +24,19 @@ TC4 研究台要素合成使用原始 `PacketAspectCombinationToServer` handler�
 
 同日按钮与提示框回归：原始合成 handler 连续执行两次，输入各从 20 减到 18、输出从 0 增到 2；客户端同步、保存恢复与已有玩家标签保留均通过。合成通知使用原始通知处理器和旧 HUD 对象，像素投影在 GUI 捕获内处理，不清理宿主缓冲。完整 JUnit 共 68 项，64 项通过、4 项跳过，失败为 0；`test build runClient` 成功。
 
-研究台合成测试使用真实鼠标入口，检查两种输入要素扣除、输出要素增加、客户端回复同步、保存数据恢复以及连续点击各执行一次。解构台的检查仍只覆盖打开和绘制；研究六边格操作、笔记复制、解构配方、其他自定义 GUI 包、所有进度监听和其他模组设备仍需专项验证。
+研究台合成测试使用真实鼠标入口，检查两种输入要素扣除、输出要素增加、客户端回复同步、保存数据恢复以及连续点击各执行一次。解构台的检查仍只覆盖打开和绘制；笔记复制、解构配方、其他自定义 GUI 包、所有进度监听和其他模组设备仍需专项验证。
+
+2026-10-19 研究笔记回归：`ThaumcraftResearchIntegrationTest` 使用原始 TC4/Baubles 和准备好的运行时，在独立 JVM 中验证原始槽位插入/取出、错误连线后擦除、正确连线生成 metadata 64 的完成笔记、三次操作的墨水和要素扣除，以及 NBT 重载。完成测试使用由原版生成、缩减为“风—光—火”三格的确定性笔记；未修改模组 JAR。越界格、固定端点、重复放置、空格擦除、无点数及已完成笔记操作均应拒绝。独立构建 `test build` 通过，69 项测试中 65 项通过、4 项缺少其他外部样本而跳过。
+
+同日现代客户端 `mfclDeviceSmokeTest` 返回 `PASS`：在原版生成的完整 NITOR 笔记上，实际宿主鼠标槽位操作完成放入/取出，原版 GUI 拖放释放及右键擦除通过设备包到达服务端，客户端笔记和界面格子同步，墨水消耗两次、风要素消耗一次。该 GUI 测试把拖动状态设为已选中要素，再执行原版释放绘制逻辑；完整连线判定由上面的确定性三格运行时回归验证。已有未知笔记揭晓、完成笔记学习/消耗/持久化及副手碎片返还测试也通过。报告位于独立游戏目录 `build/research-client-game/logs/mfcl/device-smoke.json`。
+
+掉落物扫描桥接修复后再次运行设备探针，`build/dropped-item-game/logs/mfcl/device-smoke.json` 返回 `PASS`，原升降机仍推动实际圆石掉落物，研究台槽位和笔记要素操作仍通过。研究完成消息仍记录旧 `ClientTickEventsFML.researchPopup` 未初始化异常（先前 `build/readable-ids-client.log` 中也存在）；上述学习状态和持久化断言通过，但不表示完成弹窗已正常显示。
+
+可通过以下额外参数启用该运行时回归（省略时跳过）：
+
+```powershell
+.\gradlew.bat test --tests '*ThaumcraftResearchIntegrationTest' `
+  -PlegacySupportDir=build/nei-investigation `
+  '-PthaumcraftJar=C:/private-inputs/Thaumcraft-1.7.10-4.2.3.5.jar' `
+  '-PbaublesJar=C:/private-inputs/Baubles-1.7.10-1.0.1.10.jar'
+```

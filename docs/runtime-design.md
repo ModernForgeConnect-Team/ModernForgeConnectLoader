@@ -12,7 +12,13 @@ Original mod inputs are discovered from the host game directory's `mods/1.7.10/`
 
 ## Registration barrier
 
-Successful old initialization freezes old declarations before the modern registration window. `ModernContentBridge` publishes host counterparts only through modern registration events. Legal old IDs are retained; IDs containing characters disallowed by the modern registry use deterministic `mfcl:legacy/<UTF-8 hex>` IDs. The generated content manifest records these correspondences.
+Successful old initialization freezes old declarations before the modern registration window. `ModernContentBridge` publishes host counterparts only through modern registration events. Legal old IDs are retained. Other IDs use a lowercase namespace and a readable snake-case path: `Baubles:Ring` becomes `baubles:ring`, and `Thaumcraft:ItemResearchNotes` becomes `thaumcraft:item_research_notes`. Unsupported characters are escaped individually. Normalization collisions are rejected before registration, with both original names reported.
+
+Forge missing-mapping events migrate saved block/item references from the earlier `mfcl:legacy/<UTF-8 hex>` names to their corresponding loaded entries. The original case-sensitive IDs remain unchanged inside the legacy runtime and public API. The generated `mfcl-content-manifest.json` includes explicit block/item correspondences under `registryIds`.
+
+For example, `/give @s baubles:ring` and `/give @s thaumcraft:item_thaumometer` use the readable registered IDs. Changing a research note's ID does not generate its research data; its metadata and original NBT still determine its state.
+
+2026-10-19 validation: isolated `test build` passed (73 tests: 69 passed, 4 skipped for unavailable external reference inputs). `LegacyRegistryIdsTest` checks readable names, unchanged legal IDs, unsupported-character escapes, collision rejection and Forge remapping of saved hexadecimal names. The device client probe additionally checks the actual `/give` command dispatcher, `baubles:ring` completion and inventory delivery with original TC4/Baubles loaded.
 
 Legacy metadata is preserved in host block states or item envelopes. Derived resources contain textures, language data, models and supported standard crafting definitions. They do not alter original archives. Item availability in the creative catalog does not establish gameplay support for every variant.
 

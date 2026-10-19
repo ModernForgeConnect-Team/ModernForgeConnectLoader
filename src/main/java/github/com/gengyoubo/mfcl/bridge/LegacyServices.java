@@ -8,6 +8,7 @@ public final class LegacyServices {
     private final ClassLoader loader;
     private final LegacyClientData items;
     private final LegacyWorlds worlds;
+    private final LegacyBiomes biomes;
     private final LegacyScreens screens;
     private final LegacyContainers containers;
     private final LegacyTiles tiles;
@@ -25,7 +26,8 @@ public final class LegacyServices {
         this.items.initializeContext(gameDirectory, java.util.List.of("assets/minecraft/lang/en_US.lang"));
         this.items.refreshIconMetadata();
         this.items.loadRegistryCatalog();
-        this.worlds = new LegacyWorlds(loader); this.screens = new LegacyScreens(loader);
+        this.biomes = new LegacyBiomes(loader);
+        this.worlds = new LegacyWorlds(items,biomes); this.screens = new LegacyScreens(loader);
         this.containers = new LegacyContainers(this);
         this.tiles = new LegacyTiles(this);
         this.playerData = new LegacyPlayerData(this);
@@ -36,6 +38,7 @@ public final class LegacyServices {
     public ClassLoader loader() { return loader; }
     public LegacyClientData items() { return items; }
     public LegacyWorlds worlds() { return worlds; }
+    public LegacyBiomes biomes() { return biomes; }
     public LegacyScreens screens() { return screens; }
     public LegacyContainers containers() { return containers; }
     public LegacyTiles tiles() { return tiles; }

@@ -93,6 +93,8 @@ public final class LegacyContentPack {
         languages();
         json("mfcl-content-manifest.json", Map.of("blocks", content.blocks(), "items", content.items(), "creativeTabs", content.tabs(), "missingIcons", missingIcons,
                 "customItems", List.copyOf(content.customItems()),
+                "registryIds", Map.of("blocks",content.blocks().stream().collect(java.util.stream.Collectors.toMap(LegacyContent.Block::key,entry->ModernContentBridge.id(entry.key()).toString())),
+                        "items",content.items().stream().collect(java.util.stream.Collectors.toMap(LegacyContent.Item::key,entry->ModernContentBridge.id(entry.key()).toString()))),
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
     }
     private void resolveGeometry(Map<String, List<LegacyVertexStream.Primitive>> source, Map<String, List<LegacyVertexStream.Primitive>> target) throws Exception {
@@ -193,7 +195,7 @@ public final class LegacyContentPack {
                 "mfcl.content.placement_failed", "无法初始化此方块，详细信息见游戏日志。"));
         for (var entry : languages.entrySet()) json("assets/mfcl/lang/" + entry.getKey() + ".json", entry.getValue());
     }
-    private void json(String resource, Object value) throws IOException {
+    void json(String resource, Object value) throws IOException {
         Path file = directory.resolve(resource).normalize();
         if (!file.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + resource);
         Files.createDirectories(file.getParent()); Files.writeString(file, new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(value), StandardCharsets.UTF_8);
