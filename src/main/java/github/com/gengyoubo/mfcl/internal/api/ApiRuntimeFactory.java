@@ -36,6 +36,12 @@ public final class ApiRuntimeFactory {
     }
     public static void installHostMappings(LegacyApiRuntime runtime, ModernContentBridge content) {
         var services = content.services();
+        var representations = content.hostRepresentations();
+        runtime.installHostRepresentations(new LegacyHostRepresentations() {
+            public LegacyStack item(String id) { return runtime.call("HOST_REPRESENTATION", id, () -> representations.item(id)); }
+            public LegacyStack block(String id) { return runtime.call("HOST_REPRESENTATION", id, () -> representations.block(id)); }
+            public String entity(String id) { return runtime.call("HOST_REPRESENTATION", id, () -> representations.entity(id)); }
+        });
         runtime.installPlayerAccess(new LegacyApiRuntime.PlayerAccess() {
             @Override public <T> T run(Object host, java.util.function.Function<LegacyObject, T> operation) {
                 if (!(host instanceof net.minecraft.server.level.ServerPlayer player) || !player.server.isSameThread())

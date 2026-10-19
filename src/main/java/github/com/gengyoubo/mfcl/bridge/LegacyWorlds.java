@@ -262,6 +262,7 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_72921_c", "(IIIII)Z", "metadata", "(Ljava/lang/Object;IIIII)Z", null);
         forward(writer, bridge, "func_147438_o", "(III)Lnet/minecraft/tileentity/TileEntity;", "tile", "(Ljava/lang/Object;III)Ljava/lang/Object;", "net/minecraft/tileentity/TileEntity");
         forward(writer, Type.getInternalName(LegacyPackets.class), "func_73045_a", "(I)Lnet/minecraft/entity/Entity;", "serverEntity", "(Ljava/lang/Object;I)Ljava/lang/Object;", "net/minecraft/entity/Entity");
+        forward(writer, Type.getInternalName(LegacyPackets.class), "func_72924_a", "(Ljava/lang/String;)Lnet/minecraft/entity/player/EntityPlayer;", "serverPlayer", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;", "net/minecraft/entity/player/EntityPlayer");
         forward(writer, bridge, "func_147455_a", "(IIILnet/minecraft/tileentity/TileEntity;)V", "tile", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);
         forward(writer, bridge, "func_147475_p", "(III)V", "removeTile", "(Ljava/lang/Object;III)V", null);
         forward(writer, bridge, "func_147476_b", "(IIILnet/minecraft/tileentity/TileEntity;)V", "dirty", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);

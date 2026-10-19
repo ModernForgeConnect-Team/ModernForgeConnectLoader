@@ -39,6 +39,8 @@ public final class ModernContentBridge {
     private final LegacyCrafting crafting;
     private final Set<String> legacyBlockKeys;
     private final HostBlockMapping hostBlocks;
+    private final HostRepresentations hostRepresentations = new HostRepresentations(this);
+    public HostRepresentations hostRepresentations() { return hostRepresentations; }
     private final ThreadLocal<PlacementTransaction> placement = new ThreadLocal<>();
     private final Map<String, Block> blocks = new LinkedHashMap<>();
     private final Map<String, Item> items = new LinkedHashMap<>();
@@ -247,6 +249,8 @@ public final class ModernContentBridge {
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
         if (stack.isEmpty()) return null;
+        var represented = hostRepresentations.stack(stack);
+        if (represented != null) return represented;
         if (reverseItems.containsKey(stack.getItem())) return snapshot(stack);
         if (stack.hasTag() && stack.getTag().getAllKeys().stream().anyMatch(key -> !key.equals("Damage")))
             throw new UnsupportedOperationException("Unmapped host inventory NBT: " + stack);
@@ -264,6 +268,8 @@ public final class ModernContentBridge {
     }
     public ItemStack gameplayStack(LegacyClientData.Stack stack) {
         if (stack == null || stack.count() <= 0) return ItemStack.EMPTY;
+        var represented = hostRepresentations.stack(stack);
+        if (!represented.isEmpty()) return represented;
         if (!items.containsKey(stack.key()) && !stack.tag().isEmpty()) throw new UnsupportedOperationException("Original inventory NBT needs a host mapping: " + stack.key());
         var mapped = mapStack(stack);
         if (mapped.isEmpty()) throw new UnsupportedOperationException("Original inventory item needs a host mapping: " + stack.key());
@@ -306,10 +312,14 @@ public final class ModernContentBridge {
         return cost == null && color == null && name == null ? original : services.items().renderTags(original, cost, color, name);
     }
     public HostWorldAccess.Block legacyBlock(BlockState state) {
+        var represented = hostRepresentations.block(state);
+        if (represented != null) return represented;
         if (state.getBlock() instanceof MirroredBlock mirrored) return new HostWorldAccess.Block(mirrored.entry.key(), state.getValue(METADATA));
         return hostBlocks.read(state);
     }
     public BlockState modernBlock(HostWorldAccess.Block old) {
+        var represented = hostRepresentations.block(old);
+        if (represented != null) return represented;
         Block block = blocks.get(old.legacyKey());
         if (block != null) {
             if (!canPlace(((MirroredBlock) block).entry, old.metadata())) throw new UnsupportedOperationException("Legacy special rendering/placement bridge is pending: " + old.legacyKey() + "@" + old.metadata());

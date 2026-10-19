@@ -18,6 +18,10 @@ public final class HostEntityQueries {
             String type=entity instanceof Player?(level.isClientSide?"net.minecraft.client.entity.EntityClientPlayerMP":"net.minecraft.entity.player.EntityPlayerMP"):
                     entity instanceof ItemEntity?"net.minecraft.entity.item.EntityItem":entity instanceof AbstractHorse?"net.minecraft.entity.passive.EntityHorse":
                     entity instanceof LivingEntity?"net.minecraft.entity.EntityLiving":"net.minecraft.entity.Entity";
+            if (!(entity instanceof Player) && ModernContentBridge.active() != null) {
+                String represented = ModernContentBridge.active().hostRepresentations().entityClass(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+                if (represented != null) type = represented;
+            }
             LegacyClientData.Stack item=null;
             if(entity instanceof ItemEntity drop) {
                 try {if(ModernContentBridge.active()!=null)item=ModernContentBridge.active().gameplayStack(drop.getItem());}

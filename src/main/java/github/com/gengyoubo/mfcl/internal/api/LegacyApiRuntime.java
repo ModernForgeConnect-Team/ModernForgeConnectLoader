@@ -38,6 +38,15 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     private volatile boolean open = true;
     public interface PlayerAccess { <T> T run(Object player, Function<LegacyObject, T> operation); }
     private PlayerAccess playerAccess;
+    private LegacyHostRepresentations hostRepresentations;
+
+    public void installHostRepresentations(LegacyHostRepresentations representations) {
+        this.hostRepresentations = Objects.requireNonNull(representations);
+    }
+    @Override public LegacyHostRepresentations hostRepresentations() {
+        checkOpen();
+        return Objects.requireNonNull(hostRepresentations, "Host representations are unavailable");
+    }
 
     public void installPlayerAccess(PlayerAccess access) { this.playerAccess = Objects.requireNonNull(access); }
     @Override public <T> T withPlayer(Object hostPlayer, Function<LegacyObject, T> operation) {

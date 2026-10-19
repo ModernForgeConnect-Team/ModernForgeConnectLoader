@@ -18,6 +18,9 @@ public interface LegacyRuntime {
     LegacyObject stack(LegacyStack stack);
     LegacyStack snapshot(LegacyObject stack);
     LegacyMappings mappings();
+    default LegacyHostRepresentations hostRepresentations() {
+        throw new UnsupportedOperationException("This MFCL build does not provide host registry representations");
+    }
     /**
      * Runs on the owning server thread with the real player's legacy knowledge loaded.
      * Successful changes are persisted and old packets synchronized; failures restore prior data.
