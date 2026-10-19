@@ -15,6 +15,7 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.entity.player.EntityPlayerMP")
                 || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
+                || name.equals("net.minecraft.client.multiplayer.PlayerControllerMP")
                 || name.equals("cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
@@ -38,6 +39,13 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                     send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendTo","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);
                 }
                 continue;
+            }
+            if(name.endsWith(".PlayerControllerMP")&&m.name.equals("func_78756_a")) {
+                InsnList button=new InsnList();LabelNode original=new LabelNode();
+                button.add(new VarInsnNode(Opcodes.ILOAD,1));button.add(new VarInsnNode(Opcodes.ILOAD,2));
+                button.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyDeviceInput","sendButton","(II)Z",false));
+                button.add(new JumpInsnNode(Opcodes.IFEQ,original));button.add(new InsnNode(Opcodes.RETURN));
+                button.add(original);button.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(button);continue;
             }
             if(name.endsWith(".GuiContainer")&&(m.name.equals("func_73864_a")||m.name.equals("func_146286_b"))) {
                 InsnList input=new InsnList();LabelNode original=new LabelNode();

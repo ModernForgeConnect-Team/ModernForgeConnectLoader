@@ -36,6 +36,17 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     private final ArrayDeque<Diagnostic> diagnostics = new ArrayDeque<>();
     private final Conversions mappings = new Conversions();
     private volatile boolean open = true;
+    public interface PlayerAccess { <T> T run(Object player, Function<LegacyObject, T> operation); }
+    private PlayerAccess playerAccess;
+
+    public void installPlayerAccess(PlayerAccess access) { this.playerAccess = Objects.requireNonNull(access); }
+    @Override public <T> T withPlayer(Object hostPlayer, Function<LegacyObject, T> operation) {
+        Objects.requireNonNull(hostPlayer); Objects.requireNonNull(operation);
+        return call("PLAYER_ACTION", "withPlayer", () -> {
+            if (playerAccess == null) throw new UnsupportedOperationException("Player access is unavailable");
+            return playerAccess.run(hostPlayer, operation);
+        });
+    }
 
     public LegacyApiRuntime(ClassLoader loader, Scope scope, Values values, Set<String> mods) {
         this.loader = Objects.requireNonNull(loader); this.scope = Objects.requireNonNull(scope);

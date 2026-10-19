@@ -36,6 +36,16 @@ public final class ApiRuntimeFactory {
     }
     public static void installHostMappings(LegacyApiRuntime runtime, ModernContentBridge content) {
         var services = content.services();
+        runtime.installPlayerAccess(new LegacyApiRuntime.PlayerAccess() {
+            @Override public <T> T run(Object host, java.util.function.Function<LegacyObject, T> operation) {
+                if (!(host instanceof net.minecraft.server.level.ServerPlayer player) || !player.server.isSameThread())
+                    throw new IllegalArgumentException("withPlayer requires a ServerPlayer on its owning server thread");
+                var alive = new java.util.concurrent.atomic.AtomicBoolean(true);
+                try {
+                    return content.withApiPlayer(player, old -> operation.apply(runtime.borrowed(old, alive::get)));
+                } finally { alive.set(false); }
+            }
+        });
         runtime.mappings().register(LegacyMappings.ITEM_STACK, net.minecraft.world.item.ItemStack.class, host ->
             runtime.call("MAPPING_IMPORT", LegacyMappings.ITEM_STACK, () -> {
                 if (host.isEmpty()) return null;

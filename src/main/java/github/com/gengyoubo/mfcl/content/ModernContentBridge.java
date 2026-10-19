@@ -108,6 +108,33 @@ public final class ModernContentBridge {
         return entry.renderType() == 0 || active != null && active.blockRendering.supports(entry.key(), metadata);
     }
     public static final String LEGACY_ENTITY_DATA = "mfcl_legacy_entity";
+    /** Generic public-API transaction; addon-specific research rules remain outside MFCL. */
+    public <T> T withApiPlayer(net.minecraft.server.level.ServerPlayer player, java.util.function.Function<Object,T> operation) {
+        if (!player.server.isSameThread()) throw new IllegalStateException("Player access requires the server thread");
+        try {
+            return services.items().inLegacy(() -> {
+                Object world = services.worlds().bound(player.serverLevel());
+                var source = placer(player);
+                try (var state = services.playerState().enter(world); var packets = LegacyPackets.capture(player.getUUID())) {
+                    Object actor = itemUse.clientActor(world, source, null);
+                    byte[] saved = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
+                    if (saved.length != 0) services.playerData().write(actor, saved);
+                    services.playerState().initialize(actor);
+                    byte[] before = services.playerData().read(actor);
+                    T result;
+                    try { result = operation.apply(actor); }
+                    catch (RuntimeException | Error failure) { services.playerData().write(actor, before); throw failure; }
+                    byte[] after = services.playerData().read(actor);
+                    var synchronizedPackets = itemUse.sync(world, source);
+                    player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, after);
+                    packets.messages().forEach(packet -> ScanSyncChannel.sendToPlayer(player, packet));
+                    synchronizedPackets.forEach(packet -> ScanSyncChannel.sendToPlayer(player, packet));
+                    return result;
+                }
+            });
+        } catch (RuntimeException failure) { throw failure; }
+        catch (Exception failure) { throw new IllegalStateException("Legacy player transaction failed", failure); }
+    }
     private void playerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
         byte[] data = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
@@ -132,6 +159,40 @@ public final class ModernContentBridge {
         } catch (Exception failure) {
             LogUtils.getLogger().error("MFCL legacy server scan application failed for {}", player.getName().getString(), failure);
         }
+    }
+    /** Executes a legacy client packet from the Thaumonomicon (purchase research / create note) for the real player. */
+    public void applyServerLegacyMessage(net.minecraft.server.level.ServerPlayer player, LegacyPackets.Message message) {
+        try {
+            Object world=services.worlds().bound(player.serverLevel());
+            var source=placer(player);
+            services.items().inLegacy(()->{
+                try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(player.getUUID())) {
+                    Object actor=itemUse.clientActor(world,source,null);
+                    prepareActorContainers(actor);
+                    var before=hostInventory(player);
+                    services.playerInventory().write(actor,before);
+                    services.playerInventory().select(actor,player.getInventory().selected);
+                    byte[] persisted=player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
+                    if(persisted.length!=0)services.playerData().write(actor,persisted);
+                    services.playerState().initialize(actor);
+                    byte[] prior=services.playerData().read(actor);
+                    try { logicTransaction(player.serverLevel(),player.blockPosition(),()->{LegacyPackets.receiveServer(services,message,actor,null);return null;},true); }
+                    catch(Exception failure){services.playerData().write(actor,prior);throw failure;}
+                    collectLegacyInventory(player,actor,before);
+                    player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,services.playerData().read(actor));
+                    outgoing.messages().forEach(packet->ScanSyncChannel.sendToPlayer(player,packet));
+                    return null;
+                }
+            });
+        } catch(Exception failure) { LogUtils.getLogger().error("MFCL original book packet failed for {}",player.getName().getString(),failure); }
+    }
+    private void prepareActorContainers(Object actor) throws Exception {
+        var loader=services.loader();
+        var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+        Object inventory=playerType.getField("field_71071_by").get(actor);
+        Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class).newInstance(inventory,false);
+        playerType.getField("field_71069_bz").set(actor,container);
+        playerType.getField("field_71070_bA").set(actor,container);
     }
     public static ResourceLocation id(String key) {
         return LegacyRegistryIds.id(key);

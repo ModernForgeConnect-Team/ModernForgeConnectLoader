@@ -141,9 +141,13 @@ public final class ClientContainerBridge {
     private interface Action{boolean run(Bound bound)throws Exception;}
     private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=services.items().inLegacy(()->deviceAction(screen,()->action.run(bound)));Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
     private <T> T deviceAction(Screen screen,java.util.concurrent.Callable<T> action) throws Exception {
-        if(!(screen instanceof LegacyDeviceScreen device))return action.call();
+        boolean device=screen instanceof LegacyDeviceScreen,hosted=screen instanceof HostedScreen;
+        if(!device&&!hosted)return action.call();
         try(var input=new LegacyDeviceInput()){
-            T result=action.call();for(var packet:input.packets())github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendDevicePacket(device.getMenu().containerId,packet);return result;
+            T result=action.call();
+            if(device)for(var packet:input.packets())github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendDevicePacket(((LegacyDeviceScreen)screen).getMenu().containerId,packet);
+            else for(var packet:input.packets())github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendLegacyPacket(packet);
+            return result;
         }
     }
     public boolean deviceMouse(LegacyDeviceScreen screen,int x,int y,int button,boolean release) {

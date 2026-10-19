@@ -61,6 +61,13 @@ public final class LegacyPackets {
         var entity=player.getClass().getClassLoader().loadClass("net.minecraft.entity.Entity");
         return entity.getField("field_70170_p").get(player)==world&&(int)entity.getMethod("func_145782_y").invoke(player)==id?player:null;
     }
+    /** Only the authenticated player is visible to this packet's legacy name lookup. */
+    public static Object serverPlayer(Object world,String username) throws Exception {
+        Object player=SERVER_PLAYER.get();if(player==null||username==null)return null;
+        var entity=player.getClass().getClassLoader().loadClass("net.minecraft.entity.Entity");
+        if(entity.getField("field_70170_p").get(player)!=world)return null;
+        return username.equals(player.getClass().getMethod("func_70005_c_").invoke(player))?player:null;
+    }
     public static void receiveServer(LegacyServices services,Message message,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
         var loader=services.loader();
         Channel channel=CHANNELS.entrySet().stream().filter(e->e.getKey().getClass().getClassLoader()==loader&&e.getValue().name.equals(message.channel())).map(Map.Entry::getValue).findFirst().orElseThrow();

@@ -18,6 +18,14 @@ public interface LegacyRuntime {
     LegacyObject stack(LegacyStack stack);
     LegacyStack snapshot(LegacyObject stack);
     LegacyMappings mappings();
+    /**
+     * Runs on the owning server thread with the real player's legacy knowledge loaded.
+     * Successful changes are persisted and old packets synchronized; failures restore prior data.
+     * The player and references derived from it expire when the callback returns. Return snapshots only.
+     */
+    default <T> T withPlayer(Object hostPlayer, java.util.function.Function<LegacyObject, T> operation) {
+        throw new UnsupportedOperationException("This MFCL build does not provide scoped player access");
+    }
     /** Bounded failure history; values contain no legacy objects. */
     List<Diagnostic> diagnostics();
 }

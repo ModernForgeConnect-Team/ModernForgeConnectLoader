@@ -25,7 +25,25 @@ final class ThaumcraftDevicePackets {
             validatePlacement(packet,player,tile);
             return true;
         }
+        if(type.equals("thaumcraft.common.lib.network.playerdata.PacketPlayerCompleteToServer")) {
+            validateBookCompletion(packet,player);
+            return true;
+        }
         return false;
+    }
+    /** The Thaumonomicon's purchase/create-note request: bound to the authenticated player and a real research. */
+    private static void validateBookCompletion(Object packet,Object player) throws Exception {
+        var loader=player.getClass().getClassLoader();
+        int type=field(packet,"type").getByte(packet);
+        if(type!=0&&type!=1)throw new IllegalArgumentException("Unsupported research completion kind");
+        String username=(String)field(packet,"username").get(packet);
+        if(!player.getClass().getMethod("func_70005_c_").invoke(player).equals(username))throw new IllegalArgumentException("Research completion targets another player");
+        var worldType=loader.loadClass("net.minecraft.world.World");
+        Object world=loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p").get(player);
+        Object provider=worldType.getField("field_73011_w").get(world);
+        if(field(packet,"dim").getInt(packet)!=provider.getClass().getField("field_76574_g").getInt(provider))throw new IllegalArgumentException("Research completion targets another dimension");
+        String key=(String)field(packet,"key").get(packet);
+        if(key==null||loader.loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class).invoke(null,key)==null)throw new IllegalArgumentException("Research completion targets unknown research");
     }
     private static Object target(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
         if(device==null||!device.mod().equals("Thaumcraft")||device.id()!=10||device.inventory())throw new IllegalArgumentException("Research action requires the open research table");

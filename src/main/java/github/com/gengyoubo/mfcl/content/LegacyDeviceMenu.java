@@ -112,6 +112,34 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         }catch(Exception failure){failed=true;com.mojang.logging.LogUtils.getLogger().error("MFCL original container click failed",failure);server.closeContainer();}
     }
     private record ClickResult(List<ItemStack> inventory,ItemStack carried) {}
+    /** Native menu buttons (e.g. research note duplication) run the original container's enchant/button hook. */
+    @Override public boolean clickMenuButton(Player player,int id) {
+        if(original==null||!(player instanceof ServerPlayer server)||!stillValid(player))return false;
+        var services=content.services();
+        try {
+            var result=services.items().inLegacy(()->{
+                Object world=services.worlds().bound(server.serverLevel());
+                try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(server.getUUID())) {
+                    byte[] persisted=server.getPersistentData().getByteArray(ModernContentBridge.LEGACY_ENTITY_DATA);
+                    if(persisted.length!=0)services.playerData().write(original.player(),persisted);
+                    services.playerState().initialize(original.player());
+                    byte[] prior=services.playerData().read(original.player());
+                    try {
+                        boolean handled=content.logicTransaction(server.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->(boolean)original.container().getClass()
+                                .getMethod("func_75140_a",services.loader().loadClass("net.minecraft.entity.player.EntityPlayer"),int.class).invoke(original.container(),original.player(),id)),true);
+                        return new ButtonResult(handled,services.playerData().read(original.player()),outgoing.messages());
+                    }catch(Exception failure){services.playerData().write(original.player(),prior);throw failure;}
+                }
+            });
+            server.getPersistentData().putByteArray(ModernContentBridge.LEGACY_ENTITY_DATA,result.data());
+            result.messages().forEach(message->ScanSyncChannel.sendToPlayer(server,message));
+            var stacks=services.playerInventory().read(original.player());
+            for(int index=0;index<stacks.size()&&index<36;index++)inventory.setItem(index,stacks.get(index)==null?ItemStack.EMPTY:content.gameplayStack(stacks.get(index)));
+            inventory.setChanged();broadcastChanges();
+            return result.handled();
+        }catch(Exception failure){failed=true;com.mojang.logging.LogUtils.getLogger().error("MFCL original menu button failed",failure);server.closeContainer();return false;}
+    }
+    private record ButtonResult(boolean handled,byte[] data,List<LegacyPackets.Message> messages) {}
     public void receivePacket(ServerPlayer player,LegacyPackets.Message packet) {
         if(original==null||player!=inventory.player||!stillValid(player))return;
         var services=content.services();

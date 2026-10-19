@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.client;
 import github.com.gengyoubo.mfcl.bridge.*;
 import github.com.gengyoubo.mfcl.content.*;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.*;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -32,7 +33,17 @@ final class ResearchTableHostAcceptance {
             pending.join();click(mc,1);click(mc,30);phase=7;frames=0;
         }else if(phase==7&&++frames>12) {
             if(!mc.player.containerMenu.getSlot(1).getItem().isEmpty()||mc.player.containerMenu.getSlot(30).getItem().isEmpty()||!mc.player.containerMenu.getCarried().isEmpty())throw new IllegalStateException("Edited research note could not be returned to inventory");
-            proof.put("researchNoteOriginalGuiPlaceEraseAndSynchronization",true);return true;
+            proof.put("researchNoteOriginalGuiPlaceEraseAndSynchronization",true);
+            pending=server(mc,()->{seedDuplicate(mc);return true;});phase=8;frames=0;
+        }else if(phase==8&&pending.isDone()&&++frames>12) {
+            pending.join();click(mc,30);click(mc,1);phase=9;frames=0;
+        }else if(phase==9&&++frames>12) {
+            if(!mc.player.containerMenu.getCarried().isEmpty()||mc.player.containerMenu.getSlot(1).getItem().getCount()!=1)throw new IllegalStateException("Complete research note was not placed for duplication");
+            triggerDuplicate(mc);phase=10;frames=0;
+        }else if(phase==10&&++frames>20) {
+            pending=server(mc,()->{verifyDuplicate(mc);return true;});phase=11;frames=0;
+        }else if(phase==11&&pending.isDone()) {
+            pending.join();proof.put("researchNoteDuplicationButton",true);return true;
         }
         return false;
     }
@@ -100,6 +111,53 @@ final class ResearchTableHostAcceptance {
             verifyCell(data(services.items().materialize(content.gameplayStack(menu.getSlot(1).getItem()))),type);
             int actual=((Number)knowledge().getClass().getMethod("getAspectPoolFor",String.class,loader().loadClass("thaumcraft.api.aspects.Aspect")).invoke(knowledge(),player.getName().getString(),aspect())).intValue();
             if(actual!=pool||content.metadata(menu.getSlot(0).getItem())!=ink)throw new IllegalStateException("Research ink/aspect consumption mismatch: "+actual+","+content.metadata(menu.getSlot(0).getItem()));
+            return null;
+        }});
+    }
+    private void seedDuplicate(Minecraft mc) throws Exception {
+        var services=content.services();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);Object world=services.worlds().bound(player.serverLevel());var loader=loader();
+        services.items().inLegacy(()->{try(var state=services.playerState().enter(world)) {
+            Object note=loader.loadClass("thaumcraft.common.lib.research.ResearchManager").getMethod("createNote",loader.loadClass("net.minecraft.item.ItemStack"),String.class,loader.loadClass("net.minecraft.world.World"))
+                    .invoke(null,services.items().materialize(new LegacyClientData.Stack("Thaumcraft:ItemResearchNotes",0,1,"","")),"NITOR",world);
+            Object data=data(note);
+            data.getClass().getField("complete").setBoolean(data,true);
+            loader.loadClass("thaumcraft.common.lib.research.ResearchManager").getMethod("updateData",loader.loadClass("net.minecraft.item.ItemStack"),loader.loadClass("thaumcraft.common.lib.research.ResearchNoteData")).invoke(null,note,data);
+            note.getClass().getMethod("func_77964_b",int.class).invoke(note,64);
+            player.getInventory().setItem(1,content.gameplayStack(services.items().snapshot(note)));
+            player.getInventory().setItem(2,new ItemStack(Items.PAPER,8));player.getInventory().setItem(3,new ItemStack(Items.INK_SAC,8));
+            Object research=loader.loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class).invoke(null,"NITOR");
+            Object tags=research.getClass().getField("tags").get(research);
+            for(Object entry:(Object[])tags.getClass().getMethod("getAspects").invoke(tags))
+                knowledge().getClass().getMethod("setAspectPool",String.class,loader.loadClass("thaumcraft.api.aspects.Aspect"),short.class).invoke(knowledge(),player.getName().getString(),entry,(short)100);
+            Object actor=((LegacyDeviceMenu)player.containerMenu).originalPlayer();
+            player.getPersistentData().putByteArray(ModernContentBridge.LEGACY_ENTITY_DATA,services.playerData().read(actor));
+            return null;
+        }});
+        player.containerMenu.broadcastChanges();
+    }
+    /** Exercises the patched original controller call the copy button uses. */
+    private void triggerDuplicate(Minecraft mc) throws Exception {
+        var services=content.services();
+        Object client=loader().loadClass("net.minecraft.client.Minecraft").getMethod("func_71410_x").invoke(null);
+        Object controller=client.getClass().getField("field_71442_b").get(client);
+        int window=((LegacyDeviceScreen)mc.screen).getMenu().containerId;
+        services.items().inLegacy(()->{try(var input=new LegacyDeviceInput()) {
+            controller.getClass().getMethod("func_78756_a",int.class,int.class).invoke(controller,window,5);return null;
+        }});
+    }
+    private void verifyDuplicate(Minecraft mc) throws Exception {
+        var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var menu=(LegacyDeviceMenu)player.containerMenu;var services=content.services();var loader=loader();
+        services.items().inLegacy(()->{try(var state=services.playerState().enter(services.worlds().bound(player.serverLevel()))) {
+            if(content.metadata(menu.getSlot(1).getItem())!=64||menu.getSlot(1).getItem().getCount()!=2)throw new IllegalStateException("Duplicate did not copy the note: "+menu.getSlot(1).getItem());
+            Object note=services.items().materialize(content.gameplayStack(menu.getSlot(1).getItem()));
+            Object data=data(note);
+            if((int)data.getClass().getField("copies").getInt(data)!=1)throw new IllegalStateException("Duplicate copy counter was not persisted");
+            Object research=loader.loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class).invoke(null,"NITOR");
+            Object tags=research.getClass().getField("tags").get(research);Object first=((Object[])tags.getClass().getMethod("getAspects").invoke(tags))[0];
+            int amount=(int)tags.getClass().getMethod("getAmount",loader.loadClass("thaumcraft.api.aspects.Aspect")).invoke(tags,first);
+            int pool=((Number)knowledge().getClass().getMethod("getAspectPoolFor",String.class,loader.loadClass("thaumcraft.api.aspects.Aspect")).invoke(knowledge(),player.getName().getString(),first)).intValue();
+            if(pool!=100-amount)throw new IllegalStateException("Duplicate did not consume original aspects: "+pool+" vs "+(100-amount));
+            if(player.getInventory().countItem(Items.PAPER)!=7||player.getInventory().countItem(Items.INK_SAC)!=7)throw new IllegalStateException("Duplicate did not consume paper/dye");
             return null;
         }});
     }
