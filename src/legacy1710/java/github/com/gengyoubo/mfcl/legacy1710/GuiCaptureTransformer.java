@@ -12,7 +12,9 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
                 || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer") || name.equals("net.minecraft.entity.player.EntityPlayer")
                 || name.equals("net.minecraft.client.entity.EntityPlayerSP") || name.equals("net.minecraft.client.entity.EntityClientPlayerMP")
+                || name.equals("net.minecraft.entity.player.EntityPlayerMP")
                 || name.equals("net.minecraft.client.gui.GuiButton")
+                || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
                 || name.equals("cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
@@ -29,13 +31,20 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                     InsnList register=new InsnList();register.add(new VarInsnNode(Opcodes.ALOAD,0));register.add(new VarInsnNode(Opcodes.ALOAD,1));register.add(new VarInsnNode(Opcodes.ALOAD,2));register.add(new VarInsnNode(Opcodes.ILOAD,3));register.add(new VarInsnNode(Opcodes.ALOAD,4));
                     register.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"register","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Class;ILjava/lang/Object;)V",false));m.instructions.insert(register);
                 } else if(m.name.equals("sendToServer")) {
-                    InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,1));
-                    send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendToServer","(Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);
+                    InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,0));send.add(new VarInsnNode(Opcodes.ALOAD,1));
+                    send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendToServer","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);
                 } else if(m.name.equals("sendTo")) {
                     InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,0));send.add(new VarInsnNode(Opcodes.ALOAD,1));send.add(new VarInsnNode(Opcodes.ALOAD,2));
                     send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendTo","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);
                 }
                 continue;
+            }
+            if(name.endsWith(".GuiContainer")&&(m.name.equals("func_73864_a")||m.name.equals("func_146286_b"))) {
+                InsnList input=new InsnList();LabelNode original=new LabelNode();
+                input.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyDeviceInput","active","()Z",false));input.add(new JumpInsnNode(Opcodes.IFEQ,original));
+                input.add(new VarInsnNode(Opcodes.ALOAD,0));load(input,Opcodes.ILOAD,1,3);
+                input.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,"net/minecraft/client/gui/GuiScreen",m.name,m.desc,false));input.add(new InsnNode(Opcodes.RETURN));
+                input.add(original);input.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(input);continue;
             }
             if (name.endsWith(".GuiScreen") && m.name.equals("drawHoveringText") && m.desc.equals("(Ljava/util/List;IILnet/minecraft/client/gui/FontRenderer;)V")) {
                 InsnList tooltip = new InsnList(); tooltip.add(new VarInsnNode(Opcodes.ALOAD,1));
@@ -50,7 +59,17 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 chat.add(original); chat.add(new FrameNode(Opcodes.F_SAME,0,null,0,null)); m.instructions.insert(chat); continue;
             }
             if (name.endsWith(".EntityPlayer") && m.name.equals("openGui")) {
-                m.instructions.insert(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","requireGuiBridge","()V",false));
+                InsnList open=new InsnList();LabelNode original=new LabelNode();
+                open.add(new VarInsnNode(Opcodes.ALOAD,0));open.add(new VarInsnNode(Opcodes.ALOAD,1));open.add(new VarInsnNode(Opcodes.ILOAD,2));open.add(new VarInsnNode(Opcodes.ALOAD,3));load(open,Opcodes.ILOAD,4,3);
+                open.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyDeviceContainers","openGui","(Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;III)Z",false));
+                open.add(new JumpInsnNode(Opcodes.IFEQ,original));open.add(new InsnNode(Opcodes.RETURN));open.add(original);open.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(open);
+                continue;
+            }
+            if(name.endsWith(".EntityPlayerMP")&&m.name.equals("func_71007_a")) {
+                InsnList open=new InsnList();LabelNode original=new LabelNode();
+                open.add(new VarInsnNode(Opcodes.ALOAD,0));open.add(new VarInsnNode(Opcodes.ALOAD,1));
+                open.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyDeviceContainers","openInventory","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));
+                open.add(new JumpInsnNode(Opcodes.IFEQ,original));open.add(new InsnNode(Opcodes.RETURN));open.add(original);open.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(open);
                 continue;
             }
             if (name.endsWith("AbstractClientPlayer") && m.name.equals("func_110306_p")) {

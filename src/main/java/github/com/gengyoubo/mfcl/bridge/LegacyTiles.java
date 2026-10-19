@@ -51,6 +51,19 @@ public final class LegacyTiles {
             tileType.getMethod("func_145839_a", nbtType).invoke(tile, nbt); return null;
         });
     }
+    /** NBT identifies the authoritative tile subtype, including replacements within one block ID. */
+    public Object snapshotInstance(Object current, byte[] bytes) throws Exception {
+        return services.items().inLegacy(() -> {
+            Class<?> tracker = loader.loadClass("net.minecraft.nbt.NBTSizeTracker");
+            Object nbt = loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_152457_a", byte[].class, tracker)
+                    .invoke(null, bytes, tracker.getConstructor(long.class).newInstance(8L * 1024 * 1024));
+            String id = (String) nbtType.getMethod("func_74779_i", String.class).invoke(nbt, "id");
+            Field mappings = tileType.getDeclaredField("field_145855_i"); mappings.setAccessible(true);
+            Class<?> type = (Class<?>) ((Map<?, ?>) mappings.get(null)).get(id);
+            if (type == null) throw new IllegalArgumentException("Unknown saved legacy tile " + id);
+            return current != null && current.getClass() == type ? current : type.getConstructor().newInstance();
+        });
+    }
     public void invalidate(Object tile) throws Exception { services.items().inLegacy(() -> { tileType.getMethod("func_145843_s").invoke(tile); return null; }); }
     public void metadata(Object tile, int metadata) throws Exception { tileType.getField("field_145847_g").setInt(tile, metadata); }
     public void placed(String key, Object world, int x, int y, int z, Placer placer, LegacyClientData.Stack stack) throws Exception {
@@ -75,8 +88,13 @@ public final class LegacyTiles {
             Class<?> manager=loader.loadClass("net.minecraft.server.management.ItemInWorldManager");
             Object access=manager.getConstructor(worldType).newInstance(world);manager.getField("field_73090_b").set(access,actor);
             var interaction=actorType.getField("field_71134_c");interaction.setAccessible(true);interaction.set(actor,access);
+            var statistics=actorType.getDeclaredField("field_147103_bO");statistics.setAccessible(true);
+            statistics.set(actor,LegacyPlayerStatistics.create(loader,services.gameDirectory().resolve("mfcl/player-stats/"+placer.id()+".json").toFile()));
         }
         Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
+        var uuid=entity.getDeclaredField("field_96093_i");uuid.setAccessible(true);uuid.set(actor,placer.id());
+        var random=entity.getDeclaredField("field_70146_Z");random.setAccessible(true);random.set(actor,new Random());
+        entity.getField("capturedDrops").set(actor,new ArrayList<>());
         player.getField("eyeHeight").setFloat(actor,client?.12f:1.62f);
         entity.getField("field_70129_M").setFloat(actor,client?1.62f:0);
         var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);

@@ -40,6 +40,17 @@ public final class LevelWorldBridge {
                 content.afterCommit(level,()->level.playSound(excluded,sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch()));
             }
             @Override public long gameTime() { check(); return level.getGameTime(); }
+            @Override public java.util.List<HostWorldAccess.Entity> entities(double a,double b,double c,double d,double e,double f) {check();return HostEntityQueries.query(level,a,b,c,d,e,f);}
+            @Override public void applyMotion(HostWorldAccess.Motion motion) {check();content.afterCommit(level,()->HostEntityQueries.apply(level,motion));}
+            @Override public Object existingEntity(java.util.UUID id) {
+                check();var entity=level.getEntity(id);
+                if(entity instanceof net.minecraft.server.level.ServerPlayer player) {
+                    if(player.containerMenu instanceof LegacyDeviceMenu menu)return menu.originalPlayer();
+                    try {return content.itemUse().clientActor(content.services().worlds().bound(level),new github.com.gengyoubo.mfcl.bridge.LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown()),null);}
+                    catch(Exception failure){throw new IllegalStateException("Cannot resolve original player for entity query",failure);}
+                }
+                return null;
+            }
             @Override public void spawnProjectile(Projectile projectile) {
                 check();
                 var arrow = new net.minecraft.world.entity.projectile.Arrow(level, projectile.x(), projectile.y(), projectile.z());

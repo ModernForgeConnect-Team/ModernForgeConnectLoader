@@ -26,11 +26,23 @@ final class AccessorEngine {
             if (Modifier.isStatic(api.getModifiers()) || api.isDefault() || api.getDeclaringClass() == Object.class) continue;
             Binding binding = resolve(owner, target, api);
             if (api.getParameterCount() != binding.parameters.length) throw new IllegalArgumentException("Parameter count: " + api);
-            for (int i = 0; i < binding.parameters.length; i++) compatible(api.getParameterTypes()[i], binding.parameters[i]);
-            compatible(api.getReturnType(), binding.result);
+            for (int i = 0; i < binding.parameters.length; i++) compatibleParameter(api.getParameterTypes()[i], binding.parameters[i]);
+            compatibleReturn(api.getReturnType(), binding.result);
             bindings.put(api, binding);
         }
-        return contract.cast(Proxy.newProxyInstance(contract.getClassLoader(), new Class<?>[]{contract}, (proxy, method, args) -> {
+        return contract.cast(Proxy.newProxyInstance(contract.getClassLoader(), new Class<?>[]{contract},
+                new Handler(owner, receiver, bindings)));
+    }
+
+    final class Handler implements InvocationHandler {
+        private final Class<?> owner;
+        private final LegacyObject receiver;
+        private final Map<Method, Binding> bindings;
+        Handler(Class<?> owner, LegacyObject receiver, Map<Method, Binding> bindings) {
+            this.owner = owner; this.receiver = receiver; this.bindings = bindings;
+        }
+        LegacyObject reference() { return receiver; }
+        @Override public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             if (method.getDeclaringClass() == Object.class) return switch (method.getName()) {
                 case "toString" -> "MLA[" + owner.getName() + "]";
                 case "hashCode" -> System.identityHashCode(proxy);
@@ -56,7 +68,7 @@ final class AccessorEngine {
                 Object result = binding.call.invoke(oldArgs);
                 return runtime.result(result, method.getReturnType(), guards);
             });
-        }));
+        }
     }
 
     private Binding resolve(Class<?> owner, Object target, Method api) throws Exception {
@@ -66,20 +78,23 @@ final class AccessorEngine {
         if ((method == null ? 0 : 1) + (field == null ? 0 : 1) + (constructor == null ? 0 : 1) != 1)
             throw new IllegalArgumentException("Expected exactly one MLA member annotation: " + api);
         if (method != null) {
-            var type = MethodType.fromMethodDescriptorString(method.descriptor(), runtime.loader());
+            String descriptor = method.descriptor().isEmpty() ? inferMethodDescriptor(api) : method.descriptor();
+            var type = MethodType.fromMethodDescriptorString(descriptor, runtime.loader());
             Method member = findMethod(owner, method.name(), type);
             checkStatic(member.getModifiers(), method.isStatic(), target);
             if (!member.trySetAccessible()) throw new IllegalAccessException(member.toString());
             return new Binding(type.parameterArray(), type.returnType(), args -> member.invoke(target, args));
         }
         if (constructor != null) {
-            var type = MethodType.fromMethodDescriptorString(constructor.descriptor(), runtime.loader());
+            String descriptor = constructor.descriptor().isEmpty() ? inferConstructorDescriptor(api) : constructor.descriptor();
+            var type = MethodType.fromMethodDescriptorString(descriptor, runtime.loader());
             if (type.returnType() != void.class) throw new IllegalArgumentException("Constructor descriptor must end in V");
             var member = owner.getDeclaredConstructor(type.parameterArray());
             if (!member.trySetAccessible()) throw new IllegalAccessException(member.toString());
             return new Binding(type.parameterArray(), owner, member::newInstance);
         }
-        Class<?> type = MethodType.fromMethodDescriptorString("()" + field.descriptor(), runtime.loader()).returnType();
+        String descriptor = field.descriptor().isEmpty() ? inferFieldDescriptor(api) : field.descriptor();
+        Class<?> type = MethodType.fromMethodDescriptorString("()" + descriptor, runtime.loader()).returnType();
         Field member = findField(owner, field.name());
         if (member.getType() != type) throw new NoSuchFieldException("Descriptor differs: " + member);
         checkStatic(member.getModifiers(), field.isStatic(), target);
@@ -89,6 +104,79 @@ final class AccessorEngine {
             throw new IllegalArgumentException("Field setter must be (value)void and field must not be final: " + member);
         return new Binding(new Class<?>[]{type}, void.class, args -> { member.set(target, args[0]); return null; });
     }
+
+    private static String inferMethodDescriptor(Method api) {
+        var descriptor = new StringBuilder("(");
+        for (Class<?> parameter : api.getParameterTypes()) descriptor.append(infer(parameter, api));
+        return descriptor.append(')').append(infer(api.getReturnType(), api)).toString();
+    }
+
+    private static String inferConstructorDescriptor(Method api) {
+        var descriptor = new StringBuilder("(");
+        for (Class<?> parameter : api.getParameterTypes()) descriptor.append(infer(parameter, api));
+        return descriptor.append(")V").toString();
+    }
+
+    private static String inferFieldDescriptor(Method api) {
+        if (api.getParameterCount() == 0) return infer(api.getReturnType(), api);
+        if (api.getParameterCount() == 1 && api.getReturnType() == void.class) return infer(api.getParameterTypes()[0], api);
+        throw new IllegalArgumentException("Field contract must be a getter or setter: " + api);
+    }
+
+    private static String infer(Class<?> type, Method api) {
+        if (type == void.class) return "V";
+        if (type == boolean.class) return "Z";
+        if (type == byte.class) return "B";
+        if (type == char.class) return "C";
+        if (type == short.class) return "S";
+        if (type == int.class) return "I";
+        if (type == long.class) return "J";
+        if (type == float.class) return "F";
+        if (type == double.class) return "D";
+        if (type == String.class) return "Ljava/lang/String;";
+        if (type.isArray()) return "[" + infer(type.getComponentType(), api);
+        var contract = type.getAnnotation(LegacyType.class);
+        if (type.isInterface() && contract != null) return "L" + contract.value().replace('.', '/') + ";";
+        if (type == LegacyObject.class)
+            throw new IllegalArgumentException("Descriptor is required for LegacyObject in " + api);
+        throw new IllegalArgumentException("Descriptor is required for " + type.getTypeName() + " in " + api);
+    }
+
+    private void compatibleParameter(Class<?> api, Class<?> old) {
+        if (api.isArray() && old.isArray()) { compatibleParameter(api.getComponentType(), old.getComponentType()); return; }
+        Class<?> target = contractTarget(api);
+        if (target != null) {
+            if (old.isPrimitive() || !old.isAssignableFrom(target))
+                throw new IllegalArgumentException("Unsafe legacy contract parameter " + api.getTypeName() + "; descriptor type is " + old.getTypeName());
+            return;
+        }
+        compatible(api, old);
+    }
+
+    private void compatibleReturn(Class<?> api, Class<?> old) {
+        if (api.isArray() && old.isArray()) { compatibleReturn(api.getComponentType(), old.getComponentType()); return; }
+        Class<?> target = contractTarget(api);
+        if (target != null) {
+            if (old.isPrimitive() || !target.isAssignableFrom(old))
+                throw new IllegalArgumentException("Unsafe legacy contract return " + api.getTypeName() + "; descriptor type is " + old.getTypeName());
+            return;
+        }
+        compatible(api, old);
+    }
+
+    private Class<?> contractTarget(Class<?> type) {
+        if (!type.isInterface()) return null;
+        var annotation = type.getAnnotation(LegacyType.class);
+        if (annotation == null) return null;
+        try {
+            Class<?> target = runtime.loader().loadClass(annotation.value());
+            if (!runtime.owns(target)) throw new IllegalArgumentException("Contract target must belong to the isolated runtime: " + annotation.value());
+            return target;
+        } catch (ClassNotFoundException failure) {
+            throw new IllegalArgumentException("Unknown legacy contract target: " + annotation.value(), failure);
+        }
+    }
+
     private static Method findMethod(Class<?> owner, String name, MethodType type) throws NoSuchMethodException {
         // The return descriptor matters too (covariant/bridge methods may share name and parameters).
         for (Class<?> current = owner; current != null; current = current.getSuperclass()) {
@@ -113,8 +201,7 @@ final class AccessorEngine {
     private static void compatible(Class<?> api, Class<?> old) {
         if (api == old && (old.isPrimitive() || old == String.class)) return;
         if (api == LegacyObject.class && !old.isPrimitive()) return;
-        if (api.isArray() && old.isArray()) { compatible(api.getComponentType(), old.getComponentType()); return; }
         throw new IllegalArgumentException("Unsafe MLA type " + api.getTypeName() + "; descriptor type is " + old.getTypeName()
-                + ". Use LegacyObject for legacy references.");
+                + ". Use LegacyObject or a @LegacyType contract for legacy references.");
     }
 }

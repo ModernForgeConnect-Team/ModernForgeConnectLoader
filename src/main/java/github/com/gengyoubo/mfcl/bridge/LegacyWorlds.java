@@ -13,6 +13,9 @@ public final class LegacyWorlds implements AutoCloseable {
     private Class<?> clientFacade, serverFacade;
     private static final class Binding {
         final Object world; final HostWorldAccess host; final Thread owner; final ClassLoader loader;
+        final Map<java.util.UUID,Object> queried=new LinkedHashMap<>();
+        final Map<java.util.UUID,HostWorldAccess.Entity> snapshots=new LinkedHashMap<>();
+        boolean motionCapture;
         Binding(Object world, HostWorldAccess host, ClassLoader loader) { this.world = world; this.host = host; this.loader = loader; owner = Thread.currentThread(); }
         void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Legacy world access must run on its host owner thread"); }
     }
@@ -55,6 +58,7 @@ public final class LegacyWorlds implements AutoCloseable {
         Object info = loader.loadClass("net.minecraft.world.storage.WorldInfo").getConstructor(loader.loadClass("net.minecraft.nbt.NBTTagCompound"))
                 .newInstance(loader.loadClass("net.minecraft.nbt.NBTTagCompound").getConstructor().newInstance());
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72986_A", info);
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_96442_D", loader.loadClass("net.minecraft.scoreboard.Scoreboard").getConstructor().newInstance());
         set(providerType, provider, "field_76574_g", host.legacyDimensionId());
         set(providerType, provider, "field_76579_a", world);
         var binding = new Binding(world, host, loader); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
@@ -95,6 +99,7 @@ public final class LegacyWorlds implements AutoCloseable {
         try {
             ClassLoader loader = bound.loader;
             Class<?> arrowType = loader.loadClass("net.minecraft.entity.projectile.EntityArrow");
+            if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity))return LegacyDeviceContainers.drop(entity);
             if (!arrowType.isInstance(entity)) return false;
             Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
             double x = entityType.getField("field_70165_t").getDouble(entity), y = entityType.getField("field_70163_u").getDouble(entity), z = entityType.getField("field_70161_v").getDouble(entity);
@@ -105,7 +110,7 @@ public final class LegacyWorlds implements AutoCloseable {
             java.util.UUID owner = shooter == null ? null : (java.util.UUID) entityType.getMethod("func_110124_au").invoke(shooter);
             bound.host.spawnProjectile(new HostWorldAccess.Projectile(x, y, z, mx, my, mz, damage, burning, owner));
             return true;
-        } catch (ReflectiveOperationException error) { throw new IllegalStateException("Cannot translate legacy projectile", error); }
+        } catch (Exception error) { throw new IllegalStateException("Cannot translate legacy entity spawn", error); }
     }
     public static Object block(Object world, int x, int y, int z) {
         Binding binding = binding(world); var block = binding.host.block(x, y, z);
@@ -142,6 +147,40 @@ public final class LegacyWorlds implements AutoCloseable {
     public static boolean powered(Object world, int x, int y, int z) { return binding(world).host.powered(x,y,z); }
     public static int power(Object world, int x, int y, int z, int side) { return binding(world).host.power(x,y,z,side); }
     public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
+    public static List<Object> entities(Object world,Class<?> type,Object box) {return selectedEntities(world,type,box,null);}
+    public static List<Object> selectedEntities(Object world,Class<?> type,Object box,Object selector) {
+        var binding=binding(world);
+        try {
+            var aabb=binding.loader.loadClass("net.minecraft.util.AxisAlignedBB");
+            var snapshots=binding.host.entities(aabb.getField("field_72340_a").getDouble(box),aabb.getField("field_72338_b").getDouble(box),aabb.getField("field_72339_c").getDouble(box),aabb.getField("field_72336_d").getDouble(box),aabb.getField("field_72337_e").getDouble(box),aabb.getField("field_72334_f").getDouble(box));
+            var result=new ArrayList<Object>();
+            for(var snapshot:snapshots) {
+                Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
+                if(entity==null){entity=LegacyEntityAccess.mirror(binding.loader,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
+                if(type.isInstance(entity)&&(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",binding.loader.loadClass("net.minecraft.entity.Entity")).invoke(selector,entity)))result.add(entity);
+            }
+            return result;
+        }catch(Exception failure){throw new IllegalStateException("Cannot query host entities",failure);}
+    }
+    public static List<Object> excludingEntity(Object world,Object excluded,Object box) {
+        var binding=binding(world);
+        try {
+            var entity=binding.loader.loadClass("net.minecraft.entity.Entity");
+            Object id=excluded==null?null:entity.getMethod("func_110124_au").invoke(excluded);
+            var result=entities(world,entity,box);if(id!=null)result.removeIf(value->{try{return id.equals(entity.getMethod("func_110124_au").invoke(value));}catch(Exception failure){throw new IllegalStateException(failure);}});return result;
+        }catch(Exception failure){throw new IllegalStateException(failure);}
+    }
+    public static void beginEntityQueries(Object world){clearEntityQueries(world);binding(world).motionCapture=true;}
+    public static void clearEntityQueries(Object world){var binding=binding(world);binding.queried.clear();binding.snapshots.clear();binding.motionCapture=false;}
+    public static void commitEntityMotion(Object world) throws Exception {
+        var binding=binding(world);
+        try {
+            for(var entry:binding.queried.entrySet()) {
+                var next=LegacyEntityAccess.motion(binding.loader,entry.getValue(),entry.getKey());var previous=binding.snapshots.get(entry.getKey());
+                if(next.x()!=previous.motionX()||next.y()!=previous.motionY()||next.z()!=previous.motionZ()||next.fallDistance()!=previous.fallDistance())binding.host.applyMotion(next);
+            }
+        }finally{clearEntityQueries(world);}
+    }
     public static void comparators(Object world, int x, int y, int z, Object block) { binding(world).host.updateComparators(x,y,z); }
     private static String blockKey(Binding binding, Object block) {
         try {
@@ -214,6 +253,7 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_147465_d", "(IIILnet/minecraft/block/Block;II)Z", "setBlock", "(Ljava/lang/Object;IIILjava/lang/Object;II)Z", null);
         forward(writer, bridge, "func_72921_c", "(IIIII)Z", "metadata", "(Ljava/lang/Object;IIIII)Z", null);
         forward(writer, bridge, "func_147438_o", "(III)Lnet/minecraft/tileentity/TileEntity;", "tile", "(Ljava/lang/Object;III)Ljava/lang/Object;", "net/minecraft/tileentity/TileEntity");
+        forward(writer, Type.getInternalName(LegacyPackets.class), "func_73045_a", "(I)Lnet/minecraft/entity/Entity;", "serverEntity", "(Ljava/lang/Object;I)Ljava/lang/Object;", "net/minecraft/entity/Entity");
         forward(writer, bridge, "func_147455_a", "(IIILnet/minecraft/tileentity/TileEntity;)V", "tile", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);
         forward(writer, bridge, "func_147475_p", "(III)V", "removeTile", "(Ljava/lang/Object;III)V", null);
         forward(writer, bridge, "func_147476_b", "(IIILnet/minecraft/tileentity/TileEntity;)V", "dirty", "(Ljava/lang/Object;IIILjava/lang/Object;)V", null);
@@ -243,10 +283,9 @@ public final class LegacyWorlds implements AutoCloseable {
             sound.visitInsn(method.equals("func_85173_a")?Opcodes.ICONST_1:Opcodes.ICONST_0);
             sound.visitMethodInsn(Opcodes.INVOKESTATIC,bridge,"entitySound","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;FFZ)V",false);sound.visitInsn(Opcodes.RETURN);sound.visitMaxs(6,5);sound.visitEnd();
         }
-        // Entity/ray queries must answer without a live world; an empty list and a miss keep item logic running.
-        var entities = writer.visitMethod(Opcodes.ACC_PUBLIC,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;",null,null);
-        entities.visitCode(); entities.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList"); entities.visitInsn(Opcodes.DUP);
-        entities.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false); entities.visitInsn(Opcodes.ARETURN); entities.visitMaxs(2,3); entities.visitEnd();
+        forward(writer,bridge,"func_72872_a","(Ljava/lang/Class;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;","entities","(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/Object;)Ljava/util/List;",null);
+        forward(writer,bridge,"func_82733_a","(Ljava/lang/Class;Lnet/minecraft/util/AxisAlignedBB;Lnet/minecraft/command/IEntitySelector;)Ljava/util/List;","selectedEntities","(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;",null);
+        forward(writer,bridge,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;","excludingEntity","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;",null);
         forward(writer, bridge, "func_72838_d", "(Lnet/minecraft/entity/Entity;)Z", "spawn", "(Ljava/lang/Object;Ljava/lang/Object;)Z", null);
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);

@@ -48,6 +48,8 @@ public final class ModernContentBridge {
     private boolean blocksRegistered, itemsRegistered;
     private Map<Item,LegacyClientData.Stack> vanillaStacks;
     private BlockEntityType<LegacyBlockEntity> tileType;
+    private net.minecraft.world.inventory.MenuType<LegacyDeviceMenu> deviceMenuType;
+    public net.minecraft.world.inventory.MenuType<LegacyDeviceMenu> deviceMenuType(){return Objects.requireNonNull(deviceMenuType,"Legacy device menu registry window");}
 
     private ModernContentBridge(LegacyServices services) throws Exception {
         this.services = services;
@@ -160,6 +162,10 @@ public final class ModernContentBridge {
             LogUtils.getLogger().info("MFCL_CONTENT_REGISTRATION_PASS: blocks={} items={}", blocks.size(), items.size());
         });
         event.register(Registries.CREATIVE_MODE_TAB, creative::register);
+        event.register(Registries.MENU,registry->{
+            deviceMenuType=net.minecraftforge.common.extensions.IForgeMenuType.create(LegacyDeviceMenu::fromNetwork);
+            registry.register(ResourceLocation.fromNamespaceAndPath("mfcl","legacy_device"),deviceMenuType);
+        });
         event.register(Registries.BLOCK_ENTITY_TYPE, registry -> {
             var supported = declarations.blocks().stream().filter(LegacyContent.Block::tileEntity).map(entry -> blocks.get(entry.key())).toArray(Block[]::new);
             if (supported.length != 0) {
@@ -429,6 +435,7 @@ public final class ModernContentBridge {
             try {
                 var pendingInventory = new ArrayList<ItemStack>();
                 var pendingMessages = new ArrayList<String>();
+                var pendingMenus = new ArrayList<LegacyDeviceContainers.Open>();
                 int selected = player.getInventory().selected;
                 var outcome = logicTransaction(level,pos,() -> {
                     var inventory = new ArrayList<LegacyClientData.Stack>();
@@ -439,6 +446,7 @@ public final class ModernContentBridge {
                     var result = services.logic().activate(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),actor,inventory,selected,hit.getDirection().get3DDataValue(),(float)point.x,(float)point.y,(float)point.z);
                     pendingInventory.addAll(result.inventory().stream().map(ModernContentBridge.this::gameplayStack).toList());
                     pendingMessages.addAll(result.messages());
+                    if(result.device()!=null)pendingMenus.add(result.device());
                     return result.handled() ? InteractionResult.CONSUME : InteractionResult.PASS;
                 },true);
                 if (!pendingInventory.isEmpty()) {
@@ -455,6 +463,7 @@ public final class ModernContentBridge {
                     player.getInventory().setChanged(); player.inventoryMenu.broadcastChanges();
                 }
                 pendingMessages.forEach(message -> player.displayClientMessage(Component.literal(message),false));
+                if(player instanceof net.minecraft.server.level.ServerPlayer server)for(var menu:pendingMenus)LegacyDeviceMenu.open(server,ModernContentBridge.this,menu);
                 return outcome;
             } catch (Exception failure) {
                 LogUtils.getLogger().error("MFCL original block interaction failed for {} at {}",entry.key(),pos,failure);

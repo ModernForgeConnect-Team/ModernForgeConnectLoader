@@ -1,0 +1,176 @@
+package github.com.gengyoubo.mfcl.client;
+
+import github.com.gengyoubo.mfcl.bridge.*;
+import github.com.gengyoubo.mfcl.content.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.core.*;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.*;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.item.*;
+import net.minecraft.world.level.*;
+import net.minecraft.world.phys.*;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import java.util.*;
+import java.util.concurrent.*;
+
+/** Disposable JEI/TC world: changing creative slots, device screens, authoritative clicks and real lifter motion. */
+final class DeviceHostSmokeProbe {
+    private final ModernContentBridge content;
+    private final Map<String,Object> proof=new LinkedHashMap<>();
+    private CompletableFuture<?> pending;
+    private int stage,frames;
+    private int reportedStage=-1;
+    private long stageStarted;
+    private BlockPos chest,table,lifter,research,deconstruction;
+    private UUID lifted;
+    private double initialY;
+    private final long deadline=System.nanoTime()+TimeUnit.MINUTES.toNanos(5);
+    private DeviceHostSmokeProbe(ModernContentBridge content){this.content=content;}
+    static void install(ModernContentBridge content){MinecraftForge.EVENT_BUS.addListener(new DeviceHostSmokeProbe(content)::tick);}
+    private void tick(TickEvent.ClientTickEvent event) {
+        if(event.phase!=TickEvent.Phase.END||stage==99)return;var mc=Minecraft.getInstance();
+        try {
+            if(reportedStage!=stage){reportedStage=stage;stageStarted=System.nanoTime();com.mojang.logging.LogUtils.getLogger().info("MFCL_DEVICE_STAGE {}",stage);}
+            if(pending!=null&&pending.isCompletedExceptionally())pending.join();
+            if(stage>1&&System.nanoTime()-stageStarted>TimeUnit.SECONDS.toNanos(25))throw new IllegalStateException("Device stage "+stage+" stalled; screen="+(mc.screen==null?"none":mc.screen.getClass().getName())+" menu="+(mc.player==null?"none":mc.player.containerMenu.getClass().getName()));
+            if(System.nanoTime()>deadline)throw new IllegalStateException("Device acceptance timed out at "+stage);
+            if(stage==0&&mc.screen instanceof TitleScreen&&mc.getOverlay()==null) {
+                org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(2);
+                mc.createWorldOpenFlows().createFreshLevel("mfcl-device-smoke-"+System.currentTimeMillis(),new LevelSettings("MFCL device acceptance",GameType.CREATIVE,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());stage=1;
+            }else if(stage==1&&mc.player!=null&&mc.level!=null&&mc.screen==null) {
+                pending=server(mc,()->{setup(mc);return true;});
+                mc.setScreen(new CreativeModeInventoryScreen(mc.player,mc.level.enabledFeatures(),false));stage=2;frames=0;
+            }else if(stage==2&&pending.isDone()&&++frames>8) {
+                pending.join();select(mc,CreativeModeTabs.INVENTORY);stage=3;frames=0;
+            }else if(stage==3&&++frames>8) {
+                select(mc,CreativeModeTabs.BUILDING_BLOCKS);stage=4;frames=0;
+            }else if(stage==4&&++frames>8) {
+                proof.put("creativeTabSlotChanges",true);mc.screen.onClose();stage=40;frames=0;
+            }else if(stage==40&&++frames>8) {
+                pending=server(mc,()->{activate(mc,chest);return true;});stage=5;frames=0;
+            }else if(stage==5&&pending.isDone()&&mc.screen instanceof LegacyDeviceScreen&&++frames>8) {
+                pending.join();verifyScreen(mc,"GuiChest");screenshot(mc,"hungry-chest");
+                clickItem(mc,Items.DIAMOND);stage=6;frames=0;
+            }else if(stage==6&&++frames>8) {
+                if(mc.player.containerMenu.getCarried().getCount()!=3)throw new IllegalStateException("Native cursor did not synchronize original pickup");
+                var oldClient=content.services().loader().loadClass("net.minecraft.client.Minecraft").getMethod("func_71410_x").invoke(null);
+                var oldPlayer=oldClient.getClass().getField("field_71439_g").get(oldClient);
+                var oldInventory=content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(oldPlayer);
+                var carried=oldInventory.getClass().getMethod("func_70445_o").invoke(oldInventory);
+                if(carried==null||content.services().items().snapshot(carried).count()!=3)throw new IllegalStateException("Original GUI cursor did not mirror native carried stack");
+                proof.put("originalGuiCarriedStackSynchronized",true);
+                mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,0,0,ClickType.PICKUP,mc.player);stage=7;frames=0;
+            }else if(stage==7&&++frames>8) {
+                var oldContainer=content.services().loader().loadClass("net.minecraft.client.gui.inventory.GuiContainer").getField("field_147002_h").get(((LegacyDeviceScreen)mc.screen).originalGui());
+                if(oldContainer.getClass().getMethod("func_85151_d").invoke(oldContainer)!=((LegacyBlockEntity)mc.level.getBlockEntity(chest)).legacy())throw new IllegalStateException("Client tile synchronization invalidated the open original GUI");
+                proof.put("openGuiRetainedClientTileIdentity",true);
+                pending=server(mc,()->{
+                    var level=mc.getSingleplayerServer().overworld();var tile=(LegacyBlockEntity)level.getBlockEntity(chest);
+                    var stack=content.services().inventories().get(tile.legacy(),0);
+                    if(stack==null||!stack.key().equals("minecraft:diamond")||stack.count()!=3)throw new IllegalStateException("Original hungry chest did not receive native click items");
+                    proof.put("hungryChestOriginalContainerAndNativeClicks",true);
+                    var entity=level.getEntity(lifted);var lift=(LegacyBlockEntity)level.getBlockEntity(lifter);
+                    if(lift.logicSuspended()||lift.successfulTicks()<10||entity==null||entity.getY()<=initialY+.1)throw new IllegalStateException("Original lifter did not move native entity");
+                    proof.put("lifterMovedNativeEntity",true);entity.discard();
+                    return true;
+                });stage=70;frames=0;
+            }else if(stage==70&&pending.isDone()) {
+                pending.join();mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,0,1,ClickType.PICKUP,mc.player);stage=71;frames=0;
+            }else if(stage==71&&++frames>8) {
+                if(mc.player.containerMenu.getCarried().getCount()!=2)throw new IllegalStateException("Original right-click pickup did not split chest stack");
+                mc.screen.onClose();stage=72;frames=0;
+            }else if(stage==72&&++frames>8) {
+                pending=server(mc,()->{
+                    var level=mc.getSingleplayerServer().overworld();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
+                    var stack=content.services().inventories().get(((LegacyBlockEntity)level.getBlockEntity(chest)).legacy(),0);
+                    if(stack==null||stack.count()!=1||player.getInventory().countItem(Items.DIAMOND)!=2||!player.containerMenu.getCarried().isEmpty())throw new IllegalStateException("Closing device duplicated or lost carried stack");
+                    proof.put("closeReturnedCarriedItemsExactlyOnce",true);player.getInventory().setItem(1,new ItemStack(Items.STICK,2));activate(mc,table);return true;
+                });stage=8;frames=0;
+            }else if(stage==8&&pending.isDone()&&mc.screen instanceof LegacyDeviceScreen&&++frames>8) {
+                pending.join();verifyScreen(mc,"GuiArcaneWorkbench");screenshot(mc,"arcane-workbench");clickItem(mc,Items.STICK);stage=9;frames=0;
+            }else if(stage==9&&++frames>8) {
+                mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,1,0,ClickType.PICKUP,mc.player);stage=10;frames=0;
+            }else if(stage==10&&++frames>8) {
+                pending=server(mc,()->{
+                    var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
+                    if(!player.containerMenu.getSlot(1).getItem().isEmpty()||!player.containerMenu.getCarried().is(Items.STICK)||player.containerMenu.getCarried().getCount()!=2)throw new IllegalStateException("Original wand-slot restriction was lost");
+                    proof.put("originalWandSlotRestriction",true);return true;
+                });stage=50;frames=0;
+            }else if(stage==50&&pending.isDone()) {
+                pending.join();mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,2,0,ClickType.PICKUP,mc.player);stage=52;frames=0;
+            }else if(stage==52&&++frames>8) {
+                pending=server(mc,()->{
+                    var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
+                    if(!player.containerMenu.getSlot(2).getItem().is(Items.STICK)||player.containerMenu.getSlot(2).getItem().getCount()!=2)throw new IllegalStateException("Original workbench grid did not accept native click");
+                    proof.put("arcaneWorkbenchOriginalGuiAndNativeClicks",true);return true;
+                });stage=53;
+            }else if(stage==53&&pending.isDone()) {
+                pending.join();mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,2,1,ClickType.THROW,mc.player);stage=51;frames=0;
+            }else if(stage==51&&++frames>8) {
+                if(!((LegacyBlockEntity)mc.level.getBlockEntity(research)).legacy().getClass().getSimpleName().equals("TileTable"))throw new IllegalStateException("Research conversion fixture was not an ordinary client table");
+                pending=server(mc,()->{
+                    var level=mc.getSingleplayerServer().overworld();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
+                    if(!player.containerMenu.getSlot(2).getItem().isEmpty()||level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,player.getBoundingBox().inflate(4)).stream().noneMatch(entity->entity.getItem().is(Items.STICK)&&entity.getItem().getCount()==2))throw new IllegalStateException("Original container throw did not create native item drop");
+                    proof.put("originalContainerThrowCreatedNativeDrop",true);player.closeContainer();
+                    content.logicTransaction(level,research,()->{
+                        Object world=content.services().worlds().bound(level);
+                        LegacyWorlds.metadata(world,research.getX(),research.getY(),research.getZ(),2,3);
+                        Object replacement=content.services().tiles().create("Thaumcraft:blockTable",2,world,research.getX(),research.getY(),research.getZ());
+                        LegacyWorlds.tile(world,research.getX(),research.getY(),research.getZ(),replacement);return true;
+                    },true);return true;
+                });stage=54;frames=0;
+            }else if(stage==54&&pending.isDone()&&++frames>8) {
+                pending.join();
+                if(!((LegacyBlockEntity)mc.level.getBlockEntity(research)).legacy().getClass().getSimpleName().equals("TileResearchTable"))throw new IllegalStateException("Converted research table retained ordinary client tile subtype");
+                proof.put("convertedResearchTableClientSubtype",true);
+                pending=server(mc,()->{activate(mc,research);return true;});stage=11;frames=0;
+            }else if(stage==11&&pending.isDone()&&mc.screen instanceof LegacyDeviceScreen&&++frames>8) {
+                pending.join();verifyScreen(mc,"GuiResearchTable");screenshot(mc,"research-table");proof.put("researchTableOriginalGui",true);
+                pending=server(mc,()->{mc.getSingleplayerServer().getPlayerList().getPlayers().get(0).closeContainer();activate(mc,deconstruction);return true;});stage=12;frames=0;
+            }else if(stage==12&&pending.isDone()&&mc.screen instanceof LegacyDeviceScreen&&++frames>8) {
+                pending.join();verifyScreen(mc,"GuiDeconstructionTable");screenshot(mc,"deconstruction-table");proof.put("deconstructionTableOriginalGui",true);
+                pending=server(mc,()->{mc.getSingleplayerServer().getPlayerList().getPlayers().get(0).closeContainer();return true;});stage=13;
+            }else if(stage==13&&pending.isDone()) {
+                pending.join();proof.put("status","PASS");finish(mc,null);
+            }
+        }catch(Throwable failure){finish(mc,failure);}
+    }
+    private void setup(Minecraft mc) throws Exception {
+        var level=mc.getSingleplayerServer().overworld();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var origin=player.blockPosition();
+        player.getInventory().clearContent();player.getInventory().setItem(0,new ItemStack(Items.DIAMOND,3));player.getInventory().selected=8;
+        chest=origin.east(2);table=origin.south(2);research=origin.west(2);deconstruction=origin.north(2);lifter=origin.offset(3,0,3);
+        place(level,chest,"Thaumcraft:blockChestHungry",0);place(level,table,"Thaumcraft:blockTable",15);place(level,research,"Thaumcraft:blockTable",0);place(level,deconstruction,"Thaumcraft:blockTable",14);place(level,lifter,"Thaumcraft:blockLifter",0);
+        initialY=lifter.getY()+1.2;var item=new net.minecraft.world.entity.item.ItemEntity(level,lifter.getX()+.5,initialY,lifter.getZ()+.5,new ItemStack(Items.COBBLESTONE));item.setNoGravity(true);item.setDeltaMovement(Vec3.ZERO);level.addFreshEntity(item);lifted=item.getUUID();
+    }
+    private void place(net.minecraft.server.level.ServerLevel level,BlockPos pos,String key,int metadata) {
+        level.setBlockAndUpdate(pos,content.modernBlock(new HostWorldAccess.Block(key,metadata)));((LegacyBlockEntity)level.getBlockEntity(pos)).legacy();
+    }
+    private void activate(Minecraft mc,BlockPos pos) {
+        var level=mc.getSingleplayerServer().overworld();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
+        if(!level.getBlockState(pos).use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(pos),Direction.UP,pos,false)).consumesAction()||!(player.containerMenu instanceof LegacyDeviceMenu))throw new IllegalStateException("Original device did not open native menu at "+pos);
+    }
+    private void select(Minecraft mc,net.minecraft.resources.ResourceKey<CreativeModeTab> tab) throws Exception {
+        var method=CreativeModeInventoryScreen.class.getDeclaredMethod("selectTab",CreativeModeTab.class);method.setAccessible(true);method.invoke(mc.screen,BuiltInRegistries.CREATIVE_MODE_TAB.get(tab));
+    }
+    private void clickItem(Minecraft mc,Item item) {
+        var menu=mc.player.containerMenu;int slot=menu.slots.stream().filter(value->value.getItem().is(item)).findFirst().orElseThrow().index;
+        mc.gameMode.handleInventoryMouseClick(menu.containerId,slot,0,ClickType.PICKUP,mc.player);
+    }
+    private void verifyScreen(Minecraft mc,String name) {
+        var screen=(LegacyDeviceScreen)mc.screen;
+        if(!screen.originalGui().getClass().getSimpleName().equals(name)||ClientContainerBridge.active().commands(screen).isEmpty())throw new IllegalStateException("Original device GUI did not render: "+screen.originalGui().getClass());
+    }
+    private void screenshot(Minecraft mc,String name) throws Exception {
+        var path=mc.gameDirectory.toPath().resolve("screenshots/device-"+name+".png");java.nio.file.Files.createDirectories(path.getParent());try(var image=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){image.writeToFile(path);}
+    }
+    private <T> CompletableFuture<T> server(Minecraft mc,Callable<T> action){return mc.getSingleplayerServer().submit(()->{try{return action.call();}catch(Exception failure){throw new IllegalStateException(failure);}});}
+    private void finish(Minecraft mc,Throwable failure) {
+        if(failure!=null){proof.put("status","FAIL");proof.put("stage",stage);proof.put("failure",failure.toString());com.mojang.logging.LogUtils.getLogger().error("MFCL_DEVICE_SMOKE_FAIL",failure);}stage=99;
+        try{var report=mc.gameDirectory.toPath().resolve("logs/mfcl/device-smoke.json");java.nio.file.Files.createDirectories(report.getParent());java.nio.file.Files.writeString(report,new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(proof));}catch(Exception error){throw new IllegalStateException(error);}
+        com.mojang.logging.LogUtils.getLogger().info("MFCL_DEVICE_SMOKE_RESULT: {}",proof);if(mc.level!=null){mc.level.disconnect();mc.clearLevel();}mc.stop();
+    }
+}

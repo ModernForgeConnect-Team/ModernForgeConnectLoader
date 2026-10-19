@@ -49,6 +49,7 @@ public final class ClientWorldBridge {
                         next.playLocalSound(sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch(),sound.distanceDelay());
                     }
                     @Override public long gameTime() { return next.getGameTime(); }
+                    @Override public java.util.List<HostWorldAccess.Entity> entities(double a,double b,double c,double d,double e,double f) {return github.com.gengyoubo.mfcl.content.HostEntityQueries.query(next,a,b,c,d,e,f);}
                     @Override public long dayTime() { return next.getDayTime(); }
                     @Override public boolean powered(int x, int y, int z) { return next.hasNeighborSignal(new BlockPos(x,y,z)); }
                     @Override public int power(int x, int y, int z, int side) { return next.getSignal(new BlockPos(x,y,z),net.minecraft.core.Direction.from3DDataValue(side)); }
@@ -76,6 +77,11 @@ public final class ClientWorldBridge {
                         // A host block entity without an old counterpart is simply invisible to legacy code.
                         if (tile instanceof github.com.gengyoubo.mfcl.content.LegacyBlockEntity legacy) return legacy.legacy();
                         return null;
+                    }
+                    @Override public void blockEvent(int x,int y,int z,String key,int event,int data) {
+                        // Vanilla client World applies these to the local block/tile, including chest lid counts.
+                        try {services.logic().event(key,services.worlds().bound(next),x,y,z,event,data);}
+                        catch(Exception failure){throw new IllegalStateException("Cannot apply original client block event",failure);}
                     }
                     @Override public void markTileDirty(int x, int y, int z, Object old) {
                         // readCustomNBT may mark a client tile dirty while its host envelope is still loading.

@@ -4,16 +4,12 @@ import java.lang.reflect.*;
 
 /** Original gameplay callbacks. Scheduling, authority and rollback belong to the host level. */
 public final class LegacyBlockLogic {
-    private static final ThreadLocal<Boolean> ACTIVATING = new ThreadLocal<>();
     private static final ThreadLocal<java.util.List<String>> MESSAGES = new ThreadLocal<>();
-    public record Activation(boolean handled, java.util.List<LegacyClientData.Stack> inventory, java.util.List<String> messages) {}
+    public record Activation(boolean handled, java.util.List<LegacyClientData.Stack> inventory, java.util.List<String> messages, LegacyDeviceContainers.Open device) {}
     public static boolean chat(Object component) throws Exception {
         var messages = MESSAGES.get(); if (messages == null) return false;
         var type = component.getClass().getClassLoader().loadClass("net.minecraft.util.IChatComponent");
         messages.add((String)type.getMethod("func_150260_c").invoke(component)); return true;
-    }
-    public static void requireGuiBridge() {
-        if (Boolean.TRUE.equals(ACTIVATING.get())) throw new UnsupportedOperationException("Original device container/GUI bridge is pending");
     }
     private final LegacyServices services;
     private final Class<?> blockType, worldType, tileType;
@@ -27,7 +23,9 @@ public final class LegacyBlockLogic {
     public boolean tick(Object tile) throws Exception {
         return services.items().inLegacy(() -> {
             if (tile == null || (boolean)tileType.getMethod("func_145837_r").invoke(tile) || !(boolean)tileType.getMethod("canUpdate").invoke(tile)) return false;
-            tileType.getMethod("func_145845_h").invoke(tile); return true;
+            Object world=tileType.getMethod("func_145831_w").invoke(tile);LegacyWorlds.beginEntityQueries(world);
+            try {tileType.getMethod("func_145845_h").invoke(tile);LegacyWorlds.commitEntityMotion(world);return true;}
+            finally {LegacyWorlds.clearEntityQueries(world);}
         });
     }
     public boolean event(String key, Object world, int x, int y, int z, int event, int data) throws Exception {
@@ -56,17 +54,21 @@ public final class LegacyBlockLogic {
             inventoryType.getField("field_70461_c").setInt(inventory,selected);
             Object container = loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(inventoryType,boolean.class,playerType).newInstance(inventory,false,player);
             playerType.getField("field_71069_bz").set(player,container); playerType.getField("field_71070_bA").set(player,container);
-            var messages = new java.util.ArrayList<String>(); ACTIVATING.set(true); MESSAGES.set(messages);
+            var messages = new java.util.ArrayList<String>(); MESSAGES.set(messages);
             boolean handled;
-            try { handled = (boolean)blockType.getMethod("func_149727_a",worldType,int.class,int.class,int.class,playerType,int.class,float.class,float.class,float.class)
-                    .invoke(block(key),world,x,y,z,player,side,hitX,hitY,hitZ); }
-            finally { ACTIVATING.remove(); MESSAGES.remove(); }
+            LegacyDeviceContainers.Open opened;
+            try(var device=LegacyDeviceContainers.capture(services)) {
+                handled = (boolean)blockType.getMethod("func_149727_a",worldType,int.class,int.class,int.class,playerType,int.class,float.class,float.class,float.class)
+                    .invoke(block(key),world,x,y,z,player,side,hitX,hitY,hitZ);
+                opened=device.opened();
+            }
+            finally { MESSAGES.remove(); }
             var result = new java.util.ArrayList<LegacyClientData.Stack>();
             for (int slot = 0; slot < contents.size(); slot++) {
                 Object value = inventoryType.getMethod("func_70301_a",int.class).invoke(inventory,slot);
                 result.add(value == null || stackType.getField("field_77994_a").getInt(value) <= 0 ? null : services.items().snapshot(value));
             }
-            return new Activation(handled,result,java.util.List.copyOf(messages));
+            return new Activation(handled,result,java.util.List.copyOf(messages),opened);
         });
     }
     public void scheduled(String key, Object world, int x, int y, int z) throws Exception {

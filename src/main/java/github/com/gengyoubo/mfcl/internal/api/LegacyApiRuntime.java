@@ -98,15 +98,25 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         return ref.value;
     }
     void collectGuards(Object object, List<Guard> guards) {
-        if (object instanceof LegacyObject reference) { raw(reference); guards.addAll(((Reference) reference).guards); }
+        LegacyObject reference = referenceOf(object);
+        if (reference != null) { raw(reference); guards.addAll(((Reference) reference).guards); }
         else if (object instanceof Object[] array) for (Object entry : array) collectGuards(entry, guards);
+    }
+    private LegacyObject referenceOf(Object value) {
+        if (value instanceof LegacyObject reference) return reference;
+        if (value != null && Proxy.isProxyClass(value.getClass())) {
+            InvocationHandler handler = Proxy.getInvocationHandler(value);
+            if (handler instanceof AccessorEngine.Handler accessor) return accessor.reference();
+        }
+        return null;
     }
     Object argument(Object value, Class<?> expected) {
         if (value == null) {
             if (expected.isPrimitive()) throw new IllegalArgumentException("Null primitive argument");
             return null;
         }
-        if (value instanceof LegacyObject reference) {
+        LegacyObject reference = referenceOf(value);
+        if (reference != null) {
             Object old = raw(reference);
             if (!expected.isInstance(old)) throw new IllegalArgumentException("Wrong legacy argument type: " + expected.getName());
             return old;
@@ -121,13 +131,29 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     }
     Object result(Object value, Class<?> apiType, List<Guard> guards) {
         if (value == null || apiType == void.class) return null;
+        LegacyObject known = referenceOf(value);
+        if (known != null) {
+            if (apiType == LegacyObject.class) return known;
+            if (apiType.isInterface() && apiType.isAnnotationPresent(github.com.gengyoubo.mfcl.api.mla.LegacyType.class)) {
+                if (apiType.isInstance(value)) return value;
+                return wrap(apiType, known);
+            }
+            return value;
+        }
         if (apiType == LegacyObject.class) return new Reference(value, guards);
         if (apiType.isArray()) {
             int size = Array.getLength(value); Object copy = Array.newInstance(apiType.getComponentType(), size);
             for (int i = 0; i < size; i++) Array.set(copy, i, result(Array.get(value, i), apiType.getComponentType(), guards));
             return copy;
         }
+        if (apiType.isInterface() && apiType.isAnnotationPresent(github.com.gengyoubo.mfcl.api.mla.LegacyType.class))
+            return wrap(apiType, new Reference(value, guards));
         return value; // signature was checked at binding: only exact primitives and String
+    }
+    private <T> T wrap(Class<T> apiType, LegacyObject reference) {
+        try { return new AccessorEngine(this).bind(apiType, reference); }
+        catch (RuntimeException failure) { throw failure; }
+        catch (Exception failure) { throw new IllegalStateException("Cannot wrap legacy value as " + apiType.getName(), failure); }
     }
     @Override public void close() {
         try { scope.call(() -> { open = false; synchronized (mappings) { mappings.entries.clear(); } return null; }); }

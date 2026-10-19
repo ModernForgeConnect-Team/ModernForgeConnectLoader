@@ -11,6 +11,8 @@ class LegacySoundsTest {
         assertEquals("thaumcraft:cameraticks",LegacySounds.modernId("thaumcraft:cameraticks"));
         assertEquals("thaumcraft:runicshieldcharge",LegacySounds.modernId("thaumcraft:runicShieldCharge"));
         assertEquals("minecraft:entity.generic.swim",LegacySounds.modernId("game.neutral.swim"));
+        assertEquals("minecraft:block.wood.break",LegacySounds.modernId("minecraft:dig.wood"));
+        assertEquals("minecraft:block.wood.step",LegacySounds.modernId("step.wood"));
     }
     @Test void convertsOldNamespaceAndCaseWithoutLosingSoundOptions() {
         var converted=LegacySounds.definitions("thaumcraft","""

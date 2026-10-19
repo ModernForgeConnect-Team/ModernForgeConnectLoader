@@ -33,6 +33,8 @@ minecraft {
             if (project.hasProperty('mfclLogicSmokeTest')) property 'mfcl.test.logic', 'true'
             if (project.hasProperty('mfclBookSmokeTest')) property 'mfcl.test.book', 'true'
             if (project.hasProperty('mfclScannerSmokeTest')) property 'mfcl.test.scanner', 'true'
+            if (project.hasProperty('mfclTooltipSmokeTest')) property 'mfcl.test.tooltip', 'true'
+            if (project.hasProperty('mfclDeviceSmokeTest')) property 'mfcl.test.device', 'true'
             if (project.hasProperty('mfclCraftingSmokeTest')) property 'mfcl.test.crafting', 'true'
             if (project.hasProperty('mfclApiSmokeTest')) property 'mfcl.test.api', 'true'
             if (project.hasProperty('mfclSmokePrefix')) property 'mfcl.test.smokePrefix', project.property('mfclSmokePrefix')

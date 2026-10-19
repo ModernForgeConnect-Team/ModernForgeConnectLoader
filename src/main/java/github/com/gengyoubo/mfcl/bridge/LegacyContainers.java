@@ -19,6 +19,24 @@ public final class LegacyContainers {
     private final List<InputHooks> hooks = new ArrayList<>();
     public LegacyContainers(LegacyServices services) { this.services=services; loader=services.loader(); }
     public void addInputHooks(InputHooks hook) { hooks.add(Objects.requireNonNull(hook)); }
+    public boolean hasInputHooks() { return !hooks.isEmpty(); }
+    public void carried(LegacyClientData.Stack stack) throws Exception {
+        Object client=loader.loadClass("net.minecraft.client.Minecraft").getMethod("func_71410_x").invoke(null);
+        Object player=client.getClass().getField("field_71439_g").get(client);
+        Object inventory=loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
+        inventory.getClass().getMethod("func_70437_b",loader.loadClass("net.minecraft.item.ItemStack")).invoke(inventory,stack==null?null:services.items().materialize(stack));
+    }
+    public boolean sameLayout(Object gui,List<Slot> values) throws Exception {
+        Object container=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer").getField("field_147002_h").get(gui);
+        List<?> slots=(List<?>)container.getClass().getField("field_75151_b").get(container);
+        if(slots.size()!=values.size())return false;
+        for(int i=0;i<slots.size();i++) {
+            Object slot=slots.get(i);
+            if(slot.getClass().getField("field_75223_e").getInt(slot)!=values.get(i).x()
+                    ||slot.getClass().getField("field_75221_f").getInt(slot)!=values.get(i).y())return false;
+        }
+        return true;
+    }
     public boolean mouse(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)if(hook.mouse(screen,x,y,button))return true; return false; }
     public boolean key(Object screen,char character,int key) throws Exception { for(var hook:hooks)if(hook.key(screen,character,key))return true; return false; }
     public boolean release(Object screen,int x,int y,int button) throws Exception { for(var hook:hooks)if(hook.release(screen,x,y,button))return true;return false; }
@@ -57,6 +75,10 @@ public final class LegacyContainers {
         Object player=mc.getField("field_71439_g").get(client);
         if(player==null) {
             player=allocate(loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP"));
+            var entityType=loader.loadClass("net.minecraft.entity.Entity");
+            var uuid=entityType.getDeclaredField("field_96093_i");uuid.setAccessible(true);uuid.set(player,new java.util.UUID(0,0));
+            var random=entityType.getDeclaredField("field_70146_Z");random.setAccessible(true);random.set(player,new java.util.Random());
+            entityType.getField("capturedDrops").set(player,new java.util.ArrayList<>());
             var type=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
             var profile=type.getDeclaredField("field_146106_i");profile.setAccessible(true);profile.set(player,
                     loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(java.util.UUID.class,String.class).newInstance(new java.util.UUID(0,0),"MFCL"));

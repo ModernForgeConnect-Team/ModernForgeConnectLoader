@@ -13,6 +13,8 @@ public final class LegacySounds {
             Map.entry("random.drink","entity.generic.drink"),Map.entry("random.eat","entity.generic.eat"),
             Map.entry("fire.ignite","item.flintandsteel.use"),Map.entry("mob.endermen.portal","entity.enderman.teleport"),
             Map.entry("liquid.splash","entity.generic.splash"),Map.entry("liquid.swim","entity.generic.swim"),
+            Map.entry("dig.wood","block.wood.break"),Map.entry("step.wood","block.wood.step"),
+            Map.entry("random.chestopen","block.chest.open"),Map.entry("random.chestclosed","block.chest.close"),
             Map.entry("game.neutral.swim","entity.generic.swim"));
     private LegacySounds() {}
     public static String modernId(String name) {

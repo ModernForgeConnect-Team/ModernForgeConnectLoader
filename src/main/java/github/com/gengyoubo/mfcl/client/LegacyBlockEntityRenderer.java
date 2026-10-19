@@ -16,6 +16,7 @@ public final class LegacyBlockEntityRenderer implements BlockEntityRenderer<Lega
     private final Map<LegacyBlockEntity, Long> retryAfter = new WeakHashMap<>();
     public LegacyBlockEntityRenderer(ModernContentBridge bridge) { this.bridge = bridge; }
     @Override public void render(LegacyBlockEntity tile, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
+        if(tile.isRemoved()||tile.getLevel()==null||tile.getLevel()!=Minecraft.getInstance().level)return;
         var state = tile.getBlockState(); var cell = bridge.legacyBlock(state);
         if (!bridge.blockRendering().hasTileRenderer(cell.legacyKey(), cell.metadata())) return;
         if (System.nanoTime() < retryAfter.getOrDefault(tile, 0L)) return;

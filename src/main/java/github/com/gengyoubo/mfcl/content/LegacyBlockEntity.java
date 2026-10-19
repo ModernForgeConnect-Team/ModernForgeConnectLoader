@@ -30,8 +30,10 @@ public final class LegacyBlockEntity extends BlockEntity {
             Object world = content.services().worlds().bound(level);
             if (legacy == null) {
                 if (savedBlock != null && !savedBlock.equals(key())) throw new IllegalStateException("Saved legacy tile belongs to " + savedBlock + ", not " + key());
-                legacy = content.services().tiles().create(key(), getBlockState().getValue(ModernContentBridge.METADATA), world, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
+                legacy = saved.length == 0 ? content.services().tiles().create(key(), getBlockState().getValue(ModernContentBridge.METADATA), world, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ())
+                        : content.services().tiles().snapshotInstance(null, saved);
                 if (legacy != null && saved.length != 0) {
+                    content.services().tiles().attach(legacy, key(), getBlockState().getValue(ModernContentBridge.METADATA), world, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
                     content.services().tiles().load(legacy, saved);
                     content.services().tiles().attach(legacy, key(), getBlockState().getValue(ModernContentBridge.METADATA), world, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
                 }
@@ -53,8 +55,18 @@ public final class LegacyBlockEntity extends BlockEntity {
     }
     @Override public void load(CompoundTag tag) {
         super.load(tag);
-        if (legacy != null) invalidateLegacy();
         saved = tag.getByteArray("mfcl_legacy_nbt"); savedBlock = tag.contains("mfcl_legacy_block") ? tag.getString("mfcl_legacy_block") : null;
+        if(legacy!=null) {
+            if(level!=null&&level.isClientSide&&!isRemoved()&&saved.length!=0&&(savedBlock==null||savedBlock.equals(key())))try {
+                // Retain open GUI references for same-type updates, but honor authoritative subtype changes.
+                Object updated = content.services().tiles().snapshotInstance(legacy,saved);
+                if(updated!=legacy) { invalidateLegacy(); legacy=updated; }
+                content.services().tiles().attach(legacy,key(),getBlockState().getValue(ModernContentBridge.METADATA),content.services().worlds().bound(level),worldPosition.getX(),worldPosition.getY(),worldPosition.getZ());
+                content.services().tiles().load(legacy,saved);
+                content.services().tiles().attach(legacy,key(),getBlockState().getValue(ModernContentBridge.METADATA),content.services().worlds().bound(level),worldPosition.getX(),worldPosition.getY(),worldPosition.getZ());
+            }catch(Exception failure){throw new IllegalStateException("Cannot update original client TileEntity",failure);}
+            else invalidateLegacy();
+        }
         if (level != null && level.isClientSide) {
             requestModelDataUpdate(); level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }

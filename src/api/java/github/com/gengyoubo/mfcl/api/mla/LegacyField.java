@@ -7,6 +7,7 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 public @interface LegacyField {
     String name();
-    String descriptor();
+    /** Empty means infer the field type from the getter return type or setter parameter type. */
+    String descriptor() default "";
     boolean isStatic() default false;
 }

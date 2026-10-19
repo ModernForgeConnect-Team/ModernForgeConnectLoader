@@ -47,6 +47,21 @@ class LegacyAccessorTest {
         @LegacyMethod(name="fail", descriptor="()I") int fail();
         default int doubleCount() { return count() * 2; }
     }
+    @LegacyType("fixtures.mla.Counter") public interface InferredFactory {
+        @LegacyConstructor Inferred create(int value);
+        @LegacyMethod(name="identity", isStatic=true) Inferred identity(Inferred value);
+    }
+    @LegacyType("fixtures.mla.Counter") public interface Inferred {
+        @LegacyField(name="count") int count();
+        @LegacyField(name="count") void count(int value);
+        @LegacyMethod(name="add") int add(int amount);
+        @LegacyMethod(name="add") String add(String suffix);
+        @LegacyMethod(name="inherited") int inherited();
+        @LegacyMethod(name="self") Inferred self();
+        @LegacyMethod(name="array") Inferred[] array();
+        @LegacyMethod(name="self", descriptor="()Lfixtures/mla/Counter;") LegacyObject pinned();
+        default Inferred selfOrDefault() { return self(); }
+    }
     @LegacyType("fixtures.mla.Counter") public interface WrongDescriptor {
         @LegacyMethod(name="add", descriptor="(I)Ljava/lang/String;") String wrong(int value);
     }
@@ -58,6 +73,9 @@ class LegacyAccessorTest {
     }
     @LegacyType("fixtures.mla.Counter") public interface Leak {
         @LegacyMethod(name="self", descriptor="()Lfixtures/mla/Counter;") Object value();
+    }
+    @LegacyType("fixtures.mla.Counter") public interface MissingDescriptor {
+        @LegacyMethod(name="identity", isStatic=true) LegacyObject identity(LegacyObject value);
     }
     @LegacyType("java.lang.System") public interface HostTarget {
         @LegacyMethod(name="currentTimeMillis", descriptor="()J", isStatic=true) long time();
@@ -79,9 +97,21 @@ class LegacyAccessorTest {
     }
     @Test void invalidContractsFailBeforeFirstInvocation() {
         var ref = runtime.accessor(Factory.class).create(0);
-        for (Class<?> contract : List.of(WrongDescriptor.class, WrongStatic.class, FinalSetter.class, Leak.class, HostTarget.class))
+        for (Class<?> contract : List.of(WrongDescriptor.class, WrongStatic.class, FinalSetter.class, Leak.class, HostTarget.class, MissingDescriptor.class))
             assertEquals("MLA_BIND", assertThrows(LegacyAccessException.class, () -> runtime.accessor(contract, ref)).code());
         assertThrows(LegacyAccessException.class, () -> runtime.accessor(Counter.class));
+    }
+    @Test void inferredDescriptorsAndContractWrappingWork() {
+        InferredFactory factory = runtime.accessor(InferredFactory.class);
+        Inferred counter = factory.create(3);
+        assertNotEquals(fixtures.mla.Counter.class, counter.getClass());
+        assertEquals(5, counter.add(2)); assertEquals("5x", counter.add("x"));
+        counter.count(11); assertEquals(11, counter.count()); assertEquals(42, counter.inherited());
+        assertEquals(11, counter.self().count());
+        assertEquals(11, counter.array()[0].count());
+        assertEquals(11, factory.identity(counter).count());
+        assertEquals(11, counter.selfOrDefault().count());
+        assertEquals(11, runtime.accessor(Inferred.class, counter.pinned()).count());
     }
     @Test void referencesCannotCrossRuntimeOrOutliveIt() {
         var factory = runtime.accessor(Factory.class); var ref = factory.create(2);

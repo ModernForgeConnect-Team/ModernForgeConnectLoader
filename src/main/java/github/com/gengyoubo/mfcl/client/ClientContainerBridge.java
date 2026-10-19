@@ -62,14 +62,19 @@ public final class ClientContainerBridge {
     }
     private void init(ScreenEvent.Init.Post event) {
         if(!(event.getScreen() instanceof AbstractContainerScreen<?> screen))return;
+        if(!(screen instanceof LegacyDeviceScreen)&&!services.containers().hasInputHooks())return;
+        bind(screen);
+    }
+    private void bind(AbstractContainerScreen<?> screen) {
         try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,0,0,keys())) {
             services.items().language(Minecraft.getInstance().options.languageCode);
             Bound previous=bindings.remove(screen);if(previous!=null)previous.session.close();
             List<LegacyContainers.Slot> slots=new ArrayList<>();
             for(var slot:screen.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));
-            Object gui=services.containers().create(screen.width,screen.height,screen.getGuiLeft(),screen.getGuiTop(),screen.getXSize(),screen.getYSize(),slots);
+            Object gui=screen instanceof LegacyDeviceScreen device?device.originalGui():services.containers().create(screen.width,screen.height,screen.getGuiLeft(),screen.getGuiTop(),screen.getXSize(),screen.getYSize(),slots);
             var session=services.screens().open(gui,screen.width,screen.height);
             services.containers().position(gui,screen.getGuiLeft(),screen.getGuiTop());
+            services.containers().update(gui,slots);
             bindings.put(screen,new Bound(gui,session));
             origins.put(gui,screen);
         } catch(Exception failure){LogUtils.getLogger().error("MFCL legacy container initialization failed",failure);}
@@ -88,7 +93,7 @@ public final class ClientContainerBridge {
         Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
         bound.tooltipReady=false;bound.graphics=event.getGuiGraphics();
         try(var frame=LegacyGuiGraphics.begin(event.getScreen().width,event.getScreen().height,event.getMouseX(),event.getMouseY(),keys())) {
-            services.items().inLegacy(()->{bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());return null;});bound.commands=frame.commands();
+            services.items().inLegacy(()->deviceAction(event.getScreen(),()->{if(event.getScreen() instanceof AbstractContainerScreen<?> container)services.containers().carried(snapshot(container.getMenu().getCarried()));bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());return null;}));bound.commands=frame.commands();
             bound.tooltipReady=frame.hasTooltip();
         } catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI drawing failed",failure);}
     }
@@ -116,6 +121,11 @@ public final class ClientContainerBridge {
         var screen=Minecraft.getInstance().screen;
         if(Minecraft.getInstance().level==null&&bindings.isEmpty()){origins.clear();reverse=null;return;}
         var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return;
+        if(screen instanceof AbstractContainerScreen<?> container)try {
+            var slots=new ArrayList<LegacyContainers.Slot>();
+            for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,null));
+            if(!services.containers().sameLayout(bound.gui,slots))bind(container);
+        }catch(Exception failure){bound.failure=failure;LogUtils.getLogger().error("MFCL legacy container layout refresh failed",failure);return;}
         dispatch(screen,0,0,b->{
             if(screen instanceof AbstractContainerScreen<?> container){var slots=new ArrayList<LegacyContainers.Slot>();for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));services.containers().update(b.gui,slots);}
             b.session.tick();return false;
@@ -129,7 +139,21 @@ public final class ClientContainerBridge {
     private static int legacyKey(int key){return switch(key){case GLFW.GLFW_KEY_ESCAPE->1;case GLFW.GLFW_KEY_BACKSPACE->14;case GLFW.GLFW_KEY_ENTER->28;case GLFW.GLFW_KEY_R->19;case GLFW.GLFW_KEY_U->22;case GLFW.GLFW_KEY_O->24;default->0;};}
     private static int[] pointer(Screen screen){var mc=Minecraft.getInstance();return new int[]{(int)(mc.mouseHandler.xpos()*screen.width/mc.getWindow().getScreenWidth()),(int)(mc.mouseHandler.ypos()*screen.height/mc.getWindow().getScreenHeight())};}
     private interface Action{boolean run(Bound bound)throws Exception;}
-    private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=services.items().inLegacy(()->action.run(bound));Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
+    private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=services.items().inLegacy(()->deviceAction(screen,()->action.run(bound)));Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
+    private <T> T deviceAction(Screen screen,java.util.concurrent.Callable<T> action) throws Exception {
+        if(!(screen instanceof LegacyDeviceScreen device))return action.call();
+        try(var input=new LegacyDeviceInput()){
+            T result=action.call();for(var packet:input.packets())github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendDevicePacket(device.getMenu().containerId,packet);return result;
+        }
+    }
+    public boolean deviceMouse(LegacyDeviceScreen screen,int x,int y,int button,boolean release) {
+        return dispatch(screen,x,y,b->{
+            if(release)b.session.mouseReleased(x,y,button);else b.session.mousePressed(x,y,button);
+            // Native slots retain their own click protocol; custom GUI regions use the original handler.
+            for(var slot:screen.getMenu().slots)if(x>=screen.getGuiLeft()+slot.x&&x<screen.getGuiLeft()+slot.x+16&&y>=screen.getGuiTop()+slot.y&&y<screen.getGuiTop()+slot.y+16)return false;
+            return x>=screen.getGuiLeft()&&x<screen.getGuiLeft()+screen.getXSize()&&y>=screen.getGuiTop()&&y<screen.getGuiTop()+screen.getYSize();
+        });
+    }
     private void transition(Screen parent,Object requested) {
         if(requested==null){Minecraft.getInstance().setScreen(null);return;}
         Screen original=origins.get(requested);if(original!=null){Minecraft.getInstance().setScreen(original);return;}
@@ -147,7 +171,14 @@ public final class ClientContainerBridge {
         @Override public boolean charTyped(char character,int modifiers){int[] p=pointer(this);return dispatch(this,p[0],p[1],b->{if(!services.containers().key(b.gui,character,0))b.session.keyPressed(character,0);return true;});}
         @Override public void onClose(){Minecraft.getInstance().setScreen(parent);}
     }
-    private void close(ScreenEvent.Closing event){Bound bound=bindings.remove(event.getScreen());if(bound!=null)try{bound.session.close();}catch(Exception failure){LogUtils.getLogger().error("MFCL legacy GUI close failed",failure);}}
+    private void close(ScreenEvent.Closing event) {
+        Bound bound=bindings.remove(event.getScreen());if(bound==null)return;
+        try {services.items().inLegacy(()->{
+            // The native menu returns/drops the carried stack; the original client must not do it again.
+            if(event.getScreen() instanceof AbstractContainerScreen<?>)services.containers().carried(null);
+            bound.session.close();return null;
+        });}catch(Exception failure){LogUtils.getLogger().error("MFCL legacy GUI close failed",failure);}
+    }
     private static Set<Integer> keys(){var result=new HashSet<Integer>();if(Screen.hasControlDown())result.add(29);if(Screen.hasShiftDown())result.add(42);if(Screen.hasAltDown())result.add(56);for(int button=0;button<3;button++)if(GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().getWindow(),button)==GLFW.GLFW_PRESS)result.add(1000+button);return result;}
     public List<LegacyGuiGraphics.Command> commands(Screen screen){var bound=bindings.get(screen);if(bound==null)throw new IllegalStateException("No old GUI binding");if(bound.failure!=null)throw new IllegalStateException("Old GUI failed",bound.failure);return bound.commands;}
     public Object legacyScreen(Screen screen){return bindings.get(screen).gui;}

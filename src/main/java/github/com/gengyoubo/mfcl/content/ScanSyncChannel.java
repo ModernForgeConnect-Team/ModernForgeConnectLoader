@@ -13,7 +13,8 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class ScanSyncChannel {
     public record ScanMessage(byte type, int id, int meta, String phenomena, String prefix) {}
-    private static final String VERSION = "2";
+    public record DeviceMessage(int window,github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message packet) {}
+    private static final String VERSION = "3";
     private static SimpleChannel channel;
     private ScanSyncChannel() { }
     @SuppressWarnings("removal")
@@ -29,6 +30,11 @@ public final class ScanSyncChannel {
                 buffer->new github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message(buffer.readUtf(128),buffer.readVarInt(),buffer.readByteArray(1024*1024)),
                 (message,context)->{context.get().enqueueWork(()->net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->github.com.gengyoubo.mfcl.client.ClientContainerBridge.receive(message)));context.get().setPacketHandled(true);},
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
+        channel.registerMessage(2,DeviceMessage.class,
+                (message,buffer)->{buffer.writeVarInt(message.window());buffer.writeUtf(message.packet().channel(),128);buffer.writeVarInt(message.packet().discriminator());buffer.writeByteArray(message.packet().payload());},
+                buffer->new DeviceMessage(buffer.readVarInt(),new github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message(buffer.readUtf(128),buffer.readVarInt(),buffer.readByteArray(1024*1024))),
+                (message,context)->{context.get().enqueueWork(()->{var player=context.get().getSender();if(player!=null&&player.containerMenu instanceof LegacyDeviceMenu menu&&menu.containerId==message.window())menu.receivePacket(player,message.packet());});context.get().setPacketHandled(true);},
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
     }
     public static void sendToServer(LegacyItemUse.Scan scan, String prefix) {
         if (channel != null) channel.sendToServer(new ScanMessage(scan.type(), scan.id(), scan.meta(), scan.phenomena(), prefix));
@@ -36,6 +42,7 @@ public final class ScanSyncChannel {
     public static void sendToPlayer(ServerPlayer player, github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message message) {
         channel.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(()->player),message);
     }
+    public static void sendDevicePacket(int window,github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message message){channel.sendToServer(new DeviceMessage(window,message));}
     private static void apply(ServerPlayer player, ScanMessage message) {
         var bridge = ModernContentBridge.active();
         if (bridge != null) bridge.applyServerScan(player, message);

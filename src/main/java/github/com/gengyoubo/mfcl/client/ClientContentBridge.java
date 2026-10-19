@@ -21,6 +21,7 @@ public final class ClientContentBridge {
             }
         });
         bus.addListener((FMLClientSetupEvent event) -> event.enqueueWork(() -> {
+            net.minecraft.client.gui.screens.MenuScreens.register(bridge.deviceMenuType(),LegacyDeviceScreen::new);
             for (var entry : bridge.declarations().items()) ItemProperties.register(bridge.items().get(entry.key()), ResourceLocation.fromNamespaceAndPath("mfcl", "metadata"),
                     (stack, level, entity, seed) -> ModernContentBridge.metadata(stack));
         }));
@@ -30,7 +31,9 @@ public final class ClientContentBridge {
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.items().get(entry.key()));
         });
-        if (Boolean.getBoolean("mfcl.test.api")) ApiHostSmokeProbe.install();
+        if (Boolean.getBoolean("mfcl.test.device")) DeviceHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.tooltip")) TooltipHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.api")) ApiHostSmokeProbe.install();
         else if (Boolean.getBoolean("mfcl.test.crafting")) CraftingHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.scanner")) ScannerHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.book")) BookHostSmokeProbe.install(bridge);

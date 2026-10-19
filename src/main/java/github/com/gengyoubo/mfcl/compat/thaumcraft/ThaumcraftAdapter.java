@@ -11,6 +11,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     @Override public Map<String,Object> initialize(LegacyServices services) {
         this.services = services;
         var loader = services.loader();
+        LegacyPackets.allowServer(loader,ThaumcraftDevicePackets::prepare);
         services.playerState().register(new LegacyPlayerState.Hooks() {
             @Override public String id() { return "thaumcraft4:knowledge"; }
             @Override public AutoCloseable enter(Object world) throws Exception { return ThaumcraftKnowledge.server(loader, world); }

@@ -8,6 +8,8 @@ public interface HostWorldAccess {
     record Sound(double x,double y,double z,String id,float volume,float pitch,boolean distanceDelay,java.util.UUID excludedPlayer) {}
     /** A legacy projectile reduced to host-neutral data so the modern side can spawn an equivalent entity. */
     record Projectile(double x,double y,double z,double motionX,double motionY,double motionZ,double damage,boolean burning,java.util.UUID owner) {}
+    record Entity(java.util.UUID id,String legacyClass,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable) {}
+    record Motion(java.util.UUID id,double x,double y,double z,float fallDistance) {}
     String dimensionKey();
     int legacyDimensionId();
     boolean clientSide();
@@ -22,6 +24,9 @@ public interface HostWorldAccess {
     default boolean loaded(int x, int y, int z) { return true; }
     default void playSound(Sound sound) { }
     default void spawnProjectile(Projectile projectile) { }
+    default java.util.List<Entity> entities(double minX,double minY,double minZ,double maxX,double maxY,double maxZ) { return java.util.List.of(); }
+    default Object existingEntity(java.util.UUID id) { return null; }
+    default void applyMotion(Motion motion) { }
     default void updateComparators(int x, int y, int z) { }
     default void blockEvent(int x, int y, int z, String block, int event, int data) { throw new UnsupportedOperationException("Host block events are not available"); }
     default void schedule(int x, int y, int z, String block, int delay) { throw new UnsupportedOperationException("Host block scheduling is not available"); }

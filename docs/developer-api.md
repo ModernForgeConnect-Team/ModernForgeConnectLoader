@@ -8,7 +8,7 @@
 | --- | --- |
 | 独立 Java 17 API JAR，无 Minecraft / Forge 编译依赖 | 已实现 |
 | 运行时就绪回调、实际加载的 mod ID、关闭失效 | 已实现 |
-| MLA 精确签名的方法、字段、构造器访问 | 已实现 |
+| MLA 精确签名的方法、字段、构造器访问，描述符可推断，接口返回值自动代理包装 | 已实现 |
 | 旧物品 / 方块注册表查询 | 已实现，只读；不绕过注册屏障添加内容 |
 | ItemStack 和旧 NBT 的复制 / 快照 | 已实现，保留原始 1.7.10 SNBT |
 | 现代 ItemStack 双向转换 | 已实现，复用严格的游戏数据转换 |
@@ -86,33 +86,33 @@ AutoCloseable subscription = MfclApi.whenReady(runtime -> {
 ```java
 @LegacyType("net.minecraft.item.ItemStack")
 public interface OldStack {
-    @LegacyMethod(name = "func_77946_l",
-                  descriptor = "()Lnet/minecraft/item/ItemStack;")
-    LegacyObject copy();
+    @LegacyMethod(name = "func_77946_l") // 描述符由返回的 @LegacyType 接口推断
+    OldStack copy();
 
-    @LegacyField(name = "field_77994_a", descriptor = "I")
+    @LegacyField(name = "field_77994_a") // 描述符由 getter / setter 的 Java 类型推断
     int count();
 
-    @LegacyField(name = "field_77994_a", descriptor = "I")
+    @LegacyField(name = "field_77994_a")
     void count(int count);
 }
 
 LegacyObject value = runtime.stack(new LegacyStack("minecraft:diamond", 0, 2, ""));
 OldStack stack = runtime.accessor(OldStack.class, value);
-LegacyObject copied = stack.copy();
+OldStack copied = stack.copy(); // 旧对象自动包装成 OldStack 代理
 stack.count(1); // 不影响 copied
 ```
 
 接口必须是 `public`，并显式声明 `@LegacyType`。抽象方法必须且只能声明一种成员注解；可使用 Java 默认方法组合调用。
 
-- `@LegacyMethod` 指定准确名称、完整 JVM descriptor 和 `isStatic`；返回类型也是签名的一部分。静态成员使用 `runtime.accessor(Contract.class)`。
-- `@LegacyField` 的零参数方法读取字段；单参数、返回 `void` 的方法写字段；类型必须匹配，禁止写 `final` 字段。
-- `@LegacyConstructor(descriptor = "(I)V")` 调用目标类构造器，API 方法返回 `LegacyObject`。描述符末尾必须为 `V`。
-- 可定位非公开成员、继承方法和字段。成员不存在、重载签名错误、静态/实例声明不符、接收对象类型错误，会在绑定阶段失败。
+- `@LegacyMethod` 指定准确名称和 `isStatic`；`descriptor` 可省略，此时由 Java 签名推断：基本类型、`String`、`LegacyObject` 以及标注 `@LegacyType` 的接口和它们的数组都可以推断。含 `LegacyObject` 参数或返回值时必须显式提供 `descriptor`，否则绑定失败。返回类型也是签名的一部分。静态成员使用 `runtime.accessor(Contract.class)`。
+- `@LegacyField` 的零参数方法读取字段；单参数、返回 `void` 的方法写字段；类型必须匹配，禁止写 `final` 字段。`descriptor` 省略时使用 getter 返回类型或 setter 参数类型。
+- `@LegacyConstructor(descriptor = "(I)V")` 调用目标类构造器；描述符省略时由 Java 参数推断，末尾仍为 `V`。API 方法可以返回 `LegacyObject` 或标注 `@LegacyType` 的接口。
+- 当抽象方法的参数或返回值是标注 `@LegacyType` 的接口时，MFCL 自动在旧对象与代理之间转换：参数代理会解包成旧对象，返回的旧对象会包装成代理。代理的接收者共享原引用的线程与生命周期约束。
+- 可定位非公开成员、继承方法和字段。成员不存在、重载签名错误、静态/实例声明不符、接收对象类型错误、描述符无法推断，会在绑定阶段失败。
 
-使用**实际旧 SRG 运行时**里的名称：Minecraft 成员通常为 `func_...` / `field_...`，模组自己的成员通常保留原名。不要用现代 Mojang 映射名称，也不要把同名旧类当成现代类。`@LegacyType` 目标必须属于隔离旧域，不能借此访问宿主或 JDK 类型。
+使用**实际旧 SRG 运行时**里的名称：Minecraft 成员通常为 `func_...` / `field_...`，模组自己的成员通常保留原名。不要用现代 Mojang 映射名称，也不要把同名旧类当成现代类。`descriptor` 推断只解决 JVM 类型书写，不做 MCP/SRG 名称转换；自动名称解析仍属于独立工具，不在本版 MLA 范围内。`@LegacyType` 目标必须属于隔离旧域，不能借此访问宿主或 JDK 类型。
 
-参数和返回值只允许精确匹配的基本类型、`String`、`LegacyObject` 及这些类型的数组。任意旧类 / Java 集合用 `LegacyObject` 持有，再绑定旧域的具体 accessor；`Object`、现代 Minecraft 类和原始旧 Minecraft 类均不能直接出现在签名中。数组跨界时复制，引用元素包装成 opaque handle。
+参数和返回值允许精确匹配的基本类型、`String`、`LegacyObject`、标注 `@LegacyType` 的接口，以及这些类型的数组。任意旧类 / Java 集合用 `LegacyObject` 持有，再绑定旧域的具体 accessor；`Object`、现代 Minecraft 类和原始旧 Minecraft 类均不能直接出现在签名中。数组跨界时复制，引用元素包装成 opaque handle 或对应接口代理。
 
 `LegacyObject` 没有 `unwrap()`。MFCL 检查引用来自当前运行时，拒绝伪造 / 跨运行时引用。运行时关闭后，旧 accessor 的实际调用和转换都失败。MLA 不提供注入、重定向、覆盖旧方法，也不是隔离不可信附属代码的安全沙箱。
 
