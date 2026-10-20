@@ -102,6 +102,8 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 
 The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client connection, disconnect/reconnect and multi-player behaviour on a dedicated server are not covered by this probe.
 
+`-PmfclServerSmokeTest=gameplay` instead runs the door, hellbat, loot and elemental-arrow regressions once and writes `gameplay-smoke.json`. Use a disposable game directory: it creates and clears test entities and blocks. See the [gameplay fix record](gameplay-fixes-2026-10-21.md) for the isolated command and coverage.
+
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
 
 Check both the process exit status and the probe JSON `status` / recorded assertions. A clean Gradle exit alone is not sufficient evidence that every in-game assertion passed. Preserve logs when reporting a new failure; source-controlled acceptance JSON is a dated summary, not a promise about untested mod combinations.

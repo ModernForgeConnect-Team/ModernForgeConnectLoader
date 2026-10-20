@@ -15,6 +15,8 @@ class LegacySoundsTest {
         assertEquals("minecraft:block.wood.step",LegacySounds.modernId("step.wood"));
         assertEquals("minecraft:block.wooden_door.open",LegacySounds.modernId("random.door_open"));
         assertEquals("minecraft:block.wooden_door.close",LegacySounds.modernId("minecraft:random.door_close"));
+        assertEquals("minecraft:block.wood.place",LegacySounds.placementId("dig.wood"));
+        assertEquals("thaumcraft:custom",LegacySounds.placementId("thaumcraft:custom"));
     }
     @Test void convertsOldNamespaceAndCaseWithoutLosingSoundOptions() {
         var converted=LegacySounds.definitions("thaumcraft","""

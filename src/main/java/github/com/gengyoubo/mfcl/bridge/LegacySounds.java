@@ -18,6 +18,18 @@ public final class LegacySounds {
             Map.entry("random.door_open","block.wooden_door.open"),Map.entry("random.door_close","block.wooden_door.close"),
             Map.entry("game.neutral.swim","entity.generic.swim"));
     private LegacySounds() {}
+    public static String placementId(String name) {
+        String id=name.startsWith("minecraft:")?name.substring(10):name;
+        if(id.startsWith("dig.")||id.startsWith("step.")) {
+            String material=id.substring(id.indexOf('.')+1);
+            return switch(material) {
+                case "wood","stone","grass","gravel","sand","snow","glass","metal","ladder","anvil" -> "minecraft:block."+material+".place";
+                case "cloth" -> "minecraft:block.wool.place";
+                default -> modernId(name);
+            };
+        }
+        return modernId(name);
+    }
     public static String modernId(String name) {
         String id=name.contains(":")?name:"minecraft:"+name;
         id=id.toLowerCase(Locale.ROOT);

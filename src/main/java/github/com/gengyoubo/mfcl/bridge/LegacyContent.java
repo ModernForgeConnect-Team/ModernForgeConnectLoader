@@ -214,28 +214,22 @@ public final class LegacyContent {
         Object blockRegistry = blockType.getField("field_149771_c").get(null), itemRegistry = itemType.getField("field_150901_e").get(null);
         Method blockKey = blockRegistry.getClass().getMethod("func_148750_c", Object.class), itemKey = itemRegistry.getClass().getMethod("func_148750_c", Object.class);
         Set<String> customItems = new HashSet<>();
-        Map<String, Object> itemsByKey = new HashMap<>();
         for (Object item : (Iterable<?>) itemRegistry) {
             String key = (String) itemKey.invoke(itemRegistry, item);
             if (key == null || key.startsWith("minecraft:")) continue;
-            customItems.add(key); itemsByKey.put(key, item);
+            customItems.add(key);
         }
         var tabValues = LegacyCreativeTabs.read(data, customItems);
-        // Some legacy blocks index an icon array directly by metadata and throw for undeclared values,
-        // so only probe the metadata their ItemBlock actually exposes.
-        Map<String, Set<Integer>> declaredBlockMetas = new HashMap<>();
-        for (var stack : data.catalog()) declaredBlockMeta(declaredBlockMetas, stack, itemsByKey, itemBlock, blockRegistry, blockKey);
-        for (var tab : tabValues) for (var stack : tab.contents()) declaredBlockMeta(declaredBlockMetas, stack, itemsByKey, itemBlock, blockRegistry, blockKey);
         var blockValues = new ArrayList<Block>();
         for (Object block : (Iterable<?>) blockRegistry) {
             String key = (String) blockKey.invoke(blockRegistry, block);
             if (key == null || key.startsWith("minecraft:")) continue;
-            Set<Integer> declaredMetas = declaredBlockMetas.get(key);
             var faces = new ArrayList<List<String>>();
             for (int meta = 0; meta < 16; meta++) {
                 var sides = new ArrayList<String>();
-                boolean probe = meta == 0 || declaredMetas == null || declaredMetas.contains(meta);
-                for (int side = 0; side < 6; side++) sides.add(probe ? icon(blockType, block, side, meta, iconType) : "");
+                // World metadata also contains placement/decay/rotation bits absent from creative item variants.
+                // The icon helper tolerates old blocks that reject undeclared array indices.
+                for (int side = 0; side < 6; side++) sides.add(icon(blockType, block, side, meta, iconType));
                 faces.add(sides);
             }
             var tileMetas = new ArrayList<Integer>();
@@ -362,15 +356,6 @@ public final class LegacyContent {
             captureDiagnostics.add("held-use icons unavailable for " + item + ": " + unsupported);
             return List.of();
         }
-    }
-    private static void declaredBlockMeta(Map<String, Set<Integer>> target, LegacyClientData.Stack stack, Map<String, Object> itemsByKey,
-                                          Class<?> itemBlock, Object blockRegistry, Method blockKey) throws Exception {
-        if (stack.key().startsWith("minecraft:")) return;
-        Object item = itemsByKey.get(stack.key());
-        if (!itemBlock.isInstance(item)) return;
-        String key = (String) blockKey.invoke(blockRegistry, itemBlock.getField("field_150939_a").get(item));
-        if (key == null || key.startsWith("minecraft:")) return;
-        target.computeIfAbsent(key, ignored -> new TreeSet<>()).add(stack.metadata());
     }
     private static String icon(Class<?> blockType, Object block, int side, int meta, Class<?> iconType) throws Exception {
         try {

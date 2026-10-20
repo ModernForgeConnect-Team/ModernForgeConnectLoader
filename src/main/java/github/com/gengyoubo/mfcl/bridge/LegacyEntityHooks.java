@@ -31,6 +31,14 @@ public final class LegacyEntityHooks {
     }
     static void mirrored(Object entity) { MIRRORS.put(entity, Boolean.TRUE); }
     static boolean isMirror(Object entity) { return MIRRORS.containsKey(entity); }
+    /** Actors and query mirrors both lack the old MinecraftServer used by EntityPlayerMP. */
+    public static boolean hasServerHost(Object entity) {
+        try {var host=host(entity);return host!=null&&!host.clientSide();}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException(failure);}
+    }
+    public static boolean canAttackPlayer(Object attacker,Object target) throws ReflectiveOperationException {
+        return host(attacker).canAttackPlayer(access(attacker).idOf(attacker),access(attacker).idOf(target));
+    }
     /** Keep the original swing state/callback, but deliver its animation through the host tracker. */
     public static void animation(Object tracker,Object entity,Object packet) throws ReflectiveOperationException {
         var host=host(entity);

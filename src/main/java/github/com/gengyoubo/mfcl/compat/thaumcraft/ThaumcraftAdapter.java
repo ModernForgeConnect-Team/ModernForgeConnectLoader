@@ -13,6 +13,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDamageSourceAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPrimalArrowAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDoorAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter");
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {

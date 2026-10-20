@@ -8,7 +8,11 @@ public interface HostWorldAccess {
     record Sound(double x,double y,double z,String id,float volume,float pitch,boolean distanceDelay,java.util.UUID excludedPlayer) {}
     /** A legacy projectile reduced to host-neutral data so the modern side can spawn an equivalent entity. */
     record Projectile(double x,double y,double z,double motionX,double motionY,double motionZ,double damage,boolean burning,java.util.UUID owner) {}
-    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love) {
+    record Abilities(boolean creative,boolean invulnerable) {}
+    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities) {
+        public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love) {
+            this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,null);
+        }
         public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item) {
             this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,0,0);
         }
@@ -51,6 +55,8 @@ public interface HostWorldAccess {
     /** Old addPotionEffect; {@code potion} is the 1.7.10 potion id. */
     default void addEffect(java.util.UUID target, int potion, int duration, int amplifier, boolean ambient) { }
     default void swing(java.util.UUID entity) { }
+    /** Server PvP and team friendly-fire rules for an old player's canAttackPlayer callback. */
+    default boolean canAttackPlayer(java.util.UUID attacker,java.util.UUID target) { return false; }
     default java.util.List<Entity> entities(double minX,double minY,double minZ,double maxX,double maxY,double maxZ) { return java.util.List.of(); }
     /** Refresh a target an original entity retained after its initial AABB query; null after it leaves this world. */
     default Entity entity(java.util.UUID id) { return null; }

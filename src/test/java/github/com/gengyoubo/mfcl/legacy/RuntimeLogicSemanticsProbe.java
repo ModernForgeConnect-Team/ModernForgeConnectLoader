@@ -10,6 +10,7 @@ final class RuntimeLogicSemanticsProbe {
         var loader = services.loader(); var notifications = new ArrayList<String>();
         var sounds=new ArrayList<HostWorldAccess.Sound>();
         var effects=new ArrayList<String>();
+        boolean[] pvpAllowed={true};
         Object identity = new Object();
         Object world = services.worlds().bind(identity,new HostWorldAccess() {
             public String dimensionKey() { return "mfcl:logic-test"; } public int legacyDimensionId() { return 0; }
@@ -23,6 +24,10 @@ final class RuntimeLogicSemanticsProbe {
             public void playSound(Sound sound) {sounds.add(sound);}
             public void levelEvent(UUID excluded,int event,int x,int y,int z,int data) {effects.add(event+":"+x+":"+y+":"+z);}
             public void swing(UUID id) {effects.add("swing:"+id);}
+            public boolean canAttackPlayer(UUID attacker,UUID target) {
+                if(!attacker.equals(new UUID(1,2))||!target.equals(new UUID(3,4)))throw new AssertionError("Player identity lost");
+                return pvpAllowed[0];
+            }
         });
         try {
             if (!loader.loadClass("net.minecraft.world.WorldServer").isInstance(world)) throw new AssertionError("Server logic received a client-only world type");
@@ -45,6 +50,12 @@ final class RuntimeLogicSemanticsProbe {
             if(!effects.equals(List.of("2004:1:64:2","swing:"+new UUID(1,2))))throw new AssertionError("Old particle/swing effect entered the absent legacy tracker: "+effects);
             if(!loader.loadClass("net.minecraft.entity.EntityLivingBase").getField("field_82175_bq").getBoolean(actor))throw new AssertionError("Swing bridge skipped the original animation state");
             report.put("genericAuxiliaryEventsAndSwingVerified",true);
+            Object opponent=services.tiles().actor(world,new LegacyTiles.Placer(new UUID(3,4),"Opponent",0,64,4,0,0),null);
+            var attackRule=actor.getClass().getMethod("func_96122_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"));
+            if(!(boolean)attackRule.invoke(actor,opponent))throw new AssertionError("Host PvP permission lost");
+            pvpAllowed[0]=false;
+            if((boolean)attackRule.invoke(actor,opponent))throw new AssertionError("Host PvP denial bypassed");
+            report.put("genericPlayerAttackRulesVerified",true);
             var oldWorld = loader.loadClass("net.minecraft.world.World"); var oldTile = loader.loadClass("net.minecraft.tileentity.TileEntity");
             var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String name = "mfcl/fixture/LogicTile";

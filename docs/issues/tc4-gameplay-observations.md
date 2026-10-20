@@ -2,9 +2,11 @@
 
 环境：MFCL 当前工作区，原始 Thaumcraft 4.2.3.5。记录日期：2026-10-21。
 
+下列定位笔记保留初次报告时的证据。修复实现与服务端验收范围见 [修复记录](../gameplay-fixes-2026-10-21.md)；客户端听音、渲染和自然生成样本仍需实机复核。
+
 ## 奥能之扉开关无音效
 
-- 状态：已定位静态兼容缺口，待修复、待游戏内回归；本轮仅记录。
+- 状态：已修复开关声音映射与辅助事件转发；已补充用户后续报告的放置声音。服务端检查实际声音事件，客户端听音待复核。
 - 用户现象：奥能之扉没有门的音效。
 - 物品资料：https://www.mcmod.cn/item/6930.html
 - 原始 JAR 的 `BlockArcaneDoor.playDoorSound` 明确调用 `random.door_open` / `random.door_close`，不是有意静音；无权限时另播 `thaumcraft:doorfail`。
@@ -14,7 +16,7 @@
 
 ## 法杖核心：九狱无法召唤焱蝠
 
-- 状态：用户报告无法召唤，待专项复现和定位；尚未修复。
+- 状态：已复现并修复挥手事务回滚、生成后首次更新异常，以及旧 AI 目标镜像刷新。
 - 用户在说明需要瞄准生物后再次反馈“召唤不了生物”。具体目标、难度、灵气是否扣除和当次运行日志尚未确认。
 - 物品资料：https://www.mcmod.cn/item/5359.html
 - 原始 JAR 已核对：`ItemFocusHellbat.onFocusRightClick` 通过 `EntityUtils.getPointedEntity(world, player, 32, EntityFireBat.class)` 寻找目标；目标必须是 `EntityLivingBase`，排除焱蝠；对玩家还检查 PvP。消耗灵气成功后创建并生成 `EntityFireBat`，设置攻击目标和召唤标记。
@@ -25,7 +27,7 @@
 
 ## 奖励类方块无法使用：废弃箱子、古旧之瓮等
 
-- 状态：用户报告无法使用；已发现自定义掉落入口兼容缺口，待游戏内复现确认具体表现，尚未修复。
+- 状态：已修复通用 Forge 自定义掉落入口；已覆盖废弃箱子和古旧之瓮各三个品质。其他奖励方块未逐项验收。
 - 用户资料：https://www.mcmod.cn/item/list/204-1.html
 - 已核对范围：废弃箱子 `Thaumcraft:blockLootCrate`（https://www.mcmod.cn/item/37783.html）、古旧之瓮 `Thaumcraft:blockLootUrn`（https://www.mcmod.cn/item/37782.html），各有 metadata 0/1/2 三种品质。其他奖励方块尚未逐项确认。
 - 原版行为：打破方块掉落相应品质的战利品；这两种方块不是右键打开界面的储物箱。原始 `BlockLoot` 没有覆盖右键激活方法，而是覆盖 Forge `getDrops(World,int,int,int,int,int)`，调用 `Utils.generateLoot(metadata, world.rand)` 生成奖励。
@@ -35,7 +37,7 @@
 
 ## 稀有藏宝袋无法使用
 
-- 状态：用户明确反馈“无法使用”，待专项复现与根因定位，尚未修复。
+- 状态：已复现奖励 NBT 转换失败导致事务回滚并修复；已覆盖三种品质和 387 个奖励往返样本。
 - 物品：`Thaumcraft:ItemLootBag`，metadata 2；资料：https://www.mcmod.cn/item/9860.html 。寻常、非凡品质是否同样受影响尚未确认。
 - 原版行为已核对：`ItemLootBag.func_77659_a` 在服务端进行 8–12 次 `Utils.generateLoot(metadata, world.rand)` 抽取，对非空结果在玩家位置生成 `EntityItem`，播放 `thaumcraft:coins`，并将袋子数量减一。没有开箱界面。
 - 现有路径：`ModernContentBridge.MirroredItem.use` → `LegacyItemUse.rightClick`，服务端通过 `LegacyItemDrops.capture` 接收原始掉落并在事务提交后生成现代掉落物，随后回写库存。这表明相关入口存在，不代表该物品已通过游戏内验收。
@@ -46,10 +48,11 @@
 
 ## 元素箭射出后疑似没有元素效果
 
-- 状态：用户报告“发射的箭没有元素效果（？）”，保留为疑似兼容问题；具体箭种、发射武器、目标与缺失表现未确认，尚未专项复现或修复。
+- 状态：已修复伤害源穿甲标记及重复箭矢更新；弓、弩的六种元素效果均已通过实际服务端命中检查。
 - 资料：https://www.mcmod.cn/item/37839.html ，该页面包含风、火、水、地、秩序、混沌六种元素箭，物品为 `Thaumcraft:PrimalArrow`，metadata 0–5。
 - 已核对预期：风之矢主要效果是穿甲，不能只凭缺少显眼视觉效果判断失效；火之矢点燃目标，水之矢减速，地之矢提高伤害。命中效果与飞行渲染需分别检查。
 - 原始 `EntityPrimalArrow` 有按元素类型分支的伤害源、点燃和药水效果逻辑，不应一律表现为普通箭。
+- 创造模式扣箭：已核对原始 `EventHandlerEntity.bowShot`，条件为“非创造模式，或未命中无限附魔的 33% 免消耗随机分支”时扣箭。因此创造模式用无无限附魔的弓仍会消耗元素箭；本轮保留原始规则。
 - 当前代码：`LegacyWorlds.spawn` 仅将类恰好为原版 `EntityArrow` 的实体转换为现代普通箭，模组箭保留原始实体逻辑；`ThaumcraftCrossbow` 有现代弩替换为原始 `EntityPrimalArrow` 的路径；`LegacyEntityHooks` / `LevelWorldBridge` 有伤害、燃烧和药水效果转发。这些静态入口不等于实际命中验收通过，也不足以确定本次根因。
 - 待排查：武器实际消耗的弹药、生成实体类型、元素 metadata/type 是否保留、实体碰撞命中及效果是否作用到现代目标。弓与弩需分别验证。
 - 验收：同武器、同距离、同拉弓程度下对比普通箭；风之矢以有甲/无甲目标对比穿甲，火之矢检查非免火目标燃烧，水/秩序/混沌检查状态效果，地之矢检查伤害；另验客户端渲染、服务端效果及弹药消耗。
