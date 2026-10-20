@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.*;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -20,12 +21,15 @@ public final class ThaumcraftBiomeSource extends BiomeSource {
     private final BiomeSource source;
     private final Holder<Biome> forest,taint;
     private final int forestWeight,taintWeight;
+    /** Half-widths of the weirdness bands around -0.45 (forest) and +0.45 (taint), fixed per source. */
+    private final double forestBand,taintBand;
     public ThaumcraftBiomeSource(BiomeSource source,Holder<Biome> forest,Holder<Biome> taint,int forestWeight,int taintWeight){
         this.source=source;this.forest=forest;this.taint=taint;this.forestWeight=forestWeight;this.taintWeight=taintWeight;
+        double total=50.0+forestWeight+taintWeight;forestBand=forestWeight/total;taintBand=taintWeight/total;
     }
     @Override protected Codec<? extends BiomeSource> codec(){return CODEC;}
     @Override protected Stream<Holder<Biome>> collectPossibleBiomes(){
-        return Stream.concat(source.possibleBiomes().stream(),Stream.concat(forestWeight>0?Stream.of(forest):Stream.empty(),taintWeight>0?Stream.of(taint):Stream.empty()));
+        return Stream.concat(source.possibleBiomes().stream(),Stream.of(forestWeight>0?forest:null,taintWeight>0?taint:null).filter(Objects::nonNull));
     }
     @Override public Holder<Biome> getNoiseBiome(int x,int y,int z,Climate.Sampler sampler){
         var base=source.getNoiseBiome(x,y,z,sampler);
@@ -33,9 +37,8 @@ public final class ThaumcraftBiomeSource extends BiomeSource {
         if(!id.getNamespace().equals("minecraft")||!LAND.contains(id.getPath()))return base;
         // Climate noise depends on the world's seed and is continuous across chunk boundaries.
         double noise=Climate.unquantizeCoord(sampler.sample(x,y,z).weirdness());
-        double total=50.0+forestWeight+taintWeight;
-        if(forestWeight>0&&Math.abs(noise+.45)<forestWeight/total)return forest;
-        if(taintWeight>0&&Math.abs(noise-.45)<taintWeight/total)return taint;
+        if(Math.abs(noise+.45)<forestBand)return forest;
+        if(Math.abs(noise-.45)<taintBand)return taint;
         return base;
     }
 }

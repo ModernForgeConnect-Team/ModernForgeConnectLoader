@@ -2,10 +2,12 @@ package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.logging.LogUtils;
+import github.com.gengyoubo.mfcl.bridge.LegacyObjects;
 import github.com.gengyoubo.mfcl.bridge.LegacyServices;
 import github.com.gengyoubo.mfcl.content.LegacyBlockEntity;
+import java.lang.reflect.Method;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -24,8 +26,9 @@ import net.minecraftforge.common.MinecraftForge;
  */
 final class ThaumcraftGoggles {
     private record Tag(ResourceLocation icon, int color, int amount) {}
+    private static final ResourceLocation UNKNOWN = ResourceLocation.parse("thaumcraft:textures/aspects/_unknown.png");
     private static final int PER_ROW = 5, CELL = 18, LIGHT = 0xF000F0;
-    private static boolean reported;
+    private static final AtomicBoolean REPORTED = new AtomicBoolean();
     private ThaumcraftGoggles() {}
 
     static void install(LegacyServices services) {
@@ -53,7 +56,7 @@ final class ThaumcraftGoggles {
                 else tags = tags(services, tile, mc.player.getGameProfile().getName());
             }
         } catch (Exception | LinkageError failure) {
-            if (!reported) { reported = true; LogUtils.getLogger().error("MFCL TC4 goggles overlay unavailable", failure); }
+            ThaumcraftReflection.reportOnce(REPORTED, "MFCL TC4 goggles overlay unavailable", failure);
             return;
         }
         if (tags.isEmpty() && text == null) return;
@@ -102,12 +105,11 @@ final class ThaumcraftGoggles {
             Class<?> mc = loader.loadClass("net.minecraft.client.Minecraft");
             Object player = mc.getField("field_71439_g").get(mc.getMethod("func_71410_x").invoke(null));
             Object inventory = loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
-            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Object head = inventory.getClass().getMethod("func_70440_f", int.class).invoke(inventory, 3);
-            if (head == null) return false;
+            Object item = LegacyObjects.item(head);
             Class<?> goggles = loader.loadClass("thaumcraft.api.IGoggles");
-            Object item = stackType.getMethod("func_77973_b").invoke(head);
-            return goggles.isInstance(item) && (boolean) goggles.getMethod("showIngamePopups", stackType, loader.loadClass("net.minecraft.entity.EntityLivingBase")).invoke(item, head, player);
+            return goggles.isInstance(item) && (boolean) goggles.getMethod("showIngamePopups", loader.loadClass("net.minecraft.item.ItemStack"),
+                    loader.loadClass("net.minecraft.entity.EntityLivingBase")).invoke(item, head, player);
         });
     }
     /** TC4 Arcane Ear (TileSensor) pitch, or null for any other tile. */
@@ -128,20 +130,23 @@ final class ThaumcraftGoggles {
             if (list == null) return List.<Tag>of();
             Class<?> aspectType = loader.loadClass("thaumcraft.api.aspects.Aspect"), locationType = loader.loadClass("net.minecraft.util.ResourceLocation");
             Object knowledge = null;
-            try { Object proxy = loader.loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null); knowledge = proxy.getClass().getMethod("getPlayerKnowledge").invoke(proxy); }
+            try { Object proxy = ThaumcraftReflection.proxy(loader); knowledge = proxy.getClass().getMethod("getPlayerKnowledge").invoke(proxy); }
             catch (ReflectiveOperationException unavailable) { /* treat every aspect as discovered */ }
+            var amountOf = list.getClass().getMethod("getAmount", aspectType);
+            var discovered = knowledge == null ? null : knowledge.getClass().getMethod("hasDiscoveredAspect", String.class, aspectType);
+            Method image = aspectType.getMethod("getImage"), colorOf = aspectType.getMethod("getColor"),
+                    domain = locationType.getMethod("func_110624_b"), path = locationType.getMethod("func_110623_a");
             var result = new ArrayList<Tag>();
             for (Object aspect : (Object[]) list.getClass().getMethod("getAspects").invoke(list)) {
                 if (aspect == null) continue;
-                int amount = (int) list.getClass().getMethod("getAmount", aspectType).invoke(list, aspect);
-                boolean known = knowledge == null || (boolean) knowledge.getClass().getMethod("hasDiscoveredAspect", String.class, aspectType).invoke(knowledge, viewer, aspect);
+                int amount = (int) amountOf.invoke(list, aspect);
                 ResourceLocation icon;
                 int color;
-                if (known) {
-                    Object image = aspectType.getMethod("getImage").invoke(aspect);
-                    icon = ResourceLocation.tryParse(locationType.getMethod("func_110624_b").invoke(image) + ":" + locationType.getMethod("func_110623_a").invoke(image));
-                    color = (int) aspectType.getMethod("getColor").invoke(aspect);
-                } else { icon = ResourceLocation.tryParse("thaumcraft:textures/aspects/_unknown.png"); color = 0xAAAAAA; }
+                if (discovered == null || (boolean) discovered.invoke(knowledge, viewer, aspect)) {
+                    Object location = image.invoke(aspect);
+                    icon = ResourceLocation.tryParse(domain.invoke(location) + ":" + path.invoke(location));
+                    color = (int) colorOf.invoke(aspect);
+                } else { icon = UNKNOWN; color = 0xAAAAAA; }
                 if (icon != null) result.add(new Tag(icon, color, amount));
             }
             return List.copyOf(result);

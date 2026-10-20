@@ -9,9 +9,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     @Override public String id() { return "thaumcraft4"; }
     @Override public boolean supports(Set<String> mods) { return mods.contains("Thaumcraft"); }
     @Override public void beforeBoot(ClassLoader loader) throws Exception {
-        loader.getClass().getMethod("registerBytecodeAdapter",String.class).invoke(loader,
-                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter");
-        loader.getClass().getMethod("registerBytecodeAdapter",String.class).invoke(loader,
+        LegacyModAdapter.registerBytecodeAdapters(loader,
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter");
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
@@ -19,10 +18,10 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         var loader = services.loader();
         var generation=loader.loadClass("thaumcraft.common.lib.world.ThaumcraftWorldGenerator");
         var config=loader.loadClass("thaumcraft.common.config.Config");
-        services.biomes().register("thaumcraft:magical_forest",generation.getField("biomeMagicalForest").get(null),config.getField("biomeMagicalForestWeight").getInt(null));
-        services.biomes().register("thaumcraft:tainted_land",generation.getField("biomeTaint").get(null),config.getField("biomeTaintWeight").getInt(null));
-        services.biomes().register("thaumcraft:eerie",generation.getField("biomeEerie").get(null),0);
-        services.biomes().register("thaumcraft:eldritch",generation.getField("biomeEldritchLands").get(null),0);
+        // {host id, ThaumcraftWorldGenerator field, Config weight field (null: never generated in the overworld)}
+        for(String[] biome:new String[][]{{"thaumcraft:magical_forest","biomeMagicalForest","biomeMagicalForestWeight"},{"thaumcraft:tainted_land","biomeTaint","biomeTaintWeight"},
+                {"thaumcraft:eerie","biomeEerie",null},{"thaumcraft:eldritch","biomeEldritchLands",null}})
+            services.biomes().register(biome[0],generation.getField(biome[1]).get(null),biome[2]==null?0:config.getField(biome[2]).getInt(null));
         ThaumcraftOuterLands.install(services);
         LegacyPackets.allowServer(loader,ThaumcraftDevicePackets::prepare);
         services.playerState().register(new LegacyPlayerState.Hooks() {
@@ -41,21 +40,22 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         ThaumcraftDynamicItems.install(services);
         ThaumcraftGoggles.install(services);
         ThaumcraftParticles.install(services);
-        try {services.items().inLegacy(()->{
-            var loader=services.loader();var tc=loader.loadClass("thaumcraft.common.Thaumcraft");
-            Object instance=tc.getField("instance").get(null);var renderField=tc.getField("renderEventHandler");Object renderer=renderField.get(instance);
-            if(renderer==null){renderer=loader.loadClass("thaumcraft.client.lib.RenderEventHandler").getConstructor().newInstance();renderField.set(instance,renderer);}
-            // TC normally initializes this in its old HUD event before research GUIs render notifications.
-            var notifications=renderer.getClass().getField("notifyHandler");
-            if(notifications.get(renderer)==null)notifications.set(renderer,loader.loadClass("thaumcraft.client.lib.REHNotifyHandler").getConstructor().newInstance());
-            // The old render-tick event normally creates this before PacketResearchComplete uses it.
-            // A missing popup aborts that handler before it updates the book's prerequisite snapshot.
-            var popup=loader.loadClass("thaumcraft.client.lib.ClientTickEventsFML").getField("researchPopup");
-            if(popup.get(null)==null){
-                var minecraft=loader.loadClass("net.minecraft.client.Minecraft");
-                popup.set(null,loader.loadClass("thaumcraft.client.gui.GuiResearchPopup").getConstructor(minecraft).newInstance(minecraft.getMethod("func_71410_x").invoke(null)));
-            }
-            return null;
-        });}catch(Exception failure){throw new IllegalStateException("Cannot initialize original TC4 GUI notifications",failure);}
+        try {services.items().inLegacy(()->{initializeNotifications();return null;});}
+        catch(Exception failure){throw new IllegalStateException("Cannot initialize original TC4 GUI notifications",failure);}
+    }
+    private void initializeNotifications() throws Exception {
+        var loader=services.loader();var tc=loader.loadClass("thaumcraft.common.Thaumcraft");
+        Object instance=tc.getField("instance").get(null);var renderField=tc.getField("renderEventHandler");Object renderer=renderField.get(instance);
+        if(renderer==null){renderer=loader.loadClass("thaumcraft.client.lib.RenderEventHandler").getConstructor().newInstance();renderField.set(instance,renderer);}
+        // TC normally initializes this in its old HUD event before research GUIs render notifications.
+        var notifications=renderer.getClass().getField("notifyHandler");
+        if(notifications.get(renderer)==null)notifications.set(renderer,loader.loadClass("thaumcraft.client.lib.REHNotifyHandler").getConstructor().newInstance());
+        // The old render-tick event normally creates this before PacketResearchComplete uses it.
+        // A missing popup aborts that handler before it updates the book's prerequisite snapshot.
+        var popup=loader.loadClass("thaumcraft.client.lib.ClientTickEventsFML").getField("researchPopup");
+        if(popup.get(null)==null){
+            var minecraft=loader.loadClass("net.minecraft.client.Minecraft");
+            popup.set(null,loader.loadClass("thaumcraft.client.gui.GuiResearchPopup").getConstructor(minecraft).newInstance(minecraft.getMethod("func_71410_x").invoke(null)));
+        }
     }
 }

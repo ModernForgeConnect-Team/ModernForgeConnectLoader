@@ -7,17 +7,27 @@ public final class ThaumcraftWandFocus {
     private ThaumcraftWandFocus() {}
     public static Map<String,Object> available(ClassLoader loader,Object player) throws Exception {
         Object inventory=loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
-        Object[] slots=(Object[])inventory.getClass().getField("field_70462_a").get(inventory);
-        var result=new TreeMap<String,Object>();for(Object stack:slots)add(loader,stack,result);return result;
+        var result=new TreeMap<String,Object>();
+        for(Object stack:(Object[])inventory.getClass().getField("field_70462_a").get(inventory))add(loader,stack,result);
+        return result;
     }
     public static void add(ClassLoader loader,Object stack,Map<String,Object> result) throws Exception {
-        if(stack==null)return;var stackType=loader.loadClass("net.minecraft.item.ItemStack");
-        if(stackType.getField("field_77994_a").getInt(stack)<=0)return;
-        Object item=stackType.getMethod("func_77973_b").invoke(stack);
-        if(loader.loadClass("thaumcraft.api.wands.ItemFocusBasic").isInstance(item))
-            result.put((String)item.getClass().getMethod("getSortingHelper",stackType).invoke(item,stack),stack);
+        var stackType=loader.loadClass("net.minecraft.item.ItemStack");
+        var focusType=loader.loadClass("thaumcraft.api.wands.ItemFocusBasic");
+        Object item=present(stackType,stack);
+        if(focusType.isInstance(item))put(stackType,item,stack,result);
         else if(loader.loadClass("thaumcraft.common.items.wands.ItemFocusPouch").isInstance(item))
-            for(Object focus:(Object[])item.getClass().getMethod("getInventory",stackType).invoke(item,stack))
-                if(focus!=null&&loader.loadClass("thaumcraft.api.wands.ItemFocusBasic").isInstance(stackType.getMethod("func_77973_b").invoke(focus)))add(loader,focus,result);
+            for(Object focus:(Object[])item.getClass().getMethod("getInventory",stackType).invoke(item,stack)) {
+                Object inner=present(stackType,focus);
+                if(focusType.isInstance(inner))put(stackType,inner,focus,result);
+            }
+    }
+    /** The item of a non-empty stack, otherwise null. */
+    private static Object present(Class<?> stackType,Object stack) throws Exception {
+        if(stack==null||stackType.getField("field_77994_a").getInt(stack)<=0)return null;
+        return stackType.getMethod("func_77973_b").invoke(stack);
+    }
+    private static void put(Class<?> stackType,Object focus,Object stack,Map<String,Object> result) throws Exception {
+        result.put((String)focus.getClass().getMethod("getSortingHelper",stackType).invoke(focus,stack),stack);
     }
 }

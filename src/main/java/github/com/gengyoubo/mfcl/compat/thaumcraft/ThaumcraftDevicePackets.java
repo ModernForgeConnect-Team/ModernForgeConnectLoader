@@ -1,95 +1,77 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
 import github.com.gengyoubo.mfcl.bridge.*;
-import java.lang.reflect.Field;
+import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declared;
+import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declaredField;
 
-/** Validation for TC4's original research-table packets. */
+/** Validation for TC4's original wand-control, research-table and Thaumonomicon packets. */
 final class ThaumcraftDevicePackets {
+    private static final String MISC="thaumcraft.common.lib.network.misc.",PLAYER_DATA="thaumcraft.common.lib.network.playerdata.";
+    private ThaumcraftDevicePackets() {}
     static boolean prepare(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
-        String type=packet.getClass().getName();
-        if(type.equals("thaumcraft.common.lib.network.misc.PacketFocusChangeToServer")||type.equals("thaumcraft.common.lib.network.misc.PacketItemKeyToServer")) {
-            var loader=player.getClass().getClassLoader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");
-            Object held=player.getClass().getMethod("func_70694_bm").invoke(player);
-            Object item=held==null?null:stackType.getMethod("func_77973_b").invoke(held);
-            if(item==null||!loader.loadClass("thaumcraft.common.items.wands.ItemWandCasting").isInstance(item))throw new IllegalArgumentException("Wand control requires a held wand");
-            Object world=loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p").get(player);
-            Object provider=loader.loadClass("net.minecraft.world.World").getField("field_73011_w").get(world);
-            if(field(packet,"dim").getInt(packet)!=provider.getClass().getField("field_76574_g").getInt(provider))throw new IllegalArgumentException("Wand control targets another dimension");
-            field(packet,"playerid").setInt(packet,(int)player.getClass().getMethod("func_145782_y").invoke(player));
-            if(type.endsWith("PacketFocusChangeToServer")) {
-                if((boolean)item.getClass().getMethod("isSceptre",stackType).invoke(item,held))throw new IllegalArgumentException("Sceptres cannot equip foci");
-                String focus=(String)field(packet,"focus").get(packet);
-                if(focus==null||focus.length()>256||!focus.equals("REMOVE")&&!ThaumcraftWandFocus.available(loader,player).containsKey(focus))throw new IllegalArgumentException("Focus is not in the player's inventory");
-            }else if(field(packet,"key").getByte(packet)!=1)throw new IllegalArgumentException("Unsupported wand key");
-            return true;
+        switch(packet.getClass().getName()) {
+            case MISC+"PacketFocusChangeToServer"->validateWandControl(packet,player,true);
+            case MISC+"PacketItemKeyToServer"->validateWandControl(packet,player,false);
+            case PLAYER_DATA+"PacketAspectCombinationToServer"->validateCombination(packet,player,target(packet,player,device));
+            case PLAYER_DATA+"PacketAspectPlaceToServer"->validatePlacement(packet,player,target(packet,player,device));
+            case PLAYER_DATA+"PacketPlayerCompleteToServer"->validateBookCompletion(packet,player);
+            default->{return false;}
         }
-        if(type.equals("thaumcraft.common.lib.network.playerdata.PacketAspectCombinationToServer")) {
-            Object tile=target(packet,player,device);
-            var loader=player.getClass().getClassLoader();
-            Object bonus=tile.getClass().getField("bonusAspects").get(tile);
-            for(int index=1;index<=2;index++) {
-                Object aspect=field(packet,"aspect"+index).get(packet);
-                if(aspect==null)throw new IllegalArgumentException("Unknown research aspect");
-                // Bonus availability is authoritative; client booleans cannot grant free points.
-                int available=(int)bonus.getClass().getMethod("getAmount",loader.loadClass("thaumcraft.api.aspects.Aspect")).invoke(bonus,aspect);
-                field(packet,"ab"+index).setBoolean(packet,available>0);
-            }
-            return true;
+        return true;
+    }
+    private static void validateWandControl(Object packet,Object player,boolean focusChange) throws Exception {
+        var loader=player.getClass().getClassLoader();
+        Object held=LegacyObjects.heldStack(player),item=LegacyObjects.item(held);
+        if(item==null||!loader.loadClass("thaumcraft.common.items.wands.ItemWandCasting").isInstance(item))throw new IllegalArgumentException("Wand control requires a held wand");
+        ThaumcraftReflection.bindPlayer(packet,player,"Wand control");
+        if(focusChange) {
+            if((boolean)item.getClass().getMethod("isSceptre",loader.loadClass("net.minecraft.item.ItemStack")).invoke(item,held))throw new IllegalArgumentException("Sceptres cannot equip foci");
+            String focus=(String)declared(packet,"focus");
+            if(focus==null||focus.length()>256||!focus.equals("REMOVE")&&!ThaumcraftWandFocus.available(loader,player).containsKey(focus))throw new IllegalArgumentException("Focus is not in the player's inventory");
+        }else if(declaredField(packet,"key").getByte(packet)!=1)throw new IllegalArgumentException("Unsupported wand key");
+    }
+    /** Bonus availability is authoritative; client booleans cannot grant free points. */
+    private static void validateCombination(Object packet,Object player,Object tile) throws Exception {
+        Object bonus=tile.getClass().getField("bonusAspects").get(tile);
+        var amount=bonus.getClass().getMethod("getAmount",player.getClass().getClassLoader().loadClass("thaumcraft.api.aspects.Aspect"));
+        for(int index=1;index<=2;index++) {
+            Object aspect=declared(packet,"aspect"+index);
+            if(aspect==null)throw new IllegalArgumentException("Unknown research aspect");
+            declaredField(packet,"ab"+index).setBoolean(packet,(int)amount.invoke(bonus,aspect)>0);
         }
-        if(type.equals("thaumcraft.common.lib.network.playerdata.PacketAspectPlaceToServer")) {
-            Object tile=target(packet,player,device);
-            validatePlacement(packet,player,tile);
-            return true;
-        }
-        if(type.equals("thaumcraft.common.lib.network.playerdata.PacketPlayerCompleteToServer")) {
-            validateBookCompletion(packet,player);
-            return true;
-        }
-        return false;
     }
     /** The Thaumonomicon's purchase/create-note request: bound to the authenticated player and a real research. */
     private static void validateBookCompletion(Object packet,Object player) throws Exception {
-        var loader=player.getClass().getClassLoader();
-        int type=field(packet,"type").getByte(packet);
+        int type=declaredField(packet,"type").getByte(packet);
         if(type!=0&&type!=1)throw new IllegalArgumentException("Unsupported research completion kind");
-        String username=(String)field(packet,"username").get(packet);
-        if(!player.getClass().getMethod("func_70005_c_").invoke(player).equals(username))throw new IllegalArgumentException("Research completion targets another player");
-        var worldType=loader.loadClass("net.minecraft.world.World");
-        Object world=loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p").get(player);
-        Object provider=worldType.getField("field_73011_w").get(world);
-        if(field(packet,"dim").getInt(packet)!=provider.getClass().getField("field_76574_g").getInt(provider))throw new IllegalArgumentException("Research completion targets another dimension");
-        String key=(String)field(packet,"key").get(packet);
-        if(key==null||loader.loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class).invoke(null,key)==null)throw new IllegalArgumentException("Research completion targets unknown research");
+        if(!LegacyObjects.playerName(player).equals(declared(packet,"username")))throw new IllegalArgumentException("Research completion targets another player");
+        ThaumcraftReflection.requireSameDimension(packet,player,"Research completion");
+        String key=(String)declared(packet,"key");
+        var research=player.getClass().getClassLoader().loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class);
+        if(key==null||research.invoke(null,key)==null)throw new IllegalArgumentException("Research completion targets unknown research");
     }
     private static Object target(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
         if(device==null||!device.mod().equals("Thaumcraft")||device.id()!=10||device.inventory())throw new IllegalArgumentException("Research action requires the open research table");
-        for(String axis:new String[]{"x","y","z"}) {
-            int expected=switch(axis){case "x"->device.x();case "y"->device.y();default->device.z();};
-            if(field(packet,axis).getInt(packet)!=expected)throw new IllegalArgumentException("Research action targets another table");
-        }
-        var loader=player.getClass().getClassLoader();var worldType=loader.loadClass("net.minecraft.world.World");
-        Object world=loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p").get(player);
-        Object provider=worldType.getField("field_73011_w").get(world);
-        if(field(packet,"dim").getInt(packet)!=provider.getClass().getField("field_76574_g").getInt(provider))throw new IllegalArgumentException("Research action targets another dimension");
-        field(packet,"playerid").setInt(packet,(int)player.getClass().getMethod("func_145782_y").invoke(player));
-        Object tile=worldType.getMethod("func_147438_o",int.class,int.class,int.class).invoke(world,device.x(),device.y(),device.z());
+        if(declaredField(packet,"x").getInt(packet)!=device.x()||declaredField(packet,"y").getInt(packet)!=device.y()||declaredField(packet,"z").getInt(packet)!=device.z())
+            throw new IllegalArgumentException("Research action targets another table");
+        ThaumcraftReflection.bindPlayer(packet,player,"Research action");
+        Object world=LegacyObjects.world(player);
+        Object tile=world.getClass().getClassLoader().loadClass("net.minecraft.world.World").getMethod("func_147438_o",int.class,int.class,int.class).invoke(world,device.x(),device.y(),device.z());
         if(tile==null||!tile.getClass().getName().equals("thaumcraft.common.tiles.TileResearchTable"))throw new IllegalArgumentException("Research table no longer exists");
         return tile;
     }
     private static void validatePlacement(Object packet,Object player,Object tile) throws Exception {
         var loader=player.getClass().getClassLoader();
-        Object[] contents=(Object[])tile.getClass().getField("contents").get(tile);
-        Object note=contents[1];
-        var stackType=loader.loadClass("net.minecraft.item.ItemStack");
-        Object item=note==null?null:stackType.getMethod("func_77973_b").invoke(note);
+        Object note=((Object[])tile.getClass().getField("contents").get(tile))[1];
+        Object item=LegacyObjects.item(note);
         if(item==null||!loader.loadClass("thaumcraft.common.items.ItemResearchNotes").isInstance(item))throw new IllegalArgumentException("Research table has no editable note");
+        var stackType=loader.loadClass("net.minecraft.item.ItemStack");
         if((int)stackType.getMethod("func_77960_j").invoke(note)>=64)throw new IllegalArgumentException("Research note is already complete");
         Object data=loader.loadClass("thaumcraft.common.lib.research.ResearchManager").getMethod("getData",stackType).invoke(null,note);
         if(data==null)throw new IllegalArgumentException("Research note has no original data");
-        byte q=field(packet,"q").getByte(packet),r=field(packet,"r").getByte(packet);
-        Object hex=loader.loadClass("thaumcraft.common.lib.utils.HexUtils$Hex").getConstructor(int.class,int.class).newInstance((int)q,(int)r);
+        int q=declaredField(packet,"q").getByte(packet),r=declaredField(packet,"r").getByte(packet);
+        Object hex=loader.loadClass("thaumcraft.common.lib.utils.HexUtils$Hex").getConstructor(int.class,int.class).newInstance(q,r);
         var entries=(java.util.Map<?,?>)data.getClass().getField("hexEntries").get(data);
         if(!entries.containsKey(hex.toString()))throw new IllegalArgumentException("Research note has no such hex");
     }
-    private static Field field(Object value,String name) throws Exception {var field=value.getClass().getDeclaredField(name);field.setAccessible(true);return field;}
 }

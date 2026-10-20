@@ -1,6 +1,8 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
+import com.mojang.logging.LogUtils;
 import github.com.gengyoubo.mfcl.bridge.*;
+import github.com.gengyoubo.mfcl.client.LegacyKeyMappings;
 import github.com.gengyoubo.mfcl.content.*;
 import net.minecraft.client.*;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,8 +22,7 @@ final class ThaumcraftWandControls {
         MinecraftForge.EVENT_BUS.addListener((InputEvent.Key event)->{
             var mc=Minecraft.getInstance();if(event.getAction()!=GLFW.GLFW_PRESS||mc.player==null||mc.screen!=null)return;
             // TC4 polls these from its client PlayerTickEvent, which the host does not run; the press itself is handled here.
-            var focusKey=github.com.gengyoubo.mfcl.client.LegacyKeyMappings.find(FOCUS);var modeKey=github.com.gengyoubo.mfcl.client.LegacyKeyMappings.find(MODE);
-            boolean focus=focusKey!=null&&focusKey.matches(event.getKey(),event.getScanCode()),mode=modeKey!=null&&modeKey.matches(event.getKey(),event.getScanCode());
+            boolean focus=pressed(FOCUS,event),mode=!focus&&pressed(MODE,event);
             if(!focus&&!mode)return;
             try{
                 var content=ModernContentBridge.active();var held=content.renderSnapshot(mc.player.getMainHandItem());
@@ -31,8 +32,11 @@ final class ThaumcraftWandControls {
                     if(mc.options.keySwapOffhand.matches(event.getKey(),event.getScanCode()))while(mc.options.keySwapOffhand.consumeClick()){}
                     open(services);
                 }else send(services,null);
-            }catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL wand control failed",failure);}
+            }catch(Exception failure){LogUtils.getLogger().error("MFCL wand control failed",failure);}
         });
+    }
+    private static boolean pressed(String binding,InputEvent.Key event){
+        var key=LegacyKeyMappings.find(binding);return key!=null&&key.matches(event.getKey(),event.getScanCode());
     }
     static void open(LegacyServices services) throws Exception {
         var mc=Minecraft.getInstance();var choices=services.items().inLegacy(()->{
@@ -52,8 +56,7 @@ final class ThaumcraftWandControls {
             var loader=services.loader();var player=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
             Object request=focus==null?loader.loadClass("thaumcraft.common.lib.network.misc.PacketItemKeyToServer").getConstructor(player,int.class).newInstance(actor,1)
                     :loader.loadClass("thaumcraft.common.lib.network.misc.PacketFocusChangeToServer").getConstructor(player,String.class).newInstance(actor,focus);
-            Object wrapper=loader.loadClass("thaumcraft.common.lib.network.PacketHandler").getField("INSTANCE").get(null);
-            return LegacyPackets.encode(wrapper,request,"SERVER");
+            return LegacyPackets.encode(ThaumcraftReflection.packetHandler(loader),request,"SERVER");
         });ScanSyncChannel.sendLegacyPacket(packet);
     }
     private static final class Selector extends Screen {
@@ -66,7 +69,7 @@ final class ThaumcraftWandControls {
             if(page>0)addRenderableWidget(Button.builder(Component.literal("←"),button->{page--;rebuildWidgets();}).bounds(width/2-110,height-28,60,20).build());
             if(end<choices.size())addRenderableWidget(Button.builder(Component.literal("→"),button->{page++;rebuildWidgets();}).bounds(width/2+50,height-28,60,20).build());
         }
-        private void select(String key){try{send(services,key);onClose();}catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL focus selection failed",failure);}}
+        private void select(String key){try{send(services,key);onClose();}catch(Exception failure){LogUtils.getLogger().error("MFCL focus selection failed",failure);}}
         @Override public boolean isPauseScreen(){return false;}
         @Override public void render(GuiGraphics graphics,int x,int y,float partial){renderBackground(graphics);super.render(graphics,x,y,partial);graphics.drawCenteredString(font,title,width/2,14,0xffffff);}
     }

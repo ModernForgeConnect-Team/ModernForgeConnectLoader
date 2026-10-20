@@ -1,9 +1,12 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
+import com.mojang.logging.LogUtils;
 import github.com.gengyoubo.mfcl.bridge.*;
 import github.com.gengyoubo.mfcl.client.LiveLegacyItemCapture;
 import github.com.gengyoubo.mfcl.content.ModernContentBridge;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import java.util.*;
 
 /** TC4 chooses when its original scanner renderer needs the current target/knowledge. */
@@ -22,20 +25,21 @@ final class ThaumcraftDynamicItems {
                 var mc = Minecraft.getInstance();
                 if (mc.level == null || mc.player == null) return Optional.empty();
                 // Client world reads give post-1.7 blocks a stand-in; the lens must not scan those either.
-                if (mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult hit && hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+                if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
                     try { content.legacyBlock(mc.level.getBlockState(hit.getBlockPos())); }
-                    catch (UnmappedLegacyBlockException unmapped) {
-                        if (unmappedTargets.add(unmapped.getMessage())) com.mojang.logging.LogUtils.getLogger().warn("MFCL TC4 scanner overlay unavailable: {}", unmapped.getMessage());
-                        return Optional.empty();
-                    }
+                    catch (UnmappedLegacyBlockException unmapped) { return unavailable(unmapped); }
                 }
                 try { return Optional.of(LiveLegacyItemCapture.firstPerson(content, stack)); }
                 catch (Exception failure) {
                     var unmapped = UnmappedLegacyBlockException.find(failure);
                     if (unmapped == null) throw failure;
-                    if (unmappedTargets.add(unmapped.getMessage())) com.mojang.logging.LogUtils.getLogger().warn("MFCL TC4 scanner overlay unavailable: {}", unmapped.getMessage());
-                    return Optional.empty(); // Keep the frozen idle lens; never invent aspects for a post-1.7 block.
+                    return unavailable(unmapped);
                 }
+            }
+            /** Keep the frozen idle lens; never invent aspects for a post-1.7 block. */
+            private Optional<LegacyDynamicItems.Drawing> unavailable(UnmappedLegacyBlockException unmapped) {
+                if (unmappedTargets.add(unmapped.getMessage())) LogUtils.getLogger().warn("MFCL TC4 scanner overlay unavailable: {}", unmapped.getMessage());
+                return Optional.empty();
             }
         });
     }

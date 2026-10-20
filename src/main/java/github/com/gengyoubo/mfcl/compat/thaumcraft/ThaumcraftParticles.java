@@ -1,6 +1,5 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
-import com.mojang.logging.LogUtils;
 import github.com.gengyoubo.mfcl.bridge.LegacyIconResolver;
 import github.com.gengyoubo.mfcl.bridge.LegacyServices;
 import github.com.gengyoubo.mfcl.bridge.LegacyVertexStream;
@@ -8,6 +7,7 @@ import github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics;
 import github.com.gengyoubo.mfcl.client.LegacyBlockEntityRenderer;
 import github.com.gengyoubo.mfcl.content.ModernContentBridge;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -21,7 +21,7 @@ import net.minecraftforge.event.TickEvent;
  * onRenderWorldLast inside a capture frame each render, replayed like any other original world geometry.
  */
 final class ThaumcraftParticles {
-    private static boolean reported;
+    private static final AtomicBoolean REPORTED = new AtomicBoolean();
     private ThaumcraftParticles() {}
 
     static void install(LegacyServices services) {
@@ -75,7 +75,7 @@ final class ThaumcraftParticles {
     private static void guard(Work work) {
         try { work.run(); }
         catch (Exception | LinkageError failure) {
-            if (!reported) { reported = true; LogUtils.getLogger().error("MFCL TC4 particle engine bridge failed; later failures are not logged", failure); }
+            ThaumcraftReflection.reportOnce(REPORTED, "MFCL TC4 particle engine bridge failed; later failures are not logged", failure);
         }
     }
 }

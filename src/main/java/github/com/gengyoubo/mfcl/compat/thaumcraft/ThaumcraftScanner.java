@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.compat.thaumcraft;
 import github.com.gengyoubo.mfcl.bridge.*;
 import java.lang.reflect.Field;
 import java.util.Objects;
+import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declared;
 
 /**
  * TC4's thaumometer. Its use tick sends {@code PacketScannedToServer} when the original scan completes; the server
@@ -19,8 +20,8 @@ final class ThaumcraftScanner implements LegacyHeldScanners.Scanner {
     @Override public boolean completion(Object packet) { return packet.getClass().getName().equals(REQUEST); }
 
     @Override public LegacyItemUse.Scan read(Object packet) throws Exception {
-        return new LegacyItemUse.Scan((byte) field(packet, "type"), (int) field(packet, "id"), (int) field(packet, "md"),
-                (int) field(packet, "entityid"), (String) field(packet, "phenomena"));
+        return new LegacyItemUse.Scan((byte) declared(packet, "type"), (int) declared(packet, "id"), (int) declared(packet, "md"),
+                (int) declared(packet, "entityid"), (String) declared(packet, "phenomena"));
     }
 
     /** The package-private {@code startScan} the thaumometer records while a scan is in progress. */
@@ -48,8 +49,7 @@ final class ThaumcraftScanner implements LegacyHeldScanners.Scanner {
         Object entity = type.getField("entity").get(scan);
         boolean same = type.getField("type").getByte(scan) == reported.type() && type.getField("id").getInt(scan) == reported.id()
                 && type.getField("meta").getInt(scan) == reported.meta() && Objects.equals(type.getField("phenomena").get(scan), reported.phenomena())
-                && (reported.type() != 2 || entity != null
-                    && (int) loader.loadClass("net.minecraft.entity.Entity").getMethod("func_145782_y").invoke(entity) == reported.entityId());
+                && (reported.type() != 2 || entity != null && LegacyObjects.entityId(entity) == reported.entityId());
         if (!same) return false;
         // The client-supplied prefix is not trusted; the thaumometer itself always completes with "@".
         return (boolean) loader.loadClass("thaumcraft.common.lib.research.ScanManager")
@@ -59,16 +59,10 @@ final class ThaumcraftScanner implements LegacyHeldScanners.Scanner {
 
     /** Original research, aspect and scanned-state packets for one player. */
     static void synchronize(ClassLoader loader, Object player) throws Exception {
-        Object wrapper = loader.loadClass("thaumcraft.common.lib.network.PacketHandler").getField("INSTANCE").get(null);
+        Object wrapper = ThaumcraftReflection.packetHandler(loader);
         var send = wrapper.getClass().getMethod("sendTo", loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessage"), loader.loadClass("net.minecraft.entity.player.EntityPlayerMP"));
         var playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         for (String name : new String[]{"PacketSyncResearch", "PacketSyncAspects", "PacketSyncScannedItems", "PacketSyncScannedEntities", "PacketSyncScannedPhenomena"})
             send.invoke(wrapper, loader.loadClass("thaumcraft.common.lib.network.playerdata." + name).getConstructor(playerType).newInstance(player), player);
-    }
-
-    private static Object field(Object packet, String name) throws Exception {
-        var field = packet.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        return field.get(packet);
     }
 }
