@@ -92,9 +92,17 @@ public final class HostRepresentations implements LegacyHostRepresentations {
             var loader = content.services().loader();
             var list = loader.loadClass("net.minecraft.entity.EntityList");
             var names = (Map<String, Class<?>>) list.getField("field_75625_b").get(null);
+            // 1.7.10 EntityList names that differ from the host ID with underscores removed.
             String requested = Map.ofEntries(Map.entry("experience_orb", "XPOrb"), Map.entry("zombified_piglin", "PigZombie"),
                     Map.entry("mooshroom", "MushroomCow"), Map.entry("snow_golem", "SnowMan"), Map.entry("iron_golem", "VillagerGolem"),
-                    Map.entry("item", "Item"), Map.entry("tnt", "PrimedTnt"), Map.entry("falling_block", "FallingSand"))
+                    Map.entry("item", "Item"), Map.entry("tnt", "PrimedTnt"), Map.entry("falling_block", "FallingSand"),
+                    Map.entry("horse", "EntityHorse"), Map.entry("magma_cube", "LavaSlime"), Map.entry("wither", "WitherBoss"),
+                    Map.entry("ocelot", "Ozelot"), Map.entry("end_crystal", "EnderCrystal"), Map.entry("ender_pearl", "ThrownEnderpearl"),
+                    Map.entry("eye_of_ender", "EyeOfEnderSignal"), Map.entry("potion", "ThrownPotion"), Map.entry("experience_bottle", "ThrownExpBottle"),
+                    Map.entry("firework_rocket", "FireworksRocketEntity"), Map.entry("minecart", "MinecartRideable"),
+                    Map.entry("chest_minecart", "MinecartChest"), Map.entry("furnace_minecart", "MinecartFurnace"),
+                    Map.entry("tnt_minecart", "MinecartTNT"), Map.entry("hopper_minecart", "MinecartHopper"),
+                    Map.entry("spawner_minecart", "MinecartSpawner"), Map.entry("command_block_minecart", "MinecartCommandBlock"))
                     .getOrDefault(name.getPath(), name.getPath().replace("_", ""));
             if (name.getNamespace().equals("minecraft")) for (var entry : names.entrySet()) {
                 if (!entry.getKey().equalsIgnoreCase(requested)) continue;
