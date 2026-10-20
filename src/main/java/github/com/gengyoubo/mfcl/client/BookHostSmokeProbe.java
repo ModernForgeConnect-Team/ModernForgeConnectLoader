@@ -15,6 +15,7 @@ final class BookHostSmokeProbe {
     private final ModernContentBridge bridge;
     private int stage,frames;
     private java.util.concurrent.CompletableFuture<?> pending;
+    private BookPrerequisiteHostAcceptance prerequisiteAcceptance;
     private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
     private final Map<String,Object> proof=new LinkedHashMap<>();
     private final Set<String> playedSounds=java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -70,7 +71,10 @@ final class BookHostSmokeProbe {
             } else if(stage==5&&mc.screen==null) {
                 if(!playedSounds.contains("thaumcraft:wand")||!playedSounds.contains("thaumcraft:cameraclack"))throw new IllegalStateException("Server/GUI sound did not reach an audio channel: "+playedSounds);
                 proof.put("serverSoundBroadcastPlayed",true);proof.put("originalGuiClickSoundPlayed",true);
-                proof.put("originalCloseKey",true);proof.put("status","PASS");finish(mc,null);
+                proof.put("originalCloseKey",true);
+                prerequisiteAcceptance=new BookPrerequisiteHostAcceptance(bridge,proof);stage=6;
+            } else if(stage==6&&prerequisiteAcceptance.tick(mc)) {
+                proof.put("status","PASS");finish(mc,null);
             }
         } catch(Throwable failure){finish(mc,failure);}
     }

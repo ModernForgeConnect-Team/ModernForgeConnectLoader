@@ -69,6 +69,7 @@ public final class ModernContentBridge {
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
         LegacyBiomePack.generate(pack,services.biomes());
+        LegacyDimensionPack.generate(pack,services.dimensions());
         for(var recipe:crafting.definitions())pack.craftingRecipe(recipe.hash());
         for(var recipe:crafting.smelting())pack.smeltingRecipe(recipe.hash());
         creative = new CreativeTabBridge(this);
@@ -380,7 +381,8 @@ public final class ModernContentBridge {
         lines.add(Component.literal("1.7.10 · " + entry.key() + " @ " + metadata(stack)).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
         if (entry.blockKey() != null && blocks.get(entry.blockKey()) instanceof MirroredBlock block) {
             if (!canPlace(block.entry, metadata(stack))) lines.add(Component.translatable("mfcl.content.special_block_pending").withStyle(net.minecraft.ChatFormatting.YELLOW));
-            else if (block.entry.tileEntity() && (block.entry.renderType() == 0 || blockRendering.requiresLogic(block.entry.key(),metadata(stack))))
+            // Only runtime evidence: original tiles tick and interact; a warning without a failure would be a false alarm.
+            else if (block.entry.tileEntity() && LegacyBlockEntity.logicPaused(block.entry.key(),metadata(stack)))
                 lines.add(Component.translatable("mfcl.content.machine_logic_pending").withStyle(net.minecraft.ChatFormatting.YELLOW));
         }
     }
@@ -479,6 +481,7 @@ public final class ModernContentBridge {
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
+        @Override public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) { return useLegacyItem(context, true); }
         @Override public InteractionResult useOn(UseOnContext context) {
             // A held scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
             if(services.scanners().forItem(entry.key()).isPresent())return InteractionResult.PASS;
@@ -604,6 +607,7 @@ public final class ModernContentBridge {
         MirroredBlockItem(MirroredBlock block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
+        @Override public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) { return useLegacyItem(context, true); }
         @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
         }
@@ -613,6 +617,8 @@ public final class ModernContentBridge {
                 return InteractionResult.FAIL;
             }
             if (!context.getItemInHand().isDamageableItem() && (metadata(context.getItemInHand()) < 0 || metadata(context.getItemInHand()) > 15)) return InteractionResult.FAIL;
+            // ItemBlock predicts placement on the client; authoritative world mutation runs on the server.
+            if (context.getLevel().isClientSide) return InteractionResult.SUCCESS;
             return useLegacyItem(context);
         }
         @Override public InteractionResult place(BlockPlaceContext context) {
@@ -702,6 +708,7 @@ public final class ModernContentBridge {
                 if(player instanceof net.minecraft.server.level.ServerPlayer server)for(var menu:pendingMenus)LegacyDeviceMenu.open(server,ModernContentBridge.this,menu);
                 return outcome;
             } catch (Exception failure) {
+                LegacyBlockEntity.logicFailed(entry.key(),state.getValue(METADATA));
                 LogUtils.getLogger().error("MFCL original block interaction failed for {} at {}",entry.key(),pos,failure);
                 player.displayClientMessage(Component.literal("此设备的部分交互尚未支持。"),true); return InteractionResult.FAIL;
             }
@@ -841,31 +848,44 @@ public final class ModernContentBridge {
         };
     }
     private InteractionResult useLegacyItem(UseOnContext context) {
+        return useLegacyItem(context, false);
+    }
+    private InteractionResult useLegacyItem(UseOnContext context, boolean first) {
         if (context.getPlayer() == null) return InteractionResult.PASS;
-        if (context.getLevel().isClientSide) return InteractionResult.SUCCESS;
+        // Some old first-use handlers write blocks even on a remote world (e.g. TC4 wooden tables).
+        // The native use-on packet still runs this hook on the server; wait for its authoritative update.
+        if (first && context.getLevel().isClientSide) return InteractionResult.PASS;
         var level = context.getLevel(); var player = context.getPlayer();
         var stack = context.getItemInHand(); var pos = context.getClickedPos(); var hit = context.getClickLocation().subtract(pos.getX(),pos.getY(),pos.getZ());
         try (var transaction = new PlacementTransaction(level)) {
+            transaction.record(pos);
             var actor = new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
             // The whole main inventory is exposed: ItemEssence hands the filled phial back through addItemStackToInventory.
             int selected = player.getInventory().selected;
             var before = hostInventory(player);
-            var result = new LegacyItemPlacement(services).use(services.worlds().bound(level),actor,snapshot(stack),before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z);
-            if (!result.used()) return InteractionResult.PASS;
+            var held = snapshot(stack);
+            if (context.getHand() == net.minecraft.world.InteractionHand.OFF_HAND) before.set(selected,held);
+            var callback = new LegacyItemPlacement(services);
+            var result = first
+                    ? callback.useFirst(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z)
+                    : callback.use(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z);
             transaction.commit();
+            if (level.isClientSide) return result.used() ? InteractionResult.SUCCESS : InteractionResult.PASS;
             for (int slot = 0; slot < result.inventory().size() && slot < 36; slot++) {
                 if (slot == selected || sameLegacy(before.get(slot), result.inventory().get(slot))) continue; // The held stack is applied below.
                 try { player.getInventory().setItem(slot, result.inventory().get(slot) == null ? ItemStack.EMPTY : gameplayStack(result.inventory().get(slot))); }
                 catch (Exception unmapped) { LogUtils.getLogger().warn("MFCL cannot map original inventory change in slot {}: {}", slot, result.inventory().get(slot), unmapped); }
             }
-            if (!player.getAbilities().instabuild) {
-                if (result.stack() == null) stack.setCount(0);
+            if (!sameLegacy(held,result.stack())) {
+                if (result.stack() == null) { if (first || !player.getAbilities().instabuild) stack.setCount(0); }
                 else {
-                    stack.setCount(result.stack().count());
-                    if (!result.stack().tag().equals(snapshot(stack).tag())) player.setItemInHand(context.getHand(),mapStack(result.stack()));
+                    var updated = gameplayStack(result.stack());
+                    if (!first && player.getAbilities().instabuild) updated.setCount(stack.getCount());
+                    if (ItemStack.isSameItemSameTags(stack,updated)) stack.setCount(updated.getCount());
+                    else { stack.setCount(0); player.setItemInHand(context.getHand(),updated); }
                 }
             }
-            return InteractionResult.CONSUME;
+            return result.used() ? InteractionResult.CONSUME : InteractionResult.PASS;
         } catch (Exception failure) {
             LogUtils.getLogger().error("MFCL original item placement failed for {} at {}", BuiltInRegistries.ITEM.getKey(stack.getItem()),pos,failure);
             player.displayClientMessage(Component.translatable("mfcl.content.placement_failed"),true);

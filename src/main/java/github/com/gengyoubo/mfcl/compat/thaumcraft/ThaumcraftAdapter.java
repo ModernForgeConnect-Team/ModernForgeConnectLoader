@@ -11,6 +11,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     @Override public void beforeBoot(ClassLoader loader) throws Exception {
         loader.getClass().getMethod("registerBytecodeAdapter",String.class).invoke(loader,
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter");
+        loader.getClass().getMethod("registerBytecodeAdapter",String.class).invoke(loader,
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter");
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
         this.services = services;
@@ -21,6 +23,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         services.biomes().register("thaumcraft:tainted_land",generation.getField("biomeTaint").get(null),config.getField("biomeTaintWeight").getInt(null));
         services.biomes().register("thaumcraft:eerie",generation.getField("biomeEerie").get(null),0);
         services.biomes().register("thaumcraft:eldritch",generation.getField("biomeEldritchLands").get(null),0);
+        ThaumcraftOuterLands.install(services);
         LegacyPackets.allowServer(loader,ThaumcraftDevicePackets::prepare);
         services.playerState().register(new LegacyPlayerState.Hooks() {
             @Override public String id() { return "thaumcraft4:knowledge"; }
@@ -31,7 +34,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
             @Override public void synchronize(Object player) throws Exception { ThaumcraftScanner.synchronize(loader, player); }
         });
         services.scanners().register(new ThaumcraftScanner(loader));
-        return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer");
+        return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {
         ThaumcraftDynamicItems.install(services);
@@ -44,6 +47,13 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
             // TC normally initializes this in its old HUD event before research GUIs render notifications.
             var notifications=renderer.getClass().getField("notifyHandler");
             if(notifications.get(renderer)==null)notifications.set(renderer,loader.loadClass("thaumcraft.client.lib.REHNotifyHandler").getConstructor().newInstance());
+            // The old render-tick event normally creates this before PacketResearchComplete uses it.
+            // A missing popup aborts that handler before it updates the book's prerequisite snapshot.
+            var popup=loader.loadClass("thaumcraft.client.lib.ClientTickEventsFML").getField("researchPopup");
+            if(popup.get(null)==null){
+                var minecraft=loader.loadClass("net.minecraft.client.Minecraft");
+                popup.set(null,loader.loadClass("thaumcraft.client.gui.GuiResearchPopup").getConstructor(minecraft).newInstance(minecraft.getMethod("func_71410_x").invoke(null)));
+            }
             return null;
         });}catch(Exception failure){throw new IllegalStateException("Cannot initialize original TC4 GUI notifications",failure);}
     }

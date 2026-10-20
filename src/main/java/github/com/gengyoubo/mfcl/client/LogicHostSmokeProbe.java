@@ -27,6 +27,7 @@ final class LogicHostSmokeProbe {
     private CompletableFuture<?> pending;
     private BlockPos furnace, alembic, tube, jar, valve, crucible;
     private long started;
+    private boolean wandClientChecked;
     private final long deadline = System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
     private LogicHostSmokeProbe(ModernContentBridge bridge) { this.bridge = bridge; }
     static void install(ModernContentBridge bridge) { MinecraftForge.EVENT_BUS.addListener(new LogicHostSmokeProbe(bridge)::tick); }
@@ -49,6 +50,11 @@ final class LogicHostSmokeProbe {
             } else if (stage == 2 && pending.isDone()) {
                 if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) mc.setScreen(null);
                 pending.join();
+                if (!wandClientChecked) {
+                    if (!(mc.level.getBlockEntity(crucible) instanceof LegacyBlockEntity)) return;
+                    verifyClientWand(mc);
+                    wandClientChecked = true;
+                }
                 pending = server(mc,() -> {
                     var level = mc.getSingleplayerServer().overworld();
                     if (level.getGameTime()-started < 240) return false;
@@ -118,7 +124,7 @@ final class LogicHostSmokeProbe {
         player.setItemInHand(InteractionHand.MAIN_HAND,new ItemStack(Items.WATER_BUCKET));
         level.getBlockState(crucible).use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(crucible),Direction.UP,crucible,false));
         if (!player.getMainHandItem().is(Items.BUCKET) || player.getMainHandItem().getCount() != 1) throw new IllegalStateException("Crucible bucket exchange failed: "+player.getMainHandItem());
-        player.setItemInHand(InteractionHand.MAIN_HAND,ItemStack.EMPTY);
+        verifyServerWand(level,player);
         var before = bridge.services().tiles().save(furnaceTile.legacy()); var rollbackPos = furnace.north(2); var beforeState = level.getBlockState(rollbackPos);
         var oldWorld = bridge.services().worlds().bound(level);
         var blockRegistry = bridge.services().loader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
@@ -136,6 +142,62 @@ final class LogicHostSmokeProbe {
         proof.put("simulatedInventoryInsert",true); proof.put("originalInventorySideRules",true); proof.put("originalValveActivation",true);
         proof.put("crucibleBucketExchange",true); proof.put("failedCallbackInventoryAndWorldRollback",true); started = level.getGameTime();
     }
+    private ItemStack wand() {
+        var stack = bridge.declarations().tabs().stream().flatMap(tab -> tab.contents().stream()).filter(value -> value.key().equals("Thaumcraft:WandCasting")).findFirst().orElseThrow();
+        return bridge.stack(stack.key(),stack.metadata(),1,stack.tag());
+    }
+    private int water(Level level) throws Exception {
+        Object tile = ((LegacyBlockEntity)level.getBlockEntity(crucible)).legacy();
+        Object tank = tile.getClass().getField("tank").get(tile);
+        return (int)tank.getClass().getMethod("getFluidAmount").invoke(tank);
+    }
+    private void verifyServerWand(net.minecraft.server.level.ServerLevel level, net.minecraft.server.level.ServerPlayer player) throws Exception {
+        var target = crucible.east(2);
+        player.setItemInHand(InteractionHand.MAIN_HAND,wand());
+        level.setBlockAndUpdate(target,Blocks.CAULDRON.defaultBlockState());
+        var hit = new BlockHitResult(Vec3.atCenterOf(target),Direction.UP,target,false);
+        if (!player.gameMode.useItemOn(player,level,player.getMainHandItem(),InteractionHand.MAIN_HAND,hit).consumesAction()
+                || !bridge.legacyBlock(level.getBlockState(target)).equals(new HostWorldAccess.Block("Thaumcraft:blockMetalDevice",0)))
+            throw new IllegalStateException("Native wand use did not convert cauldron before block activation");
+        place(level,target,"Thaumcraft:blockTable",0);
+        if (!player.gameMode.useItemOn(player,level,player.getMainHandItem(),InteractionHand.MAIN_HAND,hit).consumesAction()
+                || !bridge.legacyBlock(level.getBlockState(target)).equals(new HostWorldAccess.Block("Thaumcraft:blockTable",15)))
+            throw new IllegalStateException("Native wand use did not convert the wooden table to an arcane workbench");
+        if (!player.getMainHandItem().isEmpty() || bridge.services().inventories().get(((LegacyBlockEntity)level.getBlockEntity(target)).legacy(),10) == null)
+            throw new IllegalStateException("Converting the wooden table did not transfer the held wand exactly once");
+        player.closeContainer();
+        level.removeBlock(target,false);
+        player.setItemInHand(InteractionHand.MAIN_HAND,wand());
+        player.teleportTo(crucible.getX()+.5,crucible.getY(),crucible.getZ()-2);
+        player.setYRot(0);player.setXRot(30);player.setShiftKeyDown(false);
+        // Warm the cached actor while standing, then change sneak state on the same player.
+        player.gameMode.useItem(player,level,player.getMainHandItem(),InteractionHand.MAIN_HAND);
+        if (water(level) != 1000) throw new IllegalStateException("Standing wand use emptied the crucible");
+        player.setShiftKeyDown(true);
+        player.gameMode.useItem(player,level,player.getMainHandItem(),InteractionHand.MAIN_HAND);
+        if (water(level) != 0) throw new IllegalStateException("Sneaking wand use did not empty the crucible through the cached actor");
+        player.setShiftKeyDown(false);
+        player.setItemInHand(InteractionHand.MAIN_HAND,new ItemStack(Items.WATER_BUCKET));
+        level.getBlockState(crucible).use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(crucible),Direction.UP,crucible,false));
+        player.setItemInHand(InteractionHand.MAIN_HAND,wand());
+        proof.put("nativeWandCauldronAndCraftingTableTriggers",true);
+        proof.put("wandSneakStateRefreshAndCrucibleEmptying",true);
+    }
+    private void verifyClientWand(Minecraft mc) throws Exception {
+        mc.player.setItemInHand(InteractionHand.MAIN_HAND,wand());
+        mc.player.setPos(crucible.getX()+.5,crucible.getY(),crucible.getZ()-2);
+        mc.player.setYRot(0);mc.player.setXRot(30);
+        var hit = new BlockHitResult(Vec3.atCenterOf(crucible),Direction.NORTH,crucible,false);
+        mc.player.input.shiftKeyDown = true;
+        mc.getConnection().send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(mc.player,net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.PRESS_SHIFT_KEY));
+        mc.getConnection().send(new net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(mc.player.getX(),mc.player.getY(),mc.player.getZ(),0,30,true));
+        if (mc.gameMode.useItemOn(mc.player,InteractionHand.MAIN_HAND,hit) != InteractionResult.PASS)
+            throw new IllegalStateException("Client item use swallowed the wand's held-use fallback");
+        mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);
+        mc.getConnection().send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(mc.player,net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.RELEASE_SHIFT_KEY));
+        mc.player.input.shiftKeyDown = false;
+        proof.put("clientSneakingWandItemFallthrough",true);
+    }
     private void verify(net.minecraft.server.level.ServerLevel level, boolean reloaded) throws Exception {
         var positions = List.of(furnace,alembic,tube,jar,valve,crucible);
         for (var pos : positions) {
@@ -150,6 +212,8 @@ final class LogicHostSmokeProbe {
         if (valveOld.getClass().getField("allowFlow").getBoolean(valveOld)) throw new IllegalStateException("Native redstone did not close the original valve");
         var heated = ((LegacyBlockEntity)level.getBlockEntity(crucible)).legacy();
         if (heated.getClass().getField("heat").getShort(heated) < 190) throw new IllegalStateException("Original crucible did not heat over native lava");
+        if (water(level) != 0) throw new IllegalStateException("Client wand click did not clear the server crucible");
+        proof.put("clientWandClickReachedServerCrucible",true);
         if (reloaded) proof.put("logicStateSurvivedReload",true);
         else {
             proof.put("nativeHopperToOriginalFurnace",true); proof.put("originalSmeltingAndEssentiaTransfer",true); proof.put("essentiaConserved",amount);

@@ -25,6 +25,7 @@ class GenericRuntimeIntegrationTest {
             assertTrue(result.get("genericContainerPlayerPotionStateVerified").getAsBoolean());
             assertTrue(result.get("genericItemUseCallbackVerified").getAsBoolean());
             assertTrue(result.get("genericReturnedStackAndFeedbackVerified").getAsBoolean());
+            assertTrue(result.get("genericPlayerDimensionRefreshVerified").getAsBoolean());
             assertTrue(result.get("genericLegacyProjectileAndInventoryVerified").getAsBoolean());
             assertTrue(result.get("genericWorldRayTraceVerified").getAsBoolean());
             assertTrue(result.get("genericPlayerDataBridgeVerified").getAsBoolean());

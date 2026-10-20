@@ -13,7 +13,6 @@ import java.util.*;
 public final class ClientWorldBridge {
     private static ClientWorldBridge active;
     private final LegacyServices services;
-    private final Map<String, Integer> dimensions = new HashMap<>(Map.of("minecraft:overworld", 0, "minecraft:the_nether", -1, "minecraft:the_end", 1));
     private Level current;
     private ClientWorldBridge(LegacyServices services) { this.services = services; }
     public static void install(LegacyServices services) {
@@ -38,7 +37,7 @@ public final class ClientWorldBridge {
             Object oldWorld = null;
             if (next != null) {
                 String dimension = next.dimension().location().toString();
-                int oldDimension = dimensions.computeIfAbsent(dimension, key -> dimensions.size() + 2);
+                int oldDimension = services.dimensions().legacyId(dimension);
                 oldWorld = services.worlds().bind(next, new HostWorldAccess() {
                     @Override public String dimensionKey() { return dimension; }
                     @Override public int legacyDimensionId() { return oldDimension; }
@@ -59,13 +58,26 @@ public final class ClientWorldBridge {
                     @Override public Block block(int x, int y, int z) {
                         var state = next.getBlockState(new BlockPos(x, y, z));
                         var content = github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
-                        if (content != null) return content.legacyBlock(state);
+                        if (content != null) {
+                            // Post-1.7 blocks (tuff, deepslate...) read as stand-ins like on the server, so TESRs that
+                            // look at neighbours (item shadows on the deconstruction table) keep rendering.
+                            var known = content.hostRepresentations().knownOpaque(state);
+                            if (known != null) return known;
+                            try { return content.legacyBlock(state); }
+                            catch (UnmappedLegacyBlockException absent) { return content.hostRepresentations().opaque(state); }
+                        }
                         if (!state.equals(state.getBlock().defaultBlockState())) throw new UnsupportedOperationException("Block state requires a legacy metadata mapping: " + state);
                         String key = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
                         if (key.equals("minecraft:grass_block")) key = "minecraft:grass";
                         return new Block(key, 0);
                     }
                     @Override public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new UnsupportedOperationException("Client world cannot change authoritative blocks"); }
+                    @Override public java.util.List<HostWorldAccess.Entity> players() {
+                        return next.players().stream().map(player -> github.com.gengyoubo.mfcl.content.HostEntityQueries.snapshot(next, player)).filter(java.util.Objects::nonNull).toList();
+                    }
+                    @Override public int light(int x, int y, int z) { return next.getMaxLocalRawBrightness(new BlockPos(x,y,z)); }
+                    @Override public int height(int x, int z) { return next.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z); }
+                    @Override public boolean canSeeSky(int x, int y, int z) { return next.canSeeSky(new BlockPos(x,y,z)); }
                     @Override public HostWorldAccess.Hit rayTrace(double sx, double sy, double sz, double ex, double ey, double ez) {
                         var from = new net.minecraft.world.phys.Vec3(sx, sy, sz); var to = new net.minecraft.world.phys.Vec3(ex, ey, ez);
                         var result = next.clip(new net.minecraft.world.level.ClipContext(from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, null));

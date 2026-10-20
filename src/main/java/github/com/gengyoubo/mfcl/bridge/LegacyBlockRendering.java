@@ -18,7 +18,6 @@ public final class LegacyBlockRendering {
     private final LegacyServices services;
     private final LegacyTileRendering tiles;
     private final Map<String, Set<Integer>> tileSupported = new LinkedHashMap<>();
-    private final Map<String, Set<Integer>> pendingLogic = new LinkedHashMap<>();
     private final List<LegacyVertexStream.Primitive> tilePreviews = new ArrayList<>();
     private final Class<?> blockType, accessType, rendererType;
     private final Object registry, rendering, tessellator;
@@ -65,8 +64,6 @@ public final class LegacyBlockRendering {
                         boolean hasTile = false;
                         try (var scene = new LegacyBlockScene(services, view)) {
                             Object tile = loader.loadClass("net.minecraft.world.World").getMethod("func_147438_o", int.class,int.class,int.class).invoke(scene.world(),0,0,0);
-                            if (tile != null && (boolean)loader.loadClass("net.minecraft.tileentity.TileEntity").getMethod("canUpdate").invoke(tile))
-                                pendingLogic.computeIfAbsent(declaration.key(), ignored -> new TreeSet<>()).add(meta);
                             if (tiles.hasRenderer(tile)) {
                                 var preview = tiles.capture(tile, 0);
                                 tilePreviews.addAll(preview); hasTile = true;
@@ -94,7 +91,6 @@ public final class LegacyBlockRendering {
     }
     public boolean supports(String key, int metadata) { return supported.getOrDefault(key, Set.of()).contains(metadata); }
     public boolean hasTileRenderer(String key, int metadata) { return tileSupported.getOrDefault(key, Set.of()).contains(metadata); }
-    public boolean requiresLogic(String key, int metadata) { return pendingLogic.getOrDefault(key, Set.of()).contains(metadata); }
     public LegacyTileRendering tiles() { return tiles; }
     public List<LegacyVertexStream.Primitive> tilePreviews() { return List.copyOf(tilePreviews); }
     public Map<String, Set<Integer>> supported() { return Collections.unmodifiableMap(supported); }

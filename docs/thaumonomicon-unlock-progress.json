@@ -1,0 +1,17 @@
+{
+  "nativeRightClickOpenedOriginalBook": true,
+  "registeredResearchPacketDelivered": true,
+  "capturedCommands": 28,
+  "localizedResearchName": "矿石",
+  "originalResearchHoversChecked": 4,
+  "openedResearchKey": "ENCHANT",
+  "originalResearchEntryOpened": true,
+  "originalCategoryNavigation": true,
+  "serverSoundBroadcastPlayed": true,
+  "originalGuiClickSoundPlayed": true,
+  "originalCloseKey": true,
+  "unmetOriginalPrerequisiteRemainsLocked": "RESEARCHER2",
+  "originalCompletionPacketUnlocksDependentWithoutReopening": "RESEARCHER1 -\u003e RESEARCHER2",
+  "completedPrerequisiteSurvivesBookReopen": true,
+  "status": "PASS"
+}

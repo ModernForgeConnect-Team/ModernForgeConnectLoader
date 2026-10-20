@@ -39,6 +39,7 @@ public final class ClientContentBridge {
         else if (Boolean.getBoolean("mfcl.test.device")) DeviceHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.tooltip")) TooltipHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.api")) ApiHostSmokeProbe.install();
+        else if (Boolean.getBoolean("mfcl.test.outer")) OuterTravelSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.crafting")) CraftingHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.scanner")) ScannerHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.book")) BookHostSmokeProbe.install(bridge);

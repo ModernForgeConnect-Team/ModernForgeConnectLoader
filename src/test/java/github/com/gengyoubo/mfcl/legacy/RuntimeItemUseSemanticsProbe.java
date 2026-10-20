@@ -31,6 +31,12 @@ final class RuntimeItemUseSemanticsProbe {
         var first=bridge.rightClick(world,placer,input);Object actor=bridge.clientActor(world,placer,null);var returned=services.playerInventory().read(actor).get(0);
         if(!first.used()||!first.feedback().equals(List.of("used"))||returned==null||returned.metadata()!=1||returned.count()!=1||!returned.tag().contains("Revealed"))throw new AssertionError("Original returned stack/feedback was lost");
         bridge.rightClick(world,placer,returned);if(services.playerInventory().read(actor).get(0)!=null)throw new AssertionError("Consumed original item remained in the held slot");
+        var loader=services.loader();var dimension=loader.loadClass("net.minecraft.entity.Entity").getField("field_71093_bK");
+        Object provider=loader.loadClass("net.minecraft.world.World").getField("field_73011_w").get(world);
+        int expected=loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(provider);
+        dimension.setInt(actor,expected+13);
+        if(bridge.clientActor(world,placer,null)!=actor||dimension.getInt(actor)!=expected)throw new AssertionError("Reused player retained its previous dimension id");
+        report.put("genericPlayerDimensionRefreshVerified",true);
         report.put("genericReturnedStackAndFeedbackVerified",true);
     }
 }

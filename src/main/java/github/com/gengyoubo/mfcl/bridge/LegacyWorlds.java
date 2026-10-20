@@ -18,6 +18,7 @@ public final class LegacyWorlds implements AutoCloseable {
         final Map<java.util.UUID,Object> queried=new LinkedHashMap<>();
         final Map<java.util.UUID,HostWorldAccess.Entity> snapshots=new LinkedHashMap<>();
         boolean motionCapture;
+        long playersAt = Long.MIN_VALUE; List<Object> players = List.of();
         Binding(Object world, HostWorldAccess host, LegacyClientData items,LegacyBiomes biomes) { this.world = world; this.host = host; this.loader = items.loader(); this.items=items;this.biomes=biomes; owner = Thread.currentThread(); }
         void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Legacy world access must run on its host owner thread"); }
     }
@@ -53,22 +54,103 @@ public final class LegacyWorlds implements AutoCloseable {
         }
         Object world = allocate(facade);
         Class<?> providerType = loader.loadClass("net.minecraft.world.WorldProvider");
-        Object provider = loader.loadClass("net.minecraft.world.WorldProviderSurface").getConstructor().newInstance();
+        int dimension = host.legacyDimensionId();
+        // Dimensions an old mod registered itself (TC4's Outer Lands) keep their original provider: sky, spawn and chunk provider rules.
+        boolean original = dimension != 0 && dimension != -1 && dimension != 1
+                && (boolean) loader.loadClass("net.minecraftforge.common.DimensionManager").getMethod("isDimensionRegistered", int.class).invoke(null, dimension);
+        Object provider = original ? loader.loadClass("net.minecraftforge.common.DimensionManager").getMethod("createProviderFor", int.class).invoke(null, dimension)
+                : loader.loadClass("net.minecraft.world.WorldProviderSurface").getConstructor().newInstance();
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73011_w", provider);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72995_K", host.clientSide());
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
-        Object info = loader.loadClass("net.minecraft.world.storage.WorldInfo").getConstructor(loader.loadClass("net.minecraft.nbt.NBTTagCompound"))
-                .newInstance(loader.loadClass("net.minecraft.nbt.NBTTagCompound").getConstructor().newInstance());
+        // worldAccesses: allocated worlds skip field initializers, and spawnParticle/playSound iterate this list.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
+        // playerEntities: old code (eldritch lock messages...) reads it directly; it mirrors the host players, refreshed once per tick.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_73010_i", new AbstractList<Object>() {
+            @Override public Object get(int index) { return players(world).get(index); }
+            @Override public int size() { return players(world).size(); }
+        });
+        Object infoData = loader.loadClass("net.minecraft.nbt.NBTTagCompound").getConstructor().newInstance();
+        infoData.getClass().getMethod("func_74772_a", String.class, long.class).invoke(infoData, "RandomSeed", host.seed());
+        Object info = loader.loadClass("net.minecraft.world.storage.WorldInfo").getConstructor(loader.loadClass("net.minecraft.nbt.NBTTagCompound")).newInstance(infoData);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72986_A", info);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_96442_D", loader.loadClass("net.minecraft.scoreboard.Scoreboard").getConstructor().newInstance());
-        set(providerType, provider, "field_76574_g", host.legacyDimensionId());
+        if (host.legacySaveDirectory() != null) storage(world, host.legacySaveDirectory(), dimension);
+        set(providerType, provider, "field_76574_g", dimension);
+        if (original) providerType.getMethod("func_76558_a", loader.loadClass("net.minecraft.world.World")).invoke(provider, world);
         set(providerType, provider, "field_76579_a", world);
         var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
         return world;
     }
     public synchronized void unbind(Object hostIdentity) {
         Binding binding = worlds.get(hostIdentity);
-        if (binding != null) { binding.check(); worlds.remove(hostIdentity); DISPATCH.remove(binding.world); }
+        if (binding != null) {
+            binding.check(); worlds.remove(hostIdentity); DISPATCH.remove(binding.world);
+            var directory = binding.host.legacySaveDirectory();
+            if (directory != null && worlds.values().stream().noneMatch(other -> directory.equals(other.host.legacySaveDirectory()))) storages.remove(directory);
+        }
+    }
+    /** Old world lifecycle (WorldEvent.Load/Save) for adapters whose mods keep their own world files. */
+    public interface Lifecycle {
+        default void loaded(Object world, int dimension) throws Exception {}
+        default void saving(Object world, int dimension) throws Exception {}
+    }
+    private final List<Lifecycle> lifecycles = new java.util.concurrent.CopyOnWriteArrayList<>();
+    public void lifecycle(Lifecycle hooks) { lifecycles.add(Objects.requireNonNull(hooks)); }
+    // Not synchronized: inLegacy takes the runtime lock, which other threads hold while they look up bound worlds.
+    public void loaded(Object hostIdentity) throws Exception {
+        Object world = bound(hostIdentity); int dimension = binding(world).host.legacyDimensionId();
+        items.inLegacy(() -> { for (var hooks : lifecycles) hooks.loaded(world, dimension); return null; });
+    }
+    /** Writes old WorldSavedData (MapStorage, per-world storage) and runs adapter save hooks, as WorldServer.saveAllChunks did. */
+    public void save(Object hostIdentity) throws Exception {
+        Object world = bound(hostIdentity); int dimension = binding(world).host.legacyDimensionId();
+        items.inLegacy(() -> {
+            var type = loader.loadClass("net.minecraft.world.World"); var storage = loader.loadClass("net.minecraft.world.storage.MapStorage");
+            for (String field : List.of("field_72988_C", "perWorldStorage")) { Object data = type.getField(field).get(world); if (data != null) storage.getMethod("func_75744_a").invoke(data); }
+            for (var hooks : lifecycles) hooks.saving(world, dimension);
+            return null;
+        });
+    }
+    /** One shared MapStorage per save (1.7.10 WorldServerMulti reuses the overworld's), plus a per-dimension storage. */
+    private final Map<java.io.File, Object> storages = new HashMap<>();
+    private void storage(Object world, java.io.File directory, int dimension) throws Exception {
+        var storage = loader.loadClass("net.minecraft.world.storage.MapStorage"); var handler = loader.loadClass("net.minecraft.world.storage.ISaveHandler");
+        Object shared = storages.get(directory);
+        if (shared == null) storages.put(directory, shared = storage.getConstructor(handler).newInstance(saveHandler(directory, directory)));
+        var worldType = loader.loadClass("net.minecraft.world.World");
+        set(worldType, world, "field_73019_z", saveHandler(directory, directory));
+        set(worldType, world, "field_72988_C", shared);
+        set(worldType, world, "perWorldStorage", storage.getConstructor(handler).newInstance(saveHandler(directory, dimension == 0 ? directory : new java.io.File(directory, "DIM" + dimension))));
+    }
+    /** ISaveHandler answering only file locations; chunks and player files stay with the host. */
+    private Object saveHandler(java.io.File root, java.io.File data) throws Exception {
+        var type = loader.loadClass("net.minecraft.world.storage.ISaveHandler");
+        return Proxy.newProxyInstance(loader, new Class<?>[]{type}, (proxy, method, args) -> switch (method.getName()) {
+            case "func_75765_b" -> root;
+            case "func_75760_g" -> root.getName();
+            case "func_75758_b" -> { var folder = new java.io.File(data, "data"); folder.mkdirs(); yield new java.io.File(folder, args[0] + ".dat"); }
+            case "hashCode" -> System.identityHashCode(proxy);
+            case "equals" -> proxy == args[0];
+            case "toString" -> "MFCL legacy save " + root;
+            default -> null;
+        });
+    }
+    /** Host contract of a bound old world, for bridges invoked from rewritten original code. */
+    static HostWorldAccess access(Object world) { return binding(world).host; }
+    /** The bound server world of a legacy dimension on the calling thread (MinecraftServer.worldServerForDimension). */
+    static Object serverWorld(int dimension) {
+        synchronized (DISPATCH) {
+            for (var binding : DISPATCH.values())
+                if (!binding.host.clientSide() && binding.owner == Thread.currentThread() && binding.host.legacyDimensionId() == dimension) return binding.world;
+        }
+        return null;
+    }
+    /** Old getChunkFromChunkCoords: the host owns chunks, so callers (setChunkModified...) get a detached empty chunk. */
+    public static Object chunk(Object world, int x, int z) {
+        var binding = binding(world);
+        try { return binding.loader.loadClass("net.minecraft.world.chunk.Chunk").getConstructor(binding.loader.loadClass("net.minecraft.world.World"), int.class, int.class).newInstance(world, x, z); }
+        catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
     @Override public synchronized void close() { for (Binding binding : worlds.values()) DISPATCH.remove(binding.world); worlds.clear(); }
     private static Binding binding(Object world) {
@@ -152,6 +234,30 @@ public final class LegacyWorlds implements AutoCloseable {
     public static int power(Object world, int x, int y, int z, int side) { return binding(world).host.power(x,y,z,side); }
     public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
     public static List<Object> entities(Object world,Class<?> type,Object box) {return selectedEntities(world,type,box,null);}
+    private static Object mirrored(Binding binding,Object world,HostWorldAccess.Entity snapshot) throws Exception {
+        Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
+        if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
+        return entity;
+    }
+    private static List<Object> players(Object world) {
+        var binding=binding(world);long now=binding.host.gameTime();
+        if(binding.playersAt!=now||binding.motionCapture) try {
+            var result=new ArrayList<Object>();for(var snapshot:binding.host.players())result.add(mirrored(binding,world,snapshot));
+            binding.players=List.copyOf(result);binding.playersAt=now;
+        } catch(Exception failure){throw new IllegalStateException("Cannot mirror host players",failure);}
+        return binding.players;
+    }
+    /** Old World.newExplosion: the explosion happens in the host; the returned object only carries its parameters. */
+    public static Object explode(Object world,Object source,double x,double y,double z,float power,boolean fire,boolean smoking) {
+        var binding=binding(world);
+        try {
+            var type=binding.loader.loadClass("net.minecraft.world.Explosion");
+            Object explosion=type.getConstructor(binding.loader.loadClass("net.minecraft.world.World"),binding.loader.loadClass("net.minecraft.entity.Entity"),double.class,double.class,double.class,float.class).newInstance(world,source,x,y,z,power);
+            type.getField("field_77286_a").setBoolean(explosion,fire);type.getField("field_82755_b").setBoolean(explosion,smoking);
+            if(!binding.host.clientSide())binding.host.explode(x,y,z,power,fire,smoking);
+            return explosion;
+        } catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot forward original explosion",failure);}
+    }
     public static List<Object> selectedEntities(Object world,Class<?> type,Object box,Object selector) {
         var binding=binding(world);
         try {
@@ -159,8 +265,7 @@ public final class LegacyWorlds implements AutoCloseable {
             var snapshots=binding.host.entities(aabb.getField("field_72340_a").getDouble(box),aabb.getField("field_72338_b").getDouble(box),aabb.getField("field_72339_c").getDouble(box),aabb.getField("field_72336_d").getDouble(box),aabb.getField("field_72337_e").getDouble(box),aabb.getField("field_72334_f").getDouble(box));
             var result=new ArrayList<Object>();
             for(var snapshot:snapshots) {
-                Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
-                if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
+                Object entity=mirrored(binding,world,snapshot);
                 if(type.isInstance(entity)&&(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",binding.loader.loadClass("net.minecraft.entity.Entity")).invoke(selector,entity)))result.add(entity);
             }
             return result;
@@ -181,10 +286,51 @@ public final class LegacyWorlds implements AutoCloseable {
         try {
             for(var entry:binding.queried.entrySet()) {
                 var next=LegacyEntityAccess.motion(binding.loader,entry.getValue(),entry.getKey());var previous=binding.snapshots.get(entry.getKey());
-                if(next.x()!=previous.motionX()||next.y()!=previous.motionY()||next.z()!=previous.motionZ()||next.fallDistance()!=previous.fallDistance())binding.host.applyMotion(next);
+                if(next.x()!=previous.motionX()||next.y()!=previous.motionY()||next.z()!=previous.motionZ()||next.fallDistance()!=previous.fallDistance()||next.love()!=previous.love())binding.host.applyMotion(next);
             }
         }finally{clearEntityQueries(world);}
     }
+    public static int light(Object world, int x, int y, int z) { return binding(world).host.light(x,y,z); }
+    public static int height(Object world, int x, int z) { return binding(world).host.height(x,z); }
+    public static boolean canSeeSky(Object world, int x, int y, int z) { return binding(world).host.canSeeSky(x,y,z); }
+    /** getClosestPlayer: a negative range is unlimited in 1.7.10; host player queries are bounded to 256 blocks. */
+    public static Object closestPlayer(Object world, double x, double y, double z, double range) {
+        var binding = binding(world);
+        try {
+            double reach = range < 0 ? 256 : range;
+            Object box = binding.loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a",double.class,double.class,double.class,double.class,double.class,double.class)
+                    .invoke(null,x-reach,y-reach,z-reach,x+reach,y+reach,z+reach);
+            var entity = binding.loader.loadClass("net.minecraft.entity.Entity"); var distance = entity.getMethod("func_70092_e",double.class,double.class,double.class);
+            Object closest = null; double best = range < 0 ? Double.MAX_VALUE : range * range;
+            for (Object player : entities(world,binding.loader.loadClass("net.minecraft.entity.player.EntityPlayer"),box)) {
+                double squared = (double) distance.invoke(player,x,y,z);
+                if (squared < best) { best = squared; closest = player; }
+            }
+            return closest;
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException("Cannot query the closest host player", error); }
+    }
+    public static Object closestPlayerTo(Object world, Object entity, double range) {
+        try {
+            var type = binding(world).loader.loadClass("net.minecraft.entity.Entity");
+            return closestPlayer(world,type.getField("field_70165_t").getDouble(entity),type.getField("field_70163_u").getDouble(entity),type.getField("field_70161_v").getDouble(entity),range);
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
+    }
+    /** notifyBlocksOfNeighborChange: original neighbours run their old onNeighborBlockChange, host neighbours are updated by the host. */
+    public static void neighbors(Object world, int x, int y, int z, Object source) {
+        var binding = binding(world);
+        try {
+            var type = binding.loader.loadClass("net.minecraft.block.Block");
+            var changed = type.getMethod("func_149695_a",binding.loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class,type);
+            for (int[] side : new int[][]{{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1}}) {
+                int nx = x+side[0], ny = y+side[1], nz = z+side[2];
+                var cell = binding.host.block(nx,ny,nz);
+                if (!cell.legacyKey().startsWith("minecraft:") && !cell.legacyKey().startsWith("mfcl_host:")) changed.invoke(block(world,nx,ny,nz),world,nx,ny,nz,source);
+            }
+            binding.host.neighborsChanged(x,y,z);
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException("Cannot notify original neighbours", error); }
+    }
+    /** Entity status bytes (hearts, hurt flashes) on mirrors: the host entity broadcasts its own when changes are committed. */
+    public static void entityState(Object world, Object entity, byte state) { }
     public static void comparators(Object world, int x, int y, int z, Object block) { binding(world).host.updateComparators(x,y,z); }
     private static String blockKey(Binding binding, Object block) {
         try {
@@ -297,7 +443,18 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer,bridge,"func_72872_a","(Ljava/lang/Class;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;","entities","(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/Object;)Ljava/util/List;",null);
         forward(writer,bridge,"func_82733_a","(Ljava/lang/Class;Lnet/minecraft/util/AxisAlignedBB;Lnet/minecraft/command/IEntitySelector;)Ljava/util/List;","selectedEntities","(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;",null);
         forward(writer,bridge,"func_72839_b","(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/AxisAlignedBB;)Ljava/util/List;","excludingEntity","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;",null);
+        forward(writer,bridge,"func_72957_l","(III)I","light","(Ljava/lang/Object;III)I",null);
+        forward(writer,bridge,"func_72976_f","(II)I","height","(Ljava/lang/Object;II)I",null);
+        forward(writer,bridge,"func_72937_j","(III)Z","canSeeSky","(Ljava/lang/Object;III)Z",null);
+        forward(writer,bridge,"func_72977_a","(DDDD)Lnet/minecraft/entity/player/EntityPlayer;","closestPlayer","(Ljava/lang/Object;DDDD)Ljava/lang/Object;","net/minecraft/entity/player/EntityPlayer");
+        forward(writer,bridge,"func_72890_a","(Lnet/minecraft/entity/Entity;D)Lnet/minecraft/entity/player/EntityPlayer;","closestPlayerTo","(Ljava/lang/Object;Ljava/lang/Object;D)Ljava/lang/Object;","net/minecraft/entity/player/EntityPlayer");
+        for (String method : List.of("func_147459_d", "func_147444_c")) forward(writer,bridge,method,"(IIILnet/minecraft/block/Block;)V","neighbors","(Ljava/lang/Object;IIILjava/lang/Object;)V",null);
+        // Light is recomputed by the host from the block's light value; old relight requests have nothing to do.
+        constant(writer, "func_147463_c", "(Lnet/minecraft/world/EnumSkyBlock;III)Z", 1);
+        forward(writer,bridge,"func_72885_a","(Lnet/minecraft/entity/Entity;DDDFZZ)Lnet/minecraft/world/Explosion;","explode","(Ljava/lang/Object;Ljava/lang/Object;DDDFZZ)Ljava/lang/Object;","net/minecraft/world/Explosion");
+        forward(writer,bridge,"func_72960_a","(Lnet/minecraft/entity/Entity;B)V","entityState","(Ljava/lang/Object;Ljava/lang/Object;B)V",null);
         forward(writer, bridge, "func_72838_d", "(Lnet/minecraft/entity/Entity;)Z", "spawn", "(Ljava/lang/Object;Ljava/lang/Object;)Z", null);
+        forward(writer,bridge,"func_72964_e","(II)Lnet/minecraft/world/chunk/Chunk;","chunk","(Ljava/lang/Object;II)Ljava/lang/Object;","net/minecraft/world/chunk/Chunk");
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
         return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }

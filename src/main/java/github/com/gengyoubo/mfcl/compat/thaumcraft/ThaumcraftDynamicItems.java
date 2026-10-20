@@ -21,6 +21,14 @@ final class ThaumcraftDynamicItems {
             @Override public Optional<LegacyDynamicItems.Drawing> capture(LegacyClientData.Stack stack, String context) throws Exception {
                 var mc = Minecraft.getInstance();
                 if (mc.level == null || mc.player == null) return Optional.empty();
+                // Client world reads give post-1.7 blocks a stand-in; the lens must not scan those either.
+                if (mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult hit && hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+                    try { content.legacyBlock(mc.level.getBlockState(hit.getBlockPos())); }
+                    catch (UnmappedLegacyBlockException unmapped) {
+                        if (unmappedTargets.add(unmapped.getMessage())) com.mojang.logging.LogUtils.getLogger().warn("MFCL TC4 scanner overlay unavailable: {}", unmapped.getMessage());
+                        return Optional.empty();
+                    }
+                }
                 try { return Optional.of(LiveLegacyItemCapture.firstPerson(content, stack)); }
                 catch (Exception failure) {
                     var unmapped = UnmappedLegacyBlockException.find(failure);

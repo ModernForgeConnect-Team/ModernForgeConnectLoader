@@ -19,6 +19,7 @@ public final class LegacyServices {
     private final LegacyPlayerState playerState = new LegacyPlayerState();
     private final LegacyDynamicItems dynamicItems = new LegacyDynamicItems();
     private final LegacyHeldScanners scanners = new LegacyHeldScanners();
+    private final LegacyDimensions dimensions;
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
         this(gameDirectory, loader, new LegacyClientData(loader));
     }
@@ -28,6 +29,7 @@ public final class LegacyServices {
         this.items.refreshIconMetadata();
         this.items.loadRegistryCatalog();
         this.biomes = new LegacyBiomes(loader);
+        this.dimensions = new LegacyDimensions(loader);
         this.worlds = new LegacyWorlds(items,biomes); this.screens = new LegacyScreens(loader);
         this.containers = new LegacyContainers(this);
         this.tiles = new LegacyTiles(this);
@@ -40,6 +42,7 @@ public final class LegacyServices {
     public LegacyClientData items() { return items; }
     public LegacyWorlds worlds() { return worlds; }
     public LegacyBiomes biomes() { return biomes; }
+    public LegacyDimensions dimensions() { return dimensions; }
     public LegacyScreens screens() { return screens; }
     public LegacyContainers containers() { return containers; }
     public LegacyTiles tiles() { return tiles; }
@@ -50,4 +53,11 @@ public final class LegacyServices {
     public LegacyPlayerState playerState() { return playerState; }
     public LegacyDynamicItems dynamicItems() { return dynamicItems; }
     public LegacyHeldScanners scanners() { return scanners; }
+    /** UUID of an old Entity (player actors included); null for other old objects such as command senders. */
+    public java.util.UUID entityId(Object old) {
+        try {
+            var type = loader.loadClass("net.minecraft.entity.Entity");
+            return type.isInstance(old) ? (java.util.UUID) type.getMethod("func_110124_au").invoke(old) : null;
+        } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+    }
 }

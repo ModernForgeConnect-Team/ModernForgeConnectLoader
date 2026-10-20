@@ -252,6 +252,7 @@ public final class LegacyItemUse {
         playerType.getField("eyeHeight").setFloat(actor,client?.12f:1.62f);
         entity.getField("field_70129_M").setFloat(actor,client?1.62f:0);
         entity.getField("field_70170_p").set(actor, world);
+        entity.getField("field_71093_bK").setInt(actor,services.loader().loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(services.loader().loadClass("net.minecraft.world.World").getField("field_73011_w").get(world)));
         double oldY=placer.y()+(client?1.62:0);
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, oldY); entity.getField("field_70161_v").setDouble(actor, placer.z());
         for(String field:new String[]{"field_70169_q","field_70142_S"})entity.getField(field).setDouble(actor,placer.x());
@@ -259,9 +260,16 @@ public final class LegacyItemUse {
         for(String field:new String[]{"field_70166_s","field_70136_U"})entity.getField(field).setDouble(actor,placer.z());
         entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
         entity.getField("field_70126_B").setFloat(actor,placer.yaw());entity.getField("field_70127_C").setFloat(actor,placer.pitch());
+        Object capabilities=playerType.getField("field_71075_bZ").get(actor);
+        capabilities.getClass().getField("field_75098_d").setBoolean(capabilities,placer.creative());
+        Object watcher=entity.getMethod("func_70096_w").invoke(actor);
+        byte flags=(byte)watcher.getClass().getMethod("func_75683_a",int.class).invoke(watcher,0);
+        watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?flags|2:flags&~2));
         LegacyPlayerArmor.apply(services,actor,placer.id(),client);
         Class<?> sp=services.loader().loadClass("net.minecraft.client.entity.EntityPlayerSP");
         if(sp.isInstance(actor)) {
+            Object movement=sp.getField("field_71158_b").get(actor);
+            if(movement!=null)movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
             for(String name:new String[]{"field_71155_g","field_71164_i"})sp.getField(name).setFloat(actor,placer.pitch());
             for(String name:new String[]{"field_71154_f","field_71163_h"})sp.getField(name).setFloat(actor,placer.yaw());
         }

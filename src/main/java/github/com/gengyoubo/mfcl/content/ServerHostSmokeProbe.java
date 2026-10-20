@@ -40,6 +40,7 @@ public final class ServerHostSmokeProbe {
     private ServerHostSmokeProbe(ModernContentBridge bridge, boolean write) { this.bridge = bridge; this.write = write; }
 
     public static void install(ModernContentBridge bridge, String phase) {
+        if (phase.equals("outer-write") || phase.equals("outer-verify")) { OuterLandsSmokeProbe.install(bridge, phase.equals("outer-write")); return; }
         if (!phase.equals("write") && !phase.equals("verify")) throw new IllegalArgumentException("mfcl.test.server must be write or verify: " + phase);
         MinecraftForge.EVENT_BUS.addListener(new ServerHostSmokeProbe(bridge, phase.equals("write"))::tick);
     }

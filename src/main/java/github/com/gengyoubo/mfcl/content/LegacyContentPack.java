@@ -204,11 +204,11 @@ public final class LegacyContentPack {
         }
         languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "Other 1.7.10 items",
                 "mfcl.content.special_block_pending", "This block needs special rendering or placement support, which is not available yet.",
-                "mfcl.content.machine_logic_pending", "Placement and saved data are supported. Machine operation and interaction are pending.",
+                "mfcl.content.machine_logic_pending", "The original logic of this block failed in this session and was paused. Details are in the game log.",
                 "mfcl.content.placement_failed", "This block could not be initialized. Details are in the game log."));
         languages.computeIfAbsent("zh_cn", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "其他 1.7.10 物品",
                 "mfcl.content.special_block_pending", "此方块需要特殊渲染或放置支持，暂不能放置。",
-                "mfcl.content.machine_logic_pending", "已支持放置和保存数据；机器运行与交互尚未接通。",
+                "mfcl.content.machine_logic_pending", "此方块的原版逻辑本次运行时出错，已暂停；详细信息见游戏日志。",
                 "mfcl.content.placement_failed", "无法初始化此方块，详细信息见游戏日志。"));
         for (var entry : languages.entrySet()) json("assets/mfcl/lang/" + entry.getKey() + ".json", entry.getValue());
     }

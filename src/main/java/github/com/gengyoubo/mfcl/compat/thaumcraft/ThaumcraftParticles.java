@@ -29,12 +29,13 @@ final class ThaumcraftParticles {
         var replay = new LegacyBlockEntityRenderer(content);
         MinecraftForge.EVENT_BUS.addListener((TickEvent.ClientTickEvent event) -> {
             var mc = Minecraft.getInstance();
-            if (event.phase != TickEvent.Phase.END || mc.level == null || mc.isPaused()) return;
+            if (event.phase != TickEvent.Phase.START || mc.level == null || mc.isPaused()) return;
             guard(() -> services.items().inLegacy(() -> {
                 Object engine = engine(services); if (engine == null) return null;
                 var loader = services.loader();
                 Class<?> tick = loader.loadClass("cpw.mods.fml.common.gameevent.TickEvent$ClientTickEvent");
-                Object phase = loader.loadClass("cpw.mods.fml.common.gameevent.TickEvent$Phase").getField("END").get(null);
+                // updateParticles only ages (and so ever removes) particles on the START phase.
+                Object phase = loader.loadClass("cpw.mods.fml.common.gameevent.TickEvent$Phase").getField("START").get(null);
                 Object legacyEvent = tick.getConstructor(phase.getClass()).newInstance(phase);
                 engine.getClass().getMethod("updateParticles", tick).invoke(engine, legacyEvent);
                 return null;

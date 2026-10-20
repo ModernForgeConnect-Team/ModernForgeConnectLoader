@@ -115,6 +115,8 @@ public final class LegacyTiles {
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?2:0));
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
         entity.getField("field_70170_p").set(actor, world);
+        // Entity.dimension: old code compares it with dimension ids (TC4 eldritch portals pick the travel direction by it).
+        entity.getField("field_71093_bK").setInt(actor, loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(worldType.getField("field_73011_w").get(world)));
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()+(client?1.62:0)); entity.getField("field_70161_v").setDouble(actor, placer.z());
         entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
         // Range/ray-trace helpers read the player's bounding box; the allocated actor has none, so build one directly.

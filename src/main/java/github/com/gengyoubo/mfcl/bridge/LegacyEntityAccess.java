@@ -4,7 +4,7 @@ import org.objectweb.asm.*;
 import java.lang.reflect.Method;
 import java.util.*;
 
-/** Entity query snapshots; only motion/fall changes are committed back to the owning host world. */
+/** Entity query snapshots; only motion/fall and breeding (inLove) changes are committed back to the owning host world. */
 final class LegacyEntityAccess {
     private static final Map<ClassLoader,Map<String,Class<?>>> FACADES=Collections.synchronizedMap(new WeakHashMap<>());
     private LegacyEntityAccess() {}
@@ -45,6 +45,13 @@ final class LegacyEntityAccess {
                 profile.set(entity,loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(snapshot.id(),snapshot.name()));
             }
         }
+        // Age and breeding state are what old animal logic (lamp of fertility) checks before setInLove.
+        if(loader.loadClass("net.minecraft.entity.EntityAgeable").isInstance(entity)) {
+            var watched=base.getDeclaredField("field_70180_af");watched.setAccessible(true);Object watcher=watched.get(entity);
+            watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,12,snapshot.age());
+        }
+        Class<?> animal=loader.loadClass("net.minecraft.entity.passive.EntityAnimal");
+        if(animal.isInstance(entity)){var love=animal.getDeclaredField("field_70881_d");love.setAccessible(true);love.setInt(entity,snapshot.love());}
         if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity)) {
             if(snapshot.item()==null)throw new IllegalArgumentException("Dropped item mirror requires its actual stack");
             entity.getClass().getMethod("func_92058_a",loader.loadClass("net.minecraft.item.ItemStack")).invoke(entity,items.materialize(snapshot.item()));
@@ -66,8 +73,9 @@ final class LegacyEntityAccess {
         if(exists.invoke(watcher,index)==null) add.invoke(watcher,index,value);
     }
     static HostWorldAccess.Motion motion(ClassLoader loader,Object entity,UUID id) throws Exception {
-        var type=loader.loadClass("net.minecraft.entity.Entity");
-        return new HostWorldAccess.Motion(id,type.getField("field_70159_w").getDouble(entity),type.getField("field_70181_x").getDouble(entity),type.getField("field_70179_y").getDouble(entity),type.getField("field_70143_R").getFloat(entity));
+        var type=loader.loadClass("net.minecraft.entity.Entity");Class<?> animal=loader.loadClass("net.minecraft.entity.passive.EntityAnimal");int love=0;
+        if(animal.isInstance(entity)){var field=animal.getDeclaredField("field_70881_d");field.setAccessible(true);love=field.getInt(entity);}
+        return new HostWorldAccess.Motion(id,type.getField("field_70159_w").getDouble(entity),type.getField("field_70181_x").getDouble(entity),type.getField("field_70179_y").getDouble(entity),type.getField("field_70143_R").getFloat(entity),love);
     }
     private static Class<?> facade(ClassLoader loader,String parent) throws Exception {
         var types=FACADES.computeIfAbsent(loader,ignored->new HashMap<>());Class<?> existing=types.get(parent);if(existing!=null)return existing;

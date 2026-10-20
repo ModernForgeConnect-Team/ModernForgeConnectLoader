@@ -38,7 +38,7 @@ final class RuntimeDeviceSemanticsProbe {
             if(query.size()!=1||!Boolean.TRUE.equals(entity.getMethod("func_70104_M").invoke(query.get(0))))throw new AssertionError("Entity query did not preserve living/pushable types");
             entity.getField("field_70181_x").setDouble(query.get(0),.4);entity.getField("field_70143_R").setFloat(query.get(0),0);
             LegacyWorlds.commitEntityMotion(world);
-            if(!motions.equals(List.of(new HostWorldAccess.Motion(id,0,.4,0,0))))throw new AssertionError("Original entity motion was not committed to host");
+            if(!motions.equals(List.of(new HostWorldAccess.Motion(id,0,.4,0,0,0))))throw new AssertionError("Original entity motion was not committed to host");
             if(!LegacyWorlds.entities(world,loader.loadClass("net.minecraft.entity.item.EntityItem"),box).isEmpty())throw new AssertionError("Class-filtered entity query returned an unrelated entity");
             LegacyWorlds.clearEntityQueries(world);
             try(var frame=LegacyGuiGraphics.begin(320,240,0,0,Set.of())) {

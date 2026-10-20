@@ -8,7 +8,17 @@ public final class LegacyItemPlacement {
     public LegacyItemPlacement(LegacyServices services) { this.services = services; }
     public Result use(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, java.util.List<LegacyClientData.Stack> contents, int selected,
                       int x, int y, int z, int side, float hitX, float hitY, float hitZ) throws Exception {
+        return use(world, placer, snapshot, contents, selected, x, y, z, side, hitX, hitY, hitZ, false);
+    }
+    /** Forge invokes this before block activation; a false result continues through the normal use path. */
+    public Result useFirst(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, java.util.List<LegacyClientData.Stack> contents, int selected,
+                           int x, int y, int z, int side, float hitX, float hitY, float hitZ) throws Exception {
+        return use(world, placer, snapshot, contents, selected, x, y, z, side, hitX, hitY, hitZ, true);
+    }
+    private Result use(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, java.util.List<LegacyClientData.Stack> contents, int selected,
+                       int x, int y, int z, int side, float hitX, float hitY, float hitZ, boolean first) throws Exception {
         return services.items().inLegacy(() -> {
+            try (var state = services.playerState().enter(world)) {
             var loader = services.loader();
             Class<?> itemType = loader.loadClass("net.minecraft.item.Item"), stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Class<?> playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), worldType = loader.loadClass("net.minecraft.world.World");
@@ -29,10 +39,10 @@ public final class LegacyItemPlacement {
             }
             Class<?>[] signature = {stackType,playerType,worldType,int.class,int.class,int.class,int.class,float.class,float.class,float.class};
             Object[] arguments = {stack,player,world,x,y,z,side,hitX,hitY,hitZ};
-            boolean used = (boolean)itemType.getMethod("onItemUseFirst",signature).invoke(item,arguments);
-            if (!used) used = (boolean)itemType.getMethod("func_77648_a",signature).invoke(item,arguments);
-            int count = stackType.getField("field_77994_a").getInt(stack);
-            return new Result(used, count <= 0 ? null : services.items().snapshot(stack), services.playerInventory().read(player));
+            boolean used = (boolean)itemType.getMethod(first ? "onItemUseFirst" : "func_77648_a",signature).invoke(item,arguments);
+            var inventory = services.playerInventory().read(player);
+            return new Result(used, inventory.get(selected), inventory);
+            }
         });
     }
 }

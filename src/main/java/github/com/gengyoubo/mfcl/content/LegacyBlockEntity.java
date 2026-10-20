@@ -96,6 +96,10 @@ public final class LegacyBlockEntity extends BlockEntity {
     }
     public void markLegacyDirty() { setChanged(); updatePending = true; }
     private static final java.util.Set<String> clientFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** key@metadata of original tiles whose logic failed and was paused this session; the item tooltip reports these. */
+    private static final java.util.Set<String> pausedLogic = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    public static boolean logicPaused(String key, int metadata) { return pausedLogic.contains(key + "@" + metadata); }
+    static void logicFailed(String key, int metadata) { pausedLogic.add(key + "@" + metadata); }
     /**
      * The original updateEntity also runs on the client, where machines draw their effects (crucible bubbles and
      * froth...). It sees the client world only; a tile whose client logic fails is paused locally, the server is unaffected.
@@ -105,16 +109,27 @@ public final class LegacyBlockEntity extends BlockEntity {
         try { content.services().logic().tick(legacyOrNull()); }
         catch (Exception | LinkageError failure) {
             logicSuspended = true;
+            logicFailed(key(), getBlockState().getValue(ModernContentBridge.METADATA));
             if (clientFailures.add(key())) com.mojang.logging.LogUtils.getLogger().warn("MFCL paused client-side original tile logic for {}", key(), failure);
         }
     }
     public void tickServer() {
         if (logicSuspended || isRemoved() || level == null || level.isClientSide) return;
         try {
-            boolean ticked = content.logicTransaction(level,worldPosition,() -> content.services().logic().tick(legacyOrNull()),false);
+            boolean ticked;
+            // Old tiles message nearby players directly (eldritch lock); the actors have no connection, so deliver here.
+            try (var chat = new github.com.gengyoubo.mfcl.bridge.LegacyBlockLogic.AddressedChatCapture()) {
+                ticked = LegacyTilePlayers.tick(content,(net.minecraft.server.level.ServerLevel)level,worldPosition,legacyOrNull());
+                for (var line : chat.lines()) {
+                    var id = content.services().entityId(line.recipient());
+                    var player = id == null ? null : level.getPlayerByUUID(id);
+                    if (player != null) player.sendSystemMessage(net.minecraft.network.chat.Component.literal(line.text()));
+                }
+            }
             if (ticked) successfulTicks++;
         } catch (Exception | LinkageError failure) {
             logicSuspended = true;
+            logicFailed(key(), getBlockState().getValue(ModernContentBridge.METADATA));
             github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("tile tick " + key(), failure);
             if (level.getBlockEntity(worldPosition) instanceof LegacyBlockEntity current) current.logicSuspended = true;
             com.mojang.logging.LogUtils.getLogger().error("MFCL paused original tile logic for {} at {} after rollback",key(),worldPosition,failure);

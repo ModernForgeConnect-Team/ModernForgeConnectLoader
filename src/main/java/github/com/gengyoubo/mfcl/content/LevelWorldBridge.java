@@ -10,21 +10,39 @@ import java.util.*;
 /** Server levels own all authoritative mutations; the old World façade keeps its owner-thread checks. */
 public final class LevelWorldBridge {
     private final ModernContentBridge content;
-    private final Map<String, Integer> dimensions = new HashMap<>(Map.of("minecraft:overworld", 0, "minecraft:the_nether", -1, "minecraft:the_end", 1));
-    private LevelWorldBridge(ModernContentBridge content) { this.content = content; }
+    private final LegacyDimensionHost dimensions;
+    /**
+     * Old scheduled updates on host vanilla blocks. 1.7.10 ran BlockCrops/BlockSapling growth from updateTick for both
+     * scheduled and random ticks, so the lamp of growth schedules crops; the host only grows them in randomTick.
+     */
+    private final Map<ServerLevel, Map<BlockPos, Long>> hostTicks = new WeakHashMap<>();
+    private LevelWorldBridge(ModernContentBridge content) { this.content = content; this.dimensions = new LegacyDimensionHost(content); }
     public static void install(ModernContentBridge content) {
         var bridge = new LevelWorldBridge(content);
         MinecraftForge.EVENT_BUS.addListener(bridge::load); MinecraftForge.EVENT_BUS.addListener(bridge::unload);
+        MinecraftForge.EVENT_BUS.addListener(bridge::tick);
     }
     private void load(LevelEvent.Load event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         String key = level.dimension().location().toString();
-        int dimension = dimensions.computeIfAbsent(key, ignored -> dimensions.size() + 2);
+        int dimension = content.services().dimensions().legacyId(key);
         try { content.services().worlds().bind(level, access(level, dimension)); }
         catch (Exception error) { throw new IllegalStateException("Cannot bind legacy server world " + key, error); }
+        dimensions.loaded(level);
     }
     private void unload(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel level) content.services().worlds().unbind(level);
+        if (event.getLevel() instanceof ServerLevel level) { dimensions.unloading(level); content.services().worlds().unbind(level); hostTicks.remove(level); }
+    }
+    private void tick(net.minecraftforge.event.TickEvent.LevelTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END || !(event.level instanceof ServerLevel level)) return;
+        var pending = hostTicks.get(level); if (pending == null || pending.isEmpty()) return;
+        long now = level.getGameTime(); var due = new ArrayList<BlockPos>();
+        pending.entrySet().removeIf(entry -> { if (entry.getValue() > now) return false; due.add(entry.getKey()); return true; });
+        for (var pos : due) {
+            if (!level.isLoaded(pos)) continue;
+            var state = level.getBlockState(pos);
+            if (state.isRandomlyTicking()) state.randomTick(level, pos, level.random);
+        }
     }
     private HostWorldAccess access(ServerLevel level, int dimension) {
         return new HostWorldAccess() {
@@ -44,11 +62,20 @@ public final class LevelWorldBridge {
             @Override public long gameTime() { check(); return level.getGameTime(); }
             @Override public java.util.List<HostWorldAccess.Entity> entities(double a,double b,double c,double d,double e,double f) {check();return HostEntityQueries.query(level,a,b,c,d,e,f);}
             @Override public void applyMotion(HostWorldAccess.Motion motion) {check();content.afterCommit(level,()->HostEntityQueries.apply(level,motion));}
+            @Override public java.util.List<HostWorldAccess.Entity> players() {
+                check(); return level.players().stream().map(player -> HostEntityQueries.snapshot(level, player)).filter(java.util.Objects::nonNull).toList();
+            }
+            @Override public void explode(double x, double y, double z, float power, boolean fire, boolean breakBlocks) {
+                check();
+                content.afterCommit(level,() -> level.explode(null, x, y, z, power, fire, breakBlocks ? net.minecraft.world.level.Level.ExplosionInteraction.BLOCK : net.minecraft.world.level.Level.ExplosionInteraction.NONE));
+            }
             @Override public Object existingEntity(java.util.UUID id) {
                 check();var entity=level.getEntity(id);
                 if(entity instanceof net.minecraft.server.level.ServerPlayer player) {
-                    if(player.containerMenu instanceof LegacyDeviceMenu menu)return menu.originalPlayer();
-                    try {return content.itemUse().clientActor(content.services().worlds().bound(level),new github.com.gengyoubo.mfcl.bridge.LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown()),null);}
+                    try {
+                        Object actor=player.containerMenu instanceof LegacyDeviceMenu menu?menu.originalPlayer():content.itemUse().clientActor(content.services().worlds().bound(level),ModernContentBridge.placer(player),null);
+                        return LegacyTilePlayers.prepare(content,player,dimensions.portalState(actor,player));
+                    }
                     catch(Exception failure){throw new IllegalStateException("Cannot resolve original player for entity query",failure);}
                 }
                 return null;
@@ -82,7 +109,12 @@ public final class LevelWorldBridge {
             @Override public void schedule(int x, int y, int z, String key, int delay) {
                 check(); var pos = new BlockPos(x,y,z);
                 if (content.legacyBlock(level.getBlockState(pos)).legacyKey().equals(key)) {
-                    var block = level.getBlockState(pos).getBlock();
+                    var state = level.getBlockState(pos); var block = state.getBlock();
+                    if (!state.hasProperty(ModernContentBridge.METADATA) && state.isRandomlyTicking()) {
+                        long due = level.getGameTime() + Math.max(1, delay);
+                        content.afterCommit(level,() -> hostTicks.computeIfAbsent(level, ignored -> new HashMap<>()).putIfAbsent(pos.immutable(), due));
+                        return;
+                    }
                     content.afterCommit(level,() -> level.scheduleTick(pos,block,Math.max(1,delay)));
                 }
             }
@@ -96,7 +128,10 @@ public final class LevelWorldBridge {
             }
             @Override public boolean setBlock(int x, int y, int z, Block block, int flags) {
                 check(); var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
-                return level.setBlock(pos, content.modernBlock(block), flags);
+                net.minecraft.world.level.block.state.BlockState state;
+                try { state = content.modernBlock(block); }
+                catch (UnsupportedOperationException unsupported) { if (dimensions.skipUnsupported(block, unsupported)) return false; throw unsupported; }
+                return level.setBlock(pos, state, flags);
             }
             @Override public boolean canPlaceBlock(Block block, int x, int y, int z) {
                 check(); var candidate = content.blocks().get(block.legacyKey());
@@ -128,6 +163,24 @@ public final class LevelWorldBridge {
                 if (!(tile instanceof LegacyBlockEntity legacy) || !legacy.owns(old)) throw new IllegalStateException("Legacy tile identity mismatch");
                 legacy.markLegacyDirty();
             }
+            @Override public int light(int x, int y, int z) { check(); return level.getMaxLocalRawBrightness(new BlockPos(x,y,z)); }
+            @Override public int height(int x, int z) { check(); return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z); }
+            @Override public boolean canSeeSky(int x, int y, int z) { check(); return level.canSeeSky(new BlockPos(x,y,z)); }
+            @Override public void neighborsChanged(int x, int y, int z) {
+                check(); var pos = new BlockPos(x,y,z); var block = level.getBlockState(pos).getBlock();
+                content.afterCommit(level,() -> level.updateNeighborsAt(pos,block));
+            }
+            @Override public long seed() { return level.getSeed(); }
+            @Override public java.io.File legacySaveDirectory() { return LegacyDimensionHost.saveDirectory(level); }
+            // Queued only when the original tick commits; the move itself happens after the host tick.
+            @Override public void transferPlayer(Transfer transfer) { check(); content.afterCommit(level, () -> dimensions.queue(transfer)); }
+            @Override public void portalCooldown(java.util.UUID id, int ticks) {
+                check(); var player = level.getServer().getPlayerList().getPlayer(id); if (player != null) content.afterCommit(level, () -> player.setPortalCooldown(ticks));
+            }
+            @Override public int portalCooldown(java.util.UUID id) {
+                check(); var player = level.getServer().getPlayerList().getPlayer(id); return player == null ? 0 : player.getPortalCooldown();
+            }
+            @Override public int[] findBlock(String legacyKey, int x, int y, int z, int radius) { check(); return dimensions.findBlock(level, legacyKey, x, y, z, radius); }
             @Override public void blockUpdated(int x, int y, int z) {
                 check(); BlockPos pos = new BlockPos(x, y, z); var state = level.getBlockState(pos);
                 if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.markLegacyDirty();
