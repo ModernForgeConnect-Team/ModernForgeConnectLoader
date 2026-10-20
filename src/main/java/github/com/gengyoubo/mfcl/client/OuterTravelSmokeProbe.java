@@ -22,7 +22,7 @@ import java.util.concurrent.*;
  * Outer Lands (arriving beside the maze portal that original population built), and its twin there sends them back.
  */
 final class OuterTravelSmokeProbe {
-    private static final ResourceKey<Level> OUTER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("mfcl:thaumcraft_outer"));
+    private static final ResourceKey<Level> OUTER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("thaumcraft:outer_lands"));
     private final ModernContentBridge content;
     private final Map<String, Object> proof = new LinkedHashMap<>();
     private final long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(6);

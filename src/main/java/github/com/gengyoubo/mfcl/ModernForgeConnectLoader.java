@@ -59,6 +59,7 @@ public final class ModernForgeConnectLoader {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContentBridge.install(content, bus));
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientWorldBridge.install(runtimeService.runtime().services()));
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.ClientContainerBridge.install(runtimeService.runtime().services()));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> github.com.gengyoubo.mfcl.client.LegacyKeyMappings.install(runtimeService.runtime().services(), bus));
         }
         if (result.state() == LegacyRuntimeService.State.CLIENT_DATA_AVAILABLE && runtimeService.runtime() != null) {
             for (var adapter : runtimeService.runtime().adapters()) DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> adapter::installClient);

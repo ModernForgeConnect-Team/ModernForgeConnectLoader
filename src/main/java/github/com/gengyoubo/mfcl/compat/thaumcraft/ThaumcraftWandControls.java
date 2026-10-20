@@ -12,16 +12,16 @@ import net.minecraftforge.client.event.*;
 import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
-/** Rebindable host F/G keys; original server handlers own focus transfers and wand mode changes. */
+/** TC4's own "Change Wand Focus"/"Misc Wand Toggle" bindings (bridged host mappings); original server handlers own focus transfers and wand mode changes. */
 final class ThaumcraftWandControls {
-    private static final KeyMapping FOCUS=new KeyMapping("mfcl.key.wand_focus",net.minecraftforge.client.settings.KeyConflictContext.IN_GAME,com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_F,"mfcl.key.category");
-    private static final KeyMapping MODE=new KeyMapping("mfcl.key.wand_mode",net.minecraftforge.client.settings.KeyConflictContext.IN_GAME,com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_G,"mfcl.key.category");
+    private static final String FOCUS="Change Wand Focus",MODE="Misc Wand Toggle";
     private ThaumcraftWandControls() {}
-    @SuppressWarnings("removal") static void install(LegacyServices services){
-        net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus().addListener((RegisterKeyMappingsEvent event)->{event.register(FOCUS);event.register(MODE);});
+    static void install(LegacyServices services){
         MinecraftForge.EVENT_BUS.addListener((InputEvent.Key event)->{
             var mc=Minecraft.getInstance();if(event.getAction()!=GLFW.GLFW_PRESS||mc.player==null||mc.screen!=null)return;
-            boolean focus=FOCUS.matches(event.getKey(),event.getScanCode()),mode=MODE.matches(event.getKey(),event.getScanCode());
+            // TC4 polls these from its client PlayerTickEvent, which the host does not run; the press itself is handled here.
+            var focusKey=github.com.gengyoubo.mfcl.client.LegacyKeyMappings.find(FOCUS);var modeKey=github.com.gengyoubo.mfcl.client.LegacyKeyMappings.find(MODE);
+            boolean focus=focusKey!=null&&focusKey.matches(event.getKey(),event.getScanCode()),mode=modeKey!=null&&modeKey.matches(event.getKey(),event.getScanCode());
             if(!focus&&!mode)return;
             try{
                 var content=ModernContentBridge.active();var held=content.renderSnapshot(mc.player.getMainHandItem());

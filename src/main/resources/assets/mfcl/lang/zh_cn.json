@@ -13,9 +13,6 @@
   "mfcl.mods.loader": "加载器：Forge 1.7.10（通过 MFCL）",
   "mfcl.mods.file": "文件：%s",
   "mfcl.mods.total_loaded": "%s 个 Mod 已加载（%s：%s，%s：%s）",
-  "mfcl.key.category": "MFCL",
-  "mfcl.key.wand_focus": "选择法杖杖端",
-  "mfcl.key.wand_mode": "切换法杖模式",
   "mfcl.wand.focus.title": "选择法杖杖端",
   "mfcl.wand.focus.remove": "卸下杖端"
 }

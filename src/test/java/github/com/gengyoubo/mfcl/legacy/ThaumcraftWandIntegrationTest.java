@@ -25,7 +25,7 @@ class ThaumcraftWandIntegrationTest {
             assertEquals(0,process.exitValue(),Files.readString(log));
             var report=JsonParser.parseString(Files.readString(temporary.resolve("logs/mfcl/wand-functions-audit.json"))).getAsJsonObject();
             for(String name:new String[]{"basicIronWoodWandAssembly","advancedGoldGreatwoodWandAssembly","arcaneRejectsMissingWand","arcaneRejectsEmptyWand","arcaneResearchGate",
-                    "arcaneCraftConsumesIngredientsAndVis","nodeChargingHeldUseBridge","focusChangePacketBridge","passiveRodInventoryTick"})
+                    "arcaneCraftConsumesIngredientsAndVis","nodeChargingHeldUseBridge","focusChangePacketBridge","passiveRodInventoryTick","originalKeyBindings"})
                 assertEquals("PASS",report.getAsJsonObject(name).get("status").getAsString(),name+": "+report);
             var node=report.getAsJsonObject("nodeChargingHeldUseBridge");
             assertEquals(2000,node.get("nodeAirAfter").getAsInt()*100+node.getAsJsonObject("heldWandRawVis").get("aer").getAsInt());

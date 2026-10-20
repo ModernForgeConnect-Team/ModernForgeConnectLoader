@@ -21,7 +21,7 @@ import java.util.*;
  * host level, places through TeleporterThaumcraft, saves and stops; {@code outer-verify} checks it all survived a restart.
  */
 final class OuterLandsSmokeProbe {
-    private static final ResourceKey<net.minecraft.world.level.Level> OUTER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("mfcl:thaumcraft_outer"));
+    private static final ResourceKey<net.minecraft.world.level.Level> OUTER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("thaumcraft:outer_lands"));
     private static final int MAZE_X = 64, MAZE_Z = 64;
     private final ModernContentBridge bridge;
     private final boolean write;
@@ -39,15 +39,15 @@ final class OuterLandsSmokeProbe {
         try {
             if (System.nanoTime() > deadline) throw new IllegalStateException("Outer Lands acceptance timed out");
             ServerLevel outer = server.getLevel(OUTER);
-            if (outer == null) throw new IllegalStateException("Host level mfcl:thaumcraft_outer is missing");
+            if (outer == null) throw new IllegalStateException("Host level thaumcraft:outer_lands is missing");
             if (started < 0) {
                 proof.put("phase", write ? "outer-write" : "outer-verify");
                 legacyDimension(outer);
                 if (write) {
                     outer.getChunk(0, 0); // setblock only accepts loaded positions.
                     int result = server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput().withPermission(4),
-                            "execute in mfcl:thaumcraft_outer run setblock 0 200 0 minecraft:stone");
-                    if (result != 1 || !outer.getBlockState(new BlockPos(0, 200, 0)).is(net.minecraft.world.level.block.Blocks.STONE)) throw new IllegalStateException("execute in mfcl:thaumcraft_outer failed: " + result);
+                            "execute in thaumcraft:outer_lands run setblock 0 200 0 minecraft:stone");
+                    if (result != 1 || !outer.getBlockState(new BlockPos(0, 200, 0)).is(net.minecraft.world.level.block.Blocks.STONE)) throw new IllegalStateException("execute in thaumcraft:outer_lands failed: " + result);
                     outer.removeBlock(new BlockPos(0, 200, 0), false);
                     proof.put("executeIn", true);
                     buildMaze();

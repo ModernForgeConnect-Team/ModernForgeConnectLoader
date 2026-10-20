@@ -203,11 +203,31 @@ public final class ThaumcraftWandAuditProbe {
             });
         }
     }
+    /** TC4's ClientRegistry bindings reach the host list, and host input drives the original KeyBinding semantics. */
+    private void keyBindings() {
+        audit("originalKeyBindings",()->{
+            var keys=new LegacyKeyBindings(services);var bindings=keys.modBindings();
+            var found=new LinkedHashMap<String,Object>();for(var binding:bindings)found.put(binding.description(),binding.category()+":"+binding.defaultCode());
+            check(found.entrySet().containsAll(Map.of("Change Wand Focus","key.categories.misc:33","Activate Hover Harness","key.categories.misc:35","Misc Wand Toggle","key.categories.misc:34").entrySet()),"Unexpected original bindings "+found);
+            var focus=bindings.stream().filter(binding->binding.description().equals("Change Wand Focus")).findFirst().orElseThrow();
+            var type=loader.loadClass("net.minecraft.client.settings.KeyBinding");
+            check(keys.apply(List.of(new LegacyKeyBindings.State(focus,47,true,2)),true),"Press was not reported");
+            check((int)type.getMethod("func_151463_i").invoke(focus.handle())==47,"Rebinding did not reach the original binding");
+            check((boolean)type.getMethod("func_151470_d").invoke(focus.handle()),"Held state was not applied");
+            check((boolean)type.getMethod("func_151468_f").invoke(focus.handle())&&(boolean)type.getMethod("func_151468_f").invoke(focus.handle())
+                    &&!(boolean)type.getMethod("func_151468_f").invoke(focus.handle()),"isPressed did not consume exactly two presses");
+            keys.apply(List.of(new LegacyKeyBindings.State(focus,47,true,1)),false);
+            check(!(boolean)type.getMethod("func_151470_d").invoke(focus.handle())&&!(boolean)type.getMethod("func_151468_f").invoke(focus.handle()),"Screen focus did not release the binding");
+            keys.postKeyInput();
+            var names=keys.translate("zh_cn",List.of("key.categories.misc","Change Wand Focus"));
+            return Map.of("bindings",found,"translations",names);
+        });
+    }
     public static void main(String[] args) throws Exception {
         Path game=Path.of(args[0]);
         try(var runtime=new EmbeddedLegacyRuntime(game,Path.of(args[1]),new LegacyRuntimeService().inspect(game))) {
             var boot=runtime.boot();if(!Boolean.TRUE.equals(boot.get("legacyFmlStarted")))throw new IllegalStateException(boot.toString());
-            var services=runtime.services();services.items().inLegacy(()->{var audit=new ThaumcraftWandAuditProbe(services);audit.run();
+            var services=runtime.services();services.items().inLegacy(()->{var audit=new ThaumcraftWandAuditProbe(services);audit.run();audit.keyBindings();
                 Path output=game.resolve("logs/mfcl/wand-functions-audit.json");Files.createDirectories(output.getParent());
                 Files.writeString(output,new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(audit.report));
                 System.out.println("MFCL_WAND_AUDIT_WRITTEN "+output);return null;});
