@@ -57,6 +57,11 @@ public final class ApiRuntimeFactory {
             public LegacyStack block(String id) { return runtime.call("HOST_REPRESENTATION", id, () -> representations.block(id)); }
             public String entity(String id) { return runtime.call("HOST_REPRESENTATION", id, () -> representations.entity(id)); }
         });
+        runtime.installHostBlocks((key, metadata) -> {
+            if (metadata < 0 || metadata > 15) throw new IllegalArgumentException("Legacy block metadata outside 0..15");
+            try { return content.modernBlock(new github.com.gengyoubo.mfcl.bridge.HostWorldAccess.Block(key, metadata)); }
+            catch (UnsupportedOperationException missing) { return null; }
+        });
         runtime.installPlayerAccess(new LegacyApiRuntime.PlayerAccess() {
             @Override public <T> T run(Object host, java.util.function.Function<LegacyObject, T> operation) {
                 if (!(host instanceof net.minecraft.server.level.ServerPlayer player) || !player.server.isSameThread())

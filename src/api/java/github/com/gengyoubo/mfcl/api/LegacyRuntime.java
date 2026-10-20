@@ -21,6 +21,14 @@ public interface LegacyRuntime {
     default LegacyHostRepresentations hostRepresentations() {
         throw new UnsupportedOperationException("This MFCL build does not provide host registry representations");
     }
+    /**
+     * Host block state that mirrors an original block at a metadata value, for example to place original ores
+     * from host world generation. Empty when the original block has no host representation. The returned state
+     * is a plain host value and may be cached and used off the game thread.
+     */
+    default <H> Optional<H> hostBlock(String legacyKey, int metadata, Class<H> hostType) {
+        throw new UnsupportedOperationException("This MFCL build does not provide host block states");
+    }
     /** Fallback translations for keys the original legacy language files leave untranslated. */
     default LegacyLanguages languages() {
         throw new UnsupportedOperationException("This MFCL build does not provide legacy language supplements");

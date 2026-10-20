@@ -48,6 +48,19 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         return Objects.requireNonNull(hostRepresentations, "Host representations are unavailable");
     }
 
+    public interface HostBlocks { Object state(String legacyKey, int metadata); }
+    private HostBlocks hostBlocks;
+    public void installHostBlocks(HostBlocks blocks) { this.hostBlocks = Objects.requireNonNull(blocks); }
+    @Override public <H> Optional<H> hostBlock(String legacyKey, int metadata, Class<H> hostType) {
+        Objects.requireNonNull(legacyKey); Objects.requireNonNull(hostType);
+        return call("HOST_BLOCK", legacyKey + "@" + metadata, () -> {
+            if (hostBlocks == null) throw new UnsupportedOperationException("Host block states are unavailable");
+            Object state = hostBlocks.state(legacyKey, metadata);
+            if (state != null && !hostType.isInstance(state)) throw new IllegalArgumentException("Wrong host type for block state: " + hostType.getName());
+            return Optional.ofNullable(hostType.cast(state));
+        });
+    }
+
     private LegacyLanguages languages;
     public void installLanguages(LegacyLanguages languages) { this.languages = Objects.requireNonNull(languages); }
     @Override public LegacyLanguages languages() {
