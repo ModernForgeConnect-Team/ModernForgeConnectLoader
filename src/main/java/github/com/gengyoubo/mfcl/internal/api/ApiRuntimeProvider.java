@@ -9,7 +9,16 @@ public final class ApiRuntimeProvider implements RuntimeProvider {
     private static LegacyApiRuntime active;
     private static Map<String, LegacyModInfo> mods = Map.of();
     private static final List<Consumer<LegacyRuntime>> pending = new ArrayList<>();
+    private static volatile ClassLoader resources;
     public static synchronized void installMods(Map<String, LegacyModInfo> loaded) { mods = Map.copyOf(loaded); }
+    /** Original archives' class loader, used only to read assets/ resources before the gameplay API is ready. */
+    public static void installResources(ClassLoader loader) { resources = loader; }
+    @Override public Optional<byte[]> resource(String path) {
+        var loader = resources;
+        if (loader == null) return Optional.empty();
+        try (var input = loader.getResourceAsStream(path)) { return input == null ? Optional.empty() : Optional.of(input.readAllBytes()); }
+        catch (java.io.IOException failure) { throw new java.io.UncheckedIOException("Cannot read original resource " + path, failure); }
+    }
     @Override public Map<String, LegacyModInfo> loadedMods() {
         synchronized (ApiRuntimeProvider.class) { return active != null && !active.isOpen() ? Map.of() : mods; }
     }

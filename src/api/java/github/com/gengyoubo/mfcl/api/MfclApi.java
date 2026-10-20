@@ -37,6 +37,17 @@ public final class MfclApi {
     public static boolean isModLoaded(String id) {
         return mod(id).isPresent();
     }
+    /**
+     * Reads an {@code assets/...} file from the loaded original mods or the original game, for example
+     * {@code "assets/thaumcraft/textures/blocks/cinnibar.png"}. Available from mod construction (so resource-pack
+     * finders can derive host assets at runtime instead of redistributing them); empty when absent or not loaded.
+     */
+    public static Optional<byte[]> legacyResource(String path) {
+        java.util.Objects.requireNonNull(path);
+        if (!path.startsWith("assets/") || path.contains("..") || path.contains("\\"))
+            throw new IllegalArgumentException("Expected a relative assets/ path: " + path);
+        return Provider.INSTANCE.flatMap(p -> p.resource(path));
+    }
     /** Called once on the host setup thread, or immediately if already ready. Closing cancels a pending callback. */
     public static AutoCloseable whenReady(Consumer<LegacyRuntime> listener) {
         java.util.Objects.requireNonNull(listener);
