@@ -14,5 +14,9 @@
   "mfcl.mods.file": "File: %s",
   "mfcl.mods.total_loaded": "%s mods loaded (%s: %s, %s: %s)",
   "mfcl.wand.focus.title": "Select wand focus",
-  "mfcl.wand.focus.remove": "Remove focus"
+  "mfcl.wand.focus.remove": "Remove focus",
+  "mfcl.notice.skipped": "%s Forge 1.7.10 mod(s) were not loaded by MFCL",
+  "mfcl.notice.toast": "Legacy mods were skipped; see the title screen and logs/latest.log",
+  "mfcl.notice.mods": "Skipped: %s",
+  "mfcl.notice.more": "… full details in logs/latest.log and logs/mfcl/legacy-1.7.10.json"
 }

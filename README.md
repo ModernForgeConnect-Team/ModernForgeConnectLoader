@@ -23,7 +23,7 @@ The core provides generic mechanisms. Mod-specific behavior belongs in optional 
 
 1. Build MFCL with Java 17, or use a matching build; put the full `mfcl-0.1.0.jar` in the modern game's `mods/` directory.
 2. Obtain original legacy mods and their required dependencies. Put them directly in `mods/1.7.10/`, rather than the modern mods directory.
-3. Prepare the private legacy runtime and its verified input manifest from a source checkout with `.\tools\prepare-legacy-runtime.ps1 -GameDirectory <game-directory> -Boot` (see [runtime installation](docs/testing.md#runtime-installation)). The mod JAR and Dependency Resolver do not contain a legacy Minecraft runtime; the script downloads and derives it locally.
+3. Launch once with internet access: MFCL downloads, verifies and prepares the private legacy runtime and its input manifest by itself (see [Installing for players](#installing-for-players)). The mod JAR and Dependency Resolver do not contain a legacy Minecraft runtime. From a source checkout, `.\tools\prepare-legacy-runtime.ps1 -GameDirectory <game-directory> -Boot` runs the same preparation ahead of time (see [runtime installation](docs/testing.md#runtime-installation)).
 4. Launch Forge and inspect `logs/mfcl/legacy-1.7.10.json` and `logs/mfcl/runtime-1.7.10.json` for discovery, actual loading stages and failures.
 
 ```text
@@ -40,6 +40,24 @@ The core provides generic mechanisms. Mod-specific behavior belongs in optional 
 ```
 
 MFCL reads the game's own directory and scans only JARs directly inside `mods/1.7.10/`. Original Minecraft, Forge and third-party mod files are not redistributed with MFCL.
+
+### Installing for players
+
+1. Put the MFCL JAR in the instance's `mods/` folder (for example a PCL / MultiMC / official-launcher game directory).
+2. Put the original Forge 1.7.10 mods and their dependencies in `mods/1.7.10/`.
+3. Start the game once **with internet access**.
+
+On that first launch MFCL notices that `mods/1.7.10/` contains JARs but the instance has no usable `mfcl/runtime/1.7.10/` folder, and prepares the private Forge 1.7.10 runtime by itself: it downloads Minecraft 1.7.10, its libraries, Forge 10.13.4.1614, the MCP mappings, Forge's Scala libraries and the 1.7.10 language files from the official Mojang, Forge and Maven Central servers, checks every file against a pinned hash, applies Forge's binary patches and SRG mappings, and writes `runtime-manifest.json`. This takes one to a few minutes (about 60 MB of downloads) and is logged as `MFCL runtime: …` lines in `logs/latest.log` and on the loading screen. The runtime is built in a temporary folder and moved into place only after it passes MFCL's own check, so an interrupted download never leaves a half-installed runtime; verified downloads are kept in `mfcl/runtime/1.7.10.downloads/` until the runtime is complete, so the next start resumes instead of starting over. Later starts reuse the prepared runtime and do not download anything. MFCL releases do not ship these files because they contain Mojang and Forge binaries.
+
+MFCL re-checks the runtime on every startup (directory, `runtime-manifest.json`, Minecraft/Forge versions, every listed file and its SHA-256) and reports each problem separately in the log and in `logs/mfcl/legacy-1.7.10.json`. A runtime that fails the check is prepared again; the old folder is kept as `mfcl/runtime/1.7.10.replaced-<time>/` rather than deleted.
+
+If the runtime cannot be prepared (for example the game started offline or a server could not be reached), MFCL skips every mod in `mods/1.7.10/`: the game still starts, the title screen shows a red "Forge 1.7.10 mod(s) were not loaded" notice, and `logs/latest.log` contains an `MFCL [RUNTIME_CHECK_FAILED]` error with the reason. Restart with internet access to try again. Without internet you can instead copy an already prepared `mfcl/runtime/1.7.10/` folder from another instance (or `run/mfcl/runtime/1.7.10/` from an MFCL development checkout) to `<game-directory>/mfcl/runtime/1.7.10/`; the folder is portable because `runtime-manifest.json` lists files by relative name and SHA-256 hash, not absolute paths.
+
+To turn the automatic download off, add `-Dmfcl.autoPrepareRuntime=false` to the JVM arguments. Developers can also prepare a runtime from a source checkout with the same installer code:
+
+```powershell
+.\tools\prepare-legacy-runtime.ps1 -GameDirectory 'C:/path/to/.minecraft/versions/1.20.1-Forge_47.4.28' -Boot
+```
 
 ## Implemented compatibility
 

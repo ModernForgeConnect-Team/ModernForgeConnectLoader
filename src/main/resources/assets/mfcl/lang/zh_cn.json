@@ -14,5 +14,9 @@
   "mfcl.mods.file": "文件：%s",
   "mfcl.mods.total_loaded": "%s 个 Mod 已加载（%s：%s，%s：%s）",
   "mfcl.wand.focus.title": "选择法杖杖端",
-  "mfcl.wand.focus.remove": "卸下杖端"
+  "mfcl.wand.focus.remove": "卸下杖端",
+  "mfcl.notice.skipped": "MFCL 未能加载 %s 个 Forge 1.7.10 Mod",
+  "mfcl.notice.toast": "旧版 Mod 已被跳过；请查看标题界面与 logs/latest.log",
+  "mfcl.notice.mods": "已跳过：%s",
+  "mfcl.notice.more": "… 完整信息见 logs/latest.log 与 logs/mfcl/legacy-1.7.10.json"
 }

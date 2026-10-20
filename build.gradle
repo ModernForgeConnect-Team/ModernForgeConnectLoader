@@ -99,8 +99,30 @@ tasks.register('legacyJar', Jar) {
     destinationDirectory = layout.buildDirectory.dir('legacy')
     from sourceSets.legacy1710.output
 }
+// MFCL's own patching code only; the installer downloads its ASM/Pack200/XZ dependencies with pinned hashes.
+tasks.register('runtimePreparationJar', Jar) {
+    archiveFileName = 'mfcl-runtime-preparation.jar'
+    destinationDirectory = layout.buildDirectory.dir('legacy')
+    from sourceSets.preparation.output
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
 tasks.named('processResources') {
     from(tasks.named('legacyJar')) { into 'mfcl' }
+    from(tasks.named('runtimePreparationJar')) { into 'mfcl' }
+    from('docs') { include 'nei-reference-inputs.json', 'legacy-language-inputs.json'; into 'mfcl/runtime-inputs' }
+}
+tasks.register('installLegacyRuntime', JavaExec) {
+    group = 'development'
+    description = 'Download, verify and prepare the private Forge 1.7.10 runtime for a game directory (same code as the mod).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.legacy.runtime.RuntimeInstaller'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    def installArgs = [file(providers.gradleProperty('legacyGameDir').getOrElse('build/nei-smoke/game')).absolutePath]
+    if (project.hasProperty('legacyRuntimeDir')) installArgs += ['--runtime', file(project.property('legacyRuntimeDir')).absolutePath]
+    if (project.hasProperty('legacyDownloadDir')) installArgs += ['--downloads', file(project.property('legacyDownloadDir')).absolutePath]
+    if (project.hasProperty('legacyForceInstall')) installArgs += ['--force']
+    args installArgs
 }
 tasks.register('prepareLegacyRuntime', JavaExec) {
     group = 'development'

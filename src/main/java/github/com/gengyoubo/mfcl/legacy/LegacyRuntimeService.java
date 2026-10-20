@@ -20,6 +20,15 @@ public final class LegacyRuntimeService {
     public EmbeddedLegacyRuntime runtime() { return runtime; }
     public java.util.Set<String> loadedModIds() { return loadedModIds; }
     public java.util.Map<String, String> loadedModVersions() { return loadedModVersions; }
+    private String autoPrepareFailure;
+
+    /**
+     * Downloads and prepares the private runtime when legacy mods need it and it is missing or broken; call before
+     * {@link #start}. A failure (for example offline) is kept and reported by the startup check instead of thrown.
+     */
+    public void prepareRuntime(Path gameDirectory, Path runtimeDirectory, java.util.function.Consumer<String> progress) {
+        autoPrepareFailure = github.com.gengyoubo.mfcl.legacy.runtime.RuntimeInstaller.prepareIfNeeded(gameDirectory, runtimeDirectory, progress);
+    }
 
     public Report start(Path gameDirectory, Path runtimeDirectory) {
         return start(gameDirectory, runtimeDirectory, null);
@@ -28,14 +37,28 @@ public final class LegacyRuntimeService {
         loadedModIds = java.util.Set.of();
         loadedModVersions = java.util.Map.of();
         Report inspected = inspect(gameDirectory);
-        if (inspected.state() != State.RUNTIME_NOT_READY) return inspected;
+        // Checked on every startup, also without legacy mods (then only as notices), so a broken runtime is visible early.
+        List<LegacyDiagnostic> runtimeCheck = LegacyRuntimeCheck.run(gameDirectory, runtimeDirectory, inspected.archives(), autoPrepareFailure);
+        if (inspected.state() != State.RUNTIME_NOT_READY) {
+            if (runtimeCheck.isEmpty()) return inspected;
+            List<LegacyDiagnostic> diagnostics = new ArrayList<>(inspected.diagnostics());
+            diagnostics.addAll(runtimeCheck);
+            Report checked = new Report(inspected.targetMinecraft(), inspected.sourceMinecraft(), inspected.modDirectory(), inspected.reportFile(),
+                    inspected.state(), false, false, inspected.archives(), diagnostics);
+            try { writeReport(Path.of(checked.reportFile()), checked); }
+            catch (IOException error) { throw new IllegalStateException("Cannot save legacy boot report", error); }
+            return checked;
+        }
         List<LegacyDiagnostic> diagnostics = new ArrayList<>(inspected.diagnostics());
         diagnostics.removeIf(d -> d.code().equals("LEGACY_RUNTIME_NOT_READY"));
         boolean started = false, clientDataReady = false;
         State state = State.RUNTIME_NOT_READY;
         try {
-            if (!Files.isRegularFile(runtimeDirectory.resolve("minecraft-forge-1.7.10-srg.jar"))) {
-                diagnostics.add(LegacyDiagnostic.notice("RUNTIME_INPUT_MISSING", "Prepare the private Forge 1.7.10 runtime in " + runtimeDirectory));
+            diagnostics.addAll(runtimeCheck);
+            if (runtimeCheck.stream().anyMatch(LegacyDiagnostic::error)) {
+                // Not a quiet notice: every discovered legacy mod is skipped, so make it a runtime failure that the
+                // log, the reports and the client UI all surface.
+                state = State.RUNTIME_FAILED;
             } else {
                 runtime = new EmbeddedLegacyRuntime(gameDirectory, runtimeDirectory, inspected);
                 runtime.openGlBackend(backend);

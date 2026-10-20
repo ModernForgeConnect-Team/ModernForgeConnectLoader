@@ -37,6 +37,7 @@ public final class LegacyModListScreen extends ModListScreen {
         List<LegacyInfo> entries = catalog.entries().stream().map(entry ->
                 new LegacyInfo(entry.mod(), entry.file(), catalog.sourceMinecraft(), entry.loaded(), entry.loaded() ? "" : catalog.failure())).toList();
         if (entries.isEmpty()) return;
+        LegacyRuntimeNotice.install(catalog);
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Opening event) -> {
             if (event.getNewScreen() != null && event.getNewScreen().getClass() == ModListScreen.class)
                 event.setNewScreen(new LegacyModListScreen(event.getCurrentScreen(), entries));
