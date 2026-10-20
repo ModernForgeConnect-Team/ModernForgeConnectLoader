@@ -36,7 +36,7 @@ public final class HostBlockMapping {
     }
     public HostWorldAccess.Block read(BlockState state) {
         var mapped=blocks.get(state.getBlock());
-        if(mapped==null)throw new UnmappedLegacyBlockException("No old Block representation: "+state);
+        if(mapped==null){github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("block "+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()),"host block has no original representation");throw new UnmappedLegacyBlockException("No old Block representation: "+state);}
         String key=mapped.legacyKey();int meta=mapped.metadata();
         // Connection, shape and waterlogged properties do not change the original block/item variant.
         // Old fences/panes/stairs compute their connections from neighboring world cells.

@@ -31,15 +31,17 @@
 | 当前功能 | 归属 / 本轮处理 | 后续边界 |
 | --- | --- | --- |
 | `ThaumcraftKnowledge` | 位于 `compat.thaumcraft`；由可选 `ThaumcraftAdapter` 通过 `LegacyPlayerState.Hooks` 安装。核心玩家保存、加载和物品使用已取消对该实现的直接调用 | TC Modern Lib 兼容实现层逐步迁出；当前仍随 MFCL 打包 |
-| `ItemThaumometer.doScan()` 专用处理 | 暂时保留现有服务端验证路径 | 在 TC4 适配层继续迁移，不成为通用 API 的扫描规则 |
-| `PacketScannedToServer` 特殊捕获 | 暂时保留，维持客户端完成通知和服务端验证 | 通用网络桥完成后由 TC4 适配层替换 |
+| `ItemThaumometer.doScan()` 专用处理 | 已迁至 `compat.thaumcraft.ThaumcraftScanner`。核心只通过通用 `LegacyHeldScanners.Scanner` 按旧物品键找到扫描器，并在服务端调用其 `complete` 重新确认目标 | TC4 适配层可随 TC Modern Lib 迁出 MFCL |
+| `PacketScannedToServer` 特殊捕获 | 已迁至 TC4 扫描器的 `completion` 判断；`LegacyPackets.captureScan` 只接受当前扫描器声明的完成请求。TC4 研究 / 要素 / 已扫描状态同步改由 `LegacyPlayerState.Hooks.synchronize` 发送 | 通用网络桥完成后可替换宿主扫描消息 |
 | 透镜特定动态渲染 | `LegacyItemRenderer` 只调用通用 `LegacyDynamicItems.Renderer`；TC4 适配层选择透镜 / 显示上下文，并处理不可映射目标的回退 | 可在独立 TC4 客户端适配库安装相同实现 |
 
 `LegacyDynamicItems` 在每帧按旧物品键和旧显示上下文选择 renderer，返回捕获的几何和文字，空结果继续使用已冻结模型。不同 ID 的 renderer 同时认领同一个物品上下文会明确报冲突。通用 `LiveLegacyItemCapture` 提供真实世界 / 玩家上下文下的原始第一人称捕获，不包含 TC4 物品 ID；捕获结束恢复临时相机和装备进度。
 
 `LegacyPlayerState` 在原始 NBT 序列化前后调用适配器钩子。世界作用域按逆序恢复，部分进入失败也回滚已进入的作用域，避免集成服务器的知识状态泄漏到客户端。没有 TC4 的旧运行时不会安装这些知识和动态渲染实现。
 
-这两个 `bridge` SPI 面向 MFCL 宿主适配层，尚未放入独立 API JAR；不要把它们误认为已稳定的外部 TC Modern Lib API。
+`LegacyHeldScanners` 以同样方式工作：同一旧物品被两个扫描器认领时明确报错；没有扫描器的物品在使用 tick 中发出任何旧服务端包都会失败，而不是被静默忽略。
+
+这些 `bridge` SPI 面向 MFCL 宿主适配层，尚未放入独立 API JAR；不要把它们误认为已稳定的外部 TC Modern Lib API。
 
 ## 编译与依赖
 

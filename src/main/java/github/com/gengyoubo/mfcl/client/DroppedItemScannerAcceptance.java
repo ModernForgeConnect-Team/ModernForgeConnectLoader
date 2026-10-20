@@ -46,7 +46,7 @@ final class DroppedItemScannerAcceptance {
             pending.join();release(mc);pending=server(mc,()->{
                 if(scanned(mc,true,"minecraft:dirt",0)||pool(mc,true)!=awarded)throw new IllegalStateException("Replacing the target entity did not cancel scanning");
                 var player=player(mc);var s=content.services();
-                var result=content.itemUse().applyScan(s.worlds().bound(player.serverLevel()),source(player),(byte)2,0,0,replacedId,"","@",player.getPersistentData().getByteArray(ModernContentBridge.LEGACY_ENTITY_DATA));
+                var result=content.itemUse().applyScan(s.worlds().bound(player.serverLevel()),source(player),new LegacyClientData.Stack("Thaumcraft:ItemThaumometer",0,1,"",""),new LegacyItemUse.Scan((byte)2,0,0,replacedId,""),"@",player.getPersistentData().getByteArray(ModernContentBridge.LEGACY_ENTITY_DATA));
                 if(result.accepted()||pool(mc,true)!=awarded)throw new IllegalStateException("Server accepted a stale entity ID for another drop");
                 return true;
             });phase=8;frames=0;

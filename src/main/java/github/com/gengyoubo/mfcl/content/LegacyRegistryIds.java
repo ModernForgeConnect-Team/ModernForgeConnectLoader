@@ -42,6 +42,8 @@ public final class LegacyRegistryIds {
         for(var mapping:missing) {
             T target=previous.get(mapping.getKey());
             if(target!=null)mapping.remap(target);
+            else if(mapping.getKey().getNamespace().equals("mfcl")||entries.keySet().stream().anyMatch(key->id(key).getNamespace().equals(mapping.getKey().getNamespace())))
+                github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("saved "+mapping.getKey(),"saved world references an entry that is no longer loaded");
         }
     }
 }

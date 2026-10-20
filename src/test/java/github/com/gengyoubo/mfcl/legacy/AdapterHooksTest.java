@@ -50,4 +50,33 @@ class AdapterHooksTest {
         }
         assertTrue(registry.capture(stack,"EQUIPPED").isEmpty());
     }
+    @Test void heldScannersAreOwnedByOneAdapterAndGateCapturedRequests() throws Exception {
+        var registry = new LegacyHeldScanners();
+        class Scanner implements LegacyHeldScanners.Scanner {
+            final String id; Scanner(String id) { this.id = id; }
+            public String id() { return id; }
+            public boolean supports(String item) { return item.equals("test:scanner"); }
+            public boolean completion(Object packet) { return packet instanceof String; }
+            public LegacyItemUse.Scan read(Object packet) { return new LegacyItemUse.Scan((byte)1, 2, 3, 0, ""); }
+            public boolean complete(Object world, Object player, Object held, LegacyItemUse.Scan scan, String prefix) { return true; }
+        }
+        assertTrue(registry.forItem("test:scanner").isEmpty());
+        var first = new Scanner("test:first");
+        try (var registration = registry.register(first)) {
+            assertSame(first, registry.forItem("test:scanner").orElseThrow());
+            assertTrue(registry.forItem("test:other").isEmpty());
+            assertThrows(IllegalArgumentException.class, () -> registry.register(first));
+            var second = registry.register(new Scanner("test:second"));
+            assertThrows(IllegalStateException.class, () -> registry.forItem("test:scanner"));
+            second.close();
+            var wrapper = new Object();
+            try (var scope = LegacyPackets.captureScan(java.util.UUID.randomUUID(), first::completion)) {
+                assertTrue(LegacyPackets.sendToServer(wrapper, "completion request"));
+                assertEquals("completion request", scope.scanRequest());
+                assertThrows(UnsupportedOperationException.class, () -> LegacyPackets.sendToServer(wrapper, 42));
+            }
+            assertFalse(LegacyPackets.sendToServer(wrapper, "outside a scan"));
+        }
+        assertTrue(registry.forItem("test:scanner").isEmpty());
+    }
 }

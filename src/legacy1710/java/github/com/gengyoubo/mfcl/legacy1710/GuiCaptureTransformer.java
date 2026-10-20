@@ -18,9 +18,20 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.client.multiplayer.PlayerControllerMP")
                 || name.equals("cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
-                || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper"))) return bytes;
+                || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper")
+                || name.equals("cpw.mods.fml.common.eventhandler.EventBus"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (name.equals("cpw.mods.fml.common.eventhandler.EventBus")) {
+                // Records which old event types are actually delivered, for the undelivered-subscription diagnostic.
+                if(m.name.equals("post")&&m.desc.equals("(Lcpw/mods/fml/common/eventhandler/Event;)Z")) {
+                    InsnList posted=new InsnList();posted.add(new VarInsnNode(Opcodes.ALOAD,1));
+                    posted.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyDiagnostics","posted","(Ljava/lang/Object;)V",false));m.instructions.insert(posted);
+                    try { Class.forName("github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics",true,getClass().getClassLoader()).getMethod("eventTrackingInstalled").invoke(null); }
+                    catch (ReflectiveOperationException | LinkageError unavailable) { }
+                }
+                continue;
+            }
             if (name.endsWith(".SimpleNetworkWrapper")) {
                 String packets="github/com/gengyoubo/mfcl/bridge/LegacyPackets";
                 if(m.name.equals("<init>")) {

@@ -102,6 +102,7 @@ public final class LegacyBlockEntity extends BlockEntity {
             if (ticked) successfulTicks++;
         } catch (Exception | LinkageError failure) {
             logicSuspended = true;
+            github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("tile tick " + key(), failure);
             if (level.getBlockEntity(worldPosition) instanceof LegacyBlockEntity current) current.logicSuspended = true;
             com.mojang.logging.LogUtils.getLogger().error("MFCL paused original tile logic for {} at {} after rollback",key(),worldPosition,failure);
         }

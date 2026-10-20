@@ -23,7 +23,7 @@ The core provides generic mechanisms. Mod-specific behavior belongs in optional 
 
 1. Build MFCL with Java 17, or use a matching build; put the full `mfcl-0.1.0.jar` in the modern game's `mods/` directory.
 2. Obtain original legacy mods and their required dependencies. Put them directly in `mods/1.7.10/`, rather than the modern mods directory.
-3. Prepare the private legacy runtime and its verified input manifest. See [test environment and preparation](docs/testing.md). The mod JAR and Dependency Resolver do not contain or automatically install a complete legacy Minecraft runtime.
+3. Prepare the private legacy runtime and its verified input manifest from a source checkout with `.\tools\prepare-legacy-runtime.ps1 -GameDirectory <game-directory> -Boot` (see [runtime installation](docs/testing.md#runtime-installation)). The mod JAR and Dependency Resolver do not contain a legacy Minecraft runtime; the script downloads and derives it locally.
 4. Launch Forge and inspect `logs/mfcl/legacy-1.7.10.json` and `logs/mfcl/runtime-1.7.10.json` for discovery, actual loading stages and failures.
 
 ```text
@@ -59,7 +59,7 @@ The [technical documentation index](docs/README.md) links detailed scope, origin
 
 ## Compatibility limits
 
-MFCL is not a complete Forge 1.7.10 client, universal OpenGL emulator or replacement for every legacy game subsystem. Arbitrary mods, custom GUIs/renderers, machines, world generation, entities, player abilities and network protocols remain partially supported or unimplemented. Dedicated-server compatibility is not established by integrated-server tests.
+MFCL is not a complete Forge 1.7.10 client, universal OpenGL emulator or replacement for every legacy game subsystem. Arbitrary mods, custom GUIs/renderers, machines, world generation, entities, player abilities and network protocols remain partially supported or unimplemented. A headless dedicated server has been validated with TC4 for startup, original tile/inventory/NBT persistence and restart; client connections, reconnects and multi-player play on a dedicated server are not yet validated.
 
 Conversions reject unsupported or lossy data. Modern-only blocks/items may have no original representation. Full event forwarding and generic entity/player conversion are still pending. Standard crafting support does not imply support for arcane, crucible, infusion or other mod-specific crafting systems.
 

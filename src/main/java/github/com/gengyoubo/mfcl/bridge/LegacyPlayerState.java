@@ -10,6 +10,8 @@ public final class LegacyPlayerState {
         default void initialize(Object player) throws Exception { }
         default void save(Object player, Object originalNbt) throws Exception { }
         default void load(Object player, Object originalNbt) throws Exception { }
+        /** Sends the adapter's player state to that player's client (login, after a server-side change). */
+        default void synchronize(Object player) throws Exception { }
     }
     private final Map<String, Hooks> hooks = new LinkedHashMap<>();
     public synchronized AutoCloseable register(Hooks hook) {
@@ -37,4 +39,5 @@ public final class LegacyPlayerState {
     public void initialize(Object player) throws Exception { for (var hook : snapshot()) hook.initialize(player); }
     public void save(Object player, Object nbt) throws Exception { for (var hook : snapshot()) hook.save(player, nbt); }
     public void load(Object player, Object nbt) throws Exception { for (var hook : snapshot()) hook.load(player, nbt); }
+    public void synchronize(Object player) throws Exception { for (var hook : snapshot()) hook.synchronize(player); }
 }

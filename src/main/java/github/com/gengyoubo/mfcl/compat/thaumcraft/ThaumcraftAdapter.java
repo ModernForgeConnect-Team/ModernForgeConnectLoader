@@ -28,8 +28,10 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
             @Override public void initialize(Object player) throws Exception { ThaumcraftKnowledge.initialize(loader, player); }
             @Override public void save(Object player, Object nbt) throws Exception { ThaumcraftKnowledge.nbt(loader, player, nbt, true); }
             @Override public void load(Object player, Object nbt) throws Exception { ThaumcraftKnowledge.nbt(loader, player, nbt, false); }
+            @Override public void synchronize(Object player) throws Exception { ThaumcraftScanner.synchronize(loader, player); }
         });
-        return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge");
+        services.scanners().register(new ThaumcraftScanner(loader));
+        return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer");
     }
     @Override public void installClient() {
         ThaumcraftDynamicItems.install(services);

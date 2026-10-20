@@ -38,6 +38,7 @@ minecraft {
             if (project.hasProperty('mfclDeviceSmokeTest')) property 'mfcl.test.device', 'true'
             if (project.hasProperty('mfclCraftingSmokeTest')) property 'mfcl.test.crafting', 'true'
             if (project.hasProperty('mfclApiSmokeTest')) property 'mfcl.test.api', 'true'
+            if (project.hasProperty('mfclServerSmokeTest')) property 'mfcl.test.server', project.property('mfclServerSmokeTest')
             if (project.hasProperty('mfclSmokePrefix')) property 'mfcl.test.smokePrefix', project.property('mfclSmokePrefix')
             if (project.hasProperty('mfclLegacyGui')) property 'mfcl.legacyGui', 'true'
             if (project.hasProperty('mfclLegacyBrowser')) property 'mfcl.legacyGui', 'false'
@@ -246,7 +247,9 @@ tasks.register('bootLegacyRuntime', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'github.com.gengyoubo.mfcl.legacy.runtime.EmbeddedLegacyRuntime'
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
-    workingDir file('build/nei-smoke/game')
-    args file(providers.gradleProperty('legacyGameDir').getOrElse('build/nei-smoke/game')).absolutePath,
+    def bootGameDir = file(providers.gradleProperty('legacyGameDir').getOrElse('build/nei-smoke/game'))
+    workingDir bootGameDir
+    doFirst { bootGameDir.mkdirs() }
+    args bootGameDir.absolutePath,
             file(providers.gradleProperty('legacyRuntimeDir').getOrElse('build/nei-investigation/runtime')).absolutePath
 }

@@ -48,7 +48,11 @@ General forwarding of arbitrary old network protocols and events is unfinished. 
 
 The TC4 scanner captures a completion notification, then validates the actual target against the authoritative server-side old player/world before awarding knowledge. Original research/aspect/scanned-state packets are used for the implemented synchronization. This dedicated path is not a generic packet bridge and is not permission to trust arbitrary client-supplied scan data.
 
-`ItemThaumometer.doScan()` handling and `PacketScannedToServer` capture are temporarily retained. Their migration belongs to the TC4 adapter after the corresponding generic interaction/network contracts are available.
+The core no longer names the thaumometer or its packets. `LegacyHeldScanners` lets an adapter claim a held item, recognize its completion request during the use tick and re-evaluate it on the server; TC4's `ThaumcraftScanner` implements `doScan` / `PacketScannedToServer` handling, and its state packets are sent through `LegacyPlayerState.Hooks.synchronize`. TC4 names still in the core are the biome pack / `mfcl:thaumcraft_biomes` biome source registration and the client scan-notification reader; acceptance probes also use TC4 fixtures.
+
+Old `SimpleNetworkWrapper` and host `SimpleChannel` registrations are checked as they happen. A message ID reused for another type, an ID that aliases after byte truncation, or a second handler for the same type and direction fails the registration, so a bad legacy mod stops legacy initialization with both owners named. Old FML lets one type use one ID per side (TC4's `PacketNote` uses 18 and 21), which is accepted; a host channel must use exactly one index per Java type.
+
+`LegacyDiagnostics` records, with counts and bounded size: host or saved objects without an original counterpart, failures of original callbacks attributed to the first non-host stack frame and its archive, and `@SubscribeEvent` handlers on the old buses whose event type was never posted (the old `EventBus.post` is instrumented). Operators query them with `/mfclapi mappings|errors|events` and write a full report with `/mfclapi dump` (`logs/mfcl/diagnostics-1.7.10.json`).
 
 ## Core and adapter boundary
 

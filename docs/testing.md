@@ -24,18 +24,17 @@ Pinned versions, origins and hashes are recorded in:
 
 Original mod JARs must be supplied separately. Preparation creates derived private runtime files and test fixtures. The [standalone Dependency Resolver](../tools/legacy-dependency-resolver/README.md) verifies declared dependencies; it does not apply Forge binary patches or produce a complete SRG runtime by itself.
 
-## Existing reference preparation workflows
+## Runtime installation
 
-The existing full runtime preparation script uses the NEI reference workflow as its bootstrap input:
+Only the target game directory is required:
 
 ```powershell
-.\tools\prepare-legacy-runtime.ps1 `
-  -NeiJar 'C:/private-inputs/NotEnoughItems-1.7.10-1.0.5.120-universal.jar' `
-  -JavaHome $env:JAVA_HOME `
-  -GameDirectory 'C:/mfcl-test-game'
+.\tools\prepare-legacy-runtime.ps1 -GameDirectory 'C:/mfcl-test-game' -Boot
 ```
 
-This workflow downloads the pinned runtime dependencies from the sources recorded by the scripts/specifications, verifies inputs, applies Forge client patches and SRG mappings, and installs the private runtime into the chosen game's `mfcl/runtime/1.7.10/`. It also prepares NEI reference mods. It is a developer reference workflow, not a universal installer and not a requirement that every production legacy-mod set use NEI.
+The script uses `-JavaHome`, then `JAVA_HOME`, then a Gradle-provisioned JDK 17. It downloads the pinned Forge, launchwrapper and library inputs, Mojang's 1.7.10 client and MCP mappings, verifies every hash, applies Forge client patches and SRG mappings, and installs the private runtime and `runtime-manifest.json` into `mfcl/runtime/1.7.10/`. `-Boot` then starts legacy FML against that runtime and fails if it does not boot. Put original mods in the game's `mods/1.7.10/` afterwards. Nothing is redistributed; all derived files stay on the local machine.
+
+Adding `-NeiJar 'C:/private-inputs/NotEnoughItems-1.7.10-1.0.5.120-universal.jar'` also prepares the NEI reference fixture and installs NEI and CodeChicken into the game. NEI is no longer required to install the runtime.
 
 For TC4 validation, use a separate game directory with only original Thaumcraft and its Baubles prerequisite in `mods/1.7.10/`, and point to the already prepared runtime:
 
@@ -91,6 +90,17 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence, note insertion/place/erase/sync, native reveal/learning and lifter motion | `device-smoke.json` |
 | `mfclTooltipSmokeTest` | Actual JEI single/batch item rendering followed by tooltip depth verification | `jei-tooltip-smoke.json` |
 | `mfclContentSmokeTest` | Reference content registration, rendering, placement and persistence | `content-1.7.10-smoke.json` |
+
+### Dedicated server
+
+`mfclServerSmokeTest` runs on `runServer` without any graphical environment, in two launches against the same world. `write` places an original TC4 tile with an original inventory and an original NBT item in a host chest, lets it tick, saves and stops; `verify` restarts and checks the reloaded state. Both write `server-1.7.10-smoke-<phase>.json`, including runtime diagnostic counts:
+
+```powershell
+.\gradlew.bat runServer -PmfclRunDir=build/dedicated-server -PlegacyRuntimeDir=<runtime> -PmfclServerSmokeTest=write
+.\gradlew.bat runServer -PmfclRunDir=build/dedicated-server -PlegacyRuntimeDir=<runtime> -PmfclServerSmokeTest=verify
+```
+
+The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client connection, disconnect/reconnect and multi-player behaviour on a dedicated server are not covered by this probe.
 
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
 

@@ -155,10 +155,10 @@ public final class ModernContentBridge {
     public void applyServerScan(net.minecraft.server.level.ServerPlayer player, ScanSyncChannel.ScanMessage message) {
         try {
             var held=snapshot(player.getUseItem());
-            if(!player.isUsingItem()||held==null||!held.key().equals("Thaumcraft:ItemThaumometer")||player.getUseItemRemainingTicks()>8)return;
+            if(!player.isUsingItem()||held==null||services.scanners().forItem(held.key()).isEmpty()||player.getUseItemRemainingTicks()>8)return;
             var world = services.worlds().bound(player.serverLevel());
             byte[] prior = player.getPersistentData().contains(LEGACY_ENTITY_DATA) ? player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA) : null;
-            var updated = itemUse.applyScan(world, placer(player), message.type(), message.id(), message.meta(), message.entityId(), message.phenomena(), message.prefix(), prior);
+            var updated = itemUse.applyScan(world, placer(player), held, new LegacyItemUse.Scan(message.type(), message.id(), message.meta(), message.entityId(), message.phenomena()), message.prefix(), prior);
             player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, updated.data());
             updated.messages().forEach(packet->ScanSyncChannel.sendToPlayer(player,packet));
             LogUtils.getLogger().info("MFCL legacy server scan for {}: accepted={}, type={}, id={}, meta={}", player.getName().getString(),updated.accepted(), message.type(), message.id(), message.meta());
@@ -190,7 +190,7 @@ public final class ModernContentBridge {
                     return null;
                 }
             });
-        } catch(Exception failure) { LogUtils.getLogger().error("MFCL original book packet failed for {}",player.getName().getString(),failure); }
+        } catch(Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("book packet "+message.channel()+"#"+message.discriminator(),failure); LogUtils.getLogger().error("MFCL original book packet failed for {}",player.getName().getString(),failure); }
     }
     private void prepareActorContainers(Object actor) throws Exception {
         var loader=services.loader();
@@ -267,7 +267,10 @@ public final class ModernContentBridge {
             vanillaStacks = mapped;
         }
         var original = vanillaStacks.get(stack.getItem());
-        if (original == null) throw new UnsupportedOperationException("No original item representation: " + BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        if (original == null) {
+            github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("item "+BuiltInRegistries.ITEM.getKey(stack.getItem()),"host item has no original representation");
+            throw new UnsupportedOperationException("No original item representation: " + BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        }
         return new LegacyClientData.Stack(original.key(),stack.isDamageableItem() ? stack.getDamageValue() : original.metadata(),stack.getCount(),original.name(),"");
     }
     public ItemStack gameplayStack(LegacyClientData.Stack stack) {
@@ -276,7 +279,10 @@ public final class ModernContentBridge {
         if (!represented.isEmpty()) return represented;
         if (!items.containsKey(stack.key()) && !stack.tag().isEmpty()) throw new UnsupportedOperationException("Original inventory NBT needs a host mapping: " + stack.key());
         var mapped = mapStack(stack);
-        if (mapped.isEmpty()) throw new UnsupportedOperationException("Original inventory item needs a host mapping: " + stack.key());
+        if (mapped.isEmpty()) {
+            github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("legacy item " + stack.key(), "original item has no host item");
+            throw new UnsupportedOperationException("Original inventory item needs a host mapping: " + stack.key());
+        }
         return mapped;
     }
     public ItemStack stack(String key, int metadata, int count, String tag) {
@@ -359,8 +365,8 @@ public final class ModernContentBridge {
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public InteractionResult useOn(UseOnContext context) {
-            // The original scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
-            if(entry.key().equals("Thaumcraft:ItemThaumometer"))return InteractionResult.PASS;
+            // A held scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
+            if(services.scanners().forItem(entry.key()).isPresent())return InteractionResult.PASS;
             return useLegacyItem(context);
         }
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
@@ -518,14 +524,14 @@ public final class ModernContentBridge {
         @Override public boolean hasAnalogOutputSignal(BlockState state) { return comparatorSource; }
         @Override public int getAnalogOutputSignal(BlockState state, Level level, BlockPos pos) {
             try { return services.logic().comparator(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ()); }
-            catch (Exception failure) { LogUtils.getLogger().error("MFCL original comparator query failed at {}",pos,failure); return 0; }
+            catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("comparator "+entry.key(),failure); LogUtils.getLogger().error("MFCL original comparator query failed at {}",pos,failure); return 0; }
         }
         @Override public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) { return power(state,level,pos,side,false); }
         @Override public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) { return power(state,level,pos,side,true); }
         private int power(BlockState state, BlockGetter level, BlockPos pos, Direction side, boolean direct) {
             if (!powerSource) return 0;
             try { return services.logic().signal(entry.key(),renderView(level,pos,state),side.get3DDataValue(),direct); }
-            catch (Exception failure) { LogUtils.getLogger().error("MFCL original power query failed at {}",pos,failure); return 0; }
+            catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("redstone power "+entry.key(),failure); LogUtils.getLogger().error("MFCL original power query failed at {}",pos,failure); return 0; }
         }
         @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(METADATA); }
         @Override public InteractionResult use(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
@@ -570,11 +576,11 @@ public final class ModernContentBridge {
         }
         @Override public boolean triggerEvent(BlockState state, Level level, BlockPos pos, int event, int data) {
             try { return services.logic().event(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),event,data); }
-            catch (Exception failure) { LogUtils.getLogger().error("MFCL original block event failed for {} at {}",entry.key(),pos,failure); return false; }
+            catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("block event "+entry.key(),failure); LogUtils.getLogger().error("MFCL original block event failed for {} at {}",entry.key(),pos,failure); return false; }
         }
         @Override public void tick(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos, net.minecraft.util.RandomSource random) {
             try { logicTransaction(level,pos,() -> { services.logic().scheduled(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ()); return null; },true); }
-            catch (Exception failure) { LogUtils.getLogger().error("MFCL original scheduled tick failed for {} at {}",entry.key(),pos,failure); }
+            catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("scheduled tick "+entry.key(),failure); LogUtils.getLogger().error("MFCL original scheduled tick failed for {} at {}",entry.key(),pos,failure); }
         }
         @Override public RenderShape getRenderShape(BlockState state) {
             return entry.renderType() < 0 && blockRendering.hasTileRenderer(entry.key(), state.getValue(METADATA)) ? RenderShape.INVISIBLE : RenderShape.MODEL;

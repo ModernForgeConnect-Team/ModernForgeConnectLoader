@@ -7,8 +7,8 @@ public final class LegacyPackets {
     public record Message(String channel, int discriminator, byte[] payload) {}
     private record Handler(Object instance, Class<?> type, int discriminator, String side) {}
     private static final class Channel {
-        final String name; final List<Handler> handlers = new ArrayList<>();
-        Channel(String name) { this.name = name; }
+        final String name; final List<Handler> handlers = new ArrayList<>(); final NetworkRegistrationGuard guard;
+        Channel(String name) { this.name = name; guard = NetworkRegistrationGuard.legacy(name); }
     }
     private static final Map<Object,Channel> CHANNELS = Collections.synchronizedMap(new IdentityHashMap<>());
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
@@ -18,15 +18,20 @@ public final class LegacyPackets {
     public static void allowServer(ClassLoader loader,ServerPolicy policy){SERVER_POLICIES.computeIfAbsent(loader,key->new ArrayList<>()).add(policy);}
     private LegacyPackets() {}
     public static void channel(Object wrapper, String name) { CHANNELS.put(wrapper,new Channel(name)); }
+    /** Fails the original registerMessage call, and so legacy initialization, on an ambiguous ID or message type. */
     public static void register(Object wrapper, Object handler, Class<?> message, int discriminator, Object side) {
-        CHANNELS.get(wrapper).handlers.add(new Handler(handler,message,discriminator,side.toString()));
+        Channel channel=CHANNELS.get(wrapper);
+        if(channel==null)throw new IllegalStateException("Old network message "+message.getName()+" registered on an unknown channel");
+        channel.guard.register(discriminator,message,side.toString());
+        channel.handlers.add(new Handler(handler,message,discriminator&0xFF,side.toString()));
     }
     public static Scope capture(UUID recipient) { return new Scope(recipient); }
-    public static Scope captureScan(UUID recipient) {var scope=new Scope(recipient);scope.scan=true;return scope;}
+    /** Also captures the one client request accepted by {@code completion}; any other old serverbound packet fails. */
+    public static Scope captureScan(UUID recipient,java.util.function.Predicate<Object> completion) {var scope=new Scope(recipient);scope.completion=Objects.requireNonNull(completion);return scope;}
     public static final class Scope implements AutoCloseable {
         private final UUID recipient;
         private final List<Message> messages = new ArrayList<>();
-        private boolean scan;
+        private java.util.function.Predicate<Object> completion;
         private Object scanRequest;
         private Scope(UUID recipient) {
             if (CURRENT.get()!=null) throw new IllegalStateException("Nested old packet capture");
@@ -38,8 +43,8 @@ public final class LegacyPackets {
     }
     public static boolean sendToServer(Object wrapper,Object message) throws Exception {
         if(LegacyDeviceInput.send(wrapper,message))return true;
-        Scope scope=CURRENT.get();if(scope==null||!scope.scan)return false;
-        if(!message.getClass().getName().equals("thaumcraft.common.lib.network.playerdata.PacketScannedToServer"))throw new UnsupportedOperationException("Unexpected packet during scan: "+message.getClass().getName());
+        Scope scope=CURRENT.get();if(scope==null||scope.completion==null)return false;
+        if(!scope.completion.test(message))throw new UnsupportedOperationException("Unexpected packet during scan: "+message.getClass().getName());
         scope.scanRequest=message;return true;
     }
     public static Message encode(Object wrapper,Object message,String side) throws Exception {

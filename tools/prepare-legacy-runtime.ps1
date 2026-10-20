@@ -1,17 +1,41 @@
+# Prepares the private Minecraft 1.7.10 / Forge 10.13.4.1614 runtime and installs it into a game directory.
+# Only -GameDirectory is needed for a normal installation:
+#   .\tools\prepare-legacy-runtime.ps1 -GameDirectory 'C:/my-game' -Boot
+# -NeiJar additionally prepares the NEI reference fixture and installs NEI/CodeChicken into that game.
 param(
-    [Parameter(Mandatory=$true)][string]$NeiJar,
-    [Parameter(Mandatory=$true)][string]$JavaHome,
+    [string]$NeiJar,
+    [string]$JavaHome,
     [string]$GameDirectory,
     [switch]$Boot
 )
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-& (Join-Path $PSScriptRoot 'prepare-nei-probe.ps1') -NeiJar $NeiJar -JavaHome $JavaHome
+if (!$JavaHome) {
+    # Prefer an explicit JAVA_HOME, then a Gradle-provisioned JDK 17.
+    $candidates = @()
+    if ($env:JAVA_HOME) { $candidates += $env:JAVA_HOME }
+    $gradleJdks = Join-Path $HOME '.gradle/jdks'
+    if (Test-Path -LiteralPath $gradleJdks) {
+        $candidates += Get-ChildItem -LiteralPath $gradleJdks -Directory -Filter '*17*' | ForEach-Object {
+            $_.FullName; Get-ChildItem -LiteralPath $_.FullName -Directory | ForEach-Object FullName }
+    }
+    foreach ($candidate in $candidates) {
+        $release = Join-Path $candidate 'release'
+        if ((Test-Path -LiteralPath (Join-Path $candidate 'bin/java.exe')) -and (Test-Path -LiteralPath $release) -and
+            ((Get-Content -LiteralPath $release -Raw) -match 'JAVA_VERSION="17')) { $JavaHome = $candidate; break }
+    }
+    if (!$JavaHome) { throw 'No JDK 17 found; pass -JavaHome or set JAVA_HOME' }
+    Write-Output "Using JDK 17: $JavaHome"
+}
+if (!(Test-Path -LiteralPath (Join-Path $JavaHome 'bin/java.exe'))) { throw 'JavaHome must point to a Java 17 JDK' }
+$spec = Get-Content -LiteralPath (Join-Path $workspaceRoot 'docs/nei-reference-inputs.json') -Raw | ConvertFrom-Json
+if ($NeiJar) { & (Join-Path $PSScriptRoot 'prepare-nei-probe.ps1') -NeiJar $NeiJar -JavaHome $JavaHome }
 $inputRoot = Join-Path $workspaceRoot 'build/research-round2/artifacts'
 $runtimeRoot = Join-Path $workspaceRoot 'build/nei-investigation/runtime'
 if (!$GameDirectory) { $GameDirectory = Join-Path $workspaceRoot 'build/nei-smoke/game' }
 $GameDirectory = [IO.Path]::GetFullPath($GameDirectory)
 [IO.Directory]::CreateDirectory($inputRoot) | Out-Null
+[IO.Directory]::CreateDirectory($runtimeRoot) | Out-Null
 
 function Get-Verified([string]$url, [string]$target, [string]$algorithm, [string]$hash) {
     if (!(Test-Path -LiteralPath $target)) {
@@ -24,8 +48,13 @@ function Get-Verified([string]$url, [string]$target, [string]$algorithm, [string
     }
     if ((Get-FileHash -LiteralPath $target -Algorithm $algorithm).Hash -ne $hash) { throw "Cached input hash mismatch: $target" }
 }
+# Forge and the libraries it replaces; the NEI fixture downloads the same pinned files when it is used.
+foreach ($dependency in $spec.dependencies) {
+    if ($dependency.directory -eq 'runtime') { Get-Verified $dependency.url (Join-Path $runtimeRoot $dependency.file) 'SHA256' $dependency.sha256 }
+}
 $metadataPath = Join-Path $inputRoot 'minecraft-1.7.10-version.json'
-Get-Verified 'https://piston-meta.mojang.com/v1/packages/ed5d8789ed29872ea2ef1c348302b0c55e3f3468/1.7.10.json' $metadataPath 'SHA256' '96b4a83b9bd90041170b6f0bda98d8201af52ce778b1202272cb161c54658fcd'
+# Mojang's package URL is the SHA-1 of the file itself.
+Get-Verified 'https://piston-meta.mojang.com/v1/packages/ed5d8789ed29872ea2ef1c348302b0c55e3f3468/1.7.10.json' $metadataPath 'SHA1' 'ed5d8789ed29872ea2ef1c348302b0c55e3f3468'
 $metadata = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
 Get-Verified $metadata.downloads.client.url (Join-Path $inputRoot 'minecraft-client-1.7.10.jar') 'SHA1' $metadata.downloads.client.sha1
 foreach ($library in $metadata.libraries) {
@@ -62,8 +91,7 @@ try {
     [IO.Directory]::CreateDirectory($installedMods) | Out-Null
     $allowedLibraries = [Collections.Generic.HashSet[string]]::new()
     $allowedLibraries.Add('minecraft-forge-1.7.10-srg.jar') | Out-Null
-    $reference = Get-Content -LiteralPath (Join-Path $workspaceRoot 'docs/nei-reference-inputs.json') -Raw | ConvertFrom-Json
-    foreach ($dependency in $reference.dependencies) { if ($dependency.directory -eq 'runtime') { $allowedLibraries.Add($dependency.file) | Out-Null } }
+    foreach ($dependency in $spec.dependencies) { if ($dependency.directory -eq 'runtime') { $allowedLibraries.Add($dependency.file) | Out-Null } }
     foreach ($library in $metadata.libraries) {
         if ($library.downloads.artifact -and $library.name -notmatch 'guava|log4j|commons-lang3') { $allowedLibraries.Add([IO.Path]::GetFileName($library.downloads.artifact.path)) | Out-Null }
     }
@@ -79,15 +107,16 @@ try {
     [IO.File]::WriteAllText((Join-Path $installedRuntime 'runtime-manifest.json'), (@{minecraft='1.7.10'; forge='10.13.4.1614'; inputs=$installedInputs} | ConvertTo-Json -Depth 5))
     & (Join-Path $PSScriptRoot 'install-legacy-language-libraries.ps1') -RuntimeDirectory $installedRuntime -ForgeJar (Join-Path $runtimeRoot 'forge-1.7.10-10.13.4.1614-1.7.10-universal.jar')
     & (Join-Path $PSScriptRoot 'install-legacy-language-assets.ps1') -RuntimeDirectory $installedRuntime
-    foreach ($name in @($reference.nei.file, 'CodeChickenCore-1.7.10-1.0.7.47-universal.jar', 'CodeChickenLib-1.7.10-1.1.3.138-universal.jar')) {
+    if ($NeiJar) { foreach ($name in @($spec.nei.file, 'CodeChickenCore-1.7.10-1.0.7.47-universal.jar', 'CodeChickenLib-1.7.10-1.1.3.138-universal.jar')) {
         $source = Join-Path (Join-Path $workspaceRoot 'build/nei-smoke/game/mods/1.7.10') $name
         $destination = Join-Path $installedMods $name
         if (!(Test-Path -LiteralPath $destination)) { [IO.File]::Copy($source, $destination, $false) }
         elseif ((Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $source).Hash) { throw "Existing mod differs: $destination" }
-    }
+    } }
     Write-Output "Installed private Java 17 runtime: $installedRuntime"
+    Write-Output "Put original 1.7.10 mods and their dependencies in: $installedMods"
     if ($Boot) {
         & .\gradlew.bat bootLegacyRuntime "-PlegacyGameDir=$GameDirectory" "-PlegacyRuntimeDir=$installedRuntime" --console=plain
-        if ($LASTEXITCODE -ne 0) { throw "Legacy FML boot failed; see build/nei-smoke/game/logs/mfcl/runtime-1.7.10.json" }
+        if ($LASTEXITCODE -ne 0) { throw "Legacy FML boot failed; see $GameDirectory/logs/mfcl/runtime-1.7.10.json" }
     }
 } finally { $env:JAVA_HOME = $previousJavaHome; Pop-Location }

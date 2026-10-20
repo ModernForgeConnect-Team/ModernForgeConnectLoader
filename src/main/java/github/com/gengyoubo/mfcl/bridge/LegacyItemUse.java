@@ -45,25 +45,18 @@ public final class LegacyItemUse {
             int duration = (int) itemType.getMethod("func_77626_a", stackType).invoke(item, stack);
             var after=returned==null?null:services.items().snapshot(returned);
             boolean used = duration > 0 || !messages.isEmpty() || !feedback.isEmpty() || after==null || !after.key().equals(snapshot.key())||after.metadata()!=snapshot.metadata()||after.count()!=snapshot.count()||!after.tag().equals(snapshot.tag());
-            String prompt = scanPrompt(item, loader);
+            String prompt = prompt(snapshot.key(), item);
             boolean remote = loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world);
             LogUtils.getLogger().info("MFCL legacy use {}@{}: remote={}, duration={}, target={}", snapshot.key(), snapshot.metadata(), remote, duration, prompt);
             return new Result(used, duration, prompt, messages,feedback);
             }
         });
     }
-    /**
-     * A held-use item that records a target while scanning (Thaumcraft's thaumometer stores it in the package-private
-     * {@code startScan}) exposes no modern overlay yet, so surface the target as text instead of leaving the click silent.
-     */
-    private static String scanPrompt(Object item, ClassLoader loader) {
+    /** A held scanner's current target, surfaced as text because no modern scanning overlay exists yet. */
+    private String prompt(String key, Object item) {
         try {
-            Object scan = scanField(item);
-            if (scan == null) return null;
-            byte type = scan.getClass().getField("type").getByte(scan);
-            if (type == 3) return (String) scan.getClass().getField("phenomena").get(scan);
-            return scanTargetName(loader, type == 2 ? scan.getClass().getField("entity").get(scan) : null,
-                    scan.getClass().getField("id").getInt(scan), scan.getClass().getField("meta").getInt(scan));
+            var scanner = services.scanners().forItem(key);
+            return scanner.isPresent() ? scanner.get().prompt(item) : null;
         } catch (Throwable absent) { return null; }
     }
     /**
@@ -86,13 +79,6 @@ public final class LegacyItemUse {
             return (String) itemType.getMethod("func_77653_i", stackType).invoke(stackType.getMethod("func_77973_b").invoke(stack), stack);
         }
     }
-    private static Object scanField(Object item) throws Exception {
-        for (Class<?> type = item.getClass(); type != null; type = type.getSuperclass()) {
-            try { Field field = type.getDeclaredField("startScan"); field.setAccessible(true); return field.get(item); }
-            catch (NoSuchFieldException absent) { }
-        }
-        return null;
-    }
     public Scan usingTick(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader();
@@ -102,21 +88,18 @@ public final class LegacyItemUse {
             Object stack = services.items().materialize(snapshot);
             Object item = stackType.getMethod("func_77973_b").invoke(stack);
             Object player = actor(world, placer, snapshot);
+            var scanner = services.scanners().forItem(snapshot.key()).orElse(null);
             Object request;
-            try(var packets=LegacyPackets.captureScan(placer.id())) {
+            try(var packets=LegacyPackets.captureScan(placer.id(),scanner==null?packet->false:scanner::completion)) {
                 itemType.getMethod("onUsingTick", stackType, playerType, int.class).invoke(item, stack, player, remaining);
                 request=packets.scanRequest();
             }
             if (remaining <= 6) LogUtils.getLogger().info("MFCL legacy use tick {}@{}: remaining={}, target={}",
-                    snapshot.key(), snapshot.metadata(), remaining, scanPrompt(item, loader));
+                    snapshot.key(), snapshot.metadata(), remaining, prompt(snapshot.key(), item));
             // Only the original successful completion branch emits this packet; clearing startScan also happens on cancellation.
-            if(request!=null) {
-                return new Scan((byte)packetField(request,"type"),(int)packetField(request,"id"),(int)packetField(request,"md"),(int)packetField(request,"entityid"),(String)packetField(request,"phenomena"));
-            }
-            return null;
+            return request==null?null:scanner.read(request);
         });
     }
-    private static Object packetField(Object packet,String name) throws Exception {var field=packet.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(packet);}
     public Object clientActor(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack snapshot) throws Exception {return actor(world,placer,snapshot);}
     /** Restores previously persisted old player data into the cached actor before any legacy logic reads it. */
     public void loadPersisted(Object world, LegacyTiles.Placer placer, byte[] data) throws Exception {
@@ -128,43 +111,26 @@ public final class LegacyItemUse {
         return services.items().inLegacy(()->{try(var state=services.playerState().enter(world)){return services.playerData().read(actor(world,placer,null));}});
     }
     /**
-     * Runs the original {@code ScanManager.completeScan} against the authoritative (server) old player. The
-     * caller passes the player's previously persisted old entity data (or null) and gets the updated bytes back,
-     * so research survives across sessions.
+     * Lets the held item's scanner adapter re-evaluate a client-reported scan against the authoritative (server) old
+     * player. The caller passes the player's previously persisted old entity data (or null) and gets the updated bytes
+     * back, so research survives across sessions.
      */
-    public AppliedScan applyScan(Object world, LegacyTiles.Placer placer, byte type, int id, int meta, int entityId, String phenomena, String prefix, byte[] priorData) throws Exception {
+    public AppliedScan applyScan(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack held, Scan scan, String prefix, byte[] priorData) throws Exception {
+        var scanner = services.scanners().forItem(held.key()).orElseThrow(() -> new IllegalArgumentException("Not a held scanner: " + held.key()));
         return services.items().inLegacy(() -> {
-            var loader = services.loader();
             try(var knowledge=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id())) {
-            var held=new LegacyClientData.Stack("Thaumcraft:ItemThaumometer",0,1,"","");
             Object player = actor(world, placer, held);
             if (priorData != null && priorData.length != 0) services.playerData().write(player, priorData);
-            Object stack=services.items().materialize(held);Object item=loader.loadClass("net.minecraft.item.ItemStack").getMethod("func_77973_b").invoke(stack);
-            var target=item.getClass().getDeclaredMethod("doScan",loader.loadClass("net.minecraft.item.ItemStack"),loader.loadClass("net.minecraft.world.World"),loader.loadClass("net.minecraft.entity.player.EntityPlayer"),int.class);target.setAccessible(true);
-            Object scan=target.invoke(item,stack,world,player,0);
-            boolean accepted=false;
-            Object targetEntity=scan==null?null:scan.getClass().getField("entity").get(scan);
-            if(scan!=null&&scan.getClass().getField("type").getByte(scan)==type&&scan.getClass().getField("id").getInt(scan)==id&&scan.getClass().getField("meta").getInt(scan)==meta&&Objects.equals(scan.getClass().getField("phenomena").get(scan),phenomena)
-                    &&(type!=2||targetEntity!=null&&(int)loader.loadClass("net.minecraft.entity.Entity").getMethod("func_145782_y").invoke(targetEntity)==entityId))
-                accepted=(boolean)loader.loadClass("thaumcraft.common.lib.research.ScanManager")
-                    .getMethod("completeScan", loader.loadClass("net.minecraft.entity.player.EntityPlayer"), loader.loadClass("thaumcraft.api.research.ScanResult"), String.class)
-                    .invoke(null, player, scan, "@");
-            syncPlayer(player);
+            boolean accepted=scanner.complete(world,player,services.items().materialize(held),scan,prefix);
+            services.playerState().synchronize(player);
             return new AppliedScan(accepted,services.playerData().read(player),packets.messages());
             }
         });
     }
     public List<LegacyPackets.Message> sync(Object world,LegacyTiles.Placer placer) throws Exception {
         return services.items().inLegacy(()->{try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id())) {
-            syncPlayer(actor(world,placer,null));return packets.messages();
+            services.playerState().synchronize(actor(world,placer,null));return packets.messages();
         }});
-    }
-    private void syncPlayer(Object player) throws Exception {
-        var loader=services.loader();if(loader.getResource("thaumcraft/common/lib/network/PacketHandler.class")==null)return;
-        Object wrapper=loader.loadClass("thaumcraft.common.lib.network.PacketHandler").getField("INSTANCE").get(null);
-        var send=wrapper.getClass().getMethod("sendTo",loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessage"),loader.loadClass("net.minecraft.entity.player.EntityPlayerMP"));
-        for(String name:new String[]{"PacketSyncResearch","PacketSyncAspects","PacketSyncScannedItems","PacketSyncScannedEntities","PacketSyncScannedPhenomena"})
-            send.invoke(wrapper,loader.loadClass("thaumcraft.common.lib.network.playerdata."+name).getConstructor(loader.loadClass("net.minecraft.entity.player.EntityPlayer")).newInstance(player),player);
     }
     public void release(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
         services.items().inLegacy(() -> {
