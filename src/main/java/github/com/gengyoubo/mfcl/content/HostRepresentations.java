@@ -44,7 +44,8 @@ public final class HostRepresentations implements LegacyHostRepresentations {
             Object old = type.getConstructor().newInstance();
             String key = key("item", value);
             type.getMethod("func_77655_b", String.class).invoke(old, key);
-            register(type.getField("field_150901_e").get(null), -1, key, old);
+            LegacyHostRegistry.registerItem(loader, key, old);
+            LegacyHostRegistry.label(loader, "item." + key + ".name", () -> new ItemStack(item).getHoverName().getString());
             var stack = new LegacyStack(key, 0, 1, "");
             items.put(item, stack); reverseItems.put(key, item);
             return stack;
@@ -74,18 +75,14 @@ public final class HostRepresentations implements LegacyHostRepresentations {
             Object old = constructor.newInstance(material.getField("field_151576_e").get(null));
             String key = key("block", value);
             type.getMethod("func_149663_c", String.class).invoke(old, key);
-            register(type.getField("field_149771_c").get(null), -1, key, old);
             Object item = loader.loadClass("net.minecraft.item.ItemBlock").getConstructor(type).newInstance(old);
-            int numeric = (int) type.getMethod("func_149682_b", type).invoke(null, old);
-            register(loader.loadClass("net.minecraft.item.Item").getField("field_150901_e").get(null), numeric, key, item);
+            LegacyHostRegistry.registerBlock(loader, key, old, item);
+            LegacyHostRegistry.label(loader, "tile." + key + ".name", () -> block.getName().getString());
             var stack = new LegacyStack(key, 0, 1, "");
             blocks.put(block, stack); reverseBlocks.put(key, block);
             if (block.asItem() != Items.AIR) { items.put(block.asItem(), stack); reverseItems.put(key, block.asItem()); }
             return stack;
         });
-    }
-    private static void register(Object registry, int numeric, String key, Object value) throws Exception {
-        registry.getClass().getMethod("func_148756_a", int.class, String.class, Object.class).invoke(registry, numeric, key, value);
     }
     @Override public synchronized String entity(String value) {
         var name = id(value);
@@ -111,14 +108,16 @@ public final class HostRepresentations implements LegacyHostRepresentations {
             constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0); constructor.visitVarInsn(Opcodes.ALOAD, 1);
             constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/entity/EntityLiving", "<init>", "(Lnet/minecraft/world/World;)V", false);
             constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(0, 0); constructor.visitEnd();
-            for (String method : List.of("func_70088_a", "func_70037_a", "func_70014_b")) {
-                var mv = writer.visitMethod(Opcodes.ACC_PUBLIC, method, method.equals("func_70088_a") ? "()V" : "(Lnet/minecraft/nbt/NBTTagCompound;)V", null, null);
+            // Inherit EntityLiving's watcher bootstrap; its constructor initializes health through those slots.
+            for (String method : List.of("func_70037_a", "func_70014_b")) {
+                var mv = writer.visitMethod(Opcodes.ACC_PUBLIC, method, "(Lnet/minecraft/nbt/NBTTagCompound;)V", null, null);
                 mv.visitCode(); mv.visitInsn(Opcodes.RETURN); mv.visitMaxs(0, 2); mv.visitEnd();
             }
             writer.visitEnd(); byte[] bytes = writer.toByteArray();
             var type = (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class)
                     .invoke(loader, binary.replace('/', '.'), bytes, 0, bytes.length);
             names.put(key, type); ((Map<Class<?>, String>) list.getField("field_75626_c").get(null)).put(type, key);
+            LegacyHostRegistry.label(loader, "entity." + key + ".name", () -> BuiltInRegistries.ENTITY_TYPE.get(name).getDescription().getString());
             entities.put(value, key); entityClasses.put(value, type); return key;
         });
     }

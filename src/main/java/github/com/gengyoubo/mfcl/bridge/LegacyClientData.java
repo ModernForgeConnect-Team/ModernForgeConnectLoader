@@ -38,10 +38,12 @@ public final class LegacyClientData {
     private Map<String, float[]> iconLayout = Map.of();
     private boolean contextInitialized;
     private LegacyClientResources.Context resourceContext;
+    private final List<Path> resourcePacks;
 
     private final List<Consumer<List<Object>>> catalogListeners = new ArrayList<>();
-    public LegacyClientData(ClassLoader loader) throws Exception {
-        this.loader = loader;
+    public LegacyClientData(ClassLoader loader) throws Exception { this(loader, List.of()); }
+    public LegacyClientData(ClassLoader loader, List<Path> resourcePacks) throws Exception {
+        this.loader = loader; this.resourcePacks = List.copyOf(resourcePacks);
         stackType = loader.loadClass("net.minecraft.item.ItemStack"); itemType = loader.loadClass("net.minecraft.item.Item");
         registry = itemType.getField("field_150901_e").get(null);
         itemOfStack = stackType.getMethod("func_77973_b"); copyStack = stackType.getMethod("func_77946_l");
@@ -50,7 +52,10 @@ public final class LegacyClientData {
     }
 
     public ClassLoader loader() { return loader; }
-    public Object legacyItem(String key) throws Exception { return itemByName.invoke(registry, key); }
+    public Object legacyItem(String key) throws Exception {
+        Object represented = LegacyHostRegistry.item(loader, key);
+        return represented == null ? itemByName.invoke(registry, key) : represented;
+    }
     public Map<String, float[]> iconLayout() { return iconLayout; }
     /** The original icon whose synthetic atlas cell contains the given legacy UV, or null. */
     public String iconAt(float u, float v) {
@@ -70,7 +75,7 @@ public final class LegacyClientData {
             Object client = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, mcType);
             setField(mcType, client, "field_71432_P", client);
             setField(mcType, client, "field_71412_D", gameDir.toFile());
-            resourceContext = LegacyClientResources.create(loader);
+            resourceContext = LegacyClientResources.create(loader, resourcePacks);
             setField(mcType, client, "field_110451_am", resourceContext.manager());
             Class<?> fmlClient = loader.loadClass("cpw.mods.fml.client.FMLClientHandler");
             setField(fmlClient, fmlClient.getMethod("instance").invoke(null), "client", client);
@@ -188,7 +193,7 @@ public final class LegacyClientData {
         }
         return Map.copyOf(names);
     }
-    public void close() throws java.io.IOException { if (resourceContext != null) resourceContext.close(); }
+    public void close() throws java.io.IOException { LegacyHostRegistry.close(loader); if (resourceContext != null) resourceContext.close(); }
     public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
     public String displayName(Stack value) throws Exception {
         return inLegacy(()->(String)stackType.getMethod("func_82833_r").invoke(materialize(value)));
@@ -207,19 +212,71 @@ public final class LegacyClientData {
         });
     }
     private String currentLanguage;
+    private long hostLanguageRevision = -1;
+    private final Map<String, Map<String, String>> supplements = new HashMap<>(), overrides = new HashMap<>();
+    private long supplementRevision, appliedSupplementRevision = -1;
+    /** Fallback translations; they only fill keys the original files of that language leave undefined. */
+    public synchronized void supplement(String language, Map<String, String> entries) { addTranslations(supplements, language, entries); }
+    /** Corrections; they replace whatever the original files define. */
+    public synchronized void override(String language, Map<String, String> entries) { addTranslations(overrides, language, entries); }
+    private void addTranslations(Map<String, Map<String, String>> target, String language, Map<String, String> entries) {
+        var copy = Map.copyOf(entries);
+        if (copy.isEmpty()) return;
+        target.computeIfAbsent(legacyCode(language), ignored -> new HashMap<>()).putAll(copy);
+        supplementRevision++;
+    }
+    /** Keys of the original en_US files that the original files of the language do not define. */
+    public synchronized Set<String> missingKeys(String language) throws Exception {
+        return inLegacy(() -> {
+            var result = new TreeSet<>(originalLanguage("en_US").keySet());
+            result.removeAll(originalLanguage(legacyCode(language)).keySet());
+            return Collections.unmodifiableSet(result);
+        });
+    }
+    private static String legacyCode(String code) {
+        int split = code.indexOf('_');
+        return split < 0 ? code : code.substring(0, split).toLowerCase(java.util.Locale.ROOT) + "_" + code.substring(split + 1).toUpperCase(java.util.Locale.ROOT);
+    }
+    @SuppressWarnings("unchecked")
+    private Map<String, String> originalLanguage(String oldCode) throws Exception {
+        Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale");
+        Object locale = localeType.getConstructor().newInstance();
+        localeType.getMethod("func_135022_a", loader.loadClass("net.minecraft.client.resources.IResourceManager"), List.class)
+                .invoke(locale, resourceContext.manager(), List.of(oldCode));
+        Field translations = localeType.getDeclaredField("field_135032_a"); translations.setAccessible(true);
+        return (Map<String, String>) translations.get(locale);
+    }
     public synchronized void language(String code) throws Exception {
-        if (code.equals(currentLanguage)) return;
+        long revision = LegacyHostRegistry.revision(loader);
+        if (code.equals(currentLanguage) && revision == hostLanguageRevision && supplementRevision == appliedSupplementRevision) return;
         inLegacy(() -> {
-            int split = code.indexOf('_');
-            String oldCode = split < 0 ? code : code.substring(0, split) + "_" + code.substring(split + 1).toUpperCase(java.util.Locale.ROOT);
+            String oldCode = legacyCode(code);
             Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale");
             Object locale = localeType.getConstructor().newInstance();
             localeType.getMethod("func_135022_a", loader.loadClass("net.minecraft.client.resources.IResourceManager"), List.class)
                     .invoke(locale, resourceContext.manager(), oldCode.equals("en_US") ? List.of("en_US") : List.of("en_US", oldCode));
             setField(loader.loadClass("net.minecraft.client.resources.I18n"), null, "field_135054_a", locale);
             Field translations = localeType.getDeclaredField("field_135032_a"); translations.setAccessible(true);
-            loader.loadClass("net.minecraft.util.StringTranslate").getMethod("func_135063_a", Map.class).invoke(null, translations.get(locale));
+            var table = (Map<String, String>) translations.get(locale);
+            // Same order as Forge's LanguageManager reload: resource packs, then names registered through FML.
+            Class<?> fmlLanguages = loader.loadClass("cpw.mods.fml.common.registry.LanguageRegistry");
+            Object fml = fmlLanguages.getMethod("instance").invoke(null);
+            fmlLanguages.getMethod("mergeLanguageTable", Map.class, String.class).invoke(fml, table, oldCode);
+            var own = supplements.get(oldCode);
+            if (own != null) {
+                // Keys this language really defines (its files or FML names) win; en_US fallback text does not.
+                var defined = new HashSet<>(oldCode.equals("en_US") ? table.keySet() : originalLanguage(oldCode).keySet());
+                Field registered = fmlLanguages.getDeclaredField("modLanguageData"); registered.setAccessible(true);
+                var fmlNames = (Map<?, ?>) ((Map<?, ?>) registered.get(fml)).get(oldCode);
+                if (fmlNames != null) fmlNames.keySet().forEach(key -> defined.add(key.toString()));
+                own.forEach((key, value) -> { if (!defined.contains(key)) table.put(key, value); });
+            }
+            table.putAll(overrides.getOrDefault(oldCode, Map.of()));
+            table.putAll(LegacyHostRegistry.translations(loader));
+            loader.loadClass("net.minecraft.util.StringTranslate").getMethod("func_135063_a", Map.class).invoke(null, table);
             currentLanguage = code;
+            hostLanguageRevision = revision;
+            appliedSupplementRevision = supplementRevision;
             return null;
         });
     }
@@ -356,7 +413,7 @@ public final class LegacyClientData {
         else {
             Object item = hostItemsByKey.get(value.key());
             if (item != null && !value.tag().isEmpty()) throw new UnsupportedOperationException("Host item NBT needs a host-specific mapping: " + value.key());
-            if (item == null) item = itemByName.invoke(registry, value.key());
+            if (item == null) item = legacyItem(value.key());
             if (item == null) throw new IllegalArgumentException("Unknown legacy item " + value.key());
             result = stackType.getConstructor(itemType, int.class, int.class).newInstance(item, value.count(), value.metadata());
             if (!value.tag().isEmpty()) {
@@ -387,7 +444,8 @@ public final class LegacyClientData {
         Object item = itemOfStack.invoke(value);
         Object nbt = stackType.getField("field_77990_d").get(value);
         HostItem host = hostItems.get(item);
-        Stack stack = new Stack(host == null ? (String) nameOfItem.invoke(registry, item) : host.key(),
+        String represented = LegacyHostRegistry.name(loader, item);
+        Stack stack = new Stack(represented != null ? represented : host == null ? (String) nameOfItem.invoke(registry, item) : host.key(),
                 (Integer) stackType.getMethod("func_77960_j").invoke(value), stackType.getField("field_77994_a").getInt(value),
                 host == null ? (String) stackType.getMethod("func_82833_r").invoke(value) : host.name(), nbt == null ? "" : nbt.toString());
         if (!originals.containsKey(stack)) originals.put(stack, copyStack.invoke(value));

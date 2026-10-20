@@ -8,6 +8,21 @@ import java.util.*;
 public final class ApiRuntimeFactory {
     private ApiRuntimeFactory() { }
     public static LegacyApiRuntime create(LegacyServices services, Set<String> mods) {
+        var runtime = createRuntime(services, mods);
+        runtime.installLanguages(new LegacyLanguages() {
+            @Override public void supplement(String language, Map<String, String> entries) {
+                runtime.call("LANGUAGE_SUPPLEMENT", language, () -> { services.items().supplement(language, entries); return null; });
+            }
+            @Override public void override(String language, Map<String, String> entries) {
+                runtime.call("LANGUAGE_OVERRIDE", language, () -> { services.items().override(language, entries); return null; });
+            }
+            @Override public Set<String> missingKeys(String language) {
+                return runtime.call("LANGUAGE_MISSING_KEYS", language, () -> services.items().missingKeys(language));
+            }
+        });
+        return runtime;
+    }
+    private static LegacyApiRuntime createRuntime(LegacyServices services, Set<String> mods) {
         return new LegacyApiRuntime(services.loader(), services.items()::inLegacy, new LegacyApiRuntime.Values() {
             private Object registry(LegacyRuntime.Registry kind) throws Exception {
                 String type = kind == LegacyRuntime.Registry.ITEM ? "net.minecraft.item.Item" : "net.minecraft.block.Block";

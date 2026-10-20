@@ -34,6 +34,11 @@ class GenericRuntimeIntegrationTest {
             assertTrue(result.get("genericDeviceButtonInputVerified").getAsBoolean());
             assertTrue(result.get("genericDroppedItemStackAndIdentityVerified").getAsBoolean());
             assertTrue(result.get("genericBiomeIdentityAndCoordinatesVerified").getAsBoolean());
+            assertTrue(result.get("genericReadOnlyHostRegistryVerified").getAsBoolean());
+            assertTrue(result.get("genericLanguageSupplementVerified").getAsBoolean());
+            // Vanilla 1.7.10 languages other than en_US come from the runtime's asset-index language pack.
+            if (Files.exists(Path.of(support).resolve("runtime/minecraft-1.7.10-languages.zip")))
+                assertEquals("钻石", result.get("vanillaZhCnDiamondName").getAsString());
             assertEquals(0, result.getAsJsonObject("adapters").size());
             assertFalse(result.getAsJsonArray("loadedMods").asList().stream().anyMatch(v -> v.getAsString().equals("NotEnoughItems")));
         } finally { if (process.isAlive()) { process.destroyForcibly(); assertTrue(process.waitFor(10, TimeUnit.SECONDS)); } }

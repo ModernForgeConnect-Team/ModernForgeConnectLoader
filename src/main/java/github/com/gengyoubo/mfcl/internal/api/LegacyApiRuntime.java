@@ -48,6 +48,13 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         return Objects.requireNonNull(hostRepresentations, "Host representations are unavailable");
     }
 
+    private LegacyLanguages languages;
+    public void installLanguages(LegacyLanguages languages) { this.languages = Objects.requireNonNull(languages); }
+    @Override public LegacyLanguages languages() {
+        checkOpen();
+        return Objects.requireNonNull(languages, "Legacy languages are unavailable");
+    }
+
     public void installPlayerAccess(PlayerAccess access) { this.playerAccess = Objects.requireNonNull(access); }
     @Override public <T> T withPlayer(Object hostPlayer, Function<LegacyObject, T> operation) {
         Objects.requireNonNull(hostPlayer); Objects.requireNonNull(operation);

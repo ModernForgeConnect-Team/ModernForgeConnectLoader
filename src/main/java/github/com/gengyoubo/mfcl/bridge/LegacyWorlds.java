@@ -116,6 +116,8 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     public static Object block(Object world, int x, int y, int z) {
         Binding binding = binding(world); var block = binding.host.block(x, y, z);
+        Object represented = LegacyHostRegistry.block(binding.loader, block.legacyKey());
+        if (represented != null) return represented;
         try {
             Object registry = binding.loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
             var keys = (Set<?>) registry.getClass().getMethod("func_148742_b").invoke(registry);

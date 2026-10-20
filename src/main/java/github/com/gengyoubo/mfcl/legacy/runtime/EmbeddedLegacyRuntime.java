@@ -13,6 +13,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     private final URLClassLoader legacy;
     private final Path gameDirectory, forge;
     private final List<File> mods;
+    private final List<Path> resourcePacks;
     private final Map<Path, String> originalHashes = new LinkedHashMap<>();
     private github.com.gengyoubo.mfcl.bridge.LegacyServices services;
     private github.com.gengyoubo.mfcl.bridge.LegacyClientData earlyClient;
@@ -38,6 +39,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             if (path.equals(runtime) || path.getFileName().toString().startsWith("forge-1.7.10-")) continue;
             inputs.add(path.toUri().toURL());
         }
+        resourcePacks = runtimeResources(supportDirectory);
         Path helper = extractHelper(this.gameDirectory);
         inputs.add(0, helper.toUri().toURL());
         Set<String> modIds = new HashSet<>();
@@ -74,6 +76,22 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         if (!names.contains("minecraft-forge-1.7.10-srg.jar")) throw new IOException("Runtime manifest omits prepared Minecraft/Forge");
         return paths;
     }
+    /** Verified resource packs outside the classpath, e.g. the vanilla languages that 1.7.10 kept in the launcher asset index. */
+    private static List<Path> runtimeResources(Path directory) throws Exception {
+        Path manifest = directory.resolve("runtime-manifest.json");
+        if (!Files.exists(manifest)) return List.of();
+        var resources = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject().getAsJsonArray("resources");
+        if (resources == null) return List.of();
+        var paths = new ArrayList<Path>(); var names = new HashSet<String>();
+        for (var entry : resources) {
+            var value = entry.getAsJsonObject(); String name = value.get("file").getAsString();
+            if (!Path.of(name).getFileName().toString().equals(name) || !name.endsWith(".zip") || !names.add(name)) throw new IOException("Invalid runtime resource entry: " + name);
+            Path path = directory.resolve(name);
+            if (!LegacyDiscovery.sha256(path).equalsIgnoreCase(value.get("sha256").getAsString())) throw new IOException("Runtime resource checksum differs: " + name);
+            paths.add(path);
+        }
+        return List.copyOf(paths);
+    }
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> boot() throws Exception {
@@ -105,7 +123,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
                     ? openGlBackend.verify(legacy.loadClass("org.lwjgl.opengl.GL11"), legacy.loadClass("org.lwjgl.opengl.GL20")) : Map.of();
             Runnable initializeClient = () -> {
                 try {
-                    earlyClient = new github.com.gengyoubo.mfcl.bridge.LegacyClientData(legacy);
+                    earlyClient = new github.com.gengyoubo.mfcl.bridge.LegacyClientData(legacy, resourcePacks);
                     earlyClient.initializeContext(gameDirectory, List.of("assets/minecraft/lang/en_US.lang"));
                 } catch (Exception failure) { throw new IllegalStateException("Cannot initialize legacy client services", failure); }
             };

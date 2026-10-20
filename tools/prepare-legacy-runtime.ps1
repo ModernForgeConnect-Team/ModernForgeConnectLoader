@@ -78,6 +78,7 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $installedRuntime 'runtime-manifest.json'), (@{minecraft='1.7.10'; forge='10.13.4.1614'; inputs=$installedInputs} | ConvertTo-Json -Depth 5))
     & (Join-Path $PSScriptRoot 'install-legacy-language-libraries.ps1') -RuntimeDirectory $installedRuntime -ForgeJar (Join-Path $runtimeRoot 'forge-1.7.10-10.13.4.1614-1.7.10-universal.jar')
+    & (Join-Path $PSScriptRoot 'install-legacy-language-assets.ps1') -RuntimeDirectory $installedRuntime
     foreach ($name in @($reference.nei.file, 'CodeChickenCore-1.7.10-1.0.7.47-universal.jar', 'CodeChickenLib-1.7.10-1.1.3.138-universal.jar')) {
         $source = Join-Path (Join-Path $workspaceRoot 'build/nei-smoke/game/mods/1.7.10') $name
         $destination = Join-Path $installedMods $name

@@ -117,19 +117,23 @@ public final class ModernContentBridge {
             return services.items().inLegacy(() -> {
                 Object world = services.worlds().bound(player.serverLevel());
                 var source = placer(player);
-                try (var state = services.playerState().enter(world); var packets = LegacyPackets.capture(player.getUUID())) {
+                try (var state = services.playerState().enter(world)) {
                     Object actor = itemUse.clientActor(world, source, null);
                     byte[] saved = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
                     if (saved.length != 0) services.playerData().write(actor, saved);
                     services.playerState().initialize(actor);
                     byte[] before = services.playerData().read(actor);
                     T result;
-                    try { result = operation.apply(actor); }
-                    catch (RuntimeException | Error failure) { services.playerData().write(actor, before); throw failure; }
+                    java.util.List<LegacyPackets.Message> outgoing;
+                    try (var packets = LegacyPackets.capture(player.getUUID())) {
+                        try { result = operation.apply(actor); }
+                        catch (RuntimeException | Error failure) { services.playerData().write(actor, before); throw failure; }
+                        outgoing = packets.messages();
+                    }
                     byte[] after = services.playerData().read(actor);
                     var synchronizedPackets = itemUse.sync(world, source);
                     player.getPersistentData().putByteArray(LEGACY_ENTITY_DATA, after);
-                    packets.messages().forEach(packet -> ScanSyncChannel.sendToPlayer(player, packet));
+                    outgoing.forEach(packet -> ScanSyncChannel.sendToPlayer(player, packet));
                     synchronizedPackets.forEach(packet -> ScanSyncChannel.sendToPlayer(player, packet));
                     return result;
                 }

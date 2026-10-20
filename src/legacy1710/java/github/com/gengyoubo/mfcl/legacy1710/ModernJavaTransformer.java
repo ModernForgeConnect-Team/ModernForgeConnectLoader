@@ -10,9 +10,33 @@ public final class ModernJavaTransformer implements IClassTransformer {
         if (bytes == null) return null;
         if (!name.equals("cpw.mods.fml.common.Loader") && !name.equals("net.minecraftforge.common.util.EnumHelper")
                 && !name.equals("cpw.mods.fml.common.registry.ObjectHolderRef") && !name.equals("cpw.mods.fml.common.discovery.ModDiscoverer")
-                && !name.equals("net.minecraftforge.common.ForgeVersion") && !name.equals("cpw.mods.fml.common.registry.GameData")) return bytes;
+                && !name.equals("net.minecraftforge.common.ForgeVersion") && !name.equals("cpw.mods.fml.common.registry.GameData")
+                && !name.equals("net.minecraft.item.Item") && !name.equals("net.minecraft.block.Block")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
+        java.util.List<MethodNode> wrappers = new java.util.ArrayList<MethodNode>();
         for (MethodNode method : node.methods) {
+            String bridge = null;
+            if (name.equals("net.minecraft.item.Item")) {
+                if (method.name.equals("func_150891_b")) bridge = "itemId";
+                if (method.name.equals("func_150899_d")) bridge = "itemById";
+                if (method.name.equals("func_150898_a")) bridge = "itemFromBlock";
+            } else if (name.equals("net.minecraft.block.Block")) {
+                if (method.name.equals("func_149682_b")) bridge = "blockId";
+                if (method.name.equals("func_149729_e")) bridge = "blockById";
+            } else if (name.equals("cpw.mods.fml.common.registry.GameData") && method.name.equals("getUniqueName")) {
+                bridge = method.desc.startsWith("(Lnet/minecraft/item/Item;") ? "uniqueItemName" : "uniqueBlockName";
+            }
+            if (bridge != null) {
+                MethodNode wrapper = new MethodNode(method.access, method.name, method.desc, method.signature, null);
+                Type argument = Type.getArgumentTypes(method.desc)[0], result = Type.getReturnType(method.desc);
+                wrapper.instructions.add(new LdcInsnNode(Type.getObjectType(node.name)));
+                wrapper.instructions.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), 0));
+                wrapper.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "github/com/gengyoubo/mfcl/bridge/LegacyHostRegistry", bridge,
+                        "(Ljava/lang/Class;" + (argument.getSort() == Type.INT ? "I" : "Ljava/lang/Object;") + ")" + (result.getSort() == Type.INT ? "I" : "Ljava/lang/Object;"), false));
+                if (result.getSort() == Type.OBJECT) wrapper.instructions.add(new TypeInsnNode(Opcodes.CHECKCAST, result.getInternalName()));
+                wrapper.instructions.add(new InsnNode(result.getOpcode(Opcodes.IRETURN)));
+                method.name = "mfcl$original$" + method.name; wrappers.add(wrapper);
+            }
             if (name.equals("cpw.mods.fml.common.registry.GameData") && (method.name.equals("registerItem") || method.name.equals("registerBlock"))) {
                 method.instructions.insert(new MethodInsnNode(Opcodes.INVOKESTATIC, "github/com/gengyoubo/mfcl/legacy1710/LegacyRegistrationSeal", "check", "()V", false));
             }
@@ -71,6 +95,7 @@ public final class ModernJavaTransformer implements IClassTransformer {
                 method.instructions.add(new InsnNode(Type.getReturnType(method.desc).getOpcode(Opcodes.IRETURN)));
             }
         }
+        node.methods.addAll(wrappers);
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS); node.accept(writer); return writer.toByteArray();
     }
 }

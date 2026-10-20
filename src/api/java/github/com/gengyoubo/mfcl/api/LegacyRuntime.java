@@ -21,6 +21,10 @@ public interface LegacyRuntime {
     default LegacyHostRepresentations hostRepresentations() {
         throw new UnsupportedOperationException("This MFCL build does not provide host registry representations");
     }
+    /** Fallback translations for keys the original legacy language files leave untranslated. */
+    default LegacyLanguages languages() {
+        throw new UnsupportedOperationException("This MFCL build does not provide legacy language supplements");
+    }
     /**
      * Runs on the owning server thread with the real player's legacy knowledge loaded.
      * Successful changes are persisted and old packets synchronized; failures restore prior data.
