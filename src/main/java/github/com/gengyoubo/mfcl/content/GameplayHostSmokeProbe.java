@@ -27,9 +27,13 @@ final class GameplayHostSmokeProbe {
     private Pig target;
     private Object bat;
     private int stage, ticks;
+    private int batObservedTicks;
+    private boolean batDeathPending;
     private int arrowCase=-1;
     private Pig arrowTarget;
     private float normalDamage;
+    private float incomingDamage;
+    private boolean armorBypassed;
     private final List<String> sounds=new ArrayList<>();
     private boolean done;
     private GameplayHostSmokeProbe(ModernContentBridge content) { this.content=content; }
@@ -37,6 +41,9 @@ final class GameplayHostSmokeProbe {
         var probe=new GameplayHostSmokeProbe(content);MinecraftForge.EVENT_BUS.addListener(probe::tick);
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.PlayLevelSoundEvent.AtPosition event)->{
             if(event.getSound()!=null)probe.sounds.add(event.getSound().get().getLocation().toString());
+        });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.entity.living.LivingHurtEvent event)->{
+            if(event.getEntity()==probe.arrowTarget){probe.incomingDamage=event.getAmount();probe.armorBypassed=event.getSource().is(net.minecraft.tags.DamageTypeTags.BYPASSES_ARMOR);}
         });
     }
     private void check(boolean value,String message) { if(!value)throw new IllegalStateException(message); }
@@ -61,6 +68,7 @@ final class GameplayHostSmokeProbe {
                 level.setChunkForced(player.chunkPosition().x,player.chunkPosition().z,true);
                 level.getServer().setDifficulty(net.minecraft.world.Difficulty.NORMAL,true);
                 test("lootStackRoundTrips",()->lootMappings());
+                test("arrowDamageFlags",()->arrowFlags());
                 test("treasureBags",()->bags(level));
                 test("lootBlocks",()->loot(level));
                 test("doorSounds",()->door(level));
@@ -74,16 +82,26 @@ final class GameplayHostSmokeProbe {
                 if(++arrowCase<13){test("fireArrow"+arrowCase,()->fireArrow(level,arrowCase));ticks=0;return;}
                 finish(level);return;
             }
+            if(batDeathPending) {
+                if(++ticks<30)return;
+                test("hellbatTargetDeath",()->{
+                    check(level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)).stream().noneMatch(e->e.legacyOrNull()==bat),"Bat kept chasing a removed target");
+                    return true;
+                });
+                arrowCase=0;test("fireArrow0",()->fireArrow(level,0));ticks=0;return;
+            }
+            if(level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)).stream().anyMatch(e->e.legacyOrNull()==bat))batObservedTicks++;
+            if(ticks==20&&target!=null)target.moveTo(player.getX()+3,target.getY(),player.getZ()+6,0,0);
             if(++ticks<80)return;
             test("hellbatTicks",()->{
                 var hosted=level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)).stream()
                         .filter(e->e.legacyOrNull()==bat).findFirst();
-                check(bat!=null&&hosted.isPresent(),"Summoned bat did not survive ordinary server ticks");
+                check(bat!=null&&batObservedTicks>=10,"Summoned bat did not survive ordinary server ticks");
                 check(target.getHealth()<20,"Summoned bat never damaged its target");
-                return Map.of("targetHealth",target.getHealth(),"state",content.services().entityHosting().state(bat).toString());
+                return Map.of("targetHealth",target.getHealth(),"observedTicks",batObservedTicks,"stillPresent",hosted.isPresent(),"state",content.services().entityHosting().state(bat).toString());
             });
             if(target!=null)target.discard();
-            arrowCase=0;test("fireArrow0",()->fireArrow(level,0));ticks=0;
+            batDeathPending=true;ticks=0;
         }catch(Throwable failure){done=true;LogUtils.getLogger().error("MFCL gameplay probe failed",failure);event.getServer().halt(false);}
     }
     private void finish(ServerLevel level) throws Exception {
@@ -128,6 +146,16 @@ final class GameplayHostSmokeProbe {
         }
         check(enchanted>0,"No enchanted loot was tested");return Map.of("samples",cases.size(),"enchanted",enchanted,"keys",keys);
     }
+    private Object arrowFlags() throws Exception {
+        var loader=content.services().loader();var entity=loader.loadClass("net.minecraft.entity.Entity");
+        var type=loader.loadClass("thaumcraft.api.damagesource.DamageSourceIndirectThaumcraftEntity");
+        Object source=type.getConstructor(String.class,entity,entity).newInstance("airarrow",null,null);
+        type.getMethod("func_76348_h").invoke(source);
+        check((boolean)type.getMethod("func_76363_c").invoke(source),"TC4 armor-bypass setter only wrote its private shadow field");
+        type.getMethod("func_76361_j").invoke(source);
+        check((boolean)type.getMethod("func_76347_k").invoke(source),"TC4 fire setter only wrote its private shadow field");
+        return Map.of("bypassArmor",true,"fire",true);
+    }
     private Object loot(ServerLevel level) throws Exception {
         var results=new ArrayList<Object>();var pos=player.blockPosition().offset(3,0,0);
         for(String key:List.of("Thaumcraft:blockLootCrate","Thaumcraft:blockLootUrn"))for(int quality=0;quality<3;quality++) {
@@ -165,9 +193,18 @@ final class GameplayHostSmokeProbe {
         check(sounds.size()-before==2,"Powered door did not emit exactly one sound per transition: "+sounds);
         var output=List.copyOf(sounds.subList(sounds.size()-4,sounds.size()));
         check(output.stream().allMatch(s->s.startsWith("minecraft:block.wooden_door.")),"Door used obsolete sound ids: "+output);
+        int metadata=level.getBlockState(pos).getValue(ModernContentBridge.METADATA);tile.getClass().getField("owner").set(tile,"OtherOwner");
+        before=sounds.size();
+        content.logicTransaction(level,pos,()->{
+            door.getClass().getMethod("func_149727_a",loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),int.class,float.class,float.class,float.class)
+                    .invoke(door,world,pos.getX(),pos.getY(),pos.getZ(),actor,1,0f,0f,0f);return null;
+        },true);
+        check(level.getBlockState(pos).getValue(ModernContentBridge.METADATA)==metadata,"Unauthorized player opened the door");
+        check(sounds.size()==before+1&&sounds.get(before).equals("thaumcraft:doorfail"),"Unauthorized door feedback missing or duplicated");
         level.removeBlock(pos.above(),false);level.removeBlock(pos,false);return output;
     }
     private Object fireArrow(ServerLevel level,int scenario) throws Exception {
+        incomingDamage=0;armorBypassed=false;
         if(arrowTarget!=null)arrowTarget.discard();
         for(var entity:level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)))entity.discard();
         arrowTarget=EntityType.PIG.create(level);arrowTarget.moveTo(player.getX(),player.getY()+1.1,player.getZ()+4,180,0);
@@ -181,6 +218,11 @@ final class GameplayHostSmokeProbe {
         weapon.use(level,player,InteractionHand.MAIN_HAND);
         weapon.releaseUsing(level,player,weapon.getUseDuration()-30);player.stopUsingItem();
         if(crossbow)weapon.use(level,player,InteractionHand.MAIN_HAND);
+        // Remove critical-roll variance when comparing armor and earth damage across separate shots.
+        for(var arrow:level.getEntitiesOfClass(net.minecraft.world.entity.projectile.AbstractArrow.class,player.getBoundingBox().inflate(32)))arrow.setCritArrow(false);
+        var arrowType=content.services().loader().loadClass("net.minecraft.entity.projectile.EntityArrow");
+        for(var hosted:level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)))
+            if(arrowType.isInstance(hosted.legacyOrNull()))arrowType.getMethod("func_70243_d",boolean.class).invoke(hosted.legacyOrNull(),false);
         if(element>=0)check(player.getInventory().getItem(1).getCount()==3,"Element arrow ammo was not consumed");
         return Map.of("weapon",crossbow?"crossbow":"bow","element",element);
     }
@@ -189,17 +231,17 @@ final class GameplayHostSmokeProbe {
         var effects=arrowTarget.getActiveEffects().toString();
         check(damage>0,"Arrow did not damage target; effects="+effects);
         if(element==-1)normalDamage=damage;
-        if(element==0)check(damage>normalDamage*2,"Air arrow did not bypass armor: normal="+normalDamage+", air="+damage);
+        if(element==0)check(armorBypassed&&Math.abs(damage-incomingDamage)<.001f,"Air arrow did not bypass armor: raw="+incomingDamage+", actual="+damage+", bypass="+armorBypassed);
         if(element==1)check(arrowTarget.isOnFire(),"Fire arrow did not ignite target");
         if(element==2)check(arrowTarget.hasEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN),"Water arrow did not slow target");
         if(element==3)check(damage>normalDamage,"Earth arrow did not increase damage");
         if(element==4)check(arrowTarget.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),"Order arrow did not weaken target");
         if(element==5)check(arrowTarget.hasEffect(net.minecraft.world.effect.MobEffects.WITHER),"Entropy arrow did not wither target");
-        return Map.of("damage",damage,"onFire",arrowTarget.isOnFire(),"effects",effects);
+        return Map.of("damage",damage,"onFire",arrowTarget.isOnFire(),"effects",effects,"incomingDamage",incomingDamage,"bypassedArmor",armorBypassed);
     }
     private Object summon(ServerLevel level) throws Exception {
         target=EntityType.PIG.create(level);target.moveTo(player.getX(),player.getY()+1,player.getZ()+4,0,0);
-        target.setNoAi(true);target.setNoGravity(true);level.addFreshEntity(target);
+        target.setNoAi(true);target.setNoGravity(true);
         var services=content.services();var loader=services.loader();Object world=services.worlds().bound(level);
         var stackType=loader.loadClass("net.minecraft.item.ItemStack");
         Object wand=services.items().materialize(new LegacyClientData.Stack("Thaumcraft:WandCasting",0,1,"","{rod:\"silverwood\",cap:\"thaumium\"}"));
@@ -210,6 +252,10 @@ final class GameplayHostSmokeProbe {
         Object focus=services.items().materialize(new LegacyClientData.Stack("Thaumcraft:FocusHellbat",0,1,"",""));
         item.getClass().getMethod("setFocus",stackType,stackType).invoke(item,wand,focus);
         player.getInventory().clearContent();player.setItemInHand(InteractionHand.MAIN_HAND,content.gameplayStack(services.items().snapshot(wand)));
+        String before=content.gameplayStack(player.getMainHandItem()).tag();
+        player.getMainHandItem().use(level,player,InteractionHand.MAIN_HAND);player.stopUsingItem();
+        check(before.equals(content.gameplayStack(player.getMainHandItem()).tag()),"No-target summon consumed vis or changed the wand");
+        level.addFreshEntity(target);
         player.getMainHandItem().use(level,player,InteractionHand.MAIN_HAND);
         var bats=level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(16)).stream()
                 .filter(e->e.legacyOrNull()!=null&&e.legacyOrNull().getClass().getName().endsWith("EntityFireBat")).toList();
