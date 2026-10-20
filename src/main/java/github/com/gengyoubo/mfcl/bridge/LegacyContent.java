@@ -253,7 +253,7 @@ public final class LegacyContent {
             for (var stack : data.catalog()) if (stack.key().equals(key)) metas.add(stack.metadata());
             for (var tab : tabValues) for (var stack : tab.contents()) if (stack.key().equals(key)) metas.add(stack.metadata());
             if (metas.isEmpty()) metas.add(0);
-            int limit = 64, damage = 0;
+            int limit = (int)itemType.getMethod("func_77639_j").invoke(item), damage = 0;
             for (int meta : metas) {
                 Object stack = stackType.getConstructor(itemType, int.class, int.class).newInstance(item, 1, meta);
                 String name; String texture; int color;
@@ -270,7 +270,6 @@ public final class LegacyContent {
                     }
                     texture = icon == null ? "" : (String) iconType.getMethod("func_94215_i").invoke(icon);
                     color = (int) itemType.getMethod("func_82790_a", stackType, int.class).invoke(item, stack, 0);
-                    limit = Math.min(limit, (int) itemType.getMethod("getItemStackLimit", stackType).invoke(item, stack));
                     damage = Math.max(damage, (int) itemType.getMethod("getMaxDamage", stackType).invoke(item, stack));
                 } catch (ReflectiveOperationException undeclared) {
                     name = (String) itemType.getMethod("func_77658_a").invoke(item);

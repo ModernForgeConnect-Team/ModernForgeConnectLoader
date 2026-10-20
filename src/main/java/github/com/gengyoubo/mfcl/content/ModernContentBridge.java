@@ -255,10 +255,23 @@ public final class ModernContentBridge {
                 result=level.isClientSide?itemUse.bowEvent(world,source,bow,enchantments,charge)
                         :logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(this,player,()->itemUse.bowEvent(world,source,bow,enchantments,charge)),true);
             } catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
+            // Deliberate deviation: TC4's bowShot ignores creative mode (only Infinity's 33% roll skips ammo); creative never spends it.
+            if(!level.isClientSide&&charge>=0&&result.canceled()&&player.getAbilities().instabuild)keepCreativeAmmo(actor,before,player.getInventory().selected);
             // The client only predicts; the server's consumed ammo reaches it through the normal inventory sync.
             if(!level.isClientSide)collectLegacyInventory(player,actor,before);
             return result;
         } catch(Exception failure) { LogUtils.getLogger().error("MFCL original bow event failed for {}",player.getName().getString(),failure); return null; }
+    }
+    /** Restores every non-held stack the old bow handler shrank or used up, so the collected inventory keeps the ammo. */
+    private void keepCreativeAmmo(Object actor,List<LegacyClientData.Stack> before,int held) throws Exception {
+        var after=new ArrayList<>(services.playerInventory().read(actor));boolean restored=false;
+        for(int slot=0;slot<after.size()&&slot<before.size();slot++) {
+            var prior=before.get(slot);var now=after.get(slot);
+            if(slot==held||prior==null)continue;
+            boolean spent=now==null||prior.key().equals(now.key())&&prior.metadata()==now.metadata()&&prior.tag().equals(now.tag())&&now.count()<prior.count();
+            if(spent){after.set(slot,prior);restored=true;}
+        }
+        if(restored)services.playerInventory().write(actor,after);
     }
     private void prepareActorContainers(Object actor) throws Exception {
         var loader=services.loader();
@@ -428,6 +441,11 @@ public final class ModernContentBridge {
         var variant = entry.variants().stream().filter(v -> v.metadata() == metadata).findFirst().orElse(entry.variants().get(0));
         return Component.translatable(variant.nameKey());
     }
+    private int stackLimit(LegacyContent.Item entry,ItemStack stack) {
+        if(entry.maxDamage()>0)return 1;
+        try {return Math.max(1,Math.min(64,services.items().stackLimit(renderSnapshot(stack))));}
+        catch(Exception failure){LogUtils.getLogger().debug("Cannot evaluate original stack limit for {}",entry.key(),failure);return entry.stackLimit();}
+    }
     private void tooltip(LegacyContent.Item entry, ItemStack stack, List<Component> lines) {
         lines.add(Component.literal("1.7.10 · " + entry.key() + " @ " + metadata(stack)).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
         if (entry.blockKey() != null && blocks.get(entry.blockKey()) instanceof MirroredBlock block) {
@@ -529,6 +547,7 @@ public final class ModernContentBridge {
     private final class MirroredItem extends Item {
         private final LegacyContent.Item entry;
         MirroredItem(Properties properties, LegacyContent.Item entry) { super(properties); this.entry = entry; }
+        @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
@@ -685,6 +704,7 @@ public final class ModernContentBridge {
     private final class MirroredBlockItem extends BlockItem {
         private final LegacyContent.Item entry;
         MirroredBlockItem(MirroredBlock block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
+        @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) { return useLegacyItem(context, true); }

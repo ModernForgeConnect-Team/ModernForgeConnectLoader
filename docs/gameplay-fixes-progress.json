@@ -1,0 +1,426 @@
+{
+  "date": "2026-10-21",
+  "status": "PASS",
+  "environment": {
+    "java": "17",
+    "forge": "47.4.28",
+    "thaumcraft": "4.2.3.5",
+    "baubles": "1.0.1.10",
+    "minecraft": "1.20.1"
+  },
+  "unitTests": {
+    "errors": 0,
+    "total": 97,
+    "passed": 90,
+    "skipped": 7,
+    "failures": 0
+  },
+  "wandAudit": {
+    "basicIronWoodWandAssembly": "PASS",
+    "advancedGoldGreatwoodWandAssembly": "PASS",
+    "arcaneRejectsMissingWand": "PASS",
+    "arcaneRejectsEmptyWand": "PASS",
+    "arcaneResearchGate": "PASS",
+    "arcaneCraftConsumesIngredientsAndVis": "PASS",
+    "nodeChargingHeldUseBridge": "PASS",
+    "focusChangePacketBridge": "PASS",
+    "passiveRodInventoryTick": "PASS",
+    "originalKeyBindings": "PASS"
+  },
+  "gameplay": {
+    "coins": {
+      "result": {
+        "name": "金币",
+        "stackLimit": 64,
+        "mergedCount": 50,
+        "primalCharmLimit": 1
+      },
+      "status": "PASS"
+    },
+    "leafStates": {
+      "result": {
+        "states": 16,
+        "placedMetadata": [
+          4,
+          5
+        ],
+        "arrowTexture": "minecraft:textures/entity/projectiles/arrow.png"
+      },
+      "status": "PASS"
+    },
+    "lootStackRoundTrips": {
+      "result": {
+        "keys": [
+          "Thaumcraft:ItemBaubleBlanks",
+          "Thaumcraft:ItemResource",
+          "Thaumcraft:ItemRingRunic",
+          "minecraft:chainmail_boots",
+          "minecraft:chainmail_helmet",
+          "minecraft:diamond",
+          "minecraft:emerald",
+          "minecraft:enchanted_book",
+          "minecraft:ender_pearl",
+          "minecraft:gold_ingot",
+          "minecraft:golden_apple",
+          "minecraft:golden_helmet",
+          "minecraft:golden_leggings",
+          "minecraft:golden_sword",
+          "minecraft:leather_helmet",
+          "minecraft:leather_leggings",
+          "minecraft:potion"
+        ],
+        "samples": 387,
+        "enchanted": 4
+      },
+      "status": "PASS"
+    },
+    "arrowDamageFlags": {
+      "result": {
+        "fire": true,
+        "bypassArmor": true
+      },
+      "status": "PASS"
+    },
+    "treasureBags": {
+      "result": [
+        {
+          "drops": 12,
+          "quality": 0
+        },
+        {
+          "drops": 8,
+          "quality": 1
+        },
+        {
+          "drops": 8,
+          "quality": 2
+        }
+      ],
+      "status": "PASS"
+    },
+    "lootBlocks": {
+      "result": [
+        {
+          "drops": "[1 item_resource, 1 item_resource]",
+          "block": "Thaumcraft:blockLootCrate",
+          "quality": 0
+        },
+        {
+          "drops": "[2 item_resource, 2 item_resource, 2 item_resource]",
+          "block": "Thaumcraft:blockLootCrate",
+          "quality": 1
+        },
+        {
+          "drops": "[3 item_resource, 3 item_resource, 3 item_resource, 1 item_bauble_blanks]",
+          "block": "Thaumcraft:blockLootCrate",
+          "quality": 2
+        },
+        {
+          "drops": "[1 item_resource, 1 item_resource, 1 item_resource]",
+          "block": "Thaumcraft:blockLootUrn",
+          "quality": 0
+        },
+        {
+          "drops": "[2 item_resource, 2 item_resource, 1 enchanted_book, 2 item_resource]",
+          "block": "Thaumcraft:blockLootUrn",
+          "quality": 1
+        },
+        {
+          "drops": "[3 item_resource, 3 item_resource, 3 item_resource, 3 item_resource, 3 item_resource]",
+          "block": "Thaumcraft:blockLootUrn",
+          "quality": 2
+        }
+      ],
+      "status": "PASS"
+    },
+    "doorSounds": {
+      "result": {
+        "denied": "thaumcraft:doorfail",
+        "transitions": [
+          "minecraft:block.wooden_door.close",
+          "minecraft:block.wooden_door.close",
+          "minecraft:block.wooden_door.open",
+          "minecraft:block.wooden_door.close"
+        ],
+        "placement": "minecraft:block.metal.place"
+      },
+      "status": "PASS"
+    },
+    "hellbatSummon": {
+      "result": "State[x=0.34000000357627863, y=201.9999999521673, z=1.0, motionX=0.0, motionY=0.0, motionZ=0.0, yaw=0.0, pitch=0.0, width=0.5, height=0.9, dead=false, collidable=true]",
+      "status": "PASS"
+    },
+    "hellbatTicks": {
+      "result": {
+        "state": "State[x=3.4991553912545657, y=201.41802719117752, z=6.520018580976124, motionX=-0.022138042798855243, motionY=-0.03654160372450524, motionZ=0.01664912615908563, yaw=426.328, pitch=30.0, width=0.5, height=0.9, dead=false, collidable=true]",
+        "stillPresent": true,
+        "targetHealth": 5.0,
+        "observedTicks": 80
+      },
+      "status": "PASS"
+    },
+    "hellbatTargetDeath": {
+      "result": true,
+      "status": "PASS"
+    },
+    "fireArrow0": {
+      "result": {
+        "weapon": "bow",
+        "element": -1
+      },
+      "status": "PASS"
+    },
+    "arrow0": {
+      "result": {
+        "damage": 1.9199829,
+        "incomingDamage": 6.0,
+        "effects": "[]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow1": {
+      "result": {
+        "weapon": "bow",
+        "element": 0
+      },
+      "status": "PASS"
+    },
+    "arrow1": {
+      "result": {
+        "damage": 7.0,
+        "incomingDamage": 7.0,
+        "effects": "[]",
+        "onFire": false,
+        "bypassedArmor": true
+      },
+      "status": "PASS"
+    },
+    "fireArrow2": {
+      "result": {
+        "weapon": "bow",
+        "element": 1
+      },
+      "status": "PASS"
+    },
+    "arrow2": {
+      "result": {
+        "damage": 2.380005,
+        "incomingDamage": 7.0,
+        "effects": "[]",
+        "onFire": true,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow3": {
+      "result": {
+        "weapon": "bow",
+        "element": 2
+      },
+      "status": "PASS"
+    },
+    "arrow3": {
+      "result": {
+        "damage": 2.380005,
+        "incomingDamage": 7.0,
+        "effects": "[effect.minecraft.slowness x 5, Duration: 186]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow4": {
+      "result": {
+        "weapon": "bow",
+        "element": 3
+      },
+      "status": "PASS"
+    },
+    "arrow4": {
+      "result": {
+        "damage": 4.0,
+        "incomingDamage": 10.0,
+        "effects": "[]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow5": {
+      "result": {
+        "weapon": "bow",
+        "element": 4
+      },
+      "status": "PASS"
+    },
+    "arrow5": {
+      "result": {
+        "damage": 6.0,
+        "incomingDamage": 6.0,
+        "effects": "[effect.minecraft.weakness x 5, Duration: 186]",
+        "onFire": false,
+        "bypassedArmor": true
+      },
+      "status": "PASS"
+    },
+    "fireArrow6": {
+      "result": {
+        "weapon": "bow",
+        "element": 5
+      },
+      "status": "PASS"
+    },
+    "arrow6": {
+      "result": {
+        "damage": 1.9199829,
+        "incomingDamage": 6.0,
+        "effects": "[effect.minecraft.wither, Duration: 86]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow7": {
+      "result": {
+        "weapon": "crossbow",
+        "element": 0
+      },
+      "status": "PASS"
+    },
+    "arrow7": {
+      "result": {
+        "damage": 7.0,
+        "incomingDamage": 7.0,
+        "effects": "[]",
+        "onFire": false,
+        "bypassedArmor": true
+      },
+      "status": "PASS"
+    },
+    "fireArrow8": {
+      "result": {
+        "weapon": "crossbow",
+        "element": 1
+      },
+      "status": "PASS"
+    },
+    "arrow8": {
+      "result": {
+        "damage": 2.380005,
+        "incomingDamage": 7.0,
+        "effects": "[]",
+        "onFire": true,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow9": {
+      "result": {
+        "weapon": "crossbow",
+        "element": 2
+      },
+      "status": "PASS"
+    },
+    "arrow9": {
+      "result": {
+        "damage": 2.380005,
+        "incomingDamage": 7.0,
+        "effects": "[effect.minecraft.slowness x 5, Duration: 187]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow10": {
+      "result": {
+        "weapon": "crossbow",
+        "element": 3
+      },
+      "status": "PASS"
+    },
+    "arrow10": {
+      "result": {
+        "damage": 4.0,
+        "incomingDamage": 10.0,
+        "effects": "[]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow11": {
+      "result": {
+        "weapon": "crossbow",
+        "element": 4
+      },
+      "status": "PASS"
+    },
+    "arrow11": {
+      "result": {
+        "damage": 6.0,
+        "incomingDamage": 6.0,
+        "effects": "[effect.minecraft.weakness x 5, Duration: 187]",
+        "onFire": false,
+        "bypassedArmor": true
+      },
+      "status": "PASS"
+    },
+    "fireArrow12": {
+      "result": {
+        "weapon": "crossbow",
+        "element": 5
+      },
+      "status": "PASS"
+    },
+    "arrow12": {
+      "result": {
+        "damage": 1.9199829,
+        "incomingDamage": 6.0,
+        "effects": "[effect.minecraft.wither, Duration: 87]",
+        "onFire": false,
+        "bypassedArmor": false
+      },
+      "status": "PASS"
+    },
+    "fireArrow13": {
+      "result": {
+        "weapon": "bow",
+        "element": 0
+      },
+      "status": "PASS"
+    },
+    "arrow13": {
+      "result": {
+        "pvp": false,
+        "damage": 0.0
+      },
+      "status": "PASS"
+    },
+    "fireArrow14": {
+      "result": {
+        "weapon": "bow",
+        "element": 0
+      },
+      "status": "PASS"
+    },
+    "arrow14": {
+      "result": {
+        "pvp": true,
+        "damage": 7.0
+      },
+      "status": "PASS"
+    },
+    "status": "PASS"
+  },
+  "artifact": {
+    "path": "build/libs/mfcl-0.2.5.jar",
+    "sha256": "ec34de666303c857c804906e6ca5031b156f4f90fd2544bd8fb779d8682bf76d"
+  },
+  "limits": [
+    "Client rendering and audible playback were not manually verified.",
+    "Leaf registration IDs and saved metadata are preserved; species are not registered as separate blocks.",
+    "Legacy mod-specific enchantment data is retained, without adding its modern effects."
+  ]
+}

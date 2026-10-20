@@ -70,6 +70,7 @@ final class GameplayHostSmokeProbe {
                 level.setChunkForced(player.chunkPosition().x,player.chunkPosition().z,true);
                 level.getServer().setDifficulty(net.minecraft.world.Difficulty.NORMAL,true);
                 originalPvp=level.getServer().isPvpAllowed();
+                test("coins",()->coins());
                 test("leafStates",()->leaves(level));
                 test("lootStackRoundTrips",()->lootMappings());
                 test("arrowDamageFlags",()->arrowFlags());
@@ -83,7 +84,8 @@ final class GameplayHostSmokeProbe {
                 if(++ticks<15)return;
                 int scenario=arrowCase;
                 test("arrow"+scenario,()->verifyArrow(level,scenario));
-                if(++arrowCase<15){test("fireArrow"+arrowCase,()->fireArrow(level,arrowCase));ticks=0;return;}
+                if(++arrowCase<17){test("fireArrow"+arrowCase,()->fireArrow(level,arrowCase));ticks=0;return;}
+                test("creativeArrowAmmo",()->creativeAmmo(level));
                 finish(level);return;
             }
             if(batDeathPending) {
@@ -142,6 +144,22 @@ final class GameplayHostSmokeProbe {
         level.removeBlock(pos,false);level.removeBlock(pos.below(),false);
         check(content.pack().worldResource("minecraft:textures/entity/arrow.png").equals("minecraft:textures/entity/projectiles/arrow.png"),"Arrow renderer still uses the old vanilla resource");
         return Map.of("states",16,"placedMetadata",placed,"arrowTexture",content.pack().worldResource("minecraft:textures/entity/arrow.png"));
+    }
+    private Object coins() throws Exception {
+        var coin=content.stack("Thaumcraft:ItemResource",18,20,"");
+        check(coin.getMaxStackSize()==64,"Coin inherited another resource variant's stack limit");
+        check(content.stack("Thaumcraft:ItemResource",15,1,"").getMaxStackSize()==1,"Non-stackable resource variant lost its limit");
+        player.getInventory().clearContent();player.getInventory().setItem(0,coin);
+        var more=content.stack("Thaumcraft:ItemResource",18,30,"");player.getInventory().add(more);
+        check(more.isEmpty()&&player.getInventory().getItem(0).getCount()==50,"Identical coins did not merge in the native inventory");
+        for(var variant:content.declarations().items().stream().filter(item->item.key().equals("Thaumcraft:ItemResource")).findFirst().orElseThrow().variants()) {
+            var stack=content.stack("Thaumcraft:ItemResource",variant.metadata(),1,"");
+            check(stack.getMaxStackSize()==content.services().items().stackLimit(content.gameplayStack(stack)),"Resource stack limit mismatch: "+variant.metadata());
+        }
+        String name;
+        try {content.services().items().language("zh_cn");name=coin.getHoverName().getString();check(name.equals("金币"),"Coin translation still missing: "+name);}
+        finally {content.services().items().language("en_us");}
+        return Map.of("name",name,"stackLimit",64,"mergedCount",50,"primalCharmLimit",1);
     }
     private Object bags(ServerLevel level) throws Exception {
         var results=new ArrayList<Object>();
@@ -250,19 +268,22 @@ final class GameplayHostSmokeProbe {
         incomingDamage=0;armorBypassed=false;
         if(arrowTarget!=null)arrowTarget.discard();
         for(var entity:level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)))entity.discard();
-        if(scenario>=13) {
-            if(scenario==13)level.addNewPlayer(player);
-            arrowTarget=FakePlayerFactory.get(level,new com.mojang.authlib.GameProfile(new UUID(6930,5359+scenario),"ArrowTarget"+scenario));
-            ((net.minecraft.world.entity.player.Player)arrowTarget).getAbilities().invulnerable=false;
+        if(scenario>=13&&scenario<15) {
+            if(scenario==13) {
+                var actor=probePlayer(level,new UUID(6930,1),"ArrowShooter");
+                actor.moveTo(player.getX(),player.getY(),player.getZ(),0,0);player=actor;level.addNewPlayer(player);
+            }
+            arrowTarget=probePlayer(level,new UUID(6930,5359+scenario),"ArrowTarget"+scenario);
             level.getServer().setPvpAllowed(scenario==14);
         } else arrowTarget=EntityType.PIG.create(level);
+        if(scenario>=15)player.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
         arrowTarget.moveTo(player.getX(),player.getY()+1.1,player.getZ()+4,180,0);
         if(arrowTarget instanceof net.minecraft.world.entity.Mob mob)mob.setNoAi(true);
         arrowTarget.setNoGravity(true);
         arrowTarget.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(1000);arrowTarget.setHealth(1000);
         arrowTarget.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR).setBaseValue(20);
         if(arrowTarget instanceof net.minecraft.server.level.ServerPlayer targetPlayer)level.addNewPlayer(targetPlayer);else level.addFreshEntity(arrowTarget);
-        boolean crossbow=scenario>6&&scenario<13;int element=scenario>=13?0:scenario==0?-1:(scenario-1)%6;
+        boolean crossbow=scenario>6&&scenario<13||scenario==16;int element=scenario>=13?0:scenario==0?-1:(scenario-1)%6;
         player.getInventory().clearContent();player.getInventory().selected=0;
         var weapon=new ItemStack(crossbow?net.minecraft.world.item.Items.CROSSBOW:net.minecraft.world.item.Items.BOW);player.setItemInHand(InteractionHand.MAIN_HAND,weapon);
         player.getInventory().setItem(1,element<0?new ItemStack(net.minecraft.world.item.Items.ARROW,4):content.stack("Thaumcraft:PrimalArrow",element,4,""));
@@ -277,12 +298,43 @@ final class GameplayHostSmokeProbe {
                 arrowType.getMethod("func_70243_d",boolean.class).invoke(hosted.legacyOrNull(),false);
                 if(scenario>=13)playerShot=hosted;
             }
-        if(element>=0)check(player.getInventory().getItem(1).getCount()==3,"Element arrow ammo was not consumed");
-        return Map.of("weapon",crossbow?"crossbow":"bow","element",element);
+        if(element>=0)check(player.getInventory().getItem(1).getCount()==(scenario>=15?4:3),"Element arrow ammo count incorrect for "+scenario+": "+player.getInventory().getItem(1).getCount());
+        return Map.of("weapon",crossbow?"crossbow":"bow","element",element,"creative",scenario>=15);
+    }
+    /** Creative mode keeps primal arrows with and without Infinity; the original only skipped ammo on Infinity's 33% roll. */
+    private Object creativeAmmo(ServerLevel level) throws Exception {
+        var shooter=(net.minecraft.server.level.ServerPlayer)player;var results=new LinkedHashMap<String,Object>();
+        shooter.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+        try {
+            for(boolean infinity:new boolean[]{false,true})for(int shot=0;shot<3;shot++) {
+                shooter.getInventory().clearContent();shooter.getInventory().selected=0;
+                var bow=new ItemStack(net.minecraft.world.item.Items.BOW);
+                if(infinity)bow.enchant(net.minecraft.world.item.enchantment.Enchantments.INFINITY_ARROWS,1);
+                shooter.setItemInHand(InteractionHand.MAIN_HAND,bow);
+                shooter.getInventory().setItem(1,content.stack("Thaumcraft:PrimalArrow",2,4,""));
+                bow.use(level,shooter,InteractionHand.MAIN_HAND);bow.releaseUsing(level,shooter,bow.getUseDuration()-30);shooter.stopUsingItem();
+                check(level.getEntitiesOfClass(LegacyHostedEntity.class,shooter.getBoundingBox().inflate(32)).stream().anyMatch(e->e.legacyOrNull()!=null&&e.legacyOrNull().getClass().getName().equals("thaumcraft.common.entities.projectile.EntityPrimalArrow")),"Creative bow did not fire a primal arrow");
+                check(shooter.getInventory().getItem(1).getCount()==4,"Creative mode consumed a primal arrow, infinity="+infinity);
+                for(var entity:level.getEntitiesOfClass(LegacyHostedEntity.class,shooter.getBoundingBox().inflate(32)))entity.discard();
+            }
+            results.put("plainBowKept",4);results.put("infinityBowKept",4);
+        } finally {shooter.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);shooter.getInventory().clearContent();}
+        return results;
+    }
+    private net.minecraft.server.level.ServerPlayer probePlayer(ServerLevel level,UUID id,String name) {
+        // Forge FakePlayer is invulnerable and canHarmPlayer always returns false. Use the real player rules here.
+        var actor=new net.minecraft.server.level.ServerPlayer(level.getServer(),level,new com.mojang.authlib.GameProfile(id,name));
+        actor.connection=new net.minecraft.server.network.ServerGamePacketListenerImpl(level.getServer(),new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),actor) {
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet) {}
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet,net.minecraft.network.PacketSendListener listener) {}
+        };
+        actor.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);actor.setNoGravity(true);
+        for(int i=0;i<60;i++)actor.tick(); // Expire the original spawn protection before the damage assertions.
+        return actor;
     }
     private Object verifyArrow(ServerLevel level,int scenario) {
-        float damage=1000-arrowTarget.getHealth();int element=scenario==0?-1:(scenario-1)%6;
-        if(scenario>=13) {
+        float damage=1000-arrowTarget.getHealth();int element=scenario>=13?0:scenario==0?-1:(scenario-1)%6;
+        if(scenario>=13&&scenario<15) {
             check(scenario==13?damage==0:damage>0,"Player arrow hit did not honor PvP rules: "+scenario+", damage="+damage);
             if(scenario==13)check(playerShot!=null&&!playerShot.isRemoved(),"PvP-disabled arrow crashed instead of passing the protected player");
             return Map.of("pvp",scenario==14,"damage",damage);
