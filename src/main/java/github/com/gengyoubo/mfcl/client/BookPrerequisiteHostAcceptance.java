@@ -26,8 +26,40 @@ final class BookPrerequisiteHostAcceptance {
             pending.join();verify(mc,true);proof.put("originalCompletionPacketUnlocksDependentWithoutReopening",parent+" -> "+child);
             mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE,0,0);phase=4;frames=0;
         }else if(phase==4&&mc.screen==null&&++frames>10){mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);phase=5;frames=0;}
-        else if(phase==5&&mc.screen!=null&&++frames>20){verify(mc,true);proof.put("completedPrerequisiteSurvivesBookReopen",true);mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE,0,0);return true;}
+        else if(phase==5&&mc.screen!=null&&++frames>20){verify(mc,true);proof.put("completedPrerequisiteSurvivesBookReopen",true);
+            autoUnlocked(mc);proof.put("autoUnlockedResearchSurvivesSavedReload",true);mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE,0,0);phase=6;frames=0;}
+        else if(phase==6&&mc.screen==null&&++frames>10){
+            var server=mc.getSingleplayerServer();
+            pending=server.submit(()->{try{return server.getCommands().getDispatcher().execute("debug thaumcraft resetresearch",server.getPlayerList().getPlayers().get(0).createCommandSourceStack().withPermission(4));}
+                catch(com.mojang.brigadier.exceptions.CommandSyntaxException failure){throw new IllegalStateException(failure);}});phase=7;frames=0;
+        }else if(phase==7&&pending.isDone()&&++frames>20){
+            if(!Integer.valueOf(1).equals(pending.join()))throw new IllegalStateException("resetresearch did not succeed");
+            reset(mc);proof.put("debugResetResearchRestoresInitialState",true);return true;
+        }
         return false;
+    }
+    /** After the reset, client and server hold exactly the auto-unlocked entries. */
+    private void reset(Minecraft mc) throws Exception {
+        content.services().items().inLegacy(()->{
+            var categories=(Map<?,?>)loader().loadClass("thaumcraft.api.research.ResearchCategories").getField("researchCategories").get(null);
+            var initial=new TreeSet<String>();
+            for(Object category:categories.values())for(Object item:((Map<?,?>)category.getClass().getField("research").get(category)).values())
+                if((boolean)item.getClass().getMethod("isAutoUnlock").invoke(item))initial.add((String)item.getClass().getField("key").get(item));
+            String name=mc.player.getName().getString();
+            var book=new TreeSet<Object>((List<?>)((Map<?,?>)loader().loadClass("thaumcraft.client.gui.GuiResearchBrowser").getField("completedResearch").get(null)).get(name));
+            Object proxy=loader().loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null);
+            var client=new TreeSet<Object>((List<?>)((Map<?,?>)proxy.getClass().getMethod("getCompletedResearch").invoke(proxy)).get(name));
+            if(!book.equals(initial)||!client.equals(initial))throw new IllegalStateException("Reset left book "+book+", client "+client+", expected "+initial);
+            return null;
+        });
+        var server=mc.getSingleplayerServer();
+        server.submit(()->{
+            var player=server.getPlayerList().getPlayers().get(0);
+            var saved=new ArrayList<String>();
+            content.withApiPlayer(player,actor->{try{saved.addAll((List<String>)loader().loadClass("thaumcraft.common.lib.research.ResearchManager").getMethod("getResearchForPlayer",String.class).invoke(null,player.getName().getString()));return null;}catch(Exception failure){throw new IllegalStateException(failure);}});
+            if(saved.contains(parent))throw new IllegalStateException("Server still knows "+parent+" after reset: "+saved);
+            return null;
+        }).join();
     }
     private ClassLoader loader(){return content.services().loader();}
     private Object research(String key) throws Exception{return loader().loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class).invoke(null,key);}
@@ -69,6 +101,21 @@ final class BookPrerequisiteHostAcceptance {
             if(packets.messages().size()!=1)throw new IllegalStateException("Unexpected completion packets for "+parent+": "+packets.messages());
             packets.messages().forEach(message->ScanSyncChannel.sendToPlayer(player,message));return null;
         }});
+    }
+    /** The reopen loads saved data, which original TC writes without auto-unlocked entries. */
+    private void autoUnlocked(Minecraft mc) throws Exception {
+        content.services().items().inLegacy(()->{
+            Object browser=ClientContainerBridge.active().legacyScreen(mc.screen);
+            var entries=(List<?>)((Map<?,?>)browser.getClass().getField("completedResearch").get(null)).get(mc.player.getName().getString());
+            var categories=(Map<?,?>)loader().loadClass("thaumcraft.api.research.ResearchCategories").getField("researchCategories").get(null);
+            var missing=new ArrayList<String>();
+            for(Object category:categories.values())for(Object item:((Map<?,?>)category.getClass().getField("research").get(category)).values()){
+                String key=(String)item.getClass().getField("key").get(item);
+                if((boolean)item.getClass().getMethod("isAutoUnlock").invoke(item)&&!entries.contains(key))missing.add(key);
+            }
+            if(!missing.isEmpty())throw new IllegalStateException("Saved reload dropped auto-unlocked research "+missing);
+            return null;
+        });
     }
     private void verify(Minecraft mc,boolean unlocked) throws Exception {
         content.services().items().inLegacy(()->{

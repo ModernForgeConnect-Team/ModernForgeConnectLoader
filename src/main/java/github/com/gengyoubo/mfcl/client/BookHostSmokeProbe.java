@@ -52,6 +52,7 @@ final class BookHostSmokeProbe {
                 String name=(String)bridge.services().loader().loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class).invoke(null,"tc.research_name.ORE");
                 if(name.equals("tc.research_name.ORE"))throw new IllegalStateException("Original research language was not loaded");
                 proof.put("localizedResearchName",name);
+                autoUnlockedParents(old,(List<?>)completed.get(mc.player.getName().getString()));
                 hoverEntries(mc,old);
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-thaumonomicon.png",mc.getMainRenderTarget(),message->{});
                 openEntry(mc,old,(List<?>)completed.get(mc.player.getName().getString()));stage=10;frames=0;
@@ -95,6 +96,26 @@ final class BookHostSmokeProbe {
             mc.screen.mouseClicked(x,y,0);mc.screen.mouseReleased(x,y,0);proof.put("openedResearchKey",key);return;
         }
         throw new IllegalStateException("No visible original initial research entry was unlocked");
+    }
+    /** A fresh player's first real entries depend only on auto-unlocked stubs, so the book must not call them locked. */
+    private void autoUnlockedParents(Object old,List<?> completed) throws Exception {
+        var loader=bridge.services().loader();var researchType=loader.loadClass("thaumcraft.api.research.ResearchItem");
+        var getResearch=loader.loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class);
+        var canUnlock=old.getClass().getDeclaredMethod("canUnlockResearch",researchType);canUnlock.setAccessible(true);
+        var categories=(Map<?,?>)loader.loadClass("thaumcraft.api.research.ResearchCategories").getField("researchCategories").get(null);
+        var missingAuto=new ArrayList<String>();var locked=new ArrayList<String>();int checked=0;
+        for(Object category:categories.values())for(Object research:((Map<?,?>)category.getClass().getField("research").get(category)).values()){
+            String key=(String)researchType.getField("key").get(research);
+            if((boolean)researchType.getMethod("isAutoUnlock").invoke(research)){if(!completed.contains(key))missingAuto.add(key);continue;}
+            String[] parents=(String[])researchType.getField("parents").get(research),hidden=(String[])researchType.getField("parentsHidden").get(research);
+            if(parents==null||parents.length==0)continue;
+            boolean auto=true;
+            for(String[] group:new String[][]{parents,hidden==null?new String[0]:hidden})for(String parent:group){Object item=getResearch.invoke(null,parent);if(item!=null&&!(boolean)researchType.getMethod("isAutoUnlock").invoke(item))auto=false;}
+            if(!auto)continue;checked++;
+            if(!(boolean)canUnlock.invoke(old,research))locked.add(key);
+        }
+        if(!missingAuto.isEmpty()||!locked.isEmpty())throw new IllegalStateException("Fresh book lacks auto-unlocked research "+missingAuto+"; entries shown as missing prerequisites "+locked);
+        proof.put("autoUnlockedPrerequisitesChecked",checked);
     }
     private void hoverEntries(Minecraft mc,Object old) throws Exception {
         var researchField=old.getClass().getDeclaredField("research");researchField.setAccessible(true);

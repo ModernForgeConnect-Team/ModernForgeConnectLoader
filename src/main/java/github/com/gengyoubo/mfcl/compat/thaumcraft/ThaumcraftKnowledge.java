@@ -36,6 +36,15 @@ public final class ThaumcraftKnowledge {
         var manager=loader.loadClass("thaumcraft.common.lib.research.ResearchManager");
         Class<?> nbtType=loader.loadClass("net.minecraft.nbt.NBTTagCompound"),playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         for(String section:new String[]{"Research","Aspect","Scanned"})manager.getMethod((save?"save":"load")+section+"NBT",nbtType,playerType).invoke(null,nbt,player);
+        // saveResearchNBT omits auto-unlocked entries; TC re-adds them on every world join, so a load must restore them
+        // too, or the book reports the first real entries (FOCUSFIRE, NITOR, RESEARCHER1...) as missing prerequisites.
+        if(!save)autoUnlock(loader,manager,LegacyObjects.playerName(player));
+    }
+    private static void autoUnlock(ClassLoader loader,Class<?> manager,String name) throws Exception {
+        var complete=manager.getMethod("completeResearchUnsaved",String.class,String.class);
+        var categories=(Map<?,?>)loader.loadClass("thaumcraft.api.research.ResearchCategories").getField("researchCategories").get(null);
+        for(Object category:categories.values())for(Object research:((Map<?,?>)category.getClass().getField("research").get(category)).values())
+            if((boolean)research.getClass().getMethod("isAutoUnlock").invoke(research))complete.invoke(null,name,research.getClass().getField("key").get(research));
     }
     public static void initialize(ClassLoader loader,Object player) throws Exception {
         if(!ThaumcraftReflection.present(loader))return;

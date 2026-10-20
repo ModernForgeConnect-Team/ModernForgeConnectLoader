@@ -38,6 +38,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         });
         services.scanners().register(new ThaumcraftScanner(loader));
         ThaumcraftCrossbow.install(services);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(ThaumcraftResearchCommand::register);
         return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {
