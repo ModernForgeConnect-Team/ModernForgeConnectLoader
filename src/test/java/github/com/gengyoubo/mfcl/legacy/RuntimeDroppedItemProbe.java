@@ -34,6 +34,9 @@ final class RuntimeDroppedItemProbe {
                     ||(int)base.getMethod("func_145782_y").invoke(again.get(1))!=72)throw new AssertionError("Drop mirrors aliased their source or changed IDs between queries");
             var second=services.items().snapshot(item.getMethod("func_92059_d").invoke(again.get(1)));
             if(!second.key().equals(coal.key())||second.metadata()!=1||second.count()!=2)throw new AssertionError("Different drops shared a default stone stack");
+            String coalName=(String)loader.loadClass("net.minecraft.item.ItemStack").getMethod("func_82833_r").invoke(item.getMethod("func_92059_d").invoke(again.get(1)));
+            if(!LegacyItemUse.scanTargetName(loader,again.get(1),0,0).equals(coalName)||coalName.startsWith("item."))
+                throw new AssertionError("Dropped item scan target used EntityItem's untranslated entity name: "+LegacyItemUse.scanTargetName(loader,again.get(1),0,0));
             report.put("genericDroppedItemStackAndIdentityVerified",true);
         }finally{services.worlds().unbind(identity);}
     }

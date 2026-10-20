@@ -61,19 +61,30 @@ public final class LegacyItemUse {
             Object scan = scanField(item);
             if (scan == null) return null;
             byte type = scan.getClass().getField("type").getByte(scan);
-            if (type == 2) { Object entity = scan.getClass().getField("entity").get(scan); return entity == null ? null : (String) entity.getClass().getMethod("func_70005_c_").invoke(entity); }
             if (type == 3) return (String) scan.getClass().getField("phenomena").get(scan);
-            int id = scan.getClass().getField("id").getInt(scan), meta = scan.getClass().getField("meta").getInt(scan);
-            Object scanned = loader.loadClass("net.minecraft.item.Item").getMethod("func_150899_d", int.class).invoke(null, id);
-            if (scanned == null) return null;
-            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
-            Object stack = stackType.getConstructor(loader.loadClass("net.minecraft.item.Item"), int.class, int.class).newInstance(scanned, 1, meta);
-            String key = (String) scanned.getClass().getMethod("func_77667_c", stackType).invoke(scanned, stack);
-            Method translate = loader.loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a", String.class);
-            translate.setAccessible(true);
-            String localized = (String) translate.invoke(null, key + ".name");
-            return localized.equals(key + ".name") ? (String) translate.invoke(null, key) : localized;
+            return scanTargetName(loader, type == 2 ? scan.getClass().getField("entity").get(scan) : null,
+                    scan.getClass().getField("id").getInt(scan), scan.getClass().getField("meta").getInt(scan));
         } catch (Throwable absent) { return null; }
+    }
+    /**
+     * Names a scan target exactly as the original thaumometer lens does: a dropped item shows its stack's display
+     * name rather than EntityItem's "item.item.&lt;name&gt;" entity name, which has no translation in 1.7.10.
+     */
+    public static String scanTargetName(ClassLoader loader, Object entity, int id, int meta) throws Exception {
+        Class<?> itemType = loader.loadClass("net.minecraft.item.Item"), stackType = loader.loadClass("net.minecraft.item.ItemStack");
+        Object stack = null;
+        if (entity != null) {
+            if (!loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity)) return (String) entity.getClass().getMethod("func_70005_c_").invoke(entity);
+            stack = entity.getClass().getMethod("func_92059_d").invoke(entity);
+        } else {
+            Object scanned = itemType.getMethod("func_150899_d", int.class).invoke(null, id);
+            if (scanned != null) stack = stackType.getConstructor(itemType, int.class, int.class).newInstance(scanned, 1, meta);
+        }
+        if (stack == null || stackType.getMethod("func_77973_b").invoke(stack) == null) return null;
+        try { return (String) stackType.getMethod("func_82833_r").invoke(stack); }
+        catch (InvocationTargetException failure) {
+            return (String) itemType.getMethod("func_77653_i", stackType).invoke(stackType.getMethod("func_77973_b").invoke(stack), stack);
+        }
     }
     private static Object scanField(Object item) throws Exception {
         for (Class<?> type = item.getClass(); type != null; type = type.getSuperclass()) {
