@@ -40,6 +40,7 @@ public final class ServerHostSmokeProbe {
     private ServerHostSmokeProbe(ModernContentBridge bridge, boolean write) { this.bridge = bridge; this.write = write; }
 
     public static void install(ModernContentBridge bridge, String phase) {
+        if (phase.equals("gameplay")) { GameplayHostSmokeProbe.install(bridge); return; }
         if (phase.equals("outer-write") || phase.equals("outer-verify")) { OuterLandsSmokeProbe.install(bridge, phase.equals("outer-write")); return; }
         if (phase.equals("bow")) { BowHostSmokeProbe.install(bridge); return; }
         if (phase.equals("crossbow")) { CrossbowHostSmokeProbe.install(bridge); return; }

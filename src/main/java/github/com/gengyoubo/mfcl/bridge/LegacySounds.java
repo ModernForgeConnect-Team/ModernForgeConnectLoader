@@ -15,6 +15,7 @@ public final class LegacySounds {
             Map.entry("liquid.splash","entity.generic.splash"),Map.entry("liquid.swim","entity.generic.swim"),
             Map.entry("dig.wood","block.wood.break"),Map.entry("step.wood","block.wood.step"),
             Map.entry("random.chestopen","block.chest.open"),Map.entry("random.chestclosed","block.chest.close"),
+            Map.entry("random.door_open","block.wooden_door.open"),Map.entry("random.door_close","block.wooden_door.close"),
             Map.entry("game.neutral.swim","entity.generic.swim"));
     private LegacySounds() {}
     public static String modernId(String name) {

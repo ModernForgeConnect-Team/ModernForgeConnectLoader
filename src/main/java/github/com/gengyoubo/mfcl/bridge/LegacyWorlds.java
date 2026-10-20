@@ -26,13 +26,13 @@ public final class LegacyWorlds implements AutoCloseable {
     public synchronized Object bound(Object hostIdentity) {
         Binding binding = worlds.get(hostIdentity);
         if (binding == null) throw new IllegalStateException("Host world has no legacy binding");
-        binding.check(); return binding.world;
+        binding.check(); refreshDifficulty(binding); return binding.world;
     }
     /** Read-only API lookup; never creates a world on an arbitrary addon thread. */
     public synchronized Object findBound(Object hostIdentity) {
         Binding binding = worlds.get(hostIdentity);
         if (binding == null) return null;
-        binding.check(); return binding.world;
+        binding.check(); refreshDifficulty(binding); return binding.world;
     }
     public synchronized Object host(Object legacyWorld) {
         for (var entry : worlds.entrySet()) if (entry.getValue().world == legacyWorld) {
@@ -65,6 +65,8 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
         // worldAccesses: allocated worlds skip field initializers, and spawnParticle/playSound iterate this list.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
+        // Entity.moveEntity uses World's reusable collision list, even in a façade allocated without its constructor.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_72998_d", new ArrayList<>());
         // theProfiler: Entity.onEntityUpdate and other original update loops open profiler sections unconditionally.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72984_F", loader.loadClass("net.minecraft.profiler.Profiler").getConstructor().newInstance());
         // playerEntities: old code (eldritch lock messages...) reads it directly; it mirrors the host players, refreshed once per tick.
@@ -82,7 +84,15 @@ public final class LegacyWorlds implements AutoCloseable {
         if (original) providerType.getMethod("func_76558_a", loader.loadClass("net.minecraft.world.World")).invoke(provider, world);
         set(providerType, provider, "field_76579_a", world);
         var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
+        refreshDifficulty(binding);
         return world;
+    }
+    private static void refreshDifficulty(Binding binding) {
+        try {
+            var type=binding.loader.loadClass("net.minecraft.world.EnumDifficulty");
+            Object difficulty=type.getEnumConstants()[Math.max(0,Math.min(3,binding.host.difficulty()))];
+            binding.loader.loadClass("net.minecraft.world.World").getField("field_73013_u").set(binding.world,difficulty);
+        }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot refresh old world difficulty",failure);}
     }
     public synchronized void unbind(Object hostIdentity) {
         Binding binding = worlds.get(hostIdentity);
@@ -167,6 +177,16 @@ public final class LegacyWorlds implements AutoCloseable {
     public static void sound(Object world,double x,double y,double z,String id,float volume,float pitch) {
         binding(world).host.playSound(new HostWorldAccess.Sound(x,y,z,id,volume,pitch,false,null));
     }
+    public static void auxiliaryEffect(Object world,Object excluded,int event,int x,int y,int z,int data) throws ReflectiveOperationException {
+        var bound=binding(world);
+        UUID id=excluded==null?null:(UUID)bound.loader.loadClass("net.minecraft.entity.Entity").getMethod("func_110124_au").invoke(excluded);
+        if(event==1003) {
+            // 1.7.10's single door event randomly chose either wooden door sample for both transitions.
+            Random random=(Random)bound.loader.loadClass("net.minecraft.world.World").getField("field_73012_v").get(world);
+            bound.host.playSound(new HostWorldAccess.Sound(x+.5,y+.5,z+.5,random.nextBoolean()?"random.door_open":"random.door_close",1,random.nextFloat()*.1f+.9f,false,id));
+        } else if(event==2004) bound.host.levelEvent(id,2004,x,y,z,data); // mob-spawner flames/smoke
+        else LegacyDiagnostics.missingMapping("world event "+event,"legacy auxiliary event has no host translation");
+    }
     public static void localSound(Object world,double x,double y,double z,String id,float volume,float pitch,boolean delay) {
         var host=binding(world).host;
         // World.playSound is a client-only effect in 1.7.10; the server implementation is intentionally empty.
@@ -244,6 +264,17 @@ public final class LegacyWorlds implements AutoCloseable {
     public static int power(Object world, int x, int y, int z, int side) { return binding(world).host.power(x,y,z,side); }
     public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
     public static List<Object> entities(Object world,Class<?> type,Object box) {return selectedEntities(world,type,box,null);}
+    /** Old AI can retain a snapshot for many ticks; keep the target's position and removal state authoritative. */
+    public static void refreshEntity(Object world,Object entity) throws Exception {
+        if(entity==null||!LegacyEntityHooks.isMirror(entity))return;
+        var bound=binding(world);var type=bound.loader.loadClass("net.minecraft.entity.Entity");
+        UUID id=(UUID)type.getMethod("func_110124_au").invoke(entity);var snapshot=bound.host.entity(id);
+        type.getField("field_70128_L").setBoolean(entity,snapshot==null);
+        if(snapshot!=null) {
+            LegacyEntityAccess.mirror(bound.items,world,snapshot,entity);
+            if(bound.motionCapture){bound.queried.put(id,entity);bound.snapshots.put(id,snapshot);}
+        }
+    }
     private static Object mirrored(Binding binding,Object world,HostWorldAccess.Entity snapshot) throws Exception {
         // A host entity that hosts an old entity is that old entity; it must not be replaced by a snapshot.
         Object hosted=binding.host.hostedLegacyEntity(snapshot.id());
@@ -466,6 +497,7 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer,bridge,"func_147453_f","(IIILnet/minecraft/block/Block;)V","comparators","(Ljava/lang/Object;IIILjava/lang/Object;)V",null);
         constant(writer, "func_72904_c", "(IIIIII)Z", 1);
         forward(writer,bridge,"func_72908_a","(DDDLjava/lang/String;FF)V","sound","(Ljava/lang/Object;DDDLjava/lang/String;FF)V",null);
+        forward(writer,bridge,"func_72889_a","(Lnet/minecraft/entity/player/EntityPlayer;IIIII)V","auxiliaryEffect","(Ljava/lang/Object;Ljava/lang/Object;IIIII)V",null);
         forward(writer,bridge,"func_72980_b","(DDDLjava/lang/String;FFZ)V","localSound","(Ljava/lang/Object;DDDLjava/lang/String;FFZ)V",null);
         for(String method:List.of("func_72956_a","func_85173_a")) {
             var sound=writer.visitMethod(Opcodes.ACC_PUBLIC,method,"("+(method.equals("func_72956_a")?"Lnet/minecraft/entity/Entity;":"Lnet/minecraft/entity/player/EntityPlayer;")+"Ljava/lang/String;FF)V",null,null);

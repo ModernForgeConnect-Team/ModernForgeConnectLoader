@@ -21,6 +21,7 @@ public interface HostWorldAccess {
     String dimensionKey();
     int legacyDimensionId();
     boolean clientSide();
+    default int difficulty() { return 2; }
     long gameTime();
     long dayTime();
     void setDayTime(long time);
@@ -33,6 +34,8 @@ public interface HostWorldAccess {
     default int power(int x, int y, int z, int side) { return 0; }
     default boolean loaded(int x, int y, int z) { return true; }
     default void playSound(Sound sound) { }
+    /** A modern level event whose payload has already been translated by the legacy world bridge. */
+    default void levelEvent(java.util.UUID excludedPlayer,int event,int x,int y,int z,int data) { }
     default void spawnProjectile(Projectile projectile) { }
     /** An old entity with no host translation; the host keeps it alive and runs its original onUpdate. */
     default boolean spawnLegacyEntity(Object entity) { return false; }
@@ -47,7 +50,10 @@ public interface HostWorldAccess {
     default void ignite(java.util.UUID target, int seconds) { }
     /** Old addPotionEffect; {@code potion} is the 1.7.10 potion id. */
     default void addEffect(java.util.UUID target, int potion, int duration, int amplifier, boolean ambient) { }
+    default void swing(java.util.UUID entity) { }
     default java.util.List<Entity> entities(double minX,double minY,double minZ,double maxX,double maxY,double maxZ) { return java.util.List.of(); }
+    /** Refresh a target an original entity retained after its initial AABB query; null after it leaves this world. */
+    default Entity entity(java.util.UUID id) { return null; }
     default Object existingEntity(java.util.UUID id) { return null; }
     /** Every player in this world (old World.playerEntities). */
     default java.util.List<Entity> players() { return java.util.List.of(); }

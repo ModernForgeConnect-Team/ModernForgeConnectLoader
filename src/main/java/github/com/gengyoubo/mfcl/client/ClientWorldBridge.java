@@ -42,6 +42,7 @@ public final class ClientWorldBridge {
                     @Override public String dimensionKey() { return dimension; }
                     @Override public int legacyDimensionId() { return oldDimension; }
                     @Override public boolean clientSide() { return true; }
+                    @Override public int difficulty() { return next.getDifficulty().getId(); }
                     @Override public String biome(int x,int z) {return github.com.gengyoubo.mfcl.content.HostBiomeQueries.key(next,x,z);}
                     @Override public void playSound(Sound sound) {
                         if(sound.excludedPlayer()!=null&&Minecraft.getInstance().player!=null&&sound.excludedPlayer().equals(Minecraft.getInstance().player.getUUID()))return;
@@ -49,6 +50,10 @@ public final class ClientWorldBridge {
                         next.playLocalSound(sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch(),sound.distanceDelay());
                     }
                     @Override public long gameTime() { return next.getGameTime(); }
+                    @Override public void levelEvent(java.util.UUID excluded,int event,int x,int y,int z,int data) {
+                        if(excluded!=null&&Minecraft.getInstance().player!=null&&excluded.equals(Minecraft.getInstance().player.getUUID()))return;
+                        next.levelEvent(event,new BlockPos(x,y,z),data);
+                    }
                     @Override public java.util.List<HostWorldAccess.Entity> entities(double a,double b,double c,double d,double e,double f) {return github.com.gengyoubo.mfcl.content.HostEntityQueries.query(next,a,b,c,d,e,f);}
                     @Override public long dayTime() { return next.getDayTime(); }
                     @Override public boolean powered(int x, int y, int z) { return next.hasNeighborSignal(new BlockPos(x,y,z)); }

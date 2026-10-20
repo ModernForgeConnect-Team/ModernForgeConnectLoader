@@ -328,6 +328,7 @@ public final class ModernContentBridge {
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
         if (stack.isEmpty()) return null;
+        var vanillaLoot=LegacyVanillaStacks.toLegacy(stack);if(vanillaLoot!=null)return vanillaLoot;
         var represented = hostRepresentations.stack(stack);
         if (represented != null) return represented;
         if (reverseItems.containsKey(stack.getItem())) return snapshot(stack);
@@ -350,6 +351,7 @@ public final class ModernContentBridge {
     }
     public ItemStack gameplayStack(LegacyClientData.Stack stack) {
         if (stack == null || stack.count() <= 0) return ItemStack.EMPTY;
+        var vanillaLoot=LegacyVanillaStacks.toHost(services,stack);if(!vanillaLoot.isEmpty())return vanillaLoot;
         var represented = hostRepresentations.stack(stack);
         if (!represented.isEmpty()) return represented;
         if (!items.containsKey(stack.key()) && !stack.tag().isEmpty()) throw new UnsupportedOperationException("Original inventory NBT needs a host mapping: " + stack.key());
@@ -870,8 +872,12 @@ public final class ModernContentBridge {
             if (!canPlace(entry, state.getValue(METADATA))) return List.of();
             try {
                 var result = new ArrayList<ItemStack>();
-                for (var drop : declarations.drops(entry.key(), state.getValue(METADATA), params.getLevel().random.nextLong())) {
-                    ItemStack mapped = mapStack(drop);
+                var origin=params.getParameter(LootContextParams.ORIGIN);
+                var pos=BlockPos.containing(origin);
+                var tool=params.getOptionalParameter(LootContextParams.TOOL);
+                int fortune=tool==null?0:net.minecraft.world.item.enchantment.EnchantmentHelper.getItemEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.BLOCK_FORTUNE,tool);
+                for (var drop : declarations.drops(entry.key(),state.getValue(METADATA),services.worlds().bound(params.getLevel()),pos.getX(),pos.getY(),pos.getZ(),fortune)) {
+                    ItemStack mapped = gameplayStack(drop);
                     if (mapped.isEmpty()) throw new UnsupportedOperationException("Unmapped original block drop: " + drop.key());
                     result.add(mapped);
                 }

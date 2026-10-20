@@ -20,6 +20,7 @@ final class LegacyEntityAccess {
         var base=loader.loadClass("net.minecraft.entity.Entity");
         base.getMethod("func_145769_d",int.class).invoke(entity,snapshot.entityId());
         base.getField("field_70170_p").set(entity,world);
+        base.getField("field_71093_bK").setInt(entity,loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(loader.loadClass("net.minecraft.world.World").getField("field_73011_w").get(world)));
         base.getField("field_70165_t").setDouble(entity,snapshot.x());base.getField("field_70163_u").setDouble(entity,snapshot.y());base.getField("field_70161_v").setDouble(entity,snapshot.z());
         base.getField("field_70159_w").setDouble(entity,snapshot.motionX());base.getField("field_70181_x").setDouble(entity,snapshot.motionY());base.getField("field_70179_y").setDouble(entity,snapshot.motionZ());
         base.getField("field_70143_R").setFloat(entity,snapshot.fallDistance());base.getField("field_70130_N").setFloat(entity,snapshot.width());base.getField("field_70131_O").setFloat(entity,snapshot.height());

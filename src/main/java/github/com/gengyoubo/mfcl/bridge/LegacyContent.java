@@ -388,6 +388,20 @@ public final class LegacyContent {
     public List<LegacyCreativeTabs.Tab> tabs() { return tabs; }
     public ClassLoader loader() { return data.loader(); }
     public Set<String> registeredIcons() { return Set.copyOf(data.iconLayout().keySet()); }
+    /** Forge's extensible drop callback, including mod loot generators and the real world's random/context. */
+    public List<LegacyClientData.Stack> drops(String key,int metadata,Object world,int x,int y,int z,int fortune) throws Exception {
+        return data.inLegacy(() -> {
+            Object block=Objects.requireNonNull(oldBlocks.get(key));
+            var type=data.loader().loadClass("net.minecraft.block.Block");
+            var worldType=data.loader().loadClass("net.minecraft.world.World");
+            var result=new ArrayList<LegacyClientData.Stack>();
+            for(Object stack:(List<?>)type.getMethod("getDrops",worldType,int.class,int.class,int.class,int.class,int.class)
+                    .invoke(block,world,x,y,z,metadata,fortune)) {
+                var snapshot=data.snapshot(stack);if(snapshot!=null&&snapshot.count()>0)result.add(snapshot);
+            }
+            return List.copyOf(result);
+        });
+    }
     /** Execute the original vanilla-style drop methods, preserving custom ore drop identity and metadata. */
     public List<LegacyClientData.Stack> drops(String key, int metadata, long seed) throws Exception {
         return data.inLegacy(() -> {

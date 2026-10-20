@@ -14,11 +14,19 @@ public final class EntityHostTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null) return null;
         String constants = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d")) return bytes;
+        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_71038_i")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
         boolean changed = false;
         for (MethodNode m : node.methods) {
             if ((m.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_STATIC)) != 0) continue;
+            if(m.name.equals("func_71038_i")&&m.desc.equals("()V")) {
+                for(AbstractInsnNode instruction:m.instructions.toArray())if(instruction instanceof MethodInsnNode) {
+                    MethodInsnNode call=(MethodInsnNode)instruction;
+                    if(call.owner.equals("net/minecraft/entity/EntityTracker")&&call.name.equals("func_151247_a")) {
+                        m.instructions.set(call,new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"animation","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",false));changed=true;
+                    }
+                }
+            }
             InsnList code = new InsnList(); LabelNode original = new LabelNode();
             code.add(new VarInsnNode(Opcodes.ALOAD, 0));
             code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, "intercepts", "(Ljava/lang/Object;)Z", false));

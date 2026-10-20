@@ -9,6 +9,7 @@ final class RuntimeLogicSemanticsProbe {
     static void verify(LegacyServices services, Map<String,Object> report) throws Exception {
         var loader = services.loader(); var notifications = new ArrayList<String>();
         var sounds=new ArrayList<HostWorldAccess.Sound>();
+        var effects=new ArrayList<String>();
         Object identity = new Object();
         Object world = services.worlds().bind(identity,new HostWorldAccess() {
             public String dimensionKey() { return "mfcl:logic-test"; } public int legacyDimensionId() { return 0; }
@@ -20,6 +21,8 @@ final class RuntimeLogicSemanticsProbe {
             public void blockEvent(int x,int y,int z,String block,int event,int data) { notifications.add("event:"+block+":"+event+":"+data); }
             public void schedule(int x,int y,int z,String block,int delay) { notifications.add("schedule:"+block+":"+delay); }
             public void playSound(Sound sound) {sounds.add(sound);}
+            public void levelEvent(UUID excluded,int event,int x,int y,int z,int data) {effects.add(event+":"+x+":"+y+":"+z);}
+            public void swing(UUID id) {effects.add("swing:"+id);}
         });
         try {
             if (!loader.loadClass("net.minecraft.world.WorldServer").isInstance(world)) throw new AssertionError("Server logic received a client-only world type");
@@ -34,6 +37,14 @@ final class RuntimeLogicSemanticsProbe {
                     ||!sounds.get(1).id().equals("random.orb")||sounds.get(1).y()!=64||!new UUID(1,2).equals(sounds.get(2).excludedPlayer()))
                 throw new AssertionError("Old positional/entity sound semantics were lost: "+sounds);
             report.put("genericWorldAndEntitySoundsForwarded",true);
+            worldType.getMethod("func_72889_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),int.class,int.class,int.class,int.class,int.class).invoke(world,actor,1003,1,64,2,0);
+            var door=sounds.get(3);
+            if(!Set.of("random.door_open","random.door_close").contains(door.id())||door.x()!=1.5||door.y()!=64.5||door.pitch()<.9f||door.pitch()>=1||!new UUID(1,2).equals(door.excludedPlayer()))throw new AssertionError("Door auxiliary event lost position, pitch or excluded player: "+door);
+            worldType.getMethod("func_72926_e",int.class,int.class,int.class,int.class,int.class).invoke(world,2004,1,64,2,0);
+            actor.getClass().getMethod("func_71038_i").invoke(actor);
+            if(!effects.equals(List.of("2004:1:64:2","swing:"+new UUID(1,2))))throw new AssertionError("Old particle/swing effect entered the absent legacy tracker: "+effects);
+            if(!loader.loadClass("net.minecraft.entity.EntityLivingBase").getField("field_82175_bq").getBoolean(actor))throw new AssertionError("Swing bridge skipped the original animation state");
+            report.put("genericAuxiliaryEventsAndSwingVerified",true);
             var oldWorld = loader.loadClass("net.minecraft.world.World"); var oldTile = loader.loadClass("net.minecraft.tileentity.TileEntity");
             var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String name = "mfcl/fixture/LogicTile";

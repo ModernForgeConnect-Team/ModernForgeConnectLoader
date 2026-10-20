@@ -30,6 +30,13 @@ public final class LegacyEntityHooks {
         UUID idOf(Object value) throws ReflectiveOperationException { return value != null && entity.isInstance(value) ? (UUID) id.invoke(value) : null; }
     }
     static void mirrored(Object entity) { MIRRORS.put(entity, Boolean.TRUE); }
+    static boolean isMirror(Object entity) { return MIRRORS.containsKey(entity); }
+    /** Keep the original swing state/callback, but deliver its animation through the host tracker. */
+    public static void animation(Object tracker,Object entity,Object packet) throws ReflectiveOperationException {
+        var host=host(entity);
+        if(host!=null)host.swing(access(entity).idOf(entity));
+        else tracker.getClass().getMethod("func_151247_a",access(entity).entity,entity.getClass().getClassLoader().loadClass("net.minecraft.network.Packet")).invoke(tracker,entity,packet);
+    }
     private static Access access(Object entity) { return ACCESS.computeIfAbsent(entity.getClass().getClassLoader(), Access::of); }
     private static HostWorldAccess host(Object entity) throws ReflectiveOperationException {
         return LegacyWorlds.hostOrNull(access(entity).world.get(entity));

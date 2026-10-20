@@ -89,6 +89,7 @@ public final class LevelWorldBridge {
             @Override public String dimensionKey() { return level.dimension().location().toString(); }
             @Override public int legacyDimensionId() { return dimension; }
             @Override public boolean clientSide() { return false; }
+            @Override public int difficulty() { check(); return level.getDifficulty().getId(); }
             @Override public String biome(int x,int z) {check();return HostBiomeQueries.key(level,x,z);}
             @Override public void setBiome(int x,int z,String key) {check();content.afterCommit(level,()->HostBiomeQueries.set(level,x,z,key));}
             @Override public void playSound(Sound sound) {
@@ -97,7 +98,12 @@ public final class LevelWorldBridge {
                 content.afterCommit(level,()->level.playSound(excluded,sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch()));
             }
             @Override public long gameTime() { check(); return level.getGameTime(); }
+            @Override public void levelEvent(java.util.UUID excluded,int event,int x,int y,int z,int data) {
+                check(); var player=excluded==null?null:level.getServer().getPlayerList().getPlayer(excluded);
+                content.afterCommit(level,()->level.levelEvent(player,event,new BlockPos(x,y,z),data));
+            }
             @Override public java.util.List<HostWorldAccess.Entity> entities(double a,double b,double c,double d,double e,double f) {check();return HostEntityQueries.query(level,a,b,c,d,e,f);}
+            @Override public HostWorldAccess.Entity entity(java.util.UUID id) {check();var entity=level.getEntity(id);return entity==null||!entity.isAlive()?null:HostEntityQueries.snapshot(level,entity);}
             @Override public void applyMotion(HostWorldAccess.Motion motion) {check();content.afterCommit(level,()->HostEntityQueries.apply(level,motion));}
             @Override public java.util.List<HostWorldAccess.Entity> players() {
                 check(); return level.players().stream().map(player -> HostEntityQueries.snapshot(level, player)).filter(java.util.Objects::nonNull).toList();
@@ -149,6 +155,10 @@ public final class LevelWorldBridge {
             }
             @Override public void ignite(java.util.UUID id, int seconds) {
                 check(); var target = level.getEntity(id); if (target != null) content.afterCommit(level, () -> target.setSecondsOnFire(seconds));
+            }
+            @Override public void swing(java.util.UUID id) {
+                check();var entity=level.getEntity(id);
+                if(entity instanceof net.minecraft.world.entity.LivingEntity living)content.afterCommit(level,()->living.swing(net.minecraft.world.InteractionHand.MAIN_HAND));
             }
             @Override public void addEffect(java.util.UUID id, int potion, int duration, int amplifier, boolean ambient) {
                 check();

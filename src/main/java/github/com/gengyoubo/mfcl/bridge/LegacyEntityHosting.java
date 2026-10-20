@@ -54,7 +54,15 @@ public final class LegacyEntityHosting {
         return services.items().inLegacy(() -> {
             worldField.set(value, boundWorld); remember(value);
             ticks.setInt(value, ticks.getInt(value) + 1);
-            update.invoke(value);
+            LegacyWorlds.beginEntityQueries(boundWorld);
+            try {
+                var creature=services.loader().loadClass("net.minecraft.entity.EntityCreature");
+                if(creature.isInstance(value))LegacyWorlds.refreshEntity(boundWorld,creature.getMethod("func_70777_m").invoke(value));
+                var living=services.loader().loadClass("net.minecraft.entity.EntityLiving");
+                if(living.isInstance(value))LegacyWorlds.refreshEntity(boundWorld,living.getMethod("func_70638_az").invoke(value));
+                update.invoke(value); LegacyWorlds.commitEntityMotion(boundWorld);
+            }
+            finally { LegacyWorlds.clearEntityQueries(boundWorld); }
             return state(value);
         });
     }

@@ -29,7 +29,6 @@ final class CrossbowHostSmokeProbe {
     private UUID pig;
     private int stage, wait, ticks;
     private boolean done, sawHosted;
-    private final List<String> trace = new ArrayList<>();
     private CrossbowHostSmokeProbe() {}
     static void install(ModernContentBridge bridge) { MinecraftForge.EVENT_BUS.addListener(new CrossbowHostSmokeProbe()::tick); }
     private void tick(TickEvent.ServerTickEvent event) {
@@ -43,9 +42,6 @@ final class CrossbowHostSmokeProbe {
                 case 2 -> { fire(level); stage = 3; }
                 case 3 -> {
                     sawHosted |= hosted(level) > 0;
-                    if (ticks < 12) for (var entity : level.getEntitiesOfClass(LegacyHostedEntity.class, player.getBoundingBox().inflate(64)))
-                        trace.add(String.format("%.2f,%.2f,%.2f v%.2f,%.2f,%.2f", entity.getX() - player.getX(), entity.getY() - player.getY(), entity.getZ() - player.getZ(),
-                                entity.getDeltaMovement().x, entity.getDeltaMovement().y, entity.getDeltaMovement().z));
                     boolean slowed = level.getEntity(pig) instanceof LivingEntity target && target.hasEffect(MobEffects.MOVEMENT_SLOWDOWN);
                     if (slowed || ++ticks > 60) verify(level, slowed);
                 }
@@ -57,6 +53,8 @@ final class CrossbowHostSmokeProbe {
         var spawn = level.getSharedSpawnPos(); double y = level.getMaxBuildHeight() - 10;
         player = FakePlayerFactory.getMinecraft(level);
         player.moveTo(spawn.getX() + .5, y, spawn.getZ() + .5, 0, 0);
+        // The probe world is saved between runs; earlier probe pigs would otherwise stand in the arrow's path.
+        for (var old : level.getEntitiesOfClass(net.minecraft.world.entity.animal.Pig.class, new net.minecraft.world.phys.AABB(spawn).inflate(16, 400, 16))) old.discard();
         var target = EntityType.PIG.create(level);
         target.moveTo(spawn.getX() + .5, y + 1.1, spawn.getZ() + 4.5, 180, 0); target.setNoAi(true); target.setNoGravity(true);
         level.addFreshEntity(target); pig = target.getUUID();
@@ -76,19 +74,24 @@ final class CrossbowHostSmokeProbe {
         if (!CrossbowItem.isCharged(crossbow)) throw new IllegalStateException("Crossbow did not load a primal arrow");
         proof.put("primalLeftAfterLoad", count(level, true)); proof.put("vanillaLeftAfterLoad", count(level, false));
     }
-    private void fire(ServerLevel level) {
+    private void fire(ServerLevel level) throws Exception {
+        // The pig as original code sees it, and whether damage on that mirror is forwarded to the host pig.
+        var services = ModernContentBridge.active().services(); var target = level.getEntity(pig);
+        services.items().inLegacy(() -> {
+                var loader = services.loader(); Object world = services.worlds().bound(level);
+                Object box = loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a", double.class, double.class, double.class, double.class, double.class, double.class)
+                        .invoke(null, target.getX() - 1, target.getY() - 1, target.getZ() - 1, target.getX() + 1, target.getY() + 2, target.getZ() + 1);
+                var mirrors = github.com.gengyoubo.mfcl.bridge.LegacyWorlds.entities(world, loader.loadClass("net.minecraft.entity.Entity"), box);
+                var seen = new ArrayList<String>();
+                for (Object mirror : mirrors) seen.add(mirror.getClass().getName() + " intercepted=" + github.com.gengyoubo.mfcl.bridge.LegacyEntityHooks.intercepts(mirror));
+                proof.put("pigMirrors", seen);
+                if (!seen.contains("net.minecraft.entity.passive.EntityPig intercepted=true")) throw new IllegalStateException("The pig mirror does not forward damage " + seen);
+                return null;
+        });
         int arrowsBefore = level.getEntitiesOfClass(AbstractArrow.class, player.getBoundingBox().inflate(64)).size();
         player.getItemInHand(InteractionHand.MAIN_HAND).use(level, player, InteractionHand.MAIN_HAND);
         proof.put("hostArrows", level.getEntitiesOfClass(AbstractArrow.class, player.getBoundingBox().inflate(64)).size() - arrowsBefore);
         sawHosted = hosted(level) > 0;
-        try {
-            var hosting = ModernContentBridge.active().services().entityHosting();
-            for (var entity : level.getEntitiesOfClass(LegacyHostedEntity.class, player.getBoundingBox().inflate(64))) {
-                proof.put("spawnState", String.valueOf(hosting.state(entity.legacyOrNull())));
-                entity.tick();
-                proof.put("afterFirstTick", entity.isRemoved() + " " + (entity.legacyOrNull() == null ? "null" : String.valueOf(hosting.state(entity.legacyOrNull()))));
-            }
-        } catch (Exception failure) { proof.put("stateFailure", failure.toString()); }
     }
     private int hosted(ServerLevel level) {
         int count = 0;
@@ -105,7 +108,6 @@ final class CrossbowHostSmokeProbe {
         return total;
     }
     private void verify(ServerLevel level, boolean slowed) {
-        proof.put("arrowTrace", trace);
         proof.put("hostedPrimalArrow", sawHosted); proof.put("pigSlowed", slowed);
         if (level.getEntity(pig) instanceof LivingEntity target) proof.put("pigHealth", target.getHealth());
         if (!proof.get("primalLeftAfterLoad").equals(3) || !proof.get("vanillaLeftAfterLoad").equals(4)) throw new IllegalStateException("Wrong ammo loaded " + proof);
@@ -116,6 +118,8 @@ final class CrossbowHostSmokeProbe {
     }
     private void finish(MinecraftServer server, Throwable failure) {
         done = true;
+        // The probe world is shared with the bow probe, which fires along the same line.
+        if (pig != null && server.overworld().getEntity(pig) != null) server.overworld().getEntity(pig).discard();
         try {
             var path = FMLPaths.GAMEDIR.get().resolve("logs/mfcl/server-1.7.10-smoke-crossbow.json");
             Files.createDirectories(path.getParent());
