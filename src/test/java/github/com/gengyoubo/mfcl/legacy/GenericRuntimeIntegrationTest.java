@@ -30,6 +30,8 @@ class GenericRuntimeIntegrationTest {
             assertTrue(result.get("genericWorldRayTraceVerified").getAsBoolean());
             assertTrue(result.get("genericPlayerDataBridgeVerified").getAsBoolean());
             assertTrue(result.get("genericOriginalGameplayCallbacksVerified").getAsBoolean());
+            assertTrue(result.get("genericAuxiliaryEventsAndSwingVerified").getAsBoolean());
+            assertTrue(result.get("genericPlayerAttackRulesVerified").getAsBoolean());
             assertTrue(result.get("genericDeviceContainersAndEntityQueriesVerified").getAsBoolean());
             assertTrue(result.get("genericTileSnapshotSubtypeVerified").getAsBoolean());
             assertTrue(result.get("genericDeviceButtonInputVerified").getAsBoolean());

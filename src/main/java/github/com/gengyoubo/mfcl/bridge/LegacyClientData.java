@@ -198,6 +198,9 @@ public final class LegacyClientData {
     public String displayName(Stack value) throws Exception {
         return inLegacy(()->(String)stackType.getMethod("func_82833_r").invoke(materialize(value)));
     }
+    public int stackLimit(Stack value) throws Exception {
+        return inLegacy(()->(int)stackType.getMethod("func_77976_d").invoke(materialize(value)));
+    }
     public List<String> tooltip(Stack value,Object player,boolean advanced) throws Exception {
         return inLegacy(()->{
             @SuppressWarnings("unchecked") var lines=(List<String>)stackType.getMethod("func_82840_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),boolean.class).invoke(materialize(value),player,advanced);

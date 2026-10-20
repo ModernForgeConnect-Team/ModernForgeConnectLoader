@@ -11,10 +11,14 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     @Override public void beforeBoot(ClassLoader loader) throws Exception {
         LegacyModAdapter.registerBytecodeAdapters(loader,
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDamageSourceAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPrimalArrowAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDoorAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter");
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
         this.services = services;
+        services.items().supplement("zh_cn",Map.of("item.ItemResource.18.name","金币"));
         var loader = services.loader();
         var generation=loader.loadClass("thaumcraft.common.lib.world.ThaumcraftWorldGenerator");
         var config=loader.loadClass("thaumcraft.common.config.Config");

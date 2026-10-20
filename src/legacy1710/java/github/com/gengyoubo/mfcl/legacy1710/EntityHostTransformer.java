@@ -14,7 +14,7 @@ public final class EntityHostTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null) return null;
         String constants = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_71038_i")) return bytes;
+        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
         boolean changed = false;
         for (MethodNode m : node.methods) {
@@ -29,10 +29,15 @@ public final class EntityHostTransformer implements IClassTransformer {
             }
             InsnList code = new InsnList(); LabelNode original = new LabelNode();
             code.add(new VarInsnNode(Opcodes.ALOAD, 0));
-            code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, "intercepts", "(Ljava/lang/Object;)Z", false));
+            boolean playerRule=m.name.equals("func_96122_a")&&m.desc.equals("(Lnet/minecraft/entity/player/EntityPlayer;)Z");
+            code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, playerRule?"hasServerHost":"intercepts", "(Ljava/lang/Object;)Z", false));
             code.add(new JumpInsnNode(Opcodes.IFEQ, original));
             code.add(new VarInsnNode(Opcodes.ALOAD, 0));
-            if (m.name.equals("func_70097_a") && m.desc.equals("(Lnet/minecraft/util/DamageSource;F)Z")) {
+            if(playerRule) {
+                code.add(new VarInsnNode(Opcodes.ALOAD,1));
+                code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"canAttackPlayer","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));
+                code.add(new InsnNode(Opcodes.IRETURN));
+            } else if (m.name.equals("func_70097_a") && m.desc.equals("(Lnet/minecraft/util/DamageSource;F)Z")) {
                 code.add(new VarInsnNode(Opcodes.ALOAD, 1)); code.add(new VarInsnNode(Opcodes.FLOAD, 2));
                 code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, "attack", "(Ljava/lang/Object;Ljava/lang/Object;F)Z", false));
                 code.add(new InsnNode(Opcodes.IRETURN));

@@ -57,6 +57,16 @@ final class LegacyEntityAccess {
             }
         }
         // Age and breeding state are what old animal logic (lamp of fertility) checks before setInLove.
+        Class<?> playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+        if(playerType.isInstance(entity)) {
+            Class<?> abilitiesType=loader.loadClass("net.minecraft.entity.player.PlayerCapabilities");
+            Object abilities=abilitiesType.getConstructor().newInstance();
+            if(snapshot.abilities()!=null) {
+                abilitiesType.getField("field_75098_d").setBoolean(abilities,snapshot.abilities().creative());
+                abilitiesType.getField("field_75102_a").setBoolean(abilities,snapshot.abilities().invulnerable());
+            }
+            playerType.getField("field_71075_bZ").set(entity,abilities);
+        }
         if(loader.loadClass("net.minecraft.entity.EntityAgeable").isInstance(entity)) {
             var watched=base.getDeclaredField("field_70180_af");watched.setAccessible(true);Object watcher=watched.get(entity);
             watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,12,snapshot.age());

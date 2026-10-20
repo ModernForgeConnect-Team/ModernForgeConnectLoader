@@ -27,9 +27,15 @@ final class GameplayHostSmokeProbe {
     private Pig target;
     private Object bat;
     private int stage, ticks;
+    private int batObservedTicks;
+    private boolean batDeathPending;
     private int arrowCase=-1;
-    private Pig arrowTarget;
+    private net.minecraft.world.entity.LivingEntity arrowTarget;
+    private boolean originalPvp;
+    private LegacyHostedEntity playerShot;
     private float normalDamage;
+    private float incomingDamage;
+    private boolean armorBypassed;
     private final List<String> sounds=new ArrayList<>();
     private boolean done;
     private GameplayHostSmokeProbe(ModernContentBridge content) { this.content=content; }
@@ -37,6 +43,9 @@ final class GameplayHostSmokeProbe {
         var probe=new GameplayHostSmokeProbe(content);MinecraftForge.EVENT_BUS.addListener(probe::tick);
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.PlayLevelSoundEvent.AtPosition event)->{
             if(event.getSound()!=null)probe.sounds.add(event.getSound().get().getLocation().toString());
+        });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.entity.living.LivingHurtEvent event)->{
+            if(event.getEntity()==probe.arrowTarget){probe.incomingDamage=event.getAmount();probe.armorBypassed=event.getSource().is(net.minecraft.tags.DamageTypeTags.BYPASSES_ARMOR);}
         });
     }
     private void check(boolean value,String message) { if(!value)throw new IllegalStateException(message); }
@@ -60,7 +69,11 @@ final class GameplayHostSmokeProbe {
                 // Keep the arena loaded so hosted entities receive ordinary server ticks with no connected players.
                 level.setChunkForced(player.chunkPosition().x,player.chunkPosition().z,true);
                 level.getServer().setDifficulty(net.minecraft.world.Difficulty.NORMAL,true);
+                originalPvp=level.getServer().isPvpAllowed();
+                test("coins",()->coins());
+                test("leafStates",()->leaves(level));
                 test("lootStackRoundTrips",()->lootMappings());
+                test("arrowDamageFlags",()->arrowFlags());
                 test("treasureBags",()->bags(level));
                 test("lootBlocks",()->loot(level));
                 test("doorSounds",()->door(level));
@@ -71,27 +84,82 @@ final class GameplayHostSmokeProbe {
                 if(++ticks<15)return;
                 int scenario=arrowCase;
                 test("arrow"+scenario,()->verifyArrow(level,scenario));
-                if(++arrowCase<13){test("fireArrow"+arrowCase,()->fireArrow(level,arrowCase));ticks=0;return;}
+                if(++arrowCase<17){test("fireArrow"+arrowCase,()->fireArrow(level,arrowCase));ticks=0;return;}
+                test("creativeArrowAmmo",()->creativeAmmo(level));
                 finish(level);return;
             }
+            if(batDeathPending) {
+                if(++ticks<80)return; // Original damage immunity and death animation run before setDead.
+                test("hellbatTargetDeath",()->{
+                    check(level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)).stream().noneMatch(e->e.legacyOrNull()==bat),"Bat kept chasing a removed target");
+                    return true;
+                });
+                arrowCase=0;test("fireArrow0",()->fireArrow(level,0));ticks=0;return;
+            }
+            if(level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)).stream().anyMatch(e->e.legacyOrNull()==bat))batObservedTicks++;
+            if(ticks==20&&target!=null)target.moveTo(player.getX()+3,target.getY(),player.getZ()+6,0,0);
             if(++ticks<80)return;
             test("hellbatTicks",()->{
                 var hosted=level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)).stream()
                         .filter(e->e.legacyOrNull()==bat).findFirst();
-                check(bat!=null&&hosted.isPresent(),"Summoned bat did not survive ordinary server ticks");
+                check(bat!=null&&batObservedTicks>=10,"Summoned bat did not survive ordinary server ticks");
                 check(target.getHealth()<20,"Summoned bat never damaged its target");
-                return Map.of("targetHealth",target.getHealth(),"state",content.services().entityHosting().state(bat).toString());
+                return Map.of("targetHealth",target.getHealth(),"observedTicks",batObservedTicks,"stillPresent",hosted.isPresent(),"state",content.services().entityHosting().state(bat).toString());
             });
             if(target!=null)target.discard();
-            arrowCase=0;test("fireArrow0",()->fireArrow(level,0));ticks=0;
+            batDeathPending=true;ticks=0;
         }catch(Throwable failure){done=true;LogUtils.getLogger().error("MFCL gameplay probe failed",failure);event.getServer().halt(false);}
     }
     private void finish(ServerLevel level) throws Exception {
         done=true;
+        level.getServer().setPvpAllowed(originalPvp);
         proof.put("status",proof.values().stream().anyMatch(v->v instanceof Map<?,?> m&&"FAIL".equals(m.get("status")))?"FAIL":"PASS");
         var output=FMLPaths.GAMEDIR.get().resolve("logs/mfcl/gameplay-smoke.json");Files.createDirectories(output.getParent());
         Files.writeString(output,new GsonBuilder().setPrettyPrinting().create().toJson(proof));
         LogUtils.getLogger().info("MFCL_GAMEPLAY_SMOKE: {}",proof);level.getServer().halt(false);
+    }
+    private Object leaves(ServerLevel level) throws Exception {
+        String key="Thaumcraft:blockMagicalLeaves";
+        var leaves=content.declarations().blocks().stream().filter(block->block.key().equals(key)).findFirst().orElseThrow();
+        var id=ModernContentBridge.id(key);
+        var models=content.pack().directory().resolve("assets/"+id.getNamespace()+"/models/block/"+id.getPath());
+        for(int meta=0;meta<16;meta++) {
+            check(leaves.faces().get(meta).equals(leaves.faces().get(meta&1)),"Leaf state lost species texture: "+meta);
+            for(String icon:leaves.faces().get(meta))check(!icon.isBlank()&&!content.pack().worldTexture(icon).equals("minecraft:item/barrier"),"Leaf state has placeholder texture: "+meta);
+            check(!Files.readString(models.resolveSibling(models.getFileName()+"_"+meta+".json")).contains("minecraft:item/barrier"),"Generated leaf model has a barrier: "+meta);
+        }
+        var placed=new ArrayList<Integer>();var pos=player.blockPosition().offset(6,0,0);
+        level.setBlock(pos.below(),net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(),3);
+        for(int species=0;species<2;species++) {
+            level.removeBlock(pos,false);
+            player.setItemInHand(InteractionHand.MAIN_HAND,content.stack(key,species,2,""));
+            var hit=new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atBottomCenterOf(pos),net.minecraft.core.Direction.UP,pos.below(),false);
+            player.getMainHandItem().useOn(new net.minecraft.world.item.context.UseOnContext(player,InteractionHand.MAIN_HAND,hit));
+            var state=level.getBlockState(pos);
+            check(state.is(content.blocks().get(key)),"Leaf item did not place species "+species);
+            int meta=state.getValue(ModernContentBridge.METADATA);
+            check((meta&1)==species&&!leaves.faces().get(meta).get(0).isBlank(),"Placed leaf state lost species texture: "+meta);
+            placed.add(meta);
+        }
+        level.removeBlock(pos,false);level.removeBlock(pos.below(),false);
+        check(content.pack().worldResource("minecraft:textures/entity/arrow.png").equals("minecraft:textures/entity/projectiles/arrow.png"),"Arrow renderer still uses the old vanilla resource");
+        return Map.of("states",16,"placedMetadata",placed,"arrowTexture",content.pack().worldResource("minecraft:textures/entity/arrow.png"));
+    }
+    private Object coins() throws Exception {
+        var coin=content.stack("Thaumcraft:ItemResource",18,20,"");
+        check(coin.getMaxStackSize()==64,"Coin inherited another resource variant's stack limit");
+        check(content.stack("Thaumcraft:ItemResource",15,1,"").getMaxStackSize()==1,"Non-stackable resource variant lost its limit");
+        player.getInventory().clearContent();player.getInventory().setItem(0,coin);
+        var more=content.stack("Thaumcraft:ItemResource",18,30,"");player.getInventory().add(more);
+        check(more.isEmpty()&&player.getInventory().getItem(0).getCount()==50,"Identical coins did not merge in the native inventory");
+        for(var variant:content.declarations().items().stream().filter(item->item.key().equals("Thaumcraft:ItemResource")).findFirst().orElseThrow().variants()) {
+            var stack=content.stack("Thaumcraft:ItemResource",variant.metadata(),1,"");
+            check(stack.getMaxStackSize()==content.services().items().stackLimit(content.gameplayStack(stack)),"Resource stack limit mismatch: "+variant.metadata());
+        }
+        String name;
+        try {content.services().items().language("zh_cn");name=coin.getHoverName().getString();check(name.equals("金币"),"Coin translation still missing: "+name);}
+        finally {content.services().items().language("en_us");}
+        return Map.of("name",name,"stackLimit",64,"mergedCount",50,"primalCharmLimit",1);
     }
     private Object bags(ServerLevel level) throws Exception {
         var results=new ArrayList<Object>();
@@ -128,6 +196,16 @@ final class GameplayHostSmokeProbe {
         }
         check(enchanted>0,"No enchanted loot was tested");return Map.of("samples",cases.size(),"enchanted",enchanted,"keys",keys);
     }
+    private Object arrowFlags() throws Exception {
+        var loader=content.services().loader();var entity=loader.loadClass("net.minecraft.entity.Entity");
+        var type=loader.loadClass("thaumcraft.api.damagesource.DamageSourceIndirectThaumcraftEntity");
+        Object source=type.getConstructor(String.class,entity,entity).newInstance("airarrow",null,null);
+        type.getMethod("func_76348_h").invoke(source);
+        check((boolean)type.getMethod("func_76363_c").invoke(source),"TC4 armor-bypass setter only wrote its private shadow field");
+        type.getMethod("func_76361_j").invoke(source);
+        check((boolean)type.getMethod("func_76347_k").invoke(source),"TC4 fire setter only wrote its private shadow field");
+        return Map.of("bypassArmor",true,"fire",true);
+    }
     private Object loot(ServerLevel level) throws Exception {
         var results=new ArrayList<Object>();var pos=player.blockPosition().offset(3,0,0);
         for(String key:List.of("Thaumcraft:blockLootCrate","Thaumcraft:blockLootUrn"))for(int quality=0;quality<3;quality++) {
@@ -144,8 +222,18 @@ final class GameplayHostSmokeProbe {
     private Object door(ServerLevel level) throws Exception {
         var pos=player.blockPosition().offset(-3,0,0);var services=content.services();var loader=services.loader();
         var block=content.blocks().get("Thaumcraft:blockArcaneDoor");
-        level.setBlock(pos,block.defaultBlockState().setValue(ModernContentBridge.METADATA,0),3);
-        level.setBlock(pos.above(),block.defaultBlockState().setValue(ModernContentBridge.METADATA,8),3);
+        level.removeBlock(pos,false);level.removeBlock(pos.above(),false);level.setBlock(pos.below(),net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(),3);
+        player.getInventory().clearContent();player.getInventory().selected=0;
+        player.setItemInHand(InteractionHand.MAIN_HAND,content.stack("Thaumcraft:ItemArcaneDoor",0,2,""));
+        var hit=new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atBottomCenterOf(pos),net.minecraft.core.Direction.UP,pos.below(),false);
+        var context=new net.minecraft.world.item.context.UseOnContext(player,InteractionHand.MAIN_HAND,hit);
+        int placementBefore=sounds.size();
+        player.getMainHandItem().useOn(context);
+        check(level.getBlockState(pos).is(block)&&level.getBlockState(pos.above()).is(block),"Door placement did not create both halves");
+        check(player.getMainHandItem().getCount()==1,"Door placement did not consume exactly one item");
+        check(sounds.size()==placementBefore+1&&sounds.get(placementBefore).equals("minecraft:block.metal.place"),"Door placement audio missing or duplicated: "+sounds);
+        player.getMainHandItem().useOn(context);
+        check(player.getMainHandItem().getCount()==1&&sounds.size()==placementBefore+1,"Blocked door placement consumed an item or played audio");
         Object world=services.worlds().bound(level);Object original=loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
         original=original.getClass().getMethod("func_82594_a",String.class).invoke(original,"Thaumcraft:blockArcaneDoor");
         Object actor=content.itemUse().clientActor(world,ModernContentBridge.placer(player),null);
@@ -165,41 +253,106 @@ final class GameplayHostSmokeProbe {
         check(sounds.size()-before==2,"Powered door did not emit exactly one sound per transition: "+sounds);
         var output=List.copyOf(sounds.subList(sounds.size()-4,sounds.size()));
         check(output.stream().allMatch(s->s.startsWith("minecraft:block.wooden_door.")),"Door used obsolete sound ids: "+output);
-        level.removeBlock(pos.above(),false);level.removeBlock(pos,false);return output;
+        int metadata=level.getBlockState(pos).getValue(ModernContentBridge.METADATA);tile.getClass().getField("owner").set(tile,"OtherOwner");
+        before=sounds.size();
+        content.logicTransaction(level,pos,()->{
+            door.getClass().getMethod("func_149727_a",loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),int.class,float.class,float.class,float.class)
+                    .invoke(door,world,pos.getX(),pos.getY(),pos.getZ(),actor,1,0f,0f,0f);return null;
+        },true);
+        check(level.getBlockState(pos).getValue(ModernContentBridge.METADATA)==metadata,"Unauthorized player opened the door");
+        check(sounds.size()==before+1&&sounds.get(before).equals("thaumcraft:doorfail"),"Unauthorized door feedback missing or duplicated");
+        level.removeBlock(pos.above(),false);level.removeBlock(pos,false);level.removeBlock(pos.below(),false);
+        return Map.of("placement","minecraft:block.metal.place","transitions",output,"denied","thaumcraft:doorfail");
     }
     private Object fireArrow(ServerLevel level,int scenario) throws Exception {
+        incomingDamage=0;armorBypassed=false;
         if(arrowTarget!=null)arrowTarget.discard();
         for(var entity:level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)))entity.discard();
-        arrowTarget=EntityType.PIG.create(level);arrowTarget.moveTo(player.getX(),player.getY()+1.1,player.getZ()+4,180,0);
-        arrowTarget.setNoAi(true);arrowTarget.setNoGravity(true);
+        if(scenario>=13&&scenario<15) {
+            if(scenario==13) {
+                var actor=probePlayer(level,new UUID(6930,1),"ArrowShooter");
+                actor.moveTo(player.getX(),player.getY(),player.getZ(),0,0);player=actor;level.addNewPlayer(player);
+            }
+            arrowTarget=probePlayer(level,new UUID(6930,5359+scenario),"ArrowTarget"+scenario);
+            level.getServer().setPvpAllowed(scenario==14);
+        } else arrowTarget=EntityType.PIG.create(level);
+        if(scenario>=15)player.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+        arrowTarget.moveTo(player.getX(),player.getY()+1.1,player.getZ()+4,180,0);
+        if(arrowTarget instanceof net.minecraft.world.entity.Mob mob)mob.setNoAi(true);
+        arrowTarget.setNoGravity(true);
         arrowTarget.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(1000);arrowTarget.setHealth(1000);
-        arrowTarget.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR).setBaseValue(20);level.addFreshEntity(arrowTarget);
-        boolean crossbow=scenario>6;int element=scenario==0?-1:(scenario-1)%6;
+        arrowTarget.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR).setBaseValue(20);
+        if(arrowTarget instanceof net.minecraft.server.level.ServerPlayer targetPlayer)level.addNewPlayer(targetPlayer);else level.addFreshEntity(arrowTarget);
+        boolean crossbow=scenario>6&&scenario<13||scenario==16;int element=scenario>=13?0:scenario==0?-1:(scenario-1)%6;
         player.getInventory().clearContent();player.getInventory().selected=0;
         var weapon=new ItemStack(crossbow?net.minecraft.world.item.Items.CROSSBOW:net.minecraft.world.item.Items.BOW);player.setItemInHand(InteractionHand.MAIN_HAND,weapon);
         player.getInventory().setItem(1,element<0?new ItemStack(net.minecraft.world.item.Items.ARROW,4):content.stack("Thaumcraft:PrimalArrow",element,4,""));
         weapon.use(level,player,InteractionHand.MAIN_HAND);
         weapon.releaseUsing(level,player,weapon.getUseDuration()-30);player.stopUsingItem();
         if(crossbow)weapon.use(level,player,InteractionHand.MAIN_HAND);
-        if(element>=0)check(player.getInventory().getItem(1).getCount()==3,"Element arrow ammo was not consumed");
-        return Map.of("weapon",crossbow?"crossbow":"bow","element",element);
+        // Remove critical-roll variance when comparing armor and earth damage across separate shots.
+        for(var arrow:level.getEntitiesOfClass(net.minecraft.world.entity.projectile.AbstractArrow.class,player.getBoundingBox().inflate(32)))arrow.setCritArrow(false);
+        var arrowType=content.services().loader().loadClass("net.minecraft.entity.projectile.EntityArrow");
+        for(var hosted:level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(32)))
+            if(arrowType.isInstance(hosted.legacyOrNull())) {
+                arrowType.getMethod("func_70243_d",boolean.class).invoke(hosted.legacyOrNull(),false);
+                if(scenario>=13)playerShot=hosted;
+            }
+        if(element>=0)check(player.getInventory().getItem(1).getCount()==(scenario>=15?4:3),"Element arrow ammo count incorrect for "+scenario+": "+player.getInventory().getItem(1).getCount());
+        return Map.of("weapon",crossbow?"crossbow":"bow","element",element,"creative",scenario>=15);
+    }
+    /** Creative mode keeps primal arrows with and without Infinity; the original only skipped ammo on Infinity's 33% roll. */
+    private Object creativeAmmo(ServerLevel level) throws Exception {
+        var shooter=(net.minecraft.server.level.ServerPlayer)player;var results=new LinkedHashMap<String,Object>();
+        shooter.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+        try {
+            for(boolean infinity:new boolean[]{false,true})for(int shot=0;shot<3;shot++) {
+                shooter.getInventory().clearContent();shooter.getInventory().selected=0;
+                var bow=new ItemStack(net.minecraft.world.item.Items.BOW);
+                if(infinity)bow.enchant(net.minecraft.world.item.enchantment.Enchantments.INFINITY_ARROWS,1);
+                shooter.setItemInHand(InteractionHand.MAIN_HAND,bow);
+                shooter.getInventory().setItem(1,content.stack("Thaumcraft:PrimalArrow",2,4,""));
+                bow.use(level,shooter,InteractionHand.MAIN_HAND);bow.releaseUsing(level,shooter,bow.getUseDuration()-30);shooter.stopUsingItem();
+                check(level.getEntitiesOfClass(LegacyHostedEntity.class,shooter.getBoundingBox().inflate(32)).stream().anyMatch(e->e.legacyOrNull()!=null&&e.legacyOrNull().getClass().getName().equals("thaumcraft.common.entities.projectile.EntityPrimalArrow")),"Creative bow did not fire a primal arrow");
+                check(shooter.getInventory().getItem(1).getCount()==4,"Creative mode consumed a primal arrow, infinity="+infinity);
+                for(var entity:level.getEntitiesOfClass(LegacyHostedEntity.class,shooter.getBoundingBox().inflate(32)))entity.discard();
+            }
+            results.put("plainBowKept",4);results.put("infinityBowKept",4);
+        } finally {shooter.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);shooter.getInventory().clearContent();}
+        return results;
+    }
+    private net.minecraft.server.level.ServerPlayer probePlayer(ServerLevel level,UUID id,String name) {
+        // Forge FakePlayer is invulnerable and canHarmPlayer always returns false. Use the real player rules here.
+        var actor=new net.minecraft.server.level.ServerPlayer(level.getServer(),level,new com.mojang.authlib.GameProfile(id,name));
+        actor.connection=new net.minecraft.server.network.ServerGamePacketListenerImpl(level.getServer(),new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),actor) {
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet) {}
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet,net.minecraft.network.PacketSendListener listener) {}
+        };
+        actor.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);actor.setNoGravity(true);
+        for(int i=0;i<60;i++)actor.tick(); // Expire the original spawn protection before the damage assertions.
+        return actor;
     }
     private Object verifyArrow(ServerLevel level,int scenario) {
-        float damage=1000-arrowTarget.getHealth();int element=scenario==0?-1:(scenario-1)%6;
+        float damage=1000-arrowTarget.getHealth();int element=scenario>=13?0:scenario==0?-1:(scenario-1)%6;
+        if(scenario>=13&&scenario<15) {
+            check(scenario==13?damage==0:damage>0,"Player arrow hit did not honor PvP rules: "+scenario+", damage="+damage);
+            if(scenario==13)check(playerShot!=null&&!playerShot.isRemoved(),"PvP-disabled arrow crashed instead of passing the protected player");
+            return Map.of("pvp",scenario==14,"damage",damage);
+        }
         var effects=arrowTarget.getActiveEffects().toString();
         check(damage>0,"Arrow did not damage target; effects="+effects);
         if(element==-1)normalDamage=damage;
-        if(element==0)check(damage>normalDamage*2,"Air arrow did not bypass armor: normal="+normalDamage+", air="+damage);
+        if(element==0)check(armorBypassed&&Math.abs(damage-incomingDamage)<.001f,"Air arrow did not bypass armor: raw="+incomingDamage+", actual="+damage+", bypass="+armorBypassed);
         if(element==1)check(arrowTarget.isOnFire(),"Fire arrow did not ignite target");
         if(element==2)check(arrowTarget.hasEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN),"Water arrow did not slow target");
         if(element==3)check(damage>normalDamage,"Earth arrow did not increase damage");
         if(element==4)check(arrowTarget.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),"Order arrow did not weaken target");
         if(element==5)check(arrowTarget.hasEffect(net.minecraft.world.effect.MobEffects.WITHER),"Entropy arrow did not wither target");
-        return Map.of("damage",damage,"onFire",arrowTarget.isOnFire(),"effects",effects);
+        return Map.of("damage",damage,"onFire",arrowTarget.isOnFire(),"effects",effects,"incomingDamage",incomingDamage,"bypassedArmor",armorBypassed);
     }
     private Object summon(ServerLevel level) throws Exception {
         target=EntityType.PIG.create(level);target.moveTo(player.getX(),player.getY()+1,player.getZ()+4,0,0);
-        target.setNoAi(true);target.setNoGravity(true);level.addFreshEntity(target);
+        target.setNoAi(true);target.setNoGravity(true);
         var services=content.services();var loader=services.loader();Object world=services.worlds().bound(level);
         var stackType=loader.loadClass("net.minecraft.item.ItemStack");
         Object wand=services.items().materialize(new LegacyClientData.Stack("Thaumcraft:WandCasting",0,1,"","{rod:\"silverwood\",cap:\"thaumium\"}"));
@@ -210,6 +363,13 @@ final class GameplayHostSmokeProbe {
         Object focus=services.items().materialize(new LegacyClientData.Stack("Thaumcraft:FocusHellbat",0,1,"",""));
         item.getClass().getMethod("setFocus",stackType,stackType).invoke(item,wand,focus);
         player.getInventory().clearContent();player.setItemInHand(InteractionHand.MAIN_HAND,content.gameplayStack(services.items().snapshot(wand)));
+        String before=content.gameplayStack(player.getMainHandItem()).tag();
+        player.getMainHandItem().use(level,player,InteractionHand.MAIN_HAND);player.stopUsingItem();
+        check(before.equals(content.gameplayStack(player.getMainHandItem()).tag()),"No-target summon consumed vis or changed the wand");
+        // Separate the negative and positive cases: even an unsuccessful original cast sets a real-time cooldown.
+        Object actor=content.itemUse().clientActor(world,ModernContentBridge.placer(player),null);
+        loader.loadClass("thaumcraft.common.items.wands.WandManager").getMethod("setCooldown",loader.loadClass("net.minecraft.entity.EntityLivingBase"),int.class).invoke(null,actor,0);
+        level.addFreshEntity(target);
         player.getMainHandItem().use(level,player,InteractionHand.MAIN_HAND);
         var bats=level.getEntitiesOfClass(LegacyHostedEntity.class,player.getBoundingBox().inflate(16)).stream()
                 .filter(e->e.legacyOrNull()!=null&&e.legacyOrNull().getClass().getName().endsWith("EntityFireBat")).toList();

@@ -229,7 +229,7 @@ public final class LegacyContentPack {
         if (value == null) throw new IllegalArgumentException("World renderer referenced an unregistered icon: " + icon);
         return value;
     }
-    public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, resource); }
+    public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, github.com.gengyoubo.mfcl.bridge.LegacyTexturePaths.modernResource(resource)); }
     public static final String TRANSPARENT_ARMOR = "mfcl:textures/models/armor/transparent.png";
     /** Host texture for an original worn armor layer, or null when the old resource was missing. */
     public String armorTexture(String resource) {

@@ -177,6 +177,17 @@ public final class LegacyWorlds implements AutoCloseable {
     public static void sound(Object world,double x,double y,double z,String id,float volume,float pitch) {
         binding(world).host.playSound(new HostWorldAccess.Sound(x,y,z,id,volume,pitch,false,null));
     }
+    public static void placementSound(Object world,Object block,int x,int y,int z) throws ReflectiveOperationException {
+        var bound=binding(world);if(bound.host.clientSide())return;
+        Class<?> blockType=bound.loader.loadClass("net.minecraft.block.Block");
+        Object sound=blockType.getField("field_149762_H").get(block);
+        Class<?> type=bound.loader.loadClass("net.minecraft.block.Block$SoundType");
+        String id=LegacySounds.placementId((String)type.getMethod("func_150496_b").invoke(sound));
+        // Old metal borrowed the stone sample at a higher pitch; modern Minecraft gives it its own event.
+        if(sound==blockType.getField("field_149777_j").get(null))id="minecraft:block.metal.place";
+        float volume=(float)type.getMethod("func_150497_c").invoke(sound),pitch=(float)type.getMethod("func_150494_d").invoke(sound);
+        bound.host.playSound(new HostWorldAccess.Sound(x+.5,y+.5,z+.5,id,(volume+1)/2,pitch*.8f,false,null));
+    }
     public static void auxiliaryEffect(Object world,Object excluded,int event,int x,int y,int z,int data) throws ReflectiveOperationException {
         var bound=binding(world);
         UUID id=excluded==null?null:(UUID)bound.loader.loadClass("net.minecraft.entity.Entity").getMethod("func_110124_au").invoke(excluded);

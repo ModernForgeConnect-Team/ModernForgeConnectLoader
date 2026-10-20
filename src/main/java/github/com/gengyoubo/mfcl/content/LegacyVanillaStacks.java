@@ -70,11 +70,32 @@ final class LegacyVanillaStacks {
         // Native enchanting/repairing can change supported enchantments after the item was awarded.
         for(String name:List.of("ench","StoredEnchantments")) {
             String modern=name.equals("ench")?"Enchantments":name;
-            var list=enchantments(root.getList(modern,Tag.TAG_COMPOUND),false);
-            for(Tag entry:tag.getList(name,Tag.TAG_COMPOUND))if(!ENCHANTMENTS.containsKey((int)((CompoundTag)entry).getShort("id")))list.add(entry.copy());
+            var pending=new LinkedHashMap<Short,CompoundTag>();
+            for(Tag entry:enchantments(root.getList(modern,Tag.TAG_COMPOUND),false))pending.put(((CompoundTag)entry).getShort("id"),(CompoundTag)entry);
+            var list=new ListTag();
+            for(Tag entry:tag.getList(name,Tag.TAG_COMPOUND)) {
+                short id=((CompoundTag)entry).getShort("id");
+                if(!ENCHANTMENTS.containsKey((int)id))list.add(entry.copy());
+                else if(pending.containsKey(id))list.add(pending.remove(id));
+            }
+            pending.values().forEach(list::add);
             if(list.isEmpty())tag.remove(name);else tag.put(name,list);
         }
         if(root.contains("RepairCost"))tag.putInt("RepairCost",root.getInt("RepairCost"));
+        for(String name:List.of("Unbreakable","HideFlags"))if(root.contains(name))tag.put(name,root.get(name).copy());else tag.remove(name);
+        if(root.contains("display",Tag.TAG_COMPOUND)) {
+            var display=root.getCompound("display").copy();
+            if(display.contains("Name",Tag.TAG_STRING)) {
+                var name=Component.Serializer.fromJson(display.getString("Name"));display.putString("Name",name==null?"":name.getString());
+            }
+            if(display.contains("Lore",Tag.TAG_LIST)) {
+                var lore=new ListTag();for(Tag line:display.getList("Lore",Tag.TAG_STRING)) {
+                    var text=Component.Serializer.fromJson(line.getAsString());lore.add(StringTag.valueOf(text==null?"":text.getString()));
+                }
+                display.put("Lore",lore);
+            }
+            tag.put("display",display);
+        }else tag.remove("display");
         return new LegacyClientData.Stack(key,stack.isDamageableItem()?stack.getDamageValue():source.getInt("metadata"),stack.getCount(),stack.getHoverName().getString(),tag.isEmpty()?"":tag.toString());
     }
     private static CompoundTag originalTag(LegacyServices services,LegacyClientData.Stack old) throws Exception {

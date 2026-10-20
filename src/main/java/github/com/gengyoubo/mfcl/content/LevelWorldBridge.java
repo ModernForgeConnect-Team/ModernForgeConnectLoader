@@ -160,6 +160,11 @@ public final class LevelWorldBridge {
                 check();var entity=level.getEntity(id);
                 if(entity instanceof net.minecraft.world.entity.LivingEntity living)content.afterCommit(level,()->living.swing(net.minecraft.world.InteractionHand.MAIN_HAND));
             }
+            @Override public boolean canAttackPlayer(java.util.UUID attacker,java.util.UUID target) {
+                check();
+                var source=level.getPlayerByUUID(attacker);var victim=level.getPlayerByUUID(target);
+                return level.getServer().isPvpAllowed()&&source!=null&&victim!=null&&source.canHarmPlayer(victim);
+            }
             @Override public void addEffect(java.util.UUID id, int potion, int duration, int amplifier, boolean ambient) {
                 check();
                 if (!(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)) return;
