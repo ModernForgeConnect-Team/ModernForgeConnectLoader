@@ -6,13 +6,14 @@ import java.util.*;
 /** Executes the original multipart collision and selection methods against a read-only scene. */
 public final class LegacyBlockShapes {
     public record Box(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {}
-    public record Shapes(List<Box> collision, List<Box> outline) {
+    /** {@code outline} is empty when the original ray trace skips the block (canCollideCheck), as for fluids and gases. */
+    public record Shapes(List<Box> collision, List<Box> outline, boolean replaceable) {
         public Shapes { collision = List.copyOf(collision); outline = List.copyOf(outline); }
     }
     private final LegacyServices services;
     private final Class<?> blockType, worldType, accessType, boxType;
     private final Object registry;
-    private final Method getBlock, stateBounds, addCollision, selection, makeBox;
+    private final Method getBlock, stateBounds, addCollision, selection, makeBox, collideCheck, replaceable;
     private record Cell(HostWorldAccess.Block block, java.nio.ByteBuffer tile) {}
     private final Map<List<Cell>, Shapes> cache = new LinkedHashMap<>(128,.75f,true) {
         @Override protected boolean removeEldestEntry(Map.Entry<List<Cell>, Shapes> entry) { return size() > 512; }
@@ -27,6 +28,8 @@ public final class LegacyBlockShapes {
         stateBounds = blockType.getMethod("func_149719_a", accessType, int.class, int.class, int.class);
         addCollision = blockType.getMethod("func_149743_a", worldType, int.class, int.class, int.class, boxType, List.class, loader.loadClass("net.minecraft.entity.Entity"));
         selection = blockType.getMethod("func_149633_g", worldType, int.class, int.class, int.class);
+        collideCheck = blockType.getMethod("func_149678_a", int.class, boolean.class);
+        replaceable = blockType.getMethod("isReplaceable", accessType, int.class, int.class, int.class);
         makeBox = boxType.getMethod("func_72330_a", double.class, double.class, double.class, double.class, double.class, double.class);
     }
     public Shapes shapes(String key, LegacyBlockRendering.View view) throws Exception {
@@ -45,8 +48,10 @@ public final class LegacyBlockShapes {
                 addCollision.invoke(block, scene.world(), 0,0,0,query,old,null);
                 var collisions = new ArrayList<Box>(); for (Object value : old) collisions.add(box(value));
                 stateBounds.invoke(block, scene.world(), 0,0,0);
-                Object selected = selection.invoke(block, scene.world(), 0,0,0);
-                var result = new Shapes(collisions, selected == null ? List.of() : List.of(box(selected)));
+                // Player ray traces pass hitLiquids=false; a block refusing that is neither outlined nor breakable.
+                boolean targetable = (boolean) collideCheck.invoke(block, view.block(0,0,0).metadata(), false);
+                Object selected = targetable ? selection.invoke(block, scene.world(), 0,0,0) : null;
+                var result = new Shapes(collisions, selected == null ? List.of() : List.of(box(selected)), (boolean) replaceable.invoke(block, scene.world(), 0,0,0));
                 cache.put(List.copyOf(cells), result); return result;
             } finally { blockType.getMethod("func_149683_g").invoke(block); }
         });

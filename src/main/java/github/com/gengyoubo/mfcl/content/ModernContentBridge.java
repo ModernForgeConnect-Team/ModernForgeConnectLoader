@@ -84,6 +84,8 @@ public final class ModernContentBridge {
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
+            LegacyCommands.install(bridge);
+            github.com.gengyoubo.mfcl.bridge.LegacyPlayerArmor.source(bridge::wornArmor);
             LogUtils.getLogger().info("MFCL content barrier: {} blocks, {} items declared before modern registration", bridge.declarations.blocks().size(), bridge.declarations.items().size());
             LogUtils.getLogger().info("MFCL legacy static models: {} items custom-rendered", bridge.declarations.customItems().size());
             for (String diagnostic : bridge.declarations.captureDiagnostics()) LogUtils.getLogger().info("MFCL capture: {}", diagnostic);
@@ -93,6 +95,28 @@ public final class ModernContentBridge {
         } catch (Exception failure) { throw new IllegalStateException("Cannot freeze legacy content declarations", failure); }
     }
     public static ModernContentBridge active() { return active; }
+    /** Host armor as old stacks, old armorInventory order (boots first); unmappable pieces are left empty. */
+    private List<LegacyClientData.Stack> wornArmor(UUID id, boolean client) {
+        net.minecraft.world.entity.player.Player player;
+        if (client) player = net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient() ? github.com.gengyoubo.mfcl.client.LocalPlayerAccess.player() : null;
+        else {
+            var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            player = server == null || id == null ? null : server.getPlayerList().getPlayer(id);
+        }
+        if (player == null) return null;
+        var worn = new ArrayList<LegacyClientData.Stack>(4);
+        for (var slot : List.of(net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.entity.EquipmentSlot.LEGS,
+                net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.HEAD)) {
+            ItemStack stack = player.getItemBySlot(slot);
+            LegacyClientData.Stack old = null;
+            try {
+                // Enchantments and other host tags must not hide original armor from old "is wearing" checks.
+                if (!stack.isEmpty()) { old = renderSnapshot(stack); if (old == null) old = gameplayStack(stack); }
+            } catch (Exception unmapped) { old = null; }
+            worn.add(old);
+        }
+        return worn;
+    }
     public LegacyContent declarations() { return declarations; }
     public LegacyBlockRendering blockRendering() { return blockRendering; }
     public LegacyBlockShapes blockShapes() { return blockShapes; }
@@ -229,7 +253,8 @@ public final class ModernContentBridge {
                 if (entry.maxDamage() > 0) properties.durability(entry.maxDamage());
                 Item item = entry.blockKey() != null && blocks.containsKey(entry.blockKey())
                         ? new MirroredBlockItem((MirroredBlock) blocks.get(entry.blockKey()), properties, entry)
-                        : new MirroredItem(properties, entry);
+                        : entry.armor() == null ? new MirroredItem(properties, entry)
+                        : entry.armor().dyeable() ? new MirroredDyeableArmorItem(properties, entry) : new MirroredArmorItem(properties, entry);
                 registry.register(id(entry.key()), item); items.put(entry.key(), item); reverseItems.put(item, entry);
             }
             itemsRegistered = true;
@@ -359,11 +384,101 @@ public final class ModernContentBridge {
                 lines.add(Component.translatable("mfcl.content.machine_logic_pending").withStyle(net.minecraft.ChatFormatting.YELLOW));
         }
     }
+    private static net.minecraft.world.item.ArmorItem.Type armorType(LegacyContent.Item entry) {
+        return switch (entry.armor().slot()) {
+            case 0 -> net.minecraft.world.item.ArmorItem.Type.HELMET; case 1 -> net.minecraft.world.item.ArmorItem.Type.CHESTPLATE;
+            case 2 -> net.minecraft.world.item.ArmorItem.Type.LEGGINGS; default -> net.minecraft.world.item.ArmorItem.Type.BOOTS;
+        };
+    }
+    /** One host material per original ItemArmor, carrying its own durability, points and enchantability. */
+    private record LegacyArmorMaterial(LegacyContent.Item entry) implements net.minecraft.world.item.ArmorMaterial {
+        @Override public int getDurabilityForType(net.minecraft.world.item.ArmorItem.Type type) { return entry.maxDamage(); }
+        @Override public int getDefenseForType(net.minecraft.world.item.ArmorItem.Type type) { return entry.armor().protection(); }
+        @Override public int getEnchantmentValue() { return entry.armor().enchantability(); }
+        @Override public net.minecraft.sounds.SoundEvent getEquipSound() { return net.minecraft.sounds.SoundEvents.ARMOR_EQUIP_GENERIC; }
+        @Override public net.minecraft.world.item.crafting.Ingredient getRepairIngredient() { return net.minecraft.world.item.crafting.Ingredient.EMPTY; }
+        @Override public String getName() { return "mfcl_legacy"; }
+        @Override public float getToughness() { return 0; }
+        @Override public float getKnockbackResistance() { return 0; }
+    }
+    /**
+     * Original ItemArmor as a real host ArmorItem, so equipping, the worn layer, durability loss and armor enchanting
+     * all follow vanilla rules. Old right-click equipping would only reach the old actor, so it is not called.
+     */
+    private class MirroredArmorItem extends net.minecraft.world.item.ArmorItem {
+        final LegacyContent.Item entry;
+        MirroredArmorItem(Properties properties, LegacyContent.Item entry) { super(new LegacyArmorMaterial(entry), armorType(entry), properties); this.entry = entry; }
+        @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
+        @Override public void inventoryTick(ItemStack stack, Level level, net.minecraft.world.entity.Entity entity, int slot, boolean selected) {
+            // Inventory.tick also visits armor slots; only the stack actually worn gets the original onArmorTick.
+            // 1.7.10 ran it on both sides: movement is the client's, effects and durability the server's.
+            if (!entry.armor().ticks() || !(entity instanceof net.minecraft.world.entity.player.Player player) || player.getItemBySlot(getEquipmentSlot()) != stack) return;
+            if (level.isClientSide ? player.isLocalPlayer() : player instanceof net.minecraft.server.level.ServerPlayer) armorTick(entry, stack, level, player);
+        }
+        @Override public Component getName(ItemStack stack) { return name(entry, stack); }
+        @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
+        @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
+            consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
+        }
+        @Override public String getArmorTexture(ItemStack stack, net.minecraft.world.entity.Entity entity, net.minecraft.world.entity.EquipmentSlot slot, String type) {
+            if (type == null) return pack.armorTexture(entry.armor().texture());
+            if (!type.equals("overlay")) return null;
+            String overlay = pack.armorTexture(entry.armor().overlay());
+            return overlay == null ? LegacyContentPack.TRANSPARENT_ARMOR : overlay;
+        }
+    }
+    /** Dyed like leather (robes...): host dye recipes and the worn tint use the original getColor. */
+    private final class MirroredDyeableArmorItem extends MirroredArmorItem implements net.minecraft.world.item.DyeableLeatherItem {
+        MirroredDyeableArmorItem(Properties properties, LegacyContent.Item entry) { super(properties, entry); }
+        @Override public int getColor(ItemStack stack) {
+            try { return itemUse.armorColor(renderSnapshot(stack)) & 0xFFFFFF; }
+            catch (Exception failure) { return net.minecraft.world.item.DyeableLeatherItem.super.getColor(stack); }
+        }
+    }
+    private final Set<String> displayFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<String> collisionFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<String> armorTickFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private void armorTick(LegacyContent.Item entry, ItemStack stack, Level level, net.minecraft.world.entity.player.Player player) {
+        if (armorTickFailures.contains(entry.key())) return;
+        try {
+            var worn = renderSnapshot(stack);
+            var motion = player.getDeltaMovement();
+            var body = new LegacyItemUse.Body(motion.x, motion.y, motion.z, player.fallDistance, player.onGround(), player.isInWater(), player.zza, player.xxa, player.tickCount);
+            var world = services.worlds().bound(level); var source = placer(player);
+            var result = level.isClientSide ? itemUse.armorTick(world, source, worn, body)
+                    : logicTransaction(level, player.blockPosition(), () -> itemUse.armorTick(world, source, worn, body), false);
+            var after = result.body();
+            if (level.isClientSide) {
+                var change = new net.minecraft.world.phys.Vec3(after.motionX() - body.motionX(), after.motionY() - body.motionY(), after.motionZ() - body.motionZ());
+                if (change.lengthSqr() > 0) player.setDeltaMovement(player.getDeltaMovement().add(change));
+            } else {
+                // Old potion IDs 1..23 are the vanilla effects; higher IDs belong to old mods and have no host identity.
+                for (var effect : result.effects()) {
+                    var type = effect.id() >= 1 && effect.id() <= 23 ? net.minecraft.world.effect.MobEffect.byId(effect.id()) : null;
+                    if (type != null) player.addEffect(new net.minecraft.world.effect.MobEffectInstance(type, effect.duration(), effect.amplifier(), effect.ambient(), true));
+                }
+                if (result.stack() != null && stack.isDamageableItem() && result.stack().metadata() != stack.getDamageValue()) stack.setDamageValue(result.stack().metadata());
+            }
+            if (after.fallDistance() != body.fallDistance()) player.fallDistance = after.fallDistance();
+        } catch (Exception | LinkageError failure) {
+            if (armorTickFailures.add(entry.key())) LogUtils.getLogger().error("MFCL original onArmorTick failed for {}; disabled for this item", entry.key(), failure);
+        }
+    }
+    /** Original Item.getIsRepairable (armor/tool material); unmappable stacks never repair. */
+    private boolean legacyRepairable(ItemStack target, ItemStack repair) {
+        if (target.isEmpty() || repair.isEmpty()) return false;
+        try {
+            var old = renderSnapshot(target);
+            var material = renderSnapshot(repair); if (material == null) material = gameplayStack(repair);
+            return old != null && material != null && itemUse.repairable(old, material);
+        } catch (Exception unmapped) { return false; }
+    }
     private final class MirroredItem extends Item {
         private final LegacyContent.Item entry;
         MirroredItem(Properties properties, LegacyContent.Item entry) { super(properties); this.entry = entry; }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
+        @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
         @Override public InteractionResult useOn(UseOnContext context) {
             // A held scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
             if(services.scanners().forItem(entry.key()).isPresent())return InteractionResult.PASS;
@@ -403,6 +518,17 @@ public final class ModernContentBridge {
             try { return itemUse.useDuration(snapshot(stack)); }
             catch (Exception failure) { return 0; }
         }
+        @Override public net.minecraft.world.item.UseAnim getUseAnimation(ItemStack stack) {
+            try {
+                return switch (itemUse.useAction(snapshot(stack))) {
+                    case "bow" -> net.minecraft.world.item.UseAnim.BOW;
+                    case "eat" -> net.minecraft.world.item.UseAnim.EAT;
+                    case "drink" -> net.minecraft.world.item.UseAnim.DRINK;
+                    case "block" -> net.minecraft.world.item.UseAnim.BLOCK;
+                    default -> net.minecraft.world.item.UseAnim.NONE;
+                };
+            } catch (Exception failure) { return net.minecraft.world.item.UseAnim.NONE; }
+        }
         @Override public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remaining) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
             try {
@@ -423,7 +549,7 @@ public final class ModernContentBridge {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
         }
     }
-    private static LegacyTiles.Placer placer(net.minecraft.world.entity.player.Player player) {
+    static LegacyTiles.Placer placer(net.minecraft.world.entity.player.Player player) {
         return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(),
                 player.getAbilities().instabuild, player.isShiftKeyDown());
     }
@@ -584,6 +710,32 @@ public final class ModernContentBridge {
             try { return services.logic().event(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),event,data); }
             catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("block event "+entry.key(),failure); LogUtils.getLogger().error("MFCL original block event failed for {} at {}",entry.key(),pos,failure); return false; }
         }
+        @Override public void animateTick(BlockState state, Level level, BlockPos pos, net.minecraft.util.RandomSource random) {
+            // Original randomDisplayTick (sparkles, smoke...), client-only like in 1.7.10.
+            if (!level.isClientSide || displayFailures.contains(entry.key())) return;
+            try { services.logic().displayTick(entry.key(), services.worlds().bound(level), pos.getX(), pos.getY(), pos.getZ(), random.nextLong()); }
+            catch (Exception | LinkageError failure) {
+                if (displayFailures.add(entry.key())) LogUtils.getLogger().warn("MFCL original randomDisplayTick disabled for {}", entry.key(), failure);
+            }
+        }
+        @Override public void entityInside(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.Entity entity) {
+            // Original onEntityCollidedWithBlock: the crucible dissolves dropped items here (attemptSmelt).
+            if (level.isClientSide || !(entity instanceof net.minecraft.world.entity.item.ItemEntity drop) || drop.isRemoved()) return;
+            try {
+                if (!services.logic().collides(entry.key())) return;
+                var snapshot = HostEntityQueries.snapshot(level, drop);
+                if (snapshot == null) return;
+                var result = logicTransaction(level, pos, () -> services.logic().collide(entry.key(), services.worlds().bound(level), pos.getX(), pos.getY(), pos.getZ(), snapshot), true);
+                if (result.removed()) drop.discard();
+                else if (!sameLegacy(result.stack(), snapshot.item())) drop.setItem(gameplayStack(result.stack()));
+                if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.captureChanges(false);
+            } catch (Exception | LinkageError failure) {
+                if (collisionFailures.add(entry.key())) {
+                    github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("entity collision "+entry.key(),failure);
+                    LogUtils.getLogger().error("MFCL original entity collision failed for {} at {}", entry.key(), pos, failure);
+                }
+            }
+        }
         @Override public void tick(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos, net.minecraft.util.RandomSource random) {
             try { logicTransaction(level,pos,() -> { services.logic().scheduled(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ()); return null; },true); }
             catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("scheduled tick "+entry.key(),failure); LogUtils.getLogger().error("MFCL original scheduled tick failed for {} at {}",entry.key(),pos,failure); }
@@ -607,6 +759,12 @@ public final class ModernContentBridge {
                     result = net.minecraft.world.phys.shapes.Shapes.or(result, net.minecraft.world.phys.shapes.Shapes.box(box.minX(),box.minY(),box.minZ(),box.maxX(),box.maxY(),box.maxZ()));
                 return result;
             } catch (Exception error) { throw new IllegalStateException("Cannot evaluate original shape " + entry.key() + " at " + pos, error); }
+        }
+        /** Original Block.isReplaceable (fluids, gases, plants): placing another block simply overwrites it. */
+        @Override public boolean canBeReplaced(BlockState state, BlockPlaceContext context) {
+            if (!canPlace(entry, state.getValue(METADATA)) || context.getItemInHand().is(asItem())) return false;
+            try { return blockShapes.shapes(entry.key(), renderView(context.getLevel(), context.getClickedPos(), state)).replaceable(); }
+            catch (Exception error) { throw new IllegalStateException("Cannot evaluate original replaceability " + entry.key() + " at " + context.getClickedPos(), error); }
         }
         @Override public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
             return itemForBlock(entry.key(), state.getValue(METADATA));
@@ -648,7 +806,8 @@ public final class ModernContentBridge {
         MirroredTileBlock(LegacyContent.Block entry) { super(entry); }
         @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new LegacyBlockEntity(ModernContentBridge.this, pos, state); }
         @Override public <T extends BlockEntity> net.minecraft.world.level.block.entity.BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-            return level.isClientSide || type != tileType ? null : (world,pos,current,tile) -> ((LegacyBlockEntity)tile).tickServer();
+            if (type != tileType) return null;
+            return level.isClientSide ? (world,pos,current,tile) -> ((LegacyBlockEntity)tile).tickClient() : (world,pos,current,tile) -> ((LegacyBlockEntity)tile).tickServer();
         }
     }
     public ItemStack itemForBlock(String key, int metadata) {
@@ -688,9 +847,17 @@ public final class ModernContentBridge {
         var stack = context.getItemInHand(); var pos = context.getClickedPos(); var hit = context.getClickLocation().subtract(pos.getX(),pos.getY(),pos.getZ());
         try (var transaction = new PlacementTransaction(level)) {
             var actor = new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
-            var result = new LegacyItemPlacement(services).use(services.worlds().bound(level),actor,snapshot(stack),pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z);
+            // The whole main inventory is exposed: ItemEssence hands the filled phial back through addItemStackToInventory.
+            int selected = player.getInventory().selected;
+            var before = hostInventory(player);
+            var result = new LegacyItemPlacement(services).use(services.worlds().bound(level),actor,snapshot(stack),before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z);
             if (!result.used()) return InteractionResult.PASS;
             transaction.commit();
+            for (int slot = 0; slot < result.inventory().size() && slot < 36; slot++) {
+                if (slot == selected || sameLegacy(before.get(slot), result.inventory().get(slot))) continue; // The held stack is applied below.
+                try { player.getInventory().setItem(slot, result.inventory().get(slot) == null ? ItemStack.EMPTY : gameplayStack(result.inventory().get(slot))); }
+                catch (Exception unmapped) { LogUtils.getLogger().warn("MFCL cannot map original inventory change in slot {}: {}", slot, result.inventory().get(slot), unmapped); }
+            }
             if (!player.getAbilities().instabuild) {
                 if (result.stack() == null) stack.setCount(0);
                 else {

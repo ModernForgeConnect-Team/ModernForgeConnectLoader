@@ -155,6 +155,70 @@ public final class LegacyItemUse {
             return (int) itemType.getMethod("func_77626_a", stackType).invoke(stackType.getMethod("func_77973_b").invoke(stack), stack);
         });
     }
+    /** Original Item.getIsRepairable: whether {@code material} repairs {@code target} in an anvil. */
+    public boolean repairable(LegacyClientData.Stack target, LegacyClientData.Stack material) throws Exception {
+        return services.items().inLegacy(() -> {
+            Class<?> stackType = services.loader().loadClass("net.minecraft.item.ItemStack");
+            Object stack = services.items().materialize(target);
+            return (boolean) services.loader().loadClass("net.minecraft.item.Item").getMethod("func_82789_a", stackType, stackType)
+                    .invoke(stackType.getMethod("func_77973_b").invoke(stack), stack, services.items().materialize(material));
+        });
+    }
+    /** Original ItemArmor.getColor (dyed robes/leather), RGB. */
+    public int armorColor(LegacyClientData.Stack worn) throws Exception {
+        return services.items().inLegacy(() -> {
+            Class<?> stackType = services.loader().loadClass("net.minecraft.item.ItemStack");
+            Object stack = services.items().materialize(worn);
+            return (int) services.loader().loadClass("net.minecraft.item.ItemArmor").getMethod("func_82814_b", stackType).invoke(stackType.getMethod("func_77973_b").invoke(stack), stack);
+        });
+    }
+    /** Host movement state an original onArmorTick may read and change. */
+    public record Body(double motionX, double motionY, double motionZ, float fallDistance, boolean onGround, boolean inWater,
+                       float forward, float strafe, int ticksExisted) {}
+    public record Effect(int id, int duration, int amplifier, boolean ambient) {}
+    /** The worn stack, the movement state and the potion effects the original applied this tick. */
+    public record ArmorTick(LegacyClientData.Stack stack, Body body, List<Effect> effects) {}
+    public ArmorTick armorTick(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack worn, Body body) throws Exception {
+        return services.items().inLegacy(() -> {
+            var loader = services.loader();
+            Class<?> entity = loader.loadClass("net.minecraft.entity.Entity"), living = loader.loadClass("net.minecraft.entity.EntityLivingBase");
+            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack"), itemType = loader.loadClass("net.minecraft.item.Item");
+            Object player = actor(world, placer, null);
+            entity.getField("field_70159_w").setDouble(player, body.motionX()); entity.getField("field_70181_x").setDouble(player, body.motionY());
+            entity.getField("field_70179_y").setDouble(player, body.motionZ()); entity.getField("field_70143_R").setFloat(player, body.fallDistance());
+            entity.getField("field_70122_E").setBoolean(player, body.onGround());
+            var water = entity.getDeclaredField("field_70171_ac"); water.setAccessible(true); water.setBoolean(player, body.inWater());
+            living.getField("field_70701_bs").setFloat(player, body.forward()); living.getField("field_70702_br").setFloat(player, body.strafe());
+            entity.getField("field_70173_aa").setInt(player, body.ticksExisted());
+            // Only this tick's effects are reported back; the host owns the player's real effect list.
+            var potions = living.getDeclaredField("field_70713_bf"); potions.setAccessible(true);
+            @SuppressWarnings("unchecked") Map<Object, Object> active = (Map<Object, Object>) potions.get(player);
+            if (active == null) { active = new HashMap<>(); potions.set(player, active); }
+            active.clear();
+            Object stack = services.items().materialize(worn);
+            itemType.getMethod("onArmorTick", loader.loadClass("net.minecraft.world.World"), loader.loadClass("net.minecraft.entity.player.EntityPlayer"), stackType)
+                    .invoke(stackType.getMethod("func_77973_b").invoke(stack), world, player, stack);
+            var effects = new ArrayList<Effect>();
+            Class<?> effect = loader.loadClass("net.minecraft.potion.PotionEffect");
+            for (Object value : active.values()) effects.add(new Effect((int) effect.getMethod("func_76456_a").invoke(value), (int) effect.getMethod("func_76459_b").invoke(value),
+                    (int) effect.getMethod("func_76458_c").invoke(value), (boolean) effect.getMethod("func_82720_e").invoke(value)));
+            active.clear();
+            var after = new Body(entity.getField("field_70159_w").getDouble(player), entity.getField("field_70181_x").getDouble(player), entity.getField("field_70179_y").getDouble(player),
+                    entity.getField("field_70143_R").getFloat(player), body.onGround(), body.inWater(), body.forward(), body.strafe(), body.ticksExisted());
+            int count = stackType.getField("field_77994_a").getInt(stack);
+            return new ArmorTick(count <= 0 ? null : services.items().snapshot(stack), after, List.copyOf(effects));
+        });
+    }
+    /** Original EnumAction name (none, eat, drink, block, bow) that drives the held-use pose. */
+    public String useAction(LegacyClientData.Stack snapshot) throws Exception {
+        return services.items().inLegacy(() -> {
+            var loader = services.loader();
+            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
+            Object stack = services.items().materialize(snapshot);
+            Object action = loader.loadClass("net.minecraft.item.Item").getMethod("func_77661_b", stackType).invoke(stackType.getMethod("func_77973_b").invoke(stack), stack);
+            return action == null ? "none" : ((Enum<?>) action).name().toLowerCase(java.util.Locale.ROOT);
+        });
+    }
     private Object actor(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot) throws Exception {
         var loader = services.loader();
         // Thaumcraft's held-use tick compares player names with `==`, so on the client the actor must be the very
@@ -195,6 +259,7 @@ public final class LegacyItemUse {
         for(String field:new String[]{"field_70166_s","field_70136_U"})entity.getField(field).setDouble(actor,placer.z());
         entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
         entity.getField("field_70126_B").setFloat(actor,placer.yaw());entity.getField("field_70127_C").setFloat(actor,placer.pitch());
+        LegacyPlayerArmor.apply(services,actor,placer.id(),client);
         Class<?> sp=services.loader().loadClass("net.minecraft.client.entity.EntityPlayerSP");
         if(sp.isInstance(actor)) {
             for(String name:new String[]{"field_71155_g","field_71164_i"})sp.getField(name).setFloat(actor,placer.pitch());

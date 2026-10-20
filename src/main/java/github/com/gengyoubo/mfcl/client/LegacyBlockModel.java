@@ -35,8 +35,16 @@ public final class LegacyBlockModel extends BakedModelWrapper<BakedModel> {
                 return data.derive().with(GEOMETRY, Map.of()).build();
             var layers = bridge.blockRendering().capture(key, metadata, bridge.renderView(level, pos));
             return data.derive().with(GEOMETRY, bake(layers)).build();
-        } catch (Exception failure) { throw new IllegalStateException("Cannot render legacy block " + key + "@" + metadata + " at " + pos, failure); }
+        } catch (Exception | LinkageError failure) {
+            // Chunk meshing and break particles must survive one failed original render; draw the isolated capture instead.
+            if (reported.add(key + "@" + metadata)) {
+                LegacyDiagnostics.legacyFailure("block render " + key, failure);
+                com.mojang.logging.LogUtils.getLogger().error("MFCL contextual render failed for {}@{} at {}; using its isolated model", key, metadata, pos, failure);
+            }
+            return data;
+        }
     }
+    private static final Set<String> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private Map<RenderType, List<BakedQuad>> geometry(ModelData data) {
         var value = data.get(GEOMETRY);
         if (value != null) return value; // Empty geometry is valid for a completely enclosed block.

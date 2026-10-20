@@ -9,8 +9,18 @@ public final class LegacyContent {
     public record Variant(int metadata, String nameKey, String icon, int color, List<Layer> layers) {
         public Variant { layers = List.copyOf(layers); }
     }
-    public record Item(String key, String blockKey, int stackLimit, int maxDamage, boolean creative, List<Variant> variants) {
-        public Item { variants = List.copyOf(variants); }
+    /**
+     * Original ItemArmor: slot (0 helmet .. 3 boots, as in 1.7.10), armor points (ISpecialArmor's displayed value
+     * when it has one), enchantability, the worn layer textures as old resource locations (overlay may be null),
+     * whether it is dyed like leather, and whether it overrides onArmorTick.
+     */
+    public record Armor(int slot, int protection, int enchantability, String texture, String overlay, boolean dyeable, boolean ticks) {}
+    /** Held-use icon frame: from {@code ticks} of drawing on, the original shows these per-pass icons (bows). */
+    public record Pull(int ticks, List<String> icons) {
+        public Pull { icons = List.copyOf(icons); }
+    }
+    public record Item(String key, String blockKey, int stackLimit, int maxDamage, boolean creative, List<Variant> variants, Armor armor, List<Pull> pulls) {
+        public Item { variants = List.copyOf(variants); pulls = List.copyOf(pulls); }
     }
     public record Block(String key, float hardness, float resistance, int light, boolean opaque,
                         boolean tileEntity, int renderType, boolean inventory3D, List<List<String>> faces, List<Integer> tileMetas) {
@@ -167,7 +177,7 @@ public final class LegacyContent {
         ClassLoader loader = data.loader();
         Class<?> blockType = loader.loadClass("net.minecraft.block.Block"), itemType = loader.loadClass("net.minecraft.item.Item");
         Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack"), itemBlock = loader.loadClass("net.minecraft.item.ItemBlock");
-        Class<?> iconType = loader.loadClass("net.minecraft.util.IIcon");
+        Class<?> iconType = loader.loadClass("net.minecraft.util.IIcon"), armorType = loader.loadClass("net.minecraft.item.ItemArmor");
         Object blockRegistry = blockType.getField("field_149771_c").get(null), itemRegistry = itemType.getField("field_150901_e").get(null);
         Method blockKey = blockRegistry.getClass().getMethod("func_148750_c", Object.class), itemKey = itemRegistry.getClass().getMethod("func_148750_c", Object.class);
         Set<String> customItems = new HashSet<>();
@@ -252,10 +262,73 @@ public final class LegacyContent {
                 variants.add(new Variant(meta, name + ".name", texture, color, layers));
             }
             boolean creative = Arrays.stream((Object[]) itemType.getMethod("getCreativeTabs").invoke(item)).anyMatch(Objects::nonNull);
-            itemValues.add(new Item(key, linkedBlock, Math.max(1, Math.min(64, limit)), damage, creative, variants));
+            Armor armor = armorType.isInstance(item) ? armor(loader, item, stackType.getConstructor(itemType, int.class, int.class).newInstance(item, 1, 0)) : null;
+            List<Pull> pulls = linkedBlock == null ? pulls(loader, item, stackType.getConstructor(itemType, int.class, int.class).newInstance(item, 1, 0)) : List.of();
+            itemValues.add(new Item(key, linkedBlock, Math.max(1, Math.min(64, limit)), damage, creative, variants, armor, pulls));
         }
         blockValues.sort(Comparator.comparing(Block::key)); itemValues.sort(Comparator.comparing(Item::key));
         return new Declarations(List.copyOf(itemValues), List.copyOf(blockValues), tabValues);
+    }
+    private static final String[] VANILLA_ARMOR = {"leather", "chainmail", "iron", "diamond", "gold"};
+    private static Armor armor(ClassLoader loader, Object item, Object stack) throws Exception {
+        Class<?> armorType = loader.loadClass("net.minecraft.item.ItemArmor"), itemType = loader.loadClass("net.minecraft.item.Item");
+        Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack"), entityType = loader.loadClass("net.minecraft.entity.Entity");
+        int slot = armorType.getField("field_77881_a").getInt(item), points = armorType.getField("field_77879_b").getInt(item);
+        Class<?> special = loader.loadClass("net.minecraftforge.common.ISpecialArmor");
+        // ISpecialArmor indexes armorInventory (0 boots .. 3 helmet); the displayed points are what its wearer sees.
+        if (special.isInstance(item)) try {
+            points = (int) special.getMethod("getArmorDisplay", loader.loadClass("net.minecraft.entity.player.EntityPlayer"), stackType, int.class).invoke(item, null, stack, 3 - slot);
+        } catch (ReflectiveOperationException | RuntimeException needsWearer) { /* keep the ItemArmor material points */ }
+        int enchantability = (int) itemType.getMethod("func_77619_b").invoke(item);
+        Object material = armorType.getMethod("func_82812_d").invoke(item);
+        boolean dyeable = material == loader.loadClass("net.minecraft.item.ItemArmor$ArmorMaterial").getField("CLOTH").get(null)
+                || item.getClass().getMethod("func_82814_b", stackType).getDeclaringClass() != armorType;
+        boolean ticks = item.getClass().getMethod("onArmorTick", loader.loadClass("net.minecraft.world.World"), loader.loadClass("net.minecraft.entity.player.EntityPlayer"), stackType).getDeclaringClass() != itemType;
+        String prefix = VANILLA_ARMOR[Math.floorMod(armorType.getField("field_77880_c").getInt(item), VANILLA_ARMOR.length)];
+        // RenderBiped's default: layer 2 only for leggings.
+        String texture = armorTexture(itemType, stackType, entityType, item, stack, slot, null,
+                String.format(Locale.ROOT, "minecraft:textures/models/armor/%s_layer_%d.png", prefix, slot == 2 ? 2 : 1));
+        String overlay = !dyeable ? null : armorTexture(itemType, stackType, entityType, item, stack, slot, "overlay",
+                prefix.equals("leather") ? String.format(Locale.ROOT, "minecraft:textures/models/armor/leather_layer_%d_overlay.png", slot == 2 ? 2 : 1) : null);
+        return new Armor(slot, points, enchantability, texture, overlay, dyeable, ticks);
+    }
+    private static String armorTexture(Class<?> itemType, Class<?> stackType, Class<?> entityType, Object item, Object stack, int slot, String type, String fallback) {
+        String texture = null;
+        try { texture = (String) itemType.getMethod("getArmorTexture", stackType, entityType, int.class, String.class).invoke(item, stack, null, slot, type); }
+        catch (ReflectiveOperationException | RuntimeException needsWearer) { /* fall back to the material layer */ }
+        if (texture == null) return fallback;
+        return texture.contains(":") ? texture : "minecraft:" + texture;
+    }
+    /** Samples the original held-use icon while drawing (as EntityPlayer.getItemIcon would), keeping each change. */
+    private List<Pull> pulls(ClassLoader loader, Object item, Object stack) {
+        try {
+            Class<?> itemType = loader.loadClass("net.minecraft.item.Item"), stackType = loader.loadClass("net.minecraft.item.ItemStack");
+            Class<?> playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), iconType = loader.loadClass("net.minecraft.util.IIcon");
+            Object action = itemType.getMethod("func_77661_b", stackType).invoke(item, stack);
+            if (action == null || !((Enum<?>) action).name().equals("bow")) return List.of();
+            int duration = (int) itemType.getMethod("func_77626_a", stackType).invoke(item, stack);
+            int passes = (int) itemType.getMethod("getRenderPasses", int.class).invoke(item, 0);
+            Class<?> mc = loader.loadClass("net.minecraft.client.Minecraft");
+            Object client = mc.getMethod("func_71410_x").invoke(null), player = client == null ? null : mc.getField("field_71439_g").get(client);
+            Method icon = itemType.getMethod("getIcon", stackType, int.class, playerType, stackType, int.class);
+            var result = new ArrayList<Pull>(); List<String> previous = new ArrayList<>();
+            for (int pass = 0; pass < passes; pass++) {
+                Object idle = itemType.getMethod("getIcon", stackType, int.class).invoke(item, stack, pass);
+                previous.add(idle == null ? "" : (String) iconType.getMethod("func_94215_i").invoke(idle));
+            }
+            for (int ticks = 1; ticks <= Math.min(duration, 72); ticks++) {
+                var icons = new ArrayList<String>();
+                for (int pass = 0; pass < passes; pass++) {
+                    Object value = icon.invoke(item, stack, pass, player, stack, duration - ticks);
+                    icons.add(value == null ? "" : (String) iconType.getMethod("func_94215_i").invoke(value));
+                }
+                if (!icons.equals(previous)) { result.add(new Pull(ticks, icons)); previous = icons; }
+            }
+            return List.copyOf(result);
+        } catch (ReflectiveOperationException | RuntimeException unsupported) {
+            captureDiagnostics.add("held-use icons unavailable for " + item + ": " + unsupported);
+            return List.of();
+        }
     }
     private static void declaredBlockMeta(Map<String, Set<Integer>> target, LegacyClientData.Stack stack, Map<String, Object> itemsByKey,
                                           Class<?> itemBlock, Object blockRegistry, Method blockKey) throws Exception {

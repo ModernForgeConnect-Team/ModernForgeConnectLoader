@@ -22,7 +22,25 @@ public final class LegacyWorldGraphics {
 
     public static Frame begin() {
         if (CURRENT.get() != null) throw new IllegalStateException("Nested legacy world capture");
+        idleTessellator();
         Frame frame = new Frame(); CURRENT.set(frame); return frame;
+    }
+    /**
+     * An original renderer that threw between startDrawing and draw leaves the shared old Tessellator "drawing", and
+     * every later capture would fail with "Already tesselating!". No capture is open here, so its vertices are stale.
+     */
+    private static void idleTessellator() {
+        try {
+            var loader = Thread.currentThread().getContextClassLoader();
+            Class<?> type = Class.forName("net.minecraft.client.renderer.Tessellator", false, loader);
+            if (type.getClassLoader() == LegacyWorldGraphics.class.getClassLoader()) return; // not the old domain
+            Object instance = type.getField("field_78398_a").get(null);
+            var drawing = type.getDeclaredField("field_78415_z"); drawing.setAccessible(true);
+            if (!drawing.getBoolean(instance)) return;
+            var reset = type.getDeclaredMethod("func_78379_d"); reset.setAccessible(true); reset.invoke(instance);
+            drawing.setBoolean(instance, false);
+            LegacyDiagnostics.legacyFailure("tessellator", new IllegalStateException("Recovered an old Tessellator left drawing by a failed renderer"));
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException unavailable) { /* not inside the old client domain */ }
     }
     public static boolean active() { return CURRENT.get() != null; }
     public static Frame current() { return CURRENT.get(); }

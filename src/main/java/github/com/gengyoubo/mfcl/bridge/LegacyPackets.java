@@ -25,19 +25,23 @@ public final class LegacyPackets {
         channel.guard.register(discriminator,message,side.toString());
         channel.handlers.add(new Handler(handler,message,discriminator&0xFF,side.toString()));
     }
-    public static Scope capture(UUID recipient) { return new Scope(recipient); }
+    public static Scope capture(UUID recipient) { return new Scope(Set.of(recipient)); }
+    /** Captures old client packets for any of these players, kept per recipient (e.g. a command targeting another player). */
+    public static Scope captureFor(Set<UUID> recipients) { return new Scope(Set.copyOf(recipients)); }
     /** Also captures the one client request accepted by {@code completion}; any other old serverbound packet fails. */
-    public static Scope captureScan(UUID recipient,java.util.function.Predicate<Object> completion) {var scope=new Scope(recipient);scope.completion=Objects.requireNonNull(completion);return scope;}
+    public static Scope captureScan(UUID recipient,java.util.function.Predicate<Object> completion) {var scope=new Scope(Set.of(recipient));scope.completion=Objects.requireNonNull(completion);return scope;}
     public static final class Scope implements AutoCloseable {
-        private final UUID recipient;
+        private final Set<UUID> recipients;
         private final List<Message> messages = new ArrayList<>();
+        private final Map<UUID,List<Message>> addressed = new LinkedHashMap<>();
         private java.util.function.Predicate<Object> completion;
         private Object scanRequest;
-        private Scope(UUID recipient) {
+        private Scope(Set<UUID> recipients) {
             if (CURRENT.get()!=null) throw new IllegalStateException("Nested old packet capture");
-            this.recipient=recipient;CURRENT.set(this);
+            this.recipients=recipients;CURRENT.set(this);
         }
         public List<Message> messages() { return List.copyOf(messages); }
+        public List<Message> messages(UUID recipient) { return List.copyOf(addressed.getOrDefault(recipient,List.of())); }
         public Object scanRequest() {return scanRequest;}
         @Override public void close() { CURRENT.remove(); }
     }
@@ -110,7 +114,8 @@ public final class LegacyPackets {
         var loader=message.getClass().getClassLoader();
         var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         Object profile=playerType.getMethod("func_146103_bH").invoke(player);
-        if(!scope.recipient.equals(profile.getClass().getMethod("getId").invoke(profile)))
+        Object recipient=profile.getClass().getMethod("getId").invoke(profile);
+        if(!scope.recipients.contains(recipient))
             throw new UnsupportedOperationException("Old item callback sent a packet to another player");
         Channel channel=Objects.requireNonNull(CHANNELS.get(wrapper),"Unregistered old network channel");
         Handler handler=channel.handlers.stream().filter(h->h.side.equals("CLIENT")&&h.type==message.getClass()).findFirst().orElseThrow();
@@ -121,7 +126,8 @@ public final class LegacyPackets {
             int size=(int)bufferType.getMethod("readableBytes").invoke(buffer);
             if(size>1024*1024)throw new IllegalArgumentException("Old client packet exceeds host limit");
             byte[] payload=new byte[size];bufferType.getMethod("readBytes",byte[].class).invoke(buffer,(Object)payload);
-            scope.messages.add(new Message(channel.name,handler.discriminator,payload));return true;
+            var encoded=new Message(channel.name,handler.discriminator,payload);
+            scope.messages.add(encoded);scope.addressed.computeIfAbsent((UUID)recipient,key->new ArrayList<>()).add(encoded);return true;
         } finally {bufferType.getMethod("release").invoke(buffer);}
     }
     public static void receiveClient(LegacyServices services, Message message) throws Exception {

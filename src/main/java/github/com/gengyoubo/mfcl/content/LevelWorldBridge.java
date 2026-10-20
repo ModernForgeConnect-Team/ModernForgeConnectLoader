@@ -86,7 +86,14 @@ public final class LevelWorldBridge {
                     content.afterCommit(level,() -> level.scheduleTick(pos,block,Math.max(1,delay)));
                 }
             }
-            @Override public Block block(int x, int y, int z) { check(); return content.legacyBlock(level.getBlockState(new BlockPos(x, y, z))); }
+            @Override public Block block(int x, int y, int z) {
+                check(); var state = level.getBlockState(new BlockPos(x, y, z));
+                // Post-1.7 neighbours (deepslate, copper, mangrove...) must not abort and suspend original tile ticks.
+                var known = content.hostRepresentations().knownOpaque(state);
+                if (known != null) return known;
+                try { return content.legacyBlock(state); }
+                catch (github.com.gengyoubo.mfcl.bridge.UnmappedLegacyBlockException absent) { return content.hostRepresentations().opaque(state); }
+            }
             @Override public boolean setBlock(int x, int y, int z, Block block, int flags) {
                 check(); var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
                 return level.setBlock(pos, content.modernBlock(block), flags);

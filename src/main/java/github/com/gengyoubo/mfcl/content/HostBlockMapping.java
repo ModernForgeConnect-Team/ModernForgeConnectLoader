@@ -29,7 +29,9 @@ public final class HostBlockMapping {
                 Map.entry("oak_sign","standing_sign"),Map.entry("oak_wall_sign","wall_sign"),
                 Map.entry("redstone_wall_torch","redstone_torch"),Map.entry("wall_torch","torch"),
                 Map.entry("carrots","carrots"),Map.entry("potatoes","potatoes"),
-                Map.entry("nether_portal","portal"),Map.entry("tripwire","tripwire"),Map.entry("dead_bush","deadbush"));
+                Map.entry("nether_portal","portal"),Map.entry("tripwire","tripwire"),Map.entry("dead_bush","deadbush"),
+                // Post-1.7 variants that are the same thing to old logic (crucible heat, bellows and spill neighbour reads).
+                Map.entry("cave_air","air"),Map.entry("void_air","air"),Map.entry("soul_fire","fire"));
         blockOnly.forEach((modern,old)->{
             if(oldKeys.contains("minecraft:"+old))blocks.put(BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("minecraft",modern)),new HostWorldAccess.Block("minecraft:"+old,0));
         });

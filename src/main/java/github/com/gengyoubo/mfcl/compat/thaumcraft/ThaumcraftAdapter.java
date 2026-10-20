@@ -35,6 +35,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     }
     @Override public void installClient() {
         ThaumcraftDynamicItems.install(services);
+        ThaumcraftGoggles.install(services);
+        ThaumcraftParticles.install(services);
         try {services.items().inLegacy(()->{
             var loader=services.loader();var tc=loader.loadClass("thaumcraft.common.Thaumcraft");
             Object instance=tc.getField("instance").get(null);var renderField=tc.getField("renderEventHandler");Object renderer=renderField.get(instance);

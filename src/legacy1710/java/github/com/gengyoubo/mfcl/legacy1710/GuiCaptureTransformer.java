@@ -12,7 +12,7 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.client.renderer.entity.RenderItem") || name.equals("net.minecraft.client.renderer.texture.TextureManager")
                 || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer") || name.equals("net.minecraft.entity.player.EntityPlayer")
                 || name.equals("net.minecraft.client.entity.EntityPlayerSP") || name.equals("net.minecraft.client.entity.EntityClientPlayerMP")
-                || name.equals("net.minecraft.entity.player.EntityPlayerMP")
+                || name.equals("net.minecraft.entity.player.EntityPlayerMP") || name.equals("net.minecraft.network.NetHandlerPlayServer")
                 || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
                 || name.equals("net.minecraft.client.multiplayer.PlayerControllerMP")
@@ -70,10 +70,17 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 tooltip.add(new MethodInsnNode(Opcodes.INVOKESTATIC,API,"tooltip","(Ljava/util/List;)V",false));
                 m.instructions.insert(tooltip); continue;
             }
+            if (name.equals("net.minecraft.network.NetHandlerPlayServer") && m.name.equals("func_147359_a")) {
+                // MFCL server actors carry a connection-less handler; their packets have no recipient.
+                InsnList drop = new InsnList(); LabelNode original = new LabelNode();
+                drop.add(new VarInsnNode(Opcodes.ALOAD,0)); drop.add(new FieldInsnNode(Opcodes.GETFIELD,"net/minecraft/network/NetHandlerPlayServer","field_147371_a","Lnet/minecraft/network/NetworkManager;"));
+                drop.add(new JumpInsnNode(Opcodes.IFNONNULL,original)); drop.add(new InsnNode(Opcodes.RETURN));
+                drop.add(original); drop.add(new FrameNode(Opcodes.F_SAME,0,null,0,null)); m.instructions.insert(drop); continue;
+            }
             if (m.name.equals("func_145747_a") && (m.access & Opcodes.ACC_ABSTRACT) == 0) {
                 InsnList chat = new InsnList(); LabelNode original = new LabelNode();
-                chat.add(new VarInsnNode(Opcodes.ALOAD,1));
-                chat.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","chat","(Ljava/lang/Object;)Z",false));
+                chat.add(new VarInsnNode(Opcodes.ALOAD,0)); chat.add(new VarInsnNode(Opcodes.ALOAD,1));
+                chat.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","chat","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));
                 chat.add(new JumpInsnNode(Opcodes.IFEQ,original)); chat.add(new InsnNode(Opcodes.RETURN));
                 chat.add(original); chat.add(new FrameNode(Opcodes.F_SAME,0,null,0,null)); m.instructions.insert(chat); continue;
             }

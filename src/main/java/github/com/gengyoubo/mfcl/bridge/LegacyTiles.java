@@ -90,6 +90,10 @@ public final class LegacyTiles {
             var interaction=actorType.getField("field_71134_c");interaction.setAccessible(true);interaction.set(actor,access);
             var statistics=actorType.getDeclaredField("field_147103_bO");statistics.setAccessible(true);
             statistics.set(actor,LegacyPlayerStatistics.create(loader,services.gameDirectory().resolve("mfcl/player-stats/"+placer.id()+".json").toFile()));
+            // Effect/inventory updates sent to the actor's connection are dropped (it has none); the host syncs the real player.
+            Class<?> handler=loader.loadClass("net.minecraft.network.NetHandlerPlayServer");
+            Object connection=unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,handler);
+            handler.getField("field_147369_b").set(connection,actor);actorType.getField("field_71135_a").set(actor,connection);
         }
         Class<?> player = loader.loadClass("net.minecraft.entity.player.EntityPlayer"), entity = loader.loadClass("net.minecraft.entity.Entity");
         var uuid=entity.getDeclaredField("field_96093_i");uuid.setAccessible(true);uuid.set(actor,placer.id());
@@ -101,6 +105,7 @@ public final class LegacyTiles {
         profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));
         Object inventory = loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(player).newInstance(actor);
         player.getField("field_71071_by").set(actor, inventory);
+        LegacyPlayerArmor.apply(services, actor, placer.id(), client);
         if (stack != null) inventory.getClass().getMethod("func_70299_a",int.class,loader.loadClass("net.minecraft.item.ItemStack")).invoke(inventory,0,services.items().materialize(stack));
         Object capabilities = loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance();
         capabilities.getClass().getField("field_75098_d").setBoolean(capabilities, placer.creative());

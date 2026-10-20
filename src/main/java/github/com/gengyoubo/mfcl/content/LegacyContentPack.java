@@ -52,6 +52,12 @@ public final class LegacyContentPack {
             }
         }
         for (var primitive : worldRendering.tilePreviews()) if (primitive.texture().contains("textures/")) texturePath(primitive.texture());
+        // Worn armor layers; old namespaces/paths may be upper-case, which host resource locations reject.
+        for (var item : content.items()) if (item.armor() != null) for (String layer : java.util.Arrays.asList(item.armor().texture(), item.armor().overlay()))
+            if (layer != null && !layer.startsWith("minecraft:")) texturePath(layer);
+        // Dyed armor always draws an overlay pass; originals without one get an empty layer instead of a missing texture.
+        var transparent = directory.resolve("assets/mfcl/textures/models/armor/transparent.png"); Files.createDirectories(transparent.getParent());
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(64, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB), "png", transparent.toFile());
         json("pack.mcmeta", Map.of("pack", Map.of("pack_format", 15, "description", "MFCL original 1.7.10 content resources")));
         // builtin/entity item models reference no texture, so their sprites must be stitched explicitly.
         json("assets/mfcl/atlases/blocks.json", Map.of("sources", List.of(Map.of("type", "minecraft:directory", "source", "block/legacy"))));
@@ -84,6 +90,17 @@ public final class LegacyContentPack {
                 String path = "item/" + id.getPath() + "_meta_" + variant.metadata();
                 json("assets/" + id.getNamespace() + "/models/" + path + ".json", itemModel(item, variant));
                 overrides.add(Map.of("predicate", Map.of("mfcl:metadata", variant.metadata()), "model", id.getNamespace() + ":" + path));
+            }
+            if (!item.pulls().isEmpty() && "minecraft:item/generated".equals(model.get("parent"))) {
+                // Original held-use frames (bow pulling), chosen by drawn ticks; listed last so they win over metadata.
+                model.put("parent", "minecraft:item/bow");
+                for (int frame = 0; frame < item.pulls().size(); frame++) {
+                    var pull = item.pulls().get(frame); var layers = new LinkedHashMap<String, String>();
+                    for (int pass = 0; pass < pull.icons().size(); pass++) layers.put("layer" + pass, texture(pull.icons().get(pass), "items"));
+                    String path = "item/" + id.getPath() + "_pull_" + frame;
+                    json("assets/" + id.getNamespace() + "/models/" + path + ".json", Map.of("parent", "minecraft:item/bow", "textures", layers));
+                    overrides.add(Map.of("predicate", Map.of("mfcl:pull", pull.ticks()), "model", id.getNamespace() + ":" + path));
+                }
             }
             model.put("overrides", overrides);
             json("assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json", model);
@@ -208,6 +225,13 @@ public final class LegacyContentPack {
         return value;
     }
     public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, resource); }
+    public static final String TRANSPARENT_ARMOR = "mfcl:textures/models/armor/transparent.png";
+    /** Host texture for an original worn armor layer, or null when the old resource was missing. */
+    public String armorTexture(String resource) {
+        if (resource == null) return null;
+        if (resource.startsWith("minecraft:")) return resource;
+        String value = textures.get("path:" + resource); return value == null || value.isEmpty() ? null : value;
+    }
     public Path directory() { return directory; }
     public void craftingRecipe(String hash) throws IOException {json("data/mfcl/recipes/legacy_crafting/"+hash+".json",Map.of("type","mfcl:legacy_crafting","original",hash));}
     public void smeltingRecipe(String hash) throws IOException {json("data/mfcl/recipes/legacy_smelting/"+hash+".json",Map.of("type","mfcl:legacy_smelting","original",hash));}

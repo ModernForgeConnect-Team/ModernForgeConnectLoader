@@ -14,6 +14,7 @@ public final class HostRepresentations implements LegacyHostRepresentations {
     private final ModernContentBridge content;
     private final Map<Item, LegacyStack> items = new IdentityHashMap<>();
     private final Map<net.minecraft.world.level.block.Block, LegacyStack> blocks = new IdentityHashMap<>();
+    private final Map<net.minecraft.world.level.block.Block, LegacyStack> opaque = new IdentityHashMap<>();
     private final Map<String, String> entities = new HashMap<>();
     private final Map<String, Class<?>> entityClasses = new HashMap<>();
     private final Map<String, Item> reverseItems = new HashMap<>();
@@ -67,21 +68,44 @@ public final class HostRepresentations implements LegacyHostRepresentations {
                 return new LegacyStack(original.legacyKey(), original.metadata(), 1, "");
             });
         } catch (UnmappedLegacyBlockException absent) { /* Register an independent identity below. */ }
+        var stack = opaque.containsKey(block) ? opaque.remove(block) : register(block, "field_151576_e");
+        blocks.put(block, stack);
+        if (block.asItem() != Items.AIR) { items.put(block.asItem(), stack); reverseItems.put(stack.key(), block.asItem()); }
+        return stack;
+    }
+    /**
+     * World-read stand-in for a post-1.7 block, so original tile logic can inspect its neighbours instead of failing.
+     * Unlike {@link #block(String)} it is not returned by {@link #block(BlockState)}: scanning still reports it as unmapped.
+     */
+    public synchronized HostWorldAccess.Block opaque(BlockState state) {
+        var block = state.getBlock();
+        var old = opaque.get(block);
+        if (old == null) {
+            String material = block instanceof net.minecraft.world.level.block.LiquidBlock
+                    ? state.getFluidState().is(net.minecraft.tags.FluidTags.LAVA) ? "field_151587_i" : "field_151586_h"
+                    : state.is(net.minecraft.tags.BlockTags.FIRE) ? "field_151581_o" : "field_151576_e";
+            old = register(block, material); opaque.put(block, old);
+        }
+        return new HostWorldAccess.Block(old.key(), 0);
+    }
+    public synchronized HostWorldAccess.Block knownOpaque(BlockState state) {
+        var old = opaque.get(state.getBlock()); return old == null ? null : new HostWorldAccess.Block(old.key(), 0);
+    }
+    private LegacyStack register(net.minecraft.world.level.block.Block block, String materialField) {
+        String value = BuiltInRegistries.BLOCK.getKey(block).toString();
         return legacy(() -> {
             var loader = content.services().loader();
             var type = loader.loadClass("net.minecraft.block.Block");
             var material = loader.loadClass("net.minecraft.block.material.Material");
             var constructor = type.getDeclaredConstructor(material); constructor.setAccessible(true);
-            Object old = constructor.newInstance(material.getField("field_151576_e").get(null));
+            Object old = constructor.newInstance(material.getField(materialField).get(null));
             String key = key("block", value);
             type.getMethod("func_149663_c", String.class).invoke(old, key);
             Object item = loader.loadClass("net.minecraft.item.ItemBlock").getConstructor(type).newInstance(old);
             LegacyHostRegistry.registerBlock(loader, key, old, item);
             LegacyHostRegistry.label(loader, "tile." + key + ".name", () -> block.getName().getString());
-            var stack = new LegacyStack(key, 0, 1, "");
-            blocks.put(block, stack); reverseBlocks.put(key, block);
-            if (block.asItem() != Items.AIR) { items.put(block.asItem(), stack); reverseItems.put(key, block.asItem()); }
-            return stack;
+            reverseBlocks.put(key, block);
+            return new LegacyStack(key, 0, 1, "");
         });
     }
     @Override public synchronized String entity(String value) {

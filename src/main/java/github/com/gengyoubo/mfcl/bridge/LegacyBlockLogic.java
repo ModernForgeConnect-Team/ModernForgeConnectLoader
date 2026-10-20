@@ -12,6 +12,21 @@ public final class LegacyBlockLogic {
         @Override public void close(){if(previous==null)MESSAGES.remove();else MESSAGES.set(previous);}
     }
     public record Activation(boolean handled, java.util.List<LegacyClientData.Stack> inventory, java.util.List<String> messages, LegacyDeviceContainers.Open device) {}
+    /** Chat line addressed to one old ICommandSender (a player actor, or the command console stand-in). */
+    public record AddressedChat(Object recipient, String text) {}
+    private static final ThreadLocal<java.util.List<AddressedChat>> ADDRESSED = new ThreadLocal<>();
+    /** Like {@link ChatCapture}, but keeps who each line was sent to; used where several old players are live at once. */
+    public static final class AddressedChatCapture implements AutoCloseable {
+        private final java.util.List<AddressedChat> previous=ADDRESSED.get(), lines=new java.util.ArrayList<>();
+        public AddressedChatCapture(){ADDRESSED.set(lines);}
+        public java.util.List<AddressedChat> lines(){return java.util.List.copyOf(lines);}
+        @Override public void close(){if(previous==null)ADDRESSED.remove();else ADDRESSED.set(previous);}
+    }
+    public static boolean chat(Object recipient, Object component) throws Exception {
+        var lines = ADDRESSED.get(); if (lines == null) return chat(component);
+        var type = component.getClass().getClassLoader().loadClass("net.minecraft.util.IChatComponent");
+        lines.add(new AddressedChat(recipient,(String)type.getMethod("func_150260_c").invoke(component))); return true;
+    }
     public static boolean chat(Object component) throws Exception {
         var messages = MESSAGES.get(); if (messages == null) return false;
         var type = component.getClass().getClassLoader().loadClass("net.minecraft.util.IChatComponent");
@@ -32,6 +47,36 @@ public final class LegacyBlockLogic {
             Object world=tileType.getMethod("func_145831_w").invoke(tile);LegacyWorlds.beginEntityQueries(world);
             try {tileType.getMethod("func_145845_h").invoke(tile);LegacyWorlds.commitEntityMotion(world);return true;}
             finally {LegacyWorlds.clearEntityQueries(world);}
+        });
+    }
+    /** What an original onEntityCollidedWithBlock left of a dropped item: removed, or its (possibly shrunk) stack. */
+    public record Collision(boolean removed, LegacyClientData.Stack stack) {}
+    private final java.util.Map<String,Boolean> collides = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Whether the original block overrides onEntityCollidedWithBlock (crucible, cactus-like hazards...). */
+    public boolean collides(String key) throws Exception {
+        Boolean known = collides.get(key);
+        if (known != null) return known;
+        boolean value = services.items().inLegacy(() -> block(key).getClass().getMethod("func_149670_a", worldType, int.class, int.class, int.class,
+                services.loader().loadClass("net.minecraft.entity.Entity")).getDeclaringClass() != blockType);
+        collides.put(key, value); return value;
+    }
+    /** Runs the original onEntityCollidedWithBlock for a dropped item mirrored from the host. */
+    public Collision collide(String key, Object world, int x, int y, int z, HostWorldAccess.Entity item) throws Exception {
+        return services.items().inLegacy(() -> {
+            var loader = services.loader(); Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
+            Object entity = LegacyEntityAccess.mirror(services.items(), world, item, null);
+            blockType.getMethod("func_149670_a", worldType, int.class, int.class, int.class, entityType).invoke(block(key), world, x, y, z, entity);
+            Object stack = entity.getClass().getMethod("func_92059_d").invoke(entity);
+            boolean removed = entityType.getField("field_70128_L").getBoolean(entity) || stack == null
+                    || loader.loadClass("net.minecraft.item.ItemStack").getField("field_77994_a").getInt(stack) <= 0;
+            return new Collision(removed, removed ? null : services.items().snapshot(stack));
+        });
+    }
+    /** Original Block.randomDisplayTick on the client world. */
+    public void displayTick(String key, Object world, int x, int y, int z, long seed) throws Exception {
+        services.items().inLegacy(() -> {
+            blockType.getMethod("func_149734_b", worldType, int.class, int.class, int.class, java.util.Random.class).invoke(block(key), world, x, y, z, new java.util.Random(seed));
+            return null;
         });
     }
     public boolean event(String key, Object world, int x, int y, int z, int event, int data) throws Exception {

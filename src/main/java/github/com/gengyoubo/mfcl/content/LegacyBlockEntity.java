@@ -95,6 +95,19 @@ public final class LegacyBlockEntity extends BlockEntity {
         }
     }
     public void markLegacyDirty() { setChanged(); updatePending = true; }
+    private static final java.util.Set<String> clientFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /**
+     * The original updateEntity also runs on the client, where machines draw their effects (crucible bubbles and
+     * froth...). It sees the client world only; a tile whose client logic fails is paused locally, the server is unaffected.
+     */
+    public void tickClient() {
+        if (logicSuspended || isRemoved() || level == null || !level.isClientSide) return;
+        try { content.services().logic().tick(legacyOrNull()); }
+        catch (Exception | LinkageError failure) {
+            logicSuspended = true;
+            if (clientFailures.add(key())) com.mojang.logging.LogUtils.getLogger().warn("MFCL paused client-side original tile logic for {}", key(), failure);
+        }
+    }
     public void tickServer() {
         if (logicSuspended || isRemoved() || level == null || level.isClientSide) return;
         try {

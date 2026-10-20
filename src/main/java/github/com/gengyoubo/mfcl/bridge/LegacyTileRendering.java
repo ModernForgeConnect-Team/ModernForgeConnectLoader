@@ -52,8 +52,11 @@ public final class LegacyTileRendering {
             managerType.getField("field_78725_b").setDouble(null,x); managerType.getField("field_78726_c").setDouble(null,y); managerType.getField("field_78723_d").setDouble(null,z);
             var active = loader.loadClass("net.minecraft.client.renderer.ActiveRenderInfo");
             double ry = Math.toRadians(yaw), rp = Math.toRadians(pitch);
-            active.getField("field_74588_d").setFloat(null,(float)Math.cos(ry)); active.getField("field_74589_e").setFloat(null,(float)Math.sin(ry));
-            active.getField("field_74586_f").setFloat(null,(float)(-Math.sin(ry)*Math.sin(rp))); active.getField("field_74587_g").setFloat(null,(float)(Math.cos(ry)*Math.sin(rp))); active.getField("field_74596_h").setFloat(null,(float)Math.cos(rp));
+            // Same assignments as ActiveRenderInfo.updateRenderInfo: rotationX (_d), rotationZ (_f), rotationYZ (_g),
+            // rotationXY (_h), rotationXZ (_e). Billboards (particles, node beams) are built from these five.
+            active.getField("field_74588_d").setFloat(null,(float)Math.cos(ry)); active.getField("field_74586_f").setFloat(null,(float)Math.sin(ry));
+            active.getField("field_74587_g").setFloat(null,(float)(-Math.sin(ry)*Math.sin(rp))); active.getField("field_74596_h").setFloat(null,(float)(Math.cos(ry)*Math.sin(rp)));
+            active.getField("field_74589_e").setFloat(null,(float)Math.cos(rp));
             return null;
         });
     }

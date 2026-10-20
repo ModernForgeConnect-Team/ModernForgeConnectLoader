@@ -94,6 +94,7 @@ public final class LegacyContainers {
         // EntityLivingBase fields that old item tooltips and wand logic read must be present.
         var potions=loader.loadClass("net.minecraft.entity.EntityLivingBase").getDeclaredField("field_70713_bf");potions.setAccessible(true);
         if(potions.get(player)==null)potions.set(player,new java.util.HashMap<Object,Object>());
+        LegacyPlayerArmor.apply(services,player,null,true);
     }
     private Object allocate(Class<?> type) throws Exception { var field=Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");field.setAccessible(true);Object unsafe=field.get(null);return unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,type); }
     private void defineTypes() throws Exception {
