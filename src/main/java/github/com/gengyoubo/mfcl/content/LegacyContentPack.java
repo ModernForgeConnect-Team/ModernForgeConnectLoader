@@ -212,6 +212,11 @@ public final class LegacyContentPack {
                 "mfcl.content.placement_failed", "无法初始化此方块，详细信息见游戏日志。"));
         for (var entry : languages.entrySet()) json("assets/mfcl/lang/" + entry.getKey() + ".json", entry.getValue());
     }
+    /** Adds original items to a host item tag without replacing what vanilla or other packs put there. */
+    public void itemTag(String tag, List<String> items) throws IOException {
+        var id = net.minecraft.resources.ResourceLocation.parse(tag);
+        json("data/" + id.getNamespace() + "/tags/items/" + id.getPath() + ".json", Map.of("replace", false, "values", items));
+    }
     void json(String resource, Object value) throws IOException {
         Path file = directory.resolve(resource).normalize();
         if (!file.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + resource);

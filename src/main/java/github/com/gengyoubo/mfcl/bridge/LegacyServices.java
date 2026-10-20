@@ -20,6 +20,7 @@ public final class LegacyServices {
     private final LegacyDynamicItems dynamicItems = new LegacyDynamicItems();
     private final LegacyHeldScanners scanners = new LegacyHeldScanners();
     private final LegacyDimensions dimensions;
+    private final LegacyEntityHosting entityHosting;
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
         this(gameDirectory, loader, new LegacyClientData(loader));
     }
@@ -36,6 +37,7 @@ public final class LegacyServices {
         this.playerData = new LegacyPlayerData(this);
         this.logic = new LegacyBlockLogic(this); this.inventories = new LegacyInventoryAccess(this);
         this.playerInventory = new LegacyPlayerInventory(this);
+        this.entityHosting = new LegacyEntityHosting(this);
     }
     public Path gameDirectory() { return gameDirectory; }
     public ClassLoader loader() { return loader; }
@@ -53,6 +55,11 @@ public final class LegacyServices {
     public LegacyPlayerState playerState() { return playerState; }
     public LegacyDynamicItems dynamicItems() { return dynamicItems; }
     public LegacyHeldScanners scanners() { return scanners; }
+    public LegacyEntityHosting entityHosting() { return entityHosting; }
+    private final java.util.Map<String, java.util.Set<String>> hostItemTags = new java.util.LinkedHashMap<>();
+    /** Puts an original item into a host item tag (e.g. minecraft:arrows), for host behavior the original game never had. */
+    public synchronized void tagItem(String hostTag, String legacyKey) { hostItemTags.computeIfAbsent(hostTag, ignored -> new java.util.LinkedHashSet<>()).add(legacyKey); }
+    public synchronized java.util.Map<String, java.util.Set<String>> hostItemTags() { return java.util.Map.copyOf(hostItemTags); }
     /** UUID of an old Entity (player actors included); null for other old objects such as command senders. */
     public java.util.UUID entityId(Object old) {
         try {

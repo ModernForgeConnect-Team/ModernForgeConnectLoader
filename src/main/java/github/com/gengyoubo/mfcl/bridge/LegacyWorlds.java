@@ -65,6 +65,8 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
         // worldAccesses: allocated worlds skip field initializers, and spawnParticle/playSound iterate this list.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
+        // theProfiler: Entity.onEntityUpdate and other original update loops open profiler sections unconditionally.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_72984_F", loader.loadClass("net.minecraft.profiler.Profiler").getConstructor().newInstance());
         // playerEntities: old code (eldritch lock messages...) reads it directly; it mirrors the host players, refreshed once per tick.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73010_i", new AbstractList<Object>() {
             @Override public Object get(int index) { return players(world).get(index); }
@@ -138,6 +140,11 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     /** Host contract of a bound old world, for bridges invoked from rewritten original code. */
     static HostWorldAccess access(Object world) { return binding(world).host; }
+    /** Host of a live binding on its owner thread, else null: old entities may outlive or wander from their world. */
+    static HostWorldAccess hostOrNull(Object world) {
+        Binding binding = world == null ? null : DISPATCH.get(world);
+        return binding == null || binding.owner != Thread.currentThread() ? null : binding.host;
+    }
     /** The bound server world of a legacy dimension on the calling thread (MinecraftServer.worldServerForDimension). */
     static Object serverWorld(int dimension) {
         synchronized (DISPATCH) {
@@ -176,7 +183,7 @@ public final class LegacyWorlds implements AutoCloseable {
                 type.getField("field_70161_v").getDouble(entity),id,volume,pitch,false,except));
     }
     public static void setTime(Object world, long time) { binding(world).host.setDayTime(time); }
-    /** Translates a legacy projectile into host-neutral data; unsupported entities are ignored so old logic keeps running. */
+    /** The plain arrow becomes a host arrow and drops become host items; every other old entity is hosted with its original logic. */
     public static boolean spawn(Object world, Object entity) {
         var bound = binding(world);
         if (bound.host.clientSide()) return false;
@@ -184,7 +191,8 @@ public final class LegacyWorlds implements AutoCloseable {
             ClassLoader loader = bound.loader;
             Class<?> arrowType = loader.loadClass("net.minecraft.entity.projectile.EntityArrow");
             if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity))return LegacyDeviceContainers.drop(entity);
-            if (!arrowType.isInstance(entity)) return false;
+            // Mod arrows (TC4 primal arrows...) keep their own impact logic and renderer; only the plain arrow is translated.
+            if (entity.getClass() != arrowType) return bound.host.spawnLegacyEntity(entity);
             Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
             double x = entityType.getField("field_70165_t").getDouble(entity), y = entityType.getField("field_70163_u").getDouble(entity), z = entityType.getField("field_70161_v").getDouble(entity);
             double mx = entityType.getField("field_70159_w").getDouble(entity), my = entityType.getField("field_70181_x").getDouble(entity), mz = entityType.getField("field_70179_y").getDouble(entity);
@@ -237,6 +245,9 @@ public final class LegacyWorlds implements AutoCloseable {
     public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
     public static List<Object> entities(Object world,Class<?> type,Object box) {return selectedEntities(world,type,box,null);}
     private static Object mirrored(Binding binding,Object world,HostWorldAccess.Entity snapshot) throws Exception {
+        // A host entity that hosts an old entity is that old entity; it must not be replaced by a snapshot.
+        Object hosted=binding.host.hostedLegacyEntity(snapshot.id());
+        if(hosted!=null)return hosted;
         Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
         if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
         return entity;
@@ -370,6 +381,16 @@ public final class LegacyWorlds implements AutoCloseable {
                     && (boolean)type.getMethod("func_149707_d",binding.loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class,int.class).invoke(target,world,x,y,z,side);
         } catch (Exception error) { throw new IllegalStateException("Cannot evaluate old placement conditions",error); }
     }
+    /** isBlockNormalCubeDefault: the facade has no chunk provider, so ask the old block directly (ItemDoor hinge checks). */
+    public static boolean normalCube(Object world, int x, int y, int z, boolean fallback) {
+        var binding = binding(world);
+        if (!binding.host.loaded(x,y,z)) return fallback;
+        try { return (boolean)binding.loader.loadClass("net.minecraft.block.Block").getMethod("isNormalCube",binding.loader.loadClass("net.minecraft.world.IBlockAccess"),int.class,int.class,int.class)
+                .invoke(block(world,x,y,z),world,x,y,z); }
+        catch (Exception error) { throw new IllegalStateException(error); }
+    }
+    /** chunkExists(chunkX, chunkZ) for checkChunksExist and friends. */
+    public static boolean chunkLoaded(Object world, int chunkX, int chunkZ) { return binding(world).host.loaded(chunkX<<4,64,chunkZ<<4); }
     public static boolean removeBlock(Object world, int x, int y, int z) { return binding(world).host.setBlock(x,y,z,new HostWorldAccess.Block("minecraft:air",0),3); }
     public static boolean solid(Object world, int x, int y, int z, Object direction, boolean fallback) {
         var binding = binding(world);
@@ -430,6 +451,8 @@ public final class LegacyWorlds implements AutoCloseable {
         ray.visitMethodInsn(Opcodes.INVOKESPECIAL,client?"net/minecraft/client/multiplayer/WorldClient":"net/minecraft/world/WorldServer","func_147447_a",rayDescriptor,false);
         ray.visitInsn(Opcodes.ARETURN);ray.visitMaxs(6,6);ray.visitEnd();
         forward(writer, bridge, "isSideSolid", "(IIILnet/minecraftforge/common/util/ForgeDirection;Z)Z", "solid", "(Ljava/lang/Object;IIILjava/lang/Object;Z)Z", null);
+        forward(writer, bridge, "func_147445_c", "(IIIZ)Z", "normalCube", "(Ljava/lang/Object;IIIZ)Z", null);
+        forward(writer, bridge, "func_72916_c", "(II)Z", "chunkLoaded", "(Ljava/lang/Object;II)Z", null);
         forward(writer, bridge, "func_72807_a", "(II)Lnet/minecraft/world/biome/BiomeGenBase;", "biome", "(Ljava/lang/Object;II)Ljava/lang/Object;", "net/minecraft/world/biome/BiomeGenBase");
         constant(writer, "func_72802_i", "(IIII)I", 0x00F000F0);
         constant(writer, "func_72800_K", "()I", 256);

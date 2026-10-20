@@ -44,6 +44,43 @@ public final class LevelWorldBridge {
             if (state.isRandomlyTicking()) state.randomTick(level, pos, level.random);
         }
     }
+    /** Old DamageSource by damageType first, then by its flags (fire, projectile, magic, explosion) and attacker. */
+    private static net.minecraft.world.damagesource.DamageSource damageSource(ServerLevel level, HostWorldAccess.Damage damage, net.minecraft.world.entity.Entity direct, net.minecraft.world.entity.Entity attacker) {
+        net.minecraft.resources.ResourceKey<net.minecraft.world.damagesource.DamageType> key = switch (damage.type()) {
+            case "inFire" -> net.minecraft.world.damagesource.DamageTypes.IN_FIRE;
+            case "onFire" -> net.minecraft.world.damagesource.DamageTypes.ON_FIRE;
+            case "lava" -> net.minecraft.world.damagesource.DamageTypes.LAVA;
+            case "inWall" -> net.minecraft.world.damagesource.DamageTypes.IN_WALL;
+            case "drown" -> net.minecraft.world.damagesource.DamageTypes.DROWN;
+            case "starve" -> net.minecraft.world.damagesource.DamageTypes.STARVE;
+            case "cactus" -> net.minecraft.world.damagesource.DamageTypes.CACTUS;
+            case "fall" -> net.minecraft.world.damagesource.DamageTypes.FALL;
+            case "outOfWorld" -> net.minecraft.world.damagesource.DamageTypes.FELL_OUT_OF_WORLD;
+            case "wither" -> net.minecraft.world.damagesource.DamageTypes.WITHER;
+            case "anvil" -> net.minecraft.world.damagesource.DamageTypes.FALLING_ANVIL;
+            case "fallingBlock" -> net.minecraft.world.damagesource.DamageTypes.FALLING_BLOCK;
+            case "thorns" -> net.minecraft.world.damagesource.DamageTypes.THORNS;
+            case "fireball" -> net.minecraft.world.damagesource.DamageTypes.FIREBALL;
+            case "arrow" -> net.minecraft.world.damagesource.DamageTypes.ARROW;
+            case "thrown" -> net.minecraft.world.damagesource.DamageTypes.THROWN;
+            case "indirectMagic" -> net.minecraft.world.damagesource.DamageTypes.INDIRECT_MAGIC;
+            case "magic" -> net.minecraft.world.damagesource.DamageTypes.MAGIC;
+            default -> null;
+        };
+        boolean player = attacker instanceof net.minecraft.world.entity.player.Player;
+        // Armor-piercing original damage (TC4 air/order arrows) maps to the host's armor-bypassing magic types.
+        if (key == null && damage.bypassArmor() && !damage.explosion() && !damage.fire())
+            key = attacker != null ? net.minecraft.world.damagesource.DamageTypes.INDIRECT_MAGIC : net.minecraft.world.damagesource.DamageTypes.MAGIC;
+        if (key == null) key = damage.explosion() ? (player ? net.minecraft.world.damagesource.DamageTypes.PLAYER_EXPLOSION : net.minecraft.world.damagesource.DamageTypes.EXPLOSION)
+                : damage.projectile() ? (damage.fire() ? net.minecraft.world.damagesource.DamageTypes.FIREBALL : net.minecraft.world.damagesource.DamageTypes.THROWN)
+                : damage.magic() ? (attacker != null ? net.minecraft.world.damagesource.DamageTypes.INDIRECT_MAGIC : net.minecraft.world.damagesource.DamageTypes.MAGIC)
+                : damage.fire() ? net.minecraft.world.damagesource.DamageTypes.ON_FIRE
+                : player ? net.minecraft.world.damagesource.DamageTypes.PLAYER_ATTACK
+                : attacker instanceof net.minecraft.world.entity.LivingEntity ? net.minecraft.world.damagesource.DamageTypes.MOB_ATTACK
+                : net.minecraft.world.damagesource.DamageTypes.GENERIC;
+        var type = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.DAMAGE_TYPE).getHolderOrThrow(key);
+        return new net.minecraft.world.damagesource.DamageSource(type, direct, attacker);
+    }
     private HostWorldAccess access(ServerLevel level, int dimension) {
         return new HostWorldAccess() {
             private void check() {
@@ -91,6 +128,35 @@ public final class LevelWorldBridge {
                 if (projectile.damage() > 0) arrow.setBaseDamage(projectile.damage());
                 if (projectile.burning()) arrow.setSecondsOnFire(100);
                 content.afterCommit(level, () -> level.addFreshEntity(arrow));
+            }
+            @Override public boolean spawnLegacyEntity(Object entity) {
+                check();
+                try { var hosted = LegacyHostedEntity.host(content, level, entity); content.afterCommit(level, () -> level.addFreshEntity(hosted)); return true; }
+                catch (Exception failure) { throw new IllegalStateException("Cannot host original entity " + entity.getClass().getName(), failure); }
+            }
+            @Override public Object hostedLegacyEntity(java.util.UUID id) {
+                check(); return level.getEntity(id) instanceof LegacyHostedEntity hosted ? hosted.legacyOrNull() : null;
+            }
+            @Override public boolean damage(Damage damage) {
+                check(); var target = level.getEntity(damage.target());
+                if (target == null || !target.isAlive()) return false;
+                var attacker = damage.attacker() == null ? null : level.getEntity(damage.attacker());
+                var direct = damage.direct() == null ? attacker : level.getEntity(damage.direct());
+                var source = damageSource(level, damage, direct == null ? attacker : direct, attacker);
+                if (target.isInvulnerableTo(source)) return false;
+                content.afterCommit(level, () -> target.hurt(source, damage.amount()));
+                return true;
+            }
+            @Override public void ignite(java.util.UUID id, int seconds) {
+                check(); var target = level.getEntity(id); if (target != null) content.afterCommit(level, () -> target.setSecondsOnFire(seconds));
+            }
+            @Override public void addEffect(java.util.UUID id, int potion, int duration, int amplifier, boolean ambient) {
+                check();
+                if (!(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)) return;
+                // 1.7.10 potion ids 1-23 are the vanilla effects in the same order; mod potions have no host form.
+                var effect = potion >= 1 && potion <= 23 ? net.minecraft.world.effect.MobEffect.byId(potion) : null;
+                if (effect == null) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("potion " + potion, "original potion has no host effect"); return; }
+                content.afterCommit(level, () -> target.addEffect(new net.minecraft.world.effect.MobEffectInstance(effect, duration, amplifier, ambient, true)));
             }
             @Override public long dayTime() { check(); return level.getDayTime(); }
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }

@@ -34,6 +34,19 @@ public interface HostWorldAccess {
     default boolean loaded(int x, int y, int z) { return true; }
     default void playSound(Sound sound) { }
     default void spawnProjectile(Projectile projectile) { }
+    /** An old entity with no host translation; the host keeps it alive and runs its original onUpdate. */
+    default boolean spawnLegacyEntity(Object entity) { return false; }
+    /** The original object behind a host entity that hosts an old entity, so old queries see the real thing. */
+    default Object hostedLegacyEntity(java.util.UUID id) { return null; }
+    /**
+     * Old attackEntityFrom on a mirrored host entity. {@code type} is the old damageType; {@code direct} and
+     * {@code attacker} are host entity ids (old getSourceOfDamage / getEntity). Returns whether the hit is expected to land.
+     */
+    record Damage(java.util.UUID target,String type,float amount,boolean fire,boolean projectile,boolean magic,boolean explosion,boolean bypassArmor,java.util.UUID direct,java.util.UUID attacker) {}
+    default boolean damage(Damage damage) { return false; }
+    default void ignite(java.util.UUID target, int seconds) { }
+    /** Old addPotionEffect; {@code potion} is the 1.7.10 potion id. */
+    default void addEffect(java.util.UUID target, int potion, int duration, int amplifier, boolean ambient) { }
     default java.util.List<Entity> entities(double minX,double minY,double minZ,double maxX,double maxY,double maxZ) { return java.util.List.of(); }
     default Object existingEntity(java.util.UUID id) { return null; }
     /** Every player in this world (old World.playerEntities). */

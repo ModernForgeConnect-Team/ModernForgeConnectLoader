@@ -33,6 +33,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
             @Override public void synchronize(Object player) throws Exception { ThaumcraftScanner.synchronize(loader, player); }
         });
         services.scanners().register(new ThaumcraftScanner(loader));
+        ThaumcraftCrossbow.install(services);
         return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {

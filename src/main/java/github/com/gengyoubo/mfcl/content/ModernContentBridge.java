@@ -51,6 +51,8 @@ public final class ModernContentBridge {
     private Map<Item,LegacyClientData.Stack> vanillaStacks;
     private BlockEntityType<LegacyBlockEntity> tileType;
     private net.minecraft.world.inventory.MenuType<LegacyDeviceMenu> deviceMenuType;
+    private net.minecraft.world.entity.EntityType<LegacyHostedEntity> legacyEntityType;
+    public net.minecraft.world.entity.EntityType<LegacyHostedEntity> legacyEntityType(){return Objects.requireNonNull(legacyEntityType,"Legacy entity registry window");}
     public net.minecraft.world.inventory.MenuType<LegacyDeviceMenu> deviceMenuType(){return Objects.requireNonNull(deviceMenuType,"Legacy device menu registry window");}
 
     private ModernContentBridge(LegacyServices services) throws Exception {
@@ -72,6 +74,7 @@ public final class ModernContentBridge {
         LegacyDimensionPack.generate(pack,services.dimensions());
         for(var recipe:crafting.definitions())pack.craftingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
         for(var recipe:crafting.smelting())pack.smeltingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
+        for(var tag:services.hostItemTags().entrySet())pack.itemTag(tag.getKey(),tag.getValue().stream().filter(key->declarations.items().stream().anyMatch(item->item.key().equals(key))).map(key->id(key).toString()).toList());
         creative = new CreativeTabBridge(this);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
@@ -82,6 +85,8 @@ public final class ModernContentBridge {
             LegacySmeltingRecipes.install(bus);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::playerLoggedIn);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::missingMappings);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::arrowNock);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::arrowLoose);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
@@ -217,6 +222,44 @@ public final class ModernContentBridge {
             });
         } catch(Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("book packet "+message.channel()+"#"+message.discriminator(),failure); LogUtils.getLogger().error("MFCL original book packet failed for {}",player.getName().getString(),failure); }
     }
+    /** Original ArrowNockEvent: an old handler that cancels it (Thaumcraft primal arrows) draws the host bow without vanilla ammo. */
+    private void arrowNock(net.minecraftforge.event.entity.player.ArrowNockEvent event) {
+        var result=legacyBowEvent(event.getEntity(),event.getLevel(),event.getBow(),-1);
+        if(result==null||!result.canceled())return;
+        event.getEntity().startUsingItem(event.getHand());
+        event.setAction(net.minecraft.world.InteractionResultHolder.consume(event.getBow()));
+    }
+    /** Original ArrowLooseEvent: a canceled old event already fired its own projectile and used its own ammo, so the vanilla shot is skipped. */
+    private void arrowLoose(net.minecraftforge.event.entity.player.ArrowLooseEvent event) {
+        var player=event.getEntity();var hand=player.getUsedItemHand();
+        var result=legacyBowEvent(player,event.getLevel(),event.getBow(),event.getCharge());
+        if(result==null||!result.canceled())return;
+        event.setCanceled(true);
+        // The old handler wore its view of the bow; wear the host bow the same way (host Unbreaking applies, as the old one did).
+        if(result.bowDamaged()&&!event.getLevel().isClientSide)event.getBow().hurtAndBreak(1,player,user->user.broadcastBreakEvent(hand));
+    }
+    private LegacyItemUse.BowEvent legacyBowEvent(net.minecraft.world.entity.player.Player player, Level level, ItemStack stack, int charge) {
+        // Host enchantment NBT has no old mapping; the old handler sees a plain bow plus the four bow enchantments by old id.
+        var plain=new ItemStack(stack.getItem());if(stack.isDamageableItem())plain.setDamageValue(stack.getDamageValue());
+        var bow=toLegacy(plain);if(bow==null)return null;
+        var enchantments=new HashMap<Integer,Integer>();
+        Map.of(net.minecraft.world.item.enchantment.Enchantments.POWER_ARROWS,48,net.minecraft.world.item.enchantment.Enchantments.PUNCH_ARROWS,49,
+                net.minecraft.world.item.enchantment.Enchantments.FLAMING_ARROWS,50,net.minecraft.world.item.enchantment.Enchantments.INFINITY_ARROWS,51)
+                .forEach((enchantment,id)->{int value=net.minecraft.world.item.enchantment.EnchantmentHelper.getItemEnchantmentLevel(enchantment,stack);if(value>0)enchantments.put(id,value);});
+        try {
+            var world=services.worlds().bound(level);var source=placer(player);
+            var before=hostInventory(player);before.set(player.getInventory().selected,bow);
+            Object actor=exposeLegacyInventory(player,world,before,bow);
+            LegacyItemUse.BowEvent result;
+            try {
+                result=level.isClientSide?itemUse.bowEvent(world,source,bow,enchantments,charge)
+                        :logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(this,player,()->itemUse.bowEvent(world,source,bow,enchantments,charge)),true);
+            } catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
+            // The client only predicts; the server's consumed ammo reaches it through the normal inventory sync.
+            if(!level.isClientSide)collectLegacyInventory(player,actor,before);
+            return result;
+        } catch(Exception failure) { LogUtils.getLogger().error("MFCL original bow event failed for {}",player.getName().getString(),failure); return null; }
+    }
     private void prepareActorContainers(Object actor) throws Exception {
         var loader=services.loader();
         var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
@@ -265,6 +308,12 @@ public final class ModernContentBridge {
         event.register(Registries.MENU,registry->{
             deviceMenuType=net.minecraftforge.common.extensions.IForgeMenuType.create(LegacyDeviceMenu::fromNetwork);
             registry.register(ResourceLocation.fromNamespaceAndPath("mfcl","legacy_device"),deviceMenuType);
+        });
+        event.register(Registries.ENTITY_TYPE, registry -> {
+            // One envelope type for every original entity; its renderer and dimensions come from the hosted original.
+            legacyEntityType = net.minecraft.world.entity.EntityType.Builder.<LegacyHostedEntity>of(LegacyHostedEntity::new, net.minecraft.world.entity.MobCategory.MISC)
+                    .sized(0.25f, 0.25f).clientTrackingRange(8).updateInterval(1).setShouldReceiveVelocityUpdates(true).fireImmune().build("mfcl:legacy_entity");
+            registry.register(ResourceLocation.fromNamespaceAndPath("mfcl", "legacy_entity"), legacyEntityType);
         });
         event.register(Registries.BLOCK_ENTITY_TYPE, registry -> {
             var supported = declarations.blocks().stream().filter(LegacyContent.Block::tileEntity).map(entry -> blocks.get(entry.key())).toArray(Block[]::new);
@@ -916,6 +965,9 @@ public final class ModernContentBridge {
             }
             return result.used() ? InteractionResult.CONSUME : InteractionResult.PASS;
         } catch (Exception failure) {
+            // Old placement code (ItemArcaneDoor) writes blocks on the remote world too; the use-on packet still
+            // runs it on the server, whose block and inventory updates replace the client prediction.
+            if (level.isClientSide && github.com.gengyoubo.mfcl.bridge.LegacyClientMutationException.causes(failure)) return InteractionResult.SUCCESS;
             LogUtils.getLogger().error("MFCL original item placement failed for {} at {}", BuiltInRegistries.ITEM.getKey(stack.getItem()),pos,failure);
             player.displayClientMessage(Component.translatable("mfcl.content.placement_failed"),true);
             return InteractionResult.FAIL;

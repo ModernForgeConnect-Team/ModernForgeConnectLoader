@@ -11,8 +11,11 @@ public final class ClientContentBridge {
     public static void install(ModernContentBridge bridge, IEventBus bus) {
         LegacyScanNotifications.install(bridge);
         LegacyItemTooltips.install(bridge);
-        bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
-                event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge)));
+        LegacyEffects.install(bridge);
+        bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) -> {
+            event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge));
+            event.registerEntityRenderer(bridge.legacyEntityType(), context -> new LegacyHostedEntityRenderer(context, bridge));
+        });
         bus.addListener((net.minecraftforge.client.event.ModelEvent.ModifyBakingResult event) -> {
             for (var declaration : bridge.declarations().blocks()) for (var state : bridge.blocks().get(declaration.key()).getStateDefinition().getPossibleStates()) {
                 int metadata = state.getValue(ModernContentBridge.METADATA);
@@ -35,7 +38,8 @@ public final class ClientContentBridge {
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.items().get(entry.key()));
         });
-        if (Boolean.getBoolean("mfcl.test.wandAudit")) WandHostAuditProbe.install(bridge);
+        if (Boolean.getBoolean("mfcl.test.fireFocus")) FireFocusHostProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.wandAudit")) WandHostAuditProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.biomes")) BiomeHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.device")) DeviceHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.tooltip")) TooltipHostSmokeProbe.install(bridge);

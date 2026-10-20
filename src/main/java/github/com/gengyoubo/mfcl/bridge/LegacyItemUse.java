@@ -187,6 +187,34 @@ public final class LegacyItemUse {
             }
         });
     }
+    /** Outcome of an old ArrowNockEvent/ArrowLooseEvent: whether a mod took over the shot and whether it wore the bow. */
+    public record BowEvent(boolean canceled, boolean bowDamaged) {}
+    /**
+     * Posts the old Forge bow event (charge &lt; 0: ArrowNockEvent, otherwise ArrowLooseEvent) on the old EVENT_BUS.
+     * The bow sits in the held slot carrying the host's bow enchantments (old ids 48-51), and is restored afterwards so
+     * inventory collection never rewrites the host bow; only its wear is reported.
+     */
+    public BowEvent bowEvent(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack bow, Map<Integer,Integer> enchantments, int charge) throws Exception {
+        return services.items().inLegacy(() -> {
+            try(var state=services.playerState().enter(world)) {
+            var loader = services.loader();
+            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack"), playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+            Class<?> enchantment = loader.loadClass("net.minecraft.enchantment.Enchantment");
+            Object player = actor(world, placer, bow), stack = services.items().materialize(bow);
+            Object[] known = (Object[]) enchantment.getField("field_77331_b").get(null);
+            for (var entry : enchantments.entrySet()) if (entry.getKey() < known.length && known[entry.getKey()] != null) stackType.getMethod("func_77966_a", enchantment, int.class).invoke(stack, known[entry.getKey()], entry.getValue());
+            bindHeld(player, stack);
+            int damage = (int) stackType.getMethod("func_77960_j").invoke(stack);
+            Object event = charge < 0 ? loader.loadClass("net.minecraftforge.event.entity.player.ArrowNockEvent").getConstructor(playerType, stackType).newInstance(player, stack)
+                    : loader.loadClass("net.minecraftforge.event.entity.player.ArrowLooseEvent").getConstructor(playerType, stackType, int.class).newInstance(player, stack, charge);
+            Object bus = loader.loadClass("net.minecraftforge.common.MinecraftForge").getField("EVENT_BUS").get(null);
+            boolean canceled = (boolean) bus.getClass().getMethod("post", loader.loadClass("cpw.mods.fml.common.eventhandler.Event")).invoke(bus, event);
+            boolean worn = stackType.getField("field_77994_a").getInt(stack) <= 0 || (int) stackType.getMethod("func_77960_j").invoke(stack) != damage;
+            bindHeld(player, services.items().materialize(bow));
+            return new BowEvent(canceled, worn);
+            }
+        });
+    }
     public int useDuration(LegacyClientData.Stack snapshot) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader();

@@ -4,7 +4,10 @@ import org.objectweb.asm.*;
 import java.lang.reflect.Method;
 import java.util.*;
 
-/** Entity query snapshots; only motion/fall and breeding (inLove) changes are committed back to the owning host world. */
+/**
+ * Entity query snapshots. Motion/fall and breeding (inLove) changes are committed back to the owning host world;
+ * damage, burning and potion effects are forwarded immediately by LegacyEntityHooks.
+ */
 final class LegacyEntityAccess {
     private static final Map<ClassLoader,Map<String,Class<?>>> FACADES=Collections.synchronizedMap(new WeakHashMap<>());
     private LegacyEntityAccess() {}
@@ -33,6 +36,13 @@ final class LegacyEntityAccess {
             try { initializeDataWatcher(type,entity); } catch (Throwable ignored) { }
             Class<?> livingBase=loader.loadClass("net.minecraft.entity.EntityLivingBase");
             if(livingBase.isAssignableFrom(type)) {
+                // Constructor-made equipment arrays: hit callbacks (EnchantmentHelper thorns/arthropod checks) read them.
+                Class<?> stack=loader.loadClass("net.minecraft.item.ItemStack");
+                equipment(livingBase,"field_82180_bT",entity,java.lang.reflect.Array.newInstance(stack,5));
+                if(loader.loadClass("net.minecraft.entity.EntityLiving").isAssignableFrom(type)) {
+                    equipment(loader.loadClass("net.minecraft.entity.EntityLiving"),"field_82182_bS",entity,java.lang.reflect.Array.newInstance(stack,5));
+                    equipment(loader.loadClass("net.minecraft.entity.EntityLiving"),"field_82174_bp",entity,new float[5]);
+                }
                 watch(watcher,add,exists,6,1f);watch(watcher,add,exists,7,0);watch(watcher,add,exists,8,(byte)0);watch(watcher,add,exists,9,(byte)0);
                 if(loader.loadClass("net.minecraft.entity.EntityLiving").isAssignableFrom(type)) {watch(watcher,add,exists,10,"");watch(watcher,add,exists,11,(byte)0);}
                 if(loader.loadClass("net.minecraft.entity.EntityAgeable").isAssignableFrom(type)) watch(watcher,add,exists,12,0);
@@ -60,6 +70,7 @@ final class LegacyEntityAccess {
         Object box=loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a",double.class,double.class,double.class,double.class,double.class,double.class).invoke(null,snapshot.x()-half,snapshot.y(),snapshot.z()-half,snapshot.x()+half,snapshot.y()+snapshot.height(),snapshot.z()+half);
         var bounds=base.getField("field_70121_D");bounds.setAccessible(true);bounds.set(entity,box);
         if(generic&&existing==null)type.getField("mfclPushable").setBoolean(entity,snapshot.pushable());
+        LegacyEntityHooks.mirrored(entity);
         return entity;
     }
     private static void initializeDataWatcher(Class<?> type,Object entity) throws ReflectiveOperationException {
@@ -68,6 +79,9 @@ final class LegacyEntityAccess {
                 var method=current.getDeclaredMethod("func_70088_a");method.setAccessible(true);method.invoke(entity);return;
             } catch(NoSuchMethodException ignored) { }
         }
+    }
+    private static void equipment(Class<?> owner,String name,Object entity,Object value) throws Exception {
+        var field=owner.getDeclaredField(name);field.setAccessible(true);if(field.get(entity)==null)field.set(entity,value);
     }
     private static void watch(Object watcher,Method add,Method exists,int index,Object value) throws Exception {
         if(exists.invoke(watcher,index)==null) add.invoke(watcher,index,value);

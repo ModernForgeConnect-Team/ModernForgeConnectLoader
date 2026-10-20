@@ -43,6 +43,11 @@ public final class LegacyContent {
     private final Map<String, List<LegacyVertexStream.Primitive>> contextGeometry = new LinkedHashMap<>();
     private final Set<String> customItems = new LinkedHashSet<>();
     private final List<String> captureDiagnostics = new ArrayList<>();
+    /** Live captures for NBT no catalog variant had, most recently used last. */
+    private final Map<String, List<LegacyVertexStream.Primitive>> liveGeometry = new LinkedHashMap<>(64, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<String, List<LegacyVertexStream.Primitive>> eldest) { return size() > 256; }
+    };
+    private final Set<String> liveFailures = new HashSet<>();
 
     public LegacyContent(LegacyClientData data) throws Exception {
         this.data = data;
@@ -52,6 +57,34 @@ public final class LegacyContent {
         captureItemRenderers();
     }
 
+    /**
+     * The original IItemRenderer drawing for a stack whose NBT no catalog variant carried (a wand holding a focus, a
+     * crafted rod/cap combination...). Cached per NBT; empty when the stack has no renderer or its renderer failed.
+     */
+    public synchronized List<LegacyVertexStream.Primitive> captureLive(LegacyClientData.Stack snapshot, String typeName) {
+        String key = typeName + "|" + geometryKey(snapshot.key(), snapshot.metadata(), snapshot.tag());
+        var cached = liveGeometry.get(key);
+        if (cached != null) return cached;
+        List<LegacyVertexStream.Primitive> captured = List.of();
+        try {
+            captured = data.inLegacy(() -> {
+                ClassLoader loader = data.loader();
+                Class<?> renderType = loader.loadClass("net.minecraftforge.client.IItemRenderer$ItemRenderType");
+                Object type = renderType.getField(typeName).get(null), stack = data.materialize(snapshot);
+                Object renderer = loader.loadClass("net.minecraftforge.client.MinecraftForgeClient").getMethod("getItemRenderer", loader.loadClass("net.minecraft.item.ItemStack"), renderType).invoke(null, stack, type);
+                if (renderer == null) return List.<LegacyVertexStream.Primitive>of();
+                try (var frame = LegacyWorldGraphics.begin()) {
+                    new LegacyItemRendering(loader).render(type, renderer, stack);
+                    return resolveIcons(frame.primitives());
+                }
+            });
+        } catch (Exception | LinkageError failure) {
+            // A failed capture stays empty for this NBT instead of failing every frame.
+            if (liveFailures.add(snapshot.key() + "|" + typeName)) com.mojang.logging.LogUtils.getLogger().error("MFCL cannot capture original {} renderer of {}", typeName, snapshot, failure);
+        }
+        liveGeometry.put(key, captured);
+        return captured;
+    }
     /** Executes the real old Forge IItemRenderer (wands, banners, ...) and keeps its captured geometry. */
     private void captureItemRenderers() {
         try {

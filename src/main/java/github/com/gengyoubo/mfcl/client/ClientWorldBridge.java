@@ -71,7 +71,7 @@ public final class ClientWorldBridge {
                         if (key.equals("minecraft:grass_block")) key = "minecraft:grass";
                         return new Block(key, 0);
                     }
-                    @Override public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new UnsupportedOperationException("Client world cannot change authoritative blocks"); }
+                    @Override public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new LegacyClientMutationException("Client world cannot change authoritative blocks"); }
                     @Override public java.util.List<HostWorldAccess.Entity> players() {
                         return next.players().stream().map(player -> github.com.gengyoubo.mfcl.content.HostEntityQueries.snapshot(next, player)).filter(java.util.Objects::nonNull).toList();
                     }
@@ -113,6 +113,7 @@ public final class ClientWorldBridge {
             }
             var mc = services.loader().loadClass("net.minecraft.client.Minecraft");
             mc.getField("field_71441_e").set(mc.getMethod("func_71410_x").invoke(null), oldWorld);
+            LegacyEffects.bind(services, oldWorld);
         } catch (Exception failure) { throw new IllegalStateException("Cannot bind legacy client world", failure); }
     }
 }

@@ -26,6 +26,12 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
         String key = LegacyContent.geometryKey(itemKey,ModernContentBridge.metadata(stack),tag == null ? "" : tag.getString("snbt"));
         String type = contextType(context);
         var primitives = bridge.pack().contextGeometry().get(type + "|" + key);
+        if (primitives == null && tag != null && bridge.declarations().customItems().contains(itemKey)) {
+            // NBT no catalog variant had (a wand holding a focus...): the frozen no-NBT model may not exist or differ.
+            try { primitives = bridge.declarations().captureLive(bridge.renderSnapshot(stack), type); }
+            catch (Exception unmapped) { primitives = null; }
+            if (primitives != null && primitives.isEmpty()) primitives = null;
+        }
         if (primitives == null) primitives = bridge.pack().contextGeometry().get(type + "|" + base);
         boolean originalPipeline = primitives != null && !primitives.isEmpty();
         if (!originalPipeline) {
