@@ -433,7 +433,7 @@ public final class ModernContentBridge {
         for (int slot = 0; slot < 36; slot++) { var stack = inventory.getItem(slot); result.add(stack.isEmpty() ? null : toLegacy(stack)); }
         return result;
     }
-    private LegacyClientData.Stack toLegacy(ItemStack stack) {
+    LegacyClientData.Stack toLegacy(ItemStack stack) {
         try { return gameplayStack(stack); } catch (Exception unmapped) { return null; }
     }
     private Object exposeLegacyInventory(net.minecraft.world.entity.player.Player player, Object world, List<LegacyClientData.Stack> contents, LegacyClientData.Stack held) throws Exception {
@@ -457,7 +457,7 @@ public final class ModernContentBridge {
         }
         inventory.setChanged();
     }
-    private static boolean sameLegacy(LegacyClientData.Stack left, LegacyClientData.Stack right) {
+    static boolean sameLegacy(LegacyClientData.Stack left, LegacyClientData.Stack right) {
         if (left == null || right == null) return left == right;
         return left.key().equals(right.key()) && left.metadata() == right.metadata() && left.count() == right.count() && left.tag().equals(right.tag());
     }
@@ -542,20 +542,26 @@ public final class ModernContentBridge {
                 var pendingMenus = new ArrayList<LegacyDeviceContainers.Open>();
                 int selected = player.getInventory().selected;
                 var outcome = logicTransaction(level,pos,() -> {
-                    var inventory = new ArrayList<LegacyClientData.Stack>();
-                    for (int slot=0;slot<40;slot++) inventory.add(gameplayStack(player.getInventory().getItem(slot)));
-                    if (hand == net.minecraft.world.InteractionHand.OFF_HAND) inventory.set(selected,gameplayStack(player.getOffhandItem()));
+                    // Host items without an original counterpart become empty slots, and only slots the old logic changed
+                    // are written back, so an unmapped item elsewhere in the inventory neither blocks nor loses anything.
+                    var before = new ArrayList<LegacyClientData.Stack>();
+                    for (int slot=0;slot<40;slot++) before.add(toLegacy(player.getInventory().getItem(slot)));
+                    if (hand == net.minecraft.world.InteractionHand.OFF_HAND) before.set(selected,toLegacy(player.getOffhandItem()));
                     var point = hit.getLocation().subtract(pos.getX(),pos.getY(),pos.getZ());
                     var actor = new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
-                    var result = services.logic().activate(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),actor,inventory,selected,hit.getDirection().get3DDataValue(),(float)point.x,(float)point.y,(float)point.z);
-                    pendingInventory.addAll(result.inventory().stream().map(ModernContentBridge.this::gameplayStack).toList());
+                    var result = services.logic().activate(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),actor,new ArrayList<>(before),selected,hit.getDirection().get3DDataValue(),(float)point.x,(float)point.y,(float)point.z);
+                    for (int slot=0;slot<result.inventory().size();slot++) {
+                        var after = result.inventory().get(slot);
+                        pendingInventory.add(slot < before.size() && sameLegacy(before.get(slot),after) ? null : gameplayStack(after));
+                    }
                     pendingMessages.addAll(result.messages());
                     if(result.device()!=null)pendingMenus.add(result.device());
                     return result.handled() ? InteractionResult.CONSUME : InteractionResult.PASS;
                 },true);
                 if (!pendingInventory.isEmpty()) {
-                    for (int slot=0;slot<40;slot++) {
+                    for (int slot=0;slot<40&&slot<pendingInventory.size();slot++) {
                         var replacement = pendingInventory.get(slot);
+                        if (replacement == null) continue; // Unchanged by the original logic.
                         var current = slot == selected && hand == net.minecraft.world.InteractionHand.OFF_HAND ? player.getOffhandItem() : player.getInventory().getItem(slot);
                         if (ItemStack.isSameItemSameTags(current,replacement)) current.setCount(replacement.getCount());
                         else {

@@ -72,7 +72,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         entity.getField("field_70165_t").setDouble(original.player(),player.getX());entity.getField("field_70163_u").setDouble(original.player(),player.getY());entity.getField("field_70161_v").setDouble(original.player(),player.getZ());
     }
     private void importInventory() throws Exception {
-        var stacks=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<36;index++)stacks.add(content.gameplayStack(inventory.getItem(index)));
+        var stacks=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<36;index++)stacks.add(content.toLegacy(inventory.getItem(index)));
         content.services().playerInventory().write(original.player(),stacks);content.services().playerInventory().select(original.player(),inventory.selected);
     }
     private <T> T originalAction(java.util.concurrent.Callable<T> action) throws Exception {
@@ -98,16 +98,18 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         int mode=switch(type){case PICKUP->0;case QUICK_MOVE->1;case SWAP->2;case CLONE->3;case THROW->4;case QUICK_CRAFT->5;case PICKUP_ALL->6;};
         try {
             var services=content.services();var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
-            var before=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<40;index++)before.add(content.gameplayStack(inventory.getItem(index)));
+            // Unmapped host items are hidden from the old container and kept unless the original logic changed their slot.
+            var before=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<40;index++)before.add(content.toLegacy(inventory.getItem(index)));
             services.playerInventory().write(original.player(),before);services.playerInventory().select(original.player(),inventory.selected);
             oldInventory().getClass().getMethod("func_70437_b",stackType).invoke(oldInventory(),old(getCarried()));
             var result=content.logicTransaction(server.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
                 original.container().getClass().getMethod("func_75144_a",int.class,int.class,int.class,playerType).invoke(original.container(),slot,button,mode,original.player());
-                var next=services.playerInventory().read(original.player()).stream().map(content::gameplayStack).toList();
+                var read=services.playerInventory().read(original.player());var next=new ArrayList<ItemStack>();
+                for(int index=0;index<read.size();index++)next.add(index<before.size()&&ModernContentBridge.sameLegacy(before.get(index),read.get(index))?null:content.gameplayStack(read.get(index)));
                 ItemStack carried=modern(oldInventory().getClass().getMethod("func_70445_o").invoke(oldInventory()));
                 refresh();return new ClickResult(next,carried);
             }),true);
-            for(int index=0;index<result.inventory().size();index++)inventory.setItem(index,result.inventory().get(index));
+            for(int index=0;index<result.inventory().size();index++)if(result.inventory().get(index)!=null)inventory.setItem(index,result.inventory().get(index));
             inventory.setChanged();setCarried(result.carried());broadcastChanges();
         }catch(Exception failure){failed=true;com.mojang.logging.LogUtils.getLogger().error("MFCL original container click failed",failure);server.closeContainer();}
     }
@@ -117,6 +119,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         if(original==null||!(player instanceof ServerPlayer server)||!stillValid(player))return false;
         var services=content.services();
         try {
+            var before=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<36;index++)before.add(content.toLegacy(inventory.getItem(index)));
             var result=services.items().inLegacy(()->{
                 Object world=services.worlds().bound(server.serverLevel());
                 try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(server.getUUID())) {
@@ -134,7 +137,8 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             server.getPersistentData().putByteArray(ModernContentBridge.LEGACY_ENTITY_DATA,result.data());
             result.messages().forEach(message->ScanSyncChannel.sendToPlayer(server,message));
             var stacks=services.playerInventory().read(original.player());
-            for(int index=0;index<stacks.size()&&index<36;index++)inventory.setItem(index,stacks.get(index)==null?ItemStack.EMPTY:content.gameplayStack(stacks.get(index)));
+            for(int index=0;index<stacks.size()&&index<36;index++)if(!ModernContentBridge.sameLegacy(before.get(index),stacks.get(index)))
+                inventory.setItem(index,stacks.get(index)==null?ItemStack.EMPTY:content.gameplayStack(stacks.get(index)));
             inventory.setChanged();broadcastChanges();
             return result.handled();
         }catch(Exception failure){failed=true;com.mojang.logging.LogUtils.getLogger().error("MFCL original menu button failed",failure);server.closeContainer();return false;}

@@ -96,10 +96,6 @@ public final class LegacyItemUse {
             }
             if (remaining <= 6) LogUtils.getLogger().info("MFCL legacy use tick {}@{}: remaining={}, target={}",
                     snapshot.key(), snapshot.metadata(), remaining, prompt(snapshot.key(), item));
-            if (remaining <= 5) try { // TEMP-DIAG
-                LogUtils.getLogger().info("MFCL TEMP-DIAG request={} notices={}", request,
-                        loader.loadClass("thaumcraft.client.lib.PlayerNotifications").getField("notificationList").get(null));
-            } catch (Throwable ignored) { }
             // Only the original successful completion branch emits this packet; clearing startScan also happens on cancellation.
             return request==null?null:scanner.read(request);
         });
