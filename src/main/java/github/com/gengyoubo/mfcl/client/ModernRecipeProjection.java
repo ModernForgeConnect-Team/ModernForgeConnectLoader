@@ -49,7 +49,8 @@ public final class ModernRecipeProjection {
     public Result update(RecipeManager manager, RegistryAccess access) throws Exception {
         var recipes = new ArrayList<LegacyClientData.HostRecipe>(); int skipped = 0;
         for (Recipe<?> recipe : manager.getRecipes()) {
-            if(recipe.getId().getNamespace().equals("mfcl")&&(recipe.getId().getPath().startsWith("legacy_crafting/")||recipe.getId().getPath().startsWith("legacy_smelting/")))continue;
+            var serializer=net.minecraft.core.registries.BuiltInRegistries.RECIPE_SERIALIZER.getKey(recipe.getSerializer());
+            if(github.com.gengyoubo.mfcl.content.LegacyCraftingRecipes.TYPE.equals(serializer)||github.com.gengyoubo.mfcl.content.LegacySmeltingRecipes.TYPE.equals(serializer))continue;
             String kind;
             if (recipe instanceof ShapedRecipe) kind = "shaped";
             else if (recipe instanceof ShapelessRecipe) kind = "shapeless";

@@ -25,6 +25,10 @@ public final class LegacyRegistryIds {
         });
         return result.toString();
     }
+    /** Recipes live in their output's namespace so recipe viewers attribute them to the original mod, not MFCL. */
+    public static String recipeNamespace(github.com.gengyoubo.mfcl.bridge.LegacyClientData.Stack output) {
+        return output==null?"mfcl":id(output.key()).getNamespace();
+    }
     static ResourceLocation previousId(String key) {
         var parsed=ResourceLocation.tryParse(key);
         return parsed!=null?parsed:ResourceLocation.fromNamespaceAndPath("mfcl","legacy/"+HexFormat.of().formatHex(key.getBytes(StandardCharsets.UTF_8)));

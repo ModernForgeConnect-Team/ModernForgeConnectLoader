@@ -32,6 +32,7 @@ public final class LegacyDiagnostics {
     private LegacyDiagnostics() {}
 
     public static void attach(ClassLoader loader) { legacyLoader = loader; }
+    static ClassLoader legacyLoader() { return legacyLoader; }
 
     /** A host or legacy object that has no counterpart on the other side. The key should identify the object, not the call. */
     public static void missingMapping(String key, String detail) { record(Kind.MISSING_MAPPING, key, detail, null); }

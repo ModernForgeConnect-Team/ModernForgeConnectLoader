@@ -28,12 +28,13 @@ public final class LegacyWorldGraphics {
     /**
      * An original renderer that threw between startDrawing and draw leaves the shared old Tessellator "drawing", and
      * every later capture would fail with "Already tesselating!". No capture is open here, so its vertices are stale.
+     * GUI frames begin before the old context loader is installed, so the attached legacy loader is tried as well.
      */
     private static void idleTessellator() {
+        Class<?> type = oldTessellator(Thread.currentThread().getContextClassLoader());
+        if (type == null) type = oldTessellator(LegacyDiagnostics.legacyLoader());
+        if (type == null) return; // not inside the old client domain
         try {
-            var loader = Thread.currentThread().getContextClassLoader();
-            Class<?> type = Class.forName("net.minecraft.client.renderer.Tessellator", false, loader);
-            if (type.getClassLoader() == LegacyWorldGraphics.class.getClassLoader()) return; // not the old domain
             Object instance = type.getField("field_78398_a").get(null);
             var drawing = type.getDeclaredField("field_78415_z"); drawing.setAccessible(true);
             if (!drawing.getBoolean(instance)) return;
@@ -41,6 +42,13 @@ public final class LegacyWorldGraphics {
             drawing.setBoolean(instance, false);
             LegacyDiagnostics.legacyFailure("tessellator", new IllegalStateException("Recovered an old Tessellator left drawing by a failed renderer"));
         } catch (ReflectiveOperationException | LinkageError | RuntimeException unavailable) { /* not inside the old client domain */ }
+    }
+    private static Class<?> oldTessellator(ClassLoader loader) {
+        if (loader == null) return null;
+        try {
+            Class<?> type = Class.forName("net.minecraft.client.renderer.Tessellator", false, loader);
+            return type.getClassLoader() == LegacyWorldGraphics.class.getClassLoader() ? null : type;
+        } catch (ClassNotFoundException | LinkageError unavailable) { return null; }
     }
     public static boolean active() { return CURRENT.get() != null; }
     public static Frame current() { return CURRENT.get(); }

@@ -24,8 +24,8 @@ final class CraftingHostSmokeProbe {
     private final long deadline=System.nanoTime()+TimeUnit.MINUTES.toNanos(5);
     private CraftingHostSmokeProbe(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){MinecraftForge.EVENT_BUS.addListener(new CraftingHostSmokeProbe(content)::tick);}
-    private static boolean ours(Recipe<?> recipe){return recipe.getId().getNamespace().equals("mfcl")&&recipe.getId().getPath().startsWith("legacy_crafting/");}
-    private ResourceLocation id(LegacyCrafting.Definition recipe){return ResourceLocation.fromNamespaceAndPath("mfcl","legacy_crafting/"+recipe.hash());}
+    private static boolean ours(Recipe<?> recipe){return recipe.getId().getPath().startsWith("legacy_crafting/")&&net.minecraft.core.registries.BuiltInRegistries.RECIPE_SERIALIZER.getKey(recipe.getSerializer()).equals(github.com.gengyoubo.mfcl.content.LegacyCraftingRecipes.TYPE);}
+    private ResourceLocation id(LegacyCrafting.Definition recipe){return ResourceLocation.fromNamespaceAndPath(github.com.gengyoubo.mfcl.content.LegacyRegistryIds.recipeNamespace(recipe.output()),"legacy_crafting/"+recipe.hash());}
     private void tick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END||stage==99)return;var mc=Minecraft.getInstance();
         try {

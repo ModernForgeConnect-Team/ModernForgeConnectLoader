@@ -233,8 +233,8 @@ public final class LegacyContentPack {
         String value = textures.get("path:" + resource); return value == null || value.isEmpty() ? null : value;
     }
     public Path directory() { return directory; }
-    public void craftingRecipe(String hash) throws IOException {json("data/mfcl/recipes/legacy_crafting/"+hash+".json",Map.of("type","mfcl:legacy_crafting","original",hash));}
-    public void smeltingRecipe(String hash) throws IOException {json("data/mfcl/recipes/legacy_smelting/"+hash+".json",Map.of("type","mfcl:legacy_smelting","original",hash));}
+    public void craftingRecipe(String namespace,String hash) throws IOException {json("data/"+namespace+"/recipes/legacy_crafting/"+hash+".json",Map.of("type","mfcl:legacy_crafting","original",hash));}
+    public void smeltingRecipe(String namespace,String hash) throws IOException {json("data/"+namespace+"/recipes/legacy_smelting/"+hash+".json",Map.of("type","mfcl:legacy_smelting","original",hash));}
     public Set<String> missingIcons() { return Collections.unmodifiableSet(missingIcons); }
     public void findPacks(AddPackFindersEvent event) {
         event.addRepositorySource(consumer -> {

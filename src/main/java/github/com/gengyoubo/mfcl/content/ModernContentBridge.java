@@ -70,8 +70,8 @@ public final class ModernContentBridge {
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
         LegacyBiomePack.generate(pack,services.biomes());
         LegacyDimensionPack.generate(pack,services.dimensions());
-        for(var recipe:crafting.definitions())pack.craftingRecipe(recipe.hash());
-        for(var recipe:crafting.smelting())pack.smeltingRecipe(recipe.hash());
+        for(var recipe:crafting.definitions())pack.craftingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
+        for(var recipe:crafting.smelting())pack.smeltingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
         creative = new CreativeTabBridge(this);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
