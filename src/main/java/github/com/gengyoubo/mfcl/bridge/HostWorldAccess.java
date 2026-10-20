@@ -45,6 +45,8 @@ public interface HostWorldAccess {
     default void blockEvent(int x, int y, int z, String block, int event, int data) { throw new UnsupportedOperationException("Host block events are not available"); }
     default void schedule(int x, int y, int z, String block, int delay) { throw new UnsupportedOperationException("Host block scheduling is not available"); }
     default Hit rayTrace(double startX, double startY, double startZ, double endX, double endY, double endZ) { return null; }
+    /** Real world bindings can run the original per-block ray test against their mirrored blocks. */
+    default boolean originalBlockRayTrace() { return false; }
     default Object tileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity lookup is not available"); }
     default void setTileEntity(int x, int y, int z, Object tile) { throw new UnsupportedOperationException("Host TileEntity assignment is not available"); }
     default void removeTileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity removal is not available"); }

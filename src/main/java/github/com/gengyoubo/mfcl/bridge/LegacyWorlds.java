@@ -216,6 +216,8 @@ public final class LegacyWorlds implements AutoCloseable {
         var binding = binding(world);
         try {
             var vecType = binding.loader.loadClass("net.minecraft.util.Vec3");
+            if(binding.host.originalBlockRayTrace())return world.getClass().getMethod("mfcl$originalRayTrace",vecType,vecType,boolean.class,boolean.class,boolean.class)
+                    .invoke(world,start,end,stopOnLiquid,ignoreBlockWithoutBoundingBox,returnLastUncollidableBlock);
             double sx = vecType.getField("field_72450_a").getDouble(start), sy = vecType.getField("field_72448_b").getDouble(start), sz = vecType.getField("field_72449_c").getDouble(start);
             double ex = vecType.getField("field_72450_a").getDouble(end), ey = vecType.getField("field_72448_b").getDouble(end), ez = vecType.getField("field_72449_c").getDouble(end);
             var hit = binding.host.rayTrace(sx, sy, sz, ex, ey, ez);
@@ -419,6 +421,14 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_147468_f", "(III)Z", "removeBlock", "(Ljava/lang/Object;III)Z", null);
         forward(writer, bridge, "func_147472_a", "(Lnet/minecraft/block/Block;IIIZILnet/minecraft/entity/Entity;Lnet/minecraft/item/ItemStack;)Z", "canPlace", "(Ljava/lang/Object;Ljava/lang/Object;IIIZILjava/lang/Object;Ljava/lang/Object;)Z", null);
         forward(writer, bridge, "func_147447_a", "(Lnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;ZZZ)Lnet/minecraft/util/MovingObjectPosition;", "rayTrace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ZZZ)Ljava/lang/Object;", "net/minecraft/util/MovingObjectPosition");
+        // Selection boxes are not ray-test bounds: TC nodes deliberately expose an empty selection box.
+        // Let the old World traversal preserve canCollideCheck, collisionRayTrace and all three flags.
+        String rayDescriptor="(Lnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;ZZZ)Lnet/minecraft/util/MovingObjectPosition;";
+        var ray=writer.visitMethod(Opcodes.ACC_PUBLIC,"mfcl$originalRayTrace",rayDescriptor,null,null);ray.visitCode();
+        for(int slot=0;slot<3;slot++)ray.visitVarInsn(Opcodes.ALOAD,slot);
+        for(int slot=3;slot<6;slot++)ray.visitVarInsn(Opcodes.ILOAD,slot);
+        ray.visitMethodInsn(Opcodes.INVOKESPECIAL,client?"net/minecraft/client/multiplayer/WorldClient":"net/minecraft/world/WorldServer","func_147447_a",rayDescriptor,false);
+        ray.visitInsn(Opcodes.ARETURN);ray.visitMaxs(6,6);ray.visitEnd();
         forward(writer, bridge, "isSideSolid", "(IIILnet/minecraftforge/common/util/ForgeDirection;Z)Z", "solid", "(Ljava/lang/Object;IIILjava/lang/Object;Z)Z", null);
         forward(writer, bridge, "func_72807_a", "(II)Lnet/minecraft/world/biome/BiomeGenBase;", "biome", "(Ljava/lang/Object;II)Ljava/lang/Object;", "net/minecraft/world/biome/BiomeGenBase");
         constant(writer, "func_72802_i", "(IIII)I", 0x00F000F0);

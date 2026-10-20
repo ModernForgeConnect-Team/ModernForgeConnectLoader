@@ -1,0 +1,352 @@
+{
+  "date": "2026-10-20",
+  "host": "Minecraft 1.20.1 / Forge 47.4.28 / Java 17",
+  "legacy": "Thaumcraft 4.2.3.5 + Baubles 1.0.1.10",
+  "implementation": {
+    "runtimeAudit": {
+      "basicIronWoodWandAssembly": {
+        "status": "PASS",
+        "output": {
+          "key": "Thaumcraft:WandCasting",
+          "metadata": 0,
+          "count": 1,
+          "name": "item.Wand.name",
+          "tag": "{cap:\"iron\",rod:\"wood\",}"
+        }
+      },
+      "recipe": {
+        "research": "BANNERS",
+        "type": "thaumcraft.api.crafting.ShapedArcaneRecipe",
+        "output": "Thaumcraft:blockWoodenDevice"
+      },
+      "advancedGoldGreatwoodWandAssembly": {
+        "status": "PASS",
+        "beforeToolVis": {
+          "aer": 10000,
+          "ignis": 10000,
+          "aqua": 10000,
+          "terra": 10000,
+          "ordo": 10000,
+          "perditio": 10000
+        },
+        "afterToolVis": {
+          "aer": 9190,
+          "ignis": 9190,
+          "aqua": 9190,
+          "terra": 9190,
+          "ordo": 9190,
+          "perditio": 9190
+        },
+        "output": {
+          "key": "Thaumcraft:WandCasting",
+          "metadata": 9,
+          "count": 1,
+          "name": "item.Wand.name",
+          "tag": "{cap:\"gold\",rod:\"greatwood\",}"
+        }
+      },
+      "arcaneRejectsMissingWand": {
+        "status": "PASS",
+        "outputAbsent": true
+      },
+      "arcaneRejectsEmptyWand": {
+        "status": "PASS",
+        "outputAbsent": true
+      },
+      "arcaneResearchGate": {
+        "status": "PASS",
+        "outputAbsent": true
+      },
+      "arcaneCraftConsumesIngredientsAndVis": {
+        "status": "PASS",
+        "afterRawVis": {
+          "aer": 2500,
+          "ignis": 2500,
+          "aqua": 1950,
+          "terra": 1950,
+          "ordo": 2500,
+          "perditio": 2500
+        },
+        "beforeRawVis": {
+          "aer": 2500,
+          "ignis": 2500,
+          "aqua": 2500,
+          "terra": 2500,
+          "ordo": 2500,
+          "perditio": 2500
+        },
+        "savedVisPreserved": true,
+        "output": {
+          "key": "Thaumcraft:blockWoodenDevice",
+          "metadata": 8,
+          "count": 1,
+          "name": "tile.blockWoodenDevice.8.0.name",
+          "tag": "{color:0b,}"
+        }
+      },
+      "nodeChargingHeldUseBridge": {
+        "status": "PASS",
+        "nodeAirBefore": 20,
+        "nodeAirAfter": 0,
+        "heldWandRawVis": {
+          "aer": 2000,
+          "ignis": 0,
+          "aqua": 0,
+          "terra": 0,
+          "ordo": 0,
+          "perditio": 0
+        }
+      },
+      "focusChangePacketBridge": {
+        "status": "PASS",
+        "unknownFocusRejected": true,
+        "equippedAndReturnedExactlyOnce": true
+      },
+      "passiveRodInventoryTick": {
+        "status": "PASS",
+        "rod": "obsidian",
+        "vis": {
+          "aer": 0,
+          "ignis": 0,
+          "aqua": 0,
+          "terra": 100,
+          "ordo": 0,
+          "perditio": 0
+        }
+      }
+    },
+    "nativeHostAudit": {
+      "ordinaryWandPreview": "1 wand_casting",
+      "nativeBasicWandCraft": "PASS",
+      "ordinaryWandResult": {
+        "key": "Thaumcraft:WandCasting",
+        "metadata": 0,
+        "count": 1,
+        "name": "",
+        "tag": "{cap:\"iron\",rod:\"wood\",}"
+      },
+      "recipeOutput": "Thaumcraft:blockWoodenDevice",
+      "recipeResearch": "BANNERS",
+      "withoutWandOutputEmpty": true,
+      "emptyWandOutputEmpty": true,
+      "chargedWandOutput": "1 block_wooden_device",
+      "takenOutput": "1 block_wooden_device",
+      "beforeWand": {
+        "key": "Thaumcraft:WandCasting",
+        "metadata": 0,
+        "count": 1,
+        "name": "Iron Capped Wooden Wand",
+        "tag": "{aqua:2500,ignis:2500,terra:2500,cap:\"iron\",rod:\"wood\",ordo:2500,perditio:2500,aer:2500,}"
+      },
+      "afterWand": {
+        "key": "Thaumcraft:WandCasting",
+        "metadata": 0,
+        "count": 1,
+        "name": "Iron Capped Wooden Wand",
+        "tag": "{aqua:1950,ignis:2500,terra:1950,cap:\"iron\",rod:\"wood\",ordo:2500,perditio:2500,aer:2500,}"
+      },
+      "remainingIngredients": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "nativeArcaneCraft": "PASS",
+      "nativeArcaneVisChargedExactlyOnce": true,
+      "savedWandNbtPreserved": true,
+      "nativeAdvancedWandCraft": "PASS",
+      "nativeAdvancedWandResult": {
+        "key": "Thaumcraft:WandCasting",
+        "metadata": 9,
+        "count": 1,
+        "name": "",
+        "tag": "{cap:\"gold\",rod:\"greatwood\",}"
+      },
+      "nativeAdvancedToolVis": {
+        "aer": 9190,
+        "ignis": 9190,
+        "aqua": 9190,
+        "terra": 9190,
+        "ordo": 9190,
+        "perditio": 9190
+      },
+      "nativeNodeChargeConserved": {
+        "nodeAirRemaining": 10,
+        "heldRawAirVis": 1000
+      },
+      "nativeWandReleaseAndStackIdentity": true,
+      "nativeFocusSelectorAndOffhandConflict": true,
+      "nativeFocusEquippedViaPacket": true,
+      "nativeFocusReturnedExactlyOnce": true,
+      "status": "PASS"
+    },
+    "focusedJUnit": {
+      "tests": 1,
+      "passed": 1,
+      "cases": 9
+    },
+    "limits": [
+      "G mode effects not individually verified",
+      "Worn Baubles focus pouch not verified",
+      "All focus spells, infusion, pedestal charging and node jarring not individually verified"
+    ],
+    "regression": {
+      "tests": 96,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7,
+      "passed": 89
+    },
+    "artifactSha256": "6666BE3F79A22C522D66D8AADB20B4AA409A5D99200DDC7906218001637FF482"
+  },
+  "beforeImplementation": {
+    "date": "2026-10-20",
+    "host": "Minecraft 1.20.1 / Forge 47.4.28 / Java 17",
+    "legacy": "Thaumcraft 4.2.3.5 + Baubles 1.0.1.10",
+    "runtimeAudit": {
+      "basicIronWoodWandAssembly": {
+        "status": "PASS",
+        "output": {
+          "key": "Thaumcraft:WandCasting",
+          "metadata": 0,
+          "count": 1,
+          "name": "item.Wand.name",
+          "tag": "{cap:\"iron\",rod:\"wood\",}"
+        }
+      },
+      "recipe": {
+        "type": "thaumcraft.api.crafting.ShapedArcaneRecipe",
+        "output": "Thaumcraft:blockWoodenDevice",
+        "research": "BANNERS"
+      },
+      "advancedGoldGreatwoodWandAssembly": {
+        "status": "PASS",
+        "output": {
+          "key": "Thaumcraft:WandCasting",
+          "metadata": 9,
+          "count": 1,
+          "name": "item.Wand.name",
+          "tag": "{cap:\"gold\",rod:\"greatwood\",}"
+        },
+        "beforeToolVis": {
+          "aer": 10000,
+          "ignis": 10000,
+          "aqua": 10000,
+          "terra": 10000,
+          "ordo": 10000,
+          "perditio": 10000
+        },
+        "afterToolVis": {
+          "aer": 9190,
+          "ignis": 9190,
+          "aqua": 9190,
+          "terra": 9190,
+          "ordo": 9190,
+          "perditio": 9190
+        }
+      },
+      "arcaneRejectsMissingWand": {
+        "status": "PASS",
+        "outputAbsent": true
+      },
+      "arcaneRejectsEmptyWand": {
+        "status": "PASS",
+        "outputAbsent": true
+      },
+      "arcaneResearchGate": {
+        "status": "PASS",
+        "outputAbsent": true
+      },
+      "arcaneCraftConsumesIngredientsAndVis": {
+        "status": "PASS",
+        "savedVisPreserved": true,
+        "output": {
+          "key": "Thaumcraft:blockWoodenDevice",
+          "metadata": 8,
+          "count": 1,
+          "name": "tile.blockWoodenDevice.8.0.name",
+          "tag": "{color:0b,}"
+        },
+        "afterRawVis": {
+          "aer": 2500,
+          "ignis": 2500,
+          "aqua": 1950,
+          "terra": 1950,
+          "ordo": 2500,
+          "perditio": 2500
+        },
+        "beforeRawVis": {
+          "aer": 2500,
+          "ignis": 2500,
+          "aqua": 2500,
+          "terra": 2500,
+          "ordo": 2500,
+          "perditio": 2500
+        }
+      },
+      "nodeChargingHeldUseBridge": {
+        "status": "FAIL",
+        "nodeAirBefore": 20,
+        "nodeAirAfter": 0,
+        "heldWandRawVis": {
+          "aer": 0,
+          "ignis": 0,
+          "aqua": 0,
+          "terra": 0,
+          "ordo": 0,
+          "perditio": 0
+        },
+        "failure": "Held-use bridge does not return changed wand NBT to the held inventory stack"
+      },
+      "focusChangePacketBridge": {
+        "status": "UNSUPPORTED",
+        "failure": "java.lang.IllegalArgumentException: Unsupported original device packet: thaumcraft.common.lib.network.misc.PacketFocusChangeToServer"
+      }
+    },
+    "nativeMenuAudit": {
+      "ordinaryWandPreview": "1 wand_casting",
+      "nativeBasicWandCraft": "PASS",
+      "ordinaryWandResult": {
+        "key": "Thaumcraft:WandCasting",
+        "metadata": 0,
+        "count": 1,
+        "name": "",
+        "tag": "{cap:\"iron\",rod:\"wood\",}"
+      },
+      "recipeOutput": "Thaumcraft:blockWoodenDevice",
+      "recipeResearch": "BANNERS",
+      "withoutWandOutputEmpty": true,
+      "emptyWandOutputEmpty": true,
+      "chargedWandOutput": "0 air",
+      "nativeArcaneCraft": "FAIL: charged wand produced no output",
+      "outputWithExplicitServerKnowledge": "1 block_wooden_device",
+      "controlledOutputPickup": "1 block_wooden_device",
+      "controlledPickupVisChanged": false
+    },
+    "nativeInteractionAudit": {
+      "originalComparatorOutput": true,
+      "nativeWandCauldronAndCraftingTableTriggers": true,
+      "wandSneakStateRefreshAndCrucibleEmptying": true,
+      "simulatedInventoryInsert": true,
+      "originalInventorySideRules": true,
+      "originalValveActivation": true,
+      "crucibleBucketExchange": true,
+      "failedCallbackInventoryAndWorldRollback": true,
+      "clientSneakingWandItemFallthrough": true,
+      "clientWandClickReachedServerCrucible": true,
+      "nativeHopperToOriginalFurnace": true,
+      "originalSmeltingAndEssentiaTransfer": true,
+      "essentiaConserved": 3,
+      "nativeRedstoneToOriginalValve": true,
+      "originalCrucibleHeating": true,
+      "minimumSuccessfulTicks": 200,
+      "clientEssentiaAmount": 3,
+      "status": "WORLD_CHECKS_PASS_RELOAD_PENDING"
+    }
+  }
+}

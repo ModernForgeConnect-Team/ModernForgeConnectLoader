@@ -54,8 +54,8 @@ final class OuterLandsSmokeProbe {
                 }
                 portalCell = portalCell();
                 proof.put("portalCell", portalCell);
-                // Loading the chunks is all a player arriving would do; population follows on later ticks.
-                for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) outer.getChunk(portalCell[0] + dx, portalCell[1] + dz);
+                // Keep the chunks loaded as a nearby player would (a bare getChunk ticket expires next tick); population follows on later ticks.
+                for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) outer.setChunkForced(portalCell[0] + dx, portalCell[1] + dz, true);
                 started = outer.getGameTime();
                 return;
             }

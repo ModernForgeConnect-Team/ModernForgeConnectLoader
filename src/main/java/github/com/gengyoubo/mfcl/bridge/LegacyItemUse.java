@@ -16,9 +16,11 @@ public final class LegacyItemUse {
     /** A finished legacy scan, ready to be replayed against the authoritative player. */
     public record Scan(byte type, int id, int meta, int entityId, String phenomena) {}
     public record AppliedScan(boolean accepted,byte[] data,List<LegacyPackets.Message> messages) {}
+    public record UseTick(Scan scan,boolean using,List<LegacyPackets.Message> messages) {}
     private final LegacyServices services;
     // The same UUID exists on both the integrated server and the client; keep their actors apart.
     private final Map<String, Object> actors = new HashMap<>();
+    private final Map<String,Boolean> inventoryUpdates = new HashMap<>();
     public LegacyItemUse(LegacyServices services) { this.services = services; }
     public Result rightClick(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot) throws Exception {
         return services.items().inLegacy(() -> {
@@ -80,7 +82,11 @@ public final class LegacyItemUse {
         }
     }
     public Scan usingTick(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
+        return usingTickResult(world,placer,snapshot,remaining).scan();
+    }
+    public UseTick usingTickResult(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
         return services.items().inLegacy(() -> {
+            try(var state=services.playerState().enter(world)) {
             var loader = services.loader();
             Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
@@ -88,17 +94,49 @@ public final class LegacyItemUse {
             Object stack = services.items().materialize(snapshot);
             Object item = stackType.getMethod("func_77973_b").invoke(stack);
             Object player = actor(world, placer, snapshot);
+            bindHeld(player,stack);
+            playerType.getMethod("func_71008_a",stackType,int.class).invoke(player,stack,remaining);
             var scanner = services.scanners().forItem(snapshot.key()).orElse(null);
-            Object request;
+            Object request;List<LegacyPackets.Message> outgoing;
             try(var packets=LegacyPackets.captureScan(placer.id(),scanner==null?packet->false:scanner::completion)) {
                 itemType.getMethod("onUsingTick", stackType, playerType, int.class).invoke(item, stack, player, remaining);
                 request=packets.scanRequest();
+                outgoing=packets.messages();
             }
             if (remaining <= 6) LogUtils.getLogger().info("MFCL legacy use tick {}@{}: remaining={}, target={}",
                     snapshot.key(), snapshot.metadata(), remaining, prompt(snapshot.key(), item));
             // Only the original successful completion branch emits this packet; clearing startScan also happens on cancellation.
-            return request==null?null:scanner.read(request);
+            return new UseTick(request==null?null:scanner.read(request),(boolean)playerType.getMethod("func_71039_bw").invoke(player),outgoing);
+            }
         });
+    }
+    private void bindHeld(Object player,Object stack) throws Exception {
+        Object inventory=services.loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
+        int selected=inventory.getClass().getField("field_70461_c").getInt(inventory);
+        inventory.getClass().getMethod("func_70299_a",int.class,services.loader().loadClass("net.minecraft.item.ItemStack")).invoke(inventory,selected,stack);
+    }
+    public boolean inventoryUpdates(LegacyClientData.Stack snapshot) throws Exception {
+        return services.items().inLegacy(()->{
+            Boolean known=inventoryUpdates.get(snapshot.key());if(known!=null)return known;
+            var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var itemType=loader.loadClass("net.minecraft.item.Item");
+            Object item=stackType.getMethod("func_77973_b").invoke(services.items().materialize(snapshot));
+            boolean updates=item.getClass().getMethod("func_77663_a",stackType,loader.loadClass("net.minecraft.world.World"),loader.loadClass("net.minecraft.entity.Entity"),int.class,boolean.class).getDeclaringClass()!=itemType;
+            inventoryUpdates.put(snapshot.key(),updates);return updates;
+        });
+    }
+    /** Executes onUpdate on the actual inventory stack, including passive wand-rod charging. */
+    public List<LegacyPackets.Message> inventoryTick(Object world,LegacyTiles.Placer placer,int slot,int ticks,boolean selected) throws Exception {
+        return services.items().inLegacy(()->{try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(placer.id())) {
+            var loader=services.loader();Object player=actor(world,placer,null);var stackType=loader.loadClass("net.minecraft.item.ItemStack");
+            Object inventory=loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
+            Object stack=inventory.getClass().getMethod("func_70301_a",int.class).invoke(inventory,slot);
+            if(stack!=null){
+                var entity=loader.loadClass("net.minecraft.entity.Entity");entity.getField("field_70173_aa").setInt(player,ticks);
+                Object item=stackType.getMethod("func_77973_b").invoke(stack);
+                loader.loadClass("net.minecraft.item.Item").getMethod("func_77663_a",stackType,loader.loadClass("net.minecraft.world.World"),entity,int.class,boolean.class).invoke(item,stack,world,player,slot,selected);
+            }
+            return outgoing.messages();
+        }});
     }
     public Object clientActor(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack snapshot) throws Exception {return actor(world,placer,snapshot);}
     /** Restores previously persisted old player data into the cached actor before any legacy logic reads it. */
@@ -134,6 +172,7 @@ public final class LegacyItemUse {
     }
     public void release(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
         services.items().inLegacy(() -> {
+            try(var state=services.playerState().enter(world)) {
             var loader = services.loader();
             Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
@@ -142,8 +181,10 @@ public final class LegacyItemUse {
             Object stack = services.items().materialize(snapshot);
             Object item = stackType.getMethod("func_77973_b").invoke(stack);
             Object player = actor(world, placer, snapshot);
+            bindHeld(player,stack);
             itemType.getMethod("func_77615_a", stackType, worldType, playerType, int.class).invoke(item, stack, world, player, remaining);
             return null;
+            }
         });
     }
     public int useDuration(LegacyClientData.Stack snapshot) throws Exception {

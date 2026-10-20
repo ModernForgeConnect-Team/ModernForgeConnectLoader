@@ -31,6 +31,7 @@ minecraft {
             if (project.hasProperty('mfclOpenGlSmokeTest')) property 'mfcl.test.openGl', 'true'
             if (project.hasProperty('mfclContentSmokeTest')) property 'mfcl.test.content', 'true'
             if (project.hasProperty('mfclLogicSmokeTest')) property 'mfcl.test.logic', 'true'
+            if (project.hasProperty('mfclWandAudit')) property 'mfcl.test.wandAudit', 'true'
             if (project.hasProperty('mfclBookSmokeTest')) property 'mfcl.test.book', 'true'
             if (project.hasProperty('mfclScannerSmokeTest')) property 'mfcl.test.scanner', 'true'
             if (project.hasProperty('mfclBiomeSmokeTest')) property 'mfcl.test.biomes', 'true'
@@ -220,6 +221,17 @@ tasks.register('inspectLegacyMods', JavaExec) {
     mainClass = 'github.com.gengyoubo.mfcl.legacy.LegacyInspector'
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
     args file(providers.gradleProperty('legacyGameDir').getOrElse('run')).absolutePath
+}
+
+tasks.register('auditThaumcraftWand', JavaExec) {
+    group = 'verification'
+    description = 'Execute original TC4 wand recipes and held-use diagnostics against a prepared private fixture.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.legacy.ThaumcraftWandAuditProbe'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    args file(providers.gradleProperty('legacyGameDir').getOrElse('build/wand-audit-game')).absolutePath,
+            file(providers.gradleProperty('legacyRuntimeDir').getOrElse('build/nei-investigation/runtime')).absolutePath
 }
 
 tasks.register('probeLegacyCoremod', JavaExec) {

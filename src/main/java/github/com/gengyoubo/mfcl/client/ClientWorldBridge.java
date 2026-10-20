@@ -85,6 +85,7 @@ public final class ClientWorldBridge {
                         var pos = result.getBlockPos();
                         return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
                     }
+                    @Override public boolean originalBlockRayTrace() { return true; }
                     @Override public Object tileEntity(int x, int y, int z) {
                         var tile = next.getBlockEntity(new BlockPos(x, y, z));
                         // A host block entity without an old counterpart is simply invisible to legacy code.

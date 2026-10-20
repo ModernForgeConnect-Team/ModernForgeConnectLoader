@@ -25,7 +25,7 @@ final class LogicHostSmokeProbe {
     private int stage;
     private String worldName;
     private CompletableFuture<?> pending;
-    private BlockPos furnace, alembic, tube, jar, valve, crucible;
+    private BlockPos furnace, alembic, tube, jar, valve, crucible, wandCrucible;
     private long started;
     private boolean wandClientChecked;
     private final long deadline = System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
@@ -37,6 +37,7 @@ final class LogicHostSmokeProbe {
         try {
             if (System.nanoTime() > deadline) throw new IllegalStateException("Logic acceptance timed out at stage " + stage);
             if (stage == 0 && mc.screen instanceof TitleScreen && mc.getOverlay() == null) {
+                org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());
                 worldName = "mfcl-logic-smoke-"+System.currentTimeMillis(); mc.options.renderDistance().set(2); mc.options.pauseOnLostFocus = false;
                 stage = 1;
                 mc.createWorldOpenFlows().createFreshLevel(worldName,new LevelSettings("MFCL original logic",GameType.CREATIVE,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),
@@ -51,7 +52,7 @@ final class LogicHostSmokeProbe {
                 if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) mc.setScreen(null);
                 pending.join();
                 if (!wandClientChecked) {
-                    if (!(mc.level.getBlockEntity(crucible) instanceof LegacyBlockEntity)) return;
+                    if (!(mc.level.getBlockEntity(wandCrucible) instanceof LegacyBlockEntity)) return;
                     verifyClientWand(mc);
                     wandClientChecked = true;
                 }
@@ -67,6 +68,7 @@ final class LogicHostSmokeProbe {
                 if (!(mc.level.getBlockEntity(jar) instanceof LegacyBlockEntity client)) return;
                 if (client.legacy().getClass().getField("amount").getInt(client.legacy()) != 3) return;
                 proof.put("clientEssentiaAmount",3);
+                proof.put("status","WORLD_CHECKS_PASS_RELOAD_PENDING");write(mc);
                 mc.level.disconnect(); mc.clearLevel(); mc.setScreen(new TitleScreen()); stage = 5;
             } else if (stage == 5 && mc.getSingleplayerServer() == null && mc.screen instanceof TitleScreen) {
                 mc.createWorldOpenFlows().loadLevel(mc.screen,worldName); stage = 6;
@@ -124,7 +126,11 @@ final class LogicHostSmokeProbe {
         player.setItemInHand(InteractionHand.MAIN_HAND,new ItemStack(Items.WATER_BUCKET));
         level.getBlockState(crucible).use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(crucible),Direction.UP,crucible,false));
         if (!player.getMainHandItem().is(Items.BUCKET) || player.getMainHandItem().getCount() != 1) throw new IllegalStateException("Crucible bucket exchange failed: "+player.getMainHandItem());
-        verifyServerWand(level,player);
+        wandCrucible=crucible.east(4);
+        place(level,wandCrucible,"Thaumcraft:blockMetalDevice",0);
+        player.setItemInHand(InteractionHand.MAIN_HAND,new ItemStack(Items.WATER_BUCKET));
+        level.getBlockState(wandCrucible).use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(wandCrucible),Direction.UP,wandCrucible,false));
+        verifyServerWand(level,player,wandCrucible);
         var before = bridge.services().tiles().save(furnaceTile.legacy()); var rollbackPos = furnace.north(2); var beforeState = level.getBlockState(rollbackPos);
         var oldWorld = bridge.services().worlds().bound(level);
         var blockRegistry = bridge.services().loader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
@@ -147,11 +153,11 @@ final class LogicHostSmokeProbe {
         return bridge.stack(stack.key(),stack.metadata(),1,stack.tag());
     }
     private int water(Level level) throws Exception {
-        Object tile = ((LegacyBlockEntity)level.getBlockEntity(crucible)).legacy();
+        Object tile = ((LegacyBlockEntity)level.getBlockEntity(wandCrucible)).legacy();
         Object tank = tile.getClass().getField("tank").get(tile);
         return (int)tank.getClass().getMethod("getFluidAmount").invoke(tank);
     }
-    private void verifyServerWand(net.minecraft.server.level.ServerLevel level, net.minecraft.server.level.ServerPlayer player) throws Exception {
+    private void verifyServerWand(net.minecraft.server.level.ServerLevel level, net.minecraft.server.level.ServerPlayer player, BlockPos crucible) throws Exception {
         var target = crucible.east(2);
         player.setItemInHand(InteractionHand.MAIN_HAND,wand());
         level.setBlockAndUpdate(target,Blocks.CAULDRON.defaultBlockState());
@@ -184,6 +190,7 @@ final class LogicHostSmokeProbe {
         proof.put("wandSneakStateRefreshAndCrucibleEmptying",true);
     }
     private void verifyClientWand(Minecraft mc) throws Exception {
+        var crucible=wandCrucible;
         mc.player.setItemInHand(InteractionHand.MAIN_HAND,wand());
         mc.player.setPos(crucible.getX()+.5,crucible.getY(),crucible.getZ()-2);
         mc.player.setYRot(0);mc.player.setXRot(30);
@@ -199,7 +206,7 @@ final class LogicHostSmokeProbe {
         proof.put("clientSneakingWandItemFallthrough",true);
     }
     private void verify(net.minecraft.server.level.ServerLevel level, boolean reloaded) throws Exception {
-        var positions = List.of(furnace,alembic,tube,jar,valve,crucible);
+        var positions = List.of(furnace,alembic,tube,jar,valve,crucible,wandCrucible);
         for (var pos : positions) {
             var tile = (LegacyBlockEntity)level.getBlockEntity(pos);
             if (tile == null || tile.logicSuspended()) throw new IllegalStateException("Original tile logic is missing or suspended: "+pos);

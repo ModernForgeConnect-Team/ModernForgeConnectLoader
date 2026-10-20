@@ -146,6 +146,7 @@ public final class LevelWorldBridge {
                 var pos = result.getBlockPos();
                 return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
             }
+            @Override public boolean originalBlockRayTrace() { check(); return true; }
             @Override public Object tileEntity(int x, int y, int z) {
                 check(); content.beforeMutation(level,new BlockPos(x,y,z)); var tile = level.getBlockEntity(new BlockPos(x, y, z));
                 if (tile == null) return null;

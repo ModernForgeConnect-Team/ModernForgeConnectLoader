@@ -25,6 +25,7 @@ Read each record's date, tested versions and stated limits. A historical experim
 | Thaumcraft 4 / Baubles | [Initial acceptance](thaumcraft-progress.json), [pinned inputs](thaumcraft-reference-inputs.json), [runtime logic](runtime-logic.md), [logic acceptance](runtime-logic-progress.json) |
 | Thaumonomicon | [GUI implementation](thaumonomicon-bridge.md), [acceptance record](thaumonomicon-progress.json) |
 | Thaumometer | [Scanning, authority and persistence](thaumometer-bridge.md), [acceptance record](thaumometer-progress.json) |
+| TC4 wand crafting, charging and focus support | [Function audit](wand-functions-audit.md), [runtime and native-menu evidence](wand-functions-audit.json) |
 
 ## Rendering, placement, sound and networking
 

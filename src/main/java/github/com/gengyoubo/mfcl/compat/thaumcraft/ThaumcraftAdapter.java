@@ -37,6 +37,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {
+        ThaumcraftWandControls.install(services);
         ThaumcraftDynamicItems.install(services);
         ThaumcraftGoggles.install(services);
         ThaumcraftParticles.install(services);

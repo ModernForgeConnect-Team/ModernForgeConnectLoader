@@ -12,5 +12,10 @@
   "mfcl.mods.failure": "Failure: %s",
   "mfcl.mods.loader": "Loader: Forge 1.7.10 (via MFCL)",
   "mfcl.mods.file": "File: %s",
-  "mfcl.mods.total_loaded": "%s mods loaded (%s: %s, %s: %s)"
+  "mfcl.mods.total_loaded": "%s mods loaded (%s: %s, %s: %s)",
+  "mfcl.key.category": "MFCL",
+  "mfcl.key.wand_focus": "Select wand focus",
+  "mfcl.key.wand_mode": "Change wand mode",
+  "mfcl.wand.focus.title": "Select wand focus",
+  "mfcl.wand.focus.remove": "Remove focus"
 }

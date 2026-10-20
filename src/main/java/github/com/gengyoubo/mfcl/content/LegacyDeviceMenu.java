@@ -78,18 +78,36 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private <T> T originalAction(java.util.concurrent.Callable<T> action) throws Exception {
         return LegacyItemDrops.capture(content,inventory.player,action);
     }
+    /** Ordinary slot callbacks consult the same authoritative knowledge as device packets and buttons. */
+    private <T> T playerContext(java.util.concurrent.Callable<T> action) throws Exception {
+        var services=content.services();var server=(ServerPlayer)inventory.player;
+        return services.items().inLegacy(()->{
+            Object world=services.worlds().bound(server.serverLevel());
+            try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(server.getUUID())) {
+                byte[] saved=server.getPersistentData().getByteArray(ModernContentBridge.LEGACY_ENTITY_DATA);
+                if(saved.length!=0)services.playerData().write(original.player(),saved);
+                services.playerState().initialize(original.player());
+                byte[] prior=services.playerData().read(original.player());
+                try {
+                    T result=action.call();
+                    server.getPersistentData().putByteArray(ModernContentBridge.LEGACY_ENTITY_DATA,services.playerData().read(original.player()));
+                    outgoing.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));return result;
+                } catch(Exception | Error failure){services.playerData().write(original.player(),prior);throw failure;}
+            }
+        });
+    }
     @Override public void broadcastChanges() {
         if(original!=null)try {
             positionActor(inventory.player);
             importInventory();
-            content.services().items().inLegacy(()->{original.container().getClass().getMethod("func_75142_b").invoke(original.container());refresh();return null;});
+            playerContext(()->{original.container().getClass().getMethod("func_75142_b").invoke(original.container());refresh();return null;});
         }catch(Exception failure){throw new IllegalStateException("Cannot synchronize original container",failure);}
         super.broadcastChanges();
     }
     @Override public boolean stillValid(Player player) {
         if(original==null)return true;
         if(player.level()!=inventory.player.level()||player.distanceToSqr(descriptor.x()+.5,descriptor.y()+.5,descriptor.z()+.5)>64)return false;
-        try {positionActor(player);return content.services().items().inLegacy(()->(boolean)original.container().getClass().getMethod("func_75145_c",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player()));}
+        try {positionActor(player);return playerContext(()->(boolean)original.container().getClass().getMethod("func_75145_c",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player()));}
         catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL original container validity check failed",failure);return false;}
     }
     @Override public ItemStack quickMoveStack(Player player,int index){return ItemStack.EMPTY;}
@@ -102,13 +120,13 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             var before=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<40;index++)before.add(content.toLegacy(inventory.getItem(index)));
             services.playerInventory().write(original.player(),before);services.playerInventory().select(original.player(),inventory.selected);
             oldInventory().getClass().getMethod("func_70437_b",stackType).invoke(oldInventory(),old(getCarried()));
-            var result=content.logicTransaction(server.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
+            var result=playerContext(()->content.logicTransaction(server.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
                 original.container().getClass().getMethod("func_75144_a",int.class,int.class,int.class,playerType).invoke(original.container(),slot,button,mode,original.player());
                 var read=services.playerInventory().read(original.player());var next=new ArrayList<ItemStack>();
                 for(int index=0;index<read.size();index++)next.add(index<before.size()&&ModernContentBridge.sameLegacy(before.get(index),read.get(index))?null:content.gameplayStack(read.get(index)));
                 ItemStack carried=modern(oldInventory().getClass().getMethod("func_70445_o").invoke(oldInventory()));
                 refresh();return new ClickResult(next,carried);
-            }),true);
+            }),true));
             for(int index=0;index<result.inventory().size();index++)if(result.inventory().get(index)!=null)inventory.setItem(index,result.inventory().get(index));
             inventory.setChanged();setCarried(result.carried());broadcastChanges();
         }catch(Exception failure){failed=true;com.mojang.logging.LogUtils.getLogger().error("MFCL original container click failed",failure);server.closeContainer();}
@@ -172,11 +190,11 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     @Override public void removed(Player player) {
         if(original!=null&&!failed)try {
             importInventory();
-            var returned=content.logicTransaction(player.level(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
+            var returned=playerContext(()->content.logicTransaction(player.level(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
                 oldInventory().getClass().getMethod("func_70437_b",content.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(oldInventory(),new Object[]{null});
                 original.container().getClass().getMethod("func_75134_a",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player());
                 return content.services().playerInventory().read(original.player()).stream().map(content::gameplayStack).toList();
-            }),true);
+            }),true));
             for(int index=0;index<returned.size();index++)inventory.setItem(index,returned.get(index));
         }catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL original container close failed",failure);}
         super.removed(player);

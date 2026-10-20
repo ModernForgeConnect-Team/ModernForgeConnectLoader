@@ -98,6 +98,7 @@ public final class LegacyBlockLogic {
     }
     public Activation activate(String key, Object world, int x, int y, int z, LegacyTiles.Placer actor, java.util.List<LegacyClientData.Stack> contents, int selected, int side, float hitX, float hitY, float hitZ) throws Exception {
         return services.items().inLegacy(() -> {
+            try(var state=services.playerState().enter(world)) {
             var loader = services.loader(); var playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer");
             var inventoryType = loader.loadClass("net.minecraft.entity.player.InventoryPlayer"); var stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Object player = services.tiles().actor(world,actor,null), inventory = playerType.getField("field_71071_by").get(player);
@@ -120,6 +121,7 @@ public final class LegacyBlockLogic {
                 result.add(value == null || stackType.getField("field_77994_a").getInt(value) <= 0 ? null : services.items().snapshot(value));
             }
             return new Activation(handled,result,java.util.List.copyOf(messages),opened);
+            }
         });
     }
     public void scheduled(String key, Object world, int x, int y, int z) throws Exception {

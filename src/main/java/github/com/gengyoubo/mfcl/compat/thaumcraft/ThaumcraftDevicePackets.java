@@ -7,6 +7,22 @@ import java.lang.reflect.Field;
 final class ThaumcraftDevicePackets {
     static boolean prepare(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
         String type=packet.getClass().getName();
+        if(type.equals("thaumcraft.common.lib.network.misc.PacketFocusChangeToServer")||type.equals("thaumcraft.common.lib.network.misc.PacketItemKeyToServer")) {
+            var loader=player.getClass().getClassLoader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");
+            Object held=player.getClass().getMethod("func_70694_bm").invoke(player);
+            Object item=held==null?null:stackType.getMethod("func_77973_b").invoke(held);
+            if(item==null||!loader.loadClass("thaumcraft.common.items.wands.ItemWandCasting").isInstance(item))throw new IllegalArgumentException("Wand control requires a held wand");
+            Object world=loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p").get(player);
+            Object provider=loader.loadClass("net.minecraft.world.World").getField("field_73011_w").get(world);
+            if(field(packet,"dim").getInt(packet)!=provider.getClass().getField("field_76574_g").getInt(provider))throw new IllegalArgumentException("Wand control targets another dimension");
+            field(packet,"playerid").setInt(packet,(int)player.getClass().getMethod("func_145782_y").invoke(player));
+            if(type.endsWith("PacketFocusChangeToServer")) {
+                if((boolean)item.getClass().getMethod("isSceptre",stackType).invoke(item,held))throw new IllegalArgumentException("Sceptres cannot equip foci");
+                String focus=(String)field(packet,"focus").get(packet);
+                if(focus==null||focus.length()>256||!focus.equals("REMOVE")&&!ThaumcraftWandFocus.available(loader,player).containsKey(focus))throw new IllegalArgumentException("Focus is not in the player's inventory");
+            }else if(field(packet,"key").getByte(packet)!=1)throw new IllegalArgumentException("Unsupported wand key");
+            return true;
+        }
         if(type.equals("thaumcraft.common.lib.network.playerdata.PacketAspectCombinationToServer")) {
             Object tile=target(packet,player,device);
             var loader=player.getClass().getClassLoader();

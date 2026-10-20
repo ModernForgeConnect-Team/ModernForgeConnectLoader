@@ -221,7 +221,7 @@ public final class ModernContentBridge {
         var loader=services.loader();
         var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         Object inventory=playerType.getField("field_71071_by").get(actor);
-        Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class).newInstance(inventory,false);
+        Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class,playerType).newInstance(inventory,false,actor);
         playerType.getField("field_71069_bz").set(actor,container);
         playerType.getField("field_71070_bA").set(actor,container);
     }
@@ -482,6 +482,17 @@ public final class ModernContentBridge {
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
         @Override public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) { return useLegacyItem(context, true); }
+        @Override public void inventoryTick(ItemStack stack,Level level,net.minecraft.world.entity.Entity entity,int slot,boolean selected) {
+            if(level.isClientSide||!(entity instanceof net.minecraft.world.entity.player.Player player)||slot<0||slot>=36)return;
+            try {
+                if(!itemUse.inventoryUpdates(snapshot(stack)))return;
+                var world=services.worlds().bound(level);var source=placer(player);var before=hostInventory(player);
+                Object actor=exposeLegacyInventory(player,world,before,null);
+                var outgoing=logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.inventoryTick(world,source,slot,player.tickCount,selected)),false);
+                collectLegacyInventory(player,actor,before);
+                if(player instanceof net.minecraft.server.level.ServerPlayer server)outgoing.forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));
+            }catch(Exception failure){if(itemTickFailures.add(entry.key()))LogUtils.getLogger().error("MFCL original inventory tick failed for {}",entry.key(),failure);}
+        }
         @Override public InteractionResult useOn(UseOnContext context) {
             // A held scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
             if(services.scanners().forItem(entry.key()).isPresent())return InteractionResult.PASS;
@@ -535,23 +546,38 @@ public final class ModernContentBridge {
         @Override public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remaining) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
             try {
-                var scan = itemUse.usingTick(services.worlds().bound(level), placer(player), snapshot(stack), remaining);
-                if (scan != null && level.isClientSide) ScanSyncChannel.sendToServer(scan, "@");
+                var world=services.worlds().bound(level);var source=placer(player);var held=snapshot(stack);
+                var hand=player.getUsedItemHand();var before=hostInventory(player);
+                if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
+                Object actor=exposeLegacyInventory(player,world,before,held);
+                var result=level.isClientSide?itemUse.usingTickResult(world,source,held,remaining)
+                        :logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.usingTickResult(world,source,held,remaining)),true);
+                if(!level.isClientSide)collectLegacyInventory(player,actor,before,hand);
+                if(result.scan()!=null&&level.isClientSide)ScanSyncChannel.sendToServer(result.scan(),"@");
+                if(player instanceof net.minecraft.server.level.ServerPlayer server){
+                    result.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));
+                    server.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
+                }
+                if(!result.using())player.stopUsingItem();
             } catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy using tick failed for {}", entry.key(), failure); }
         }
         @Override public void releaseUsing(ItemStack stack, Level level, LivingEntity living, int timeLeft) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
             try {
                 var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
-                var before = hostInventory(player); Object actor = exposeLegacyInventory(player, world, before, held);
-                try { itemUse.release(world, source, held, timeLeft); }
-                finally { if (!level.isClientSide) collectLegacyInventory(player, actor, before); }
+                var hand=player.getUsedItemHand();var before = hostInventory(player);
+                if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
+                Object actor = exposeLegacyInventory(player, world, before, held);
+                if(level.isClientSide)itemUse.release(world,source,held,timeLeft);
+                else logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->{itemUse.release(world,source,held,timeLeft);return null;}),true);
+                if (!level.isClientSide) collectLegacyInventory(player, actor, before,hand);
             } catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy release failed for {}", entry.key(), failure); }
         }
         @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
         }
     }
+    private final Set<String> itemTickFailures=java.util.concurrent.ConcurrentHashMap.newKeySet();
     static LegacyTiles.Placer placer(net.minecraft.world.entity.player.Player player) {
         return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(),
                 player.getAbilities().instabuild, player.isShiftKeyDown());
@@ -580,7 +606,10 @@ public final class ModernContentBridge {
             if (sameLegacy(before.get(slot), after.get(slot))) continue;
             try {
                 var updated=after.get(slot)==null?ItemStack.EMPTY:gameplayStack(after.get(slot));
-                if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
+                var current=hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected?player.getOffhandItem():inventory.getItem(slot);
+                // Keep the live use-item reference while NBT/vis changes, so a held action can continue next tick.
+                if(!current.isEmpty()&&!updated.isEmpty()&&current.getItem()==updated.getItem()) {current.setCount(updated.getCount());current.setTag(updated.getTag()==null?null:updated.getTag().copy());}
+                else if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
             }
             catch (Exception unmapped) { }
         }
