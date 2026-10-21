@@ -176,7 +176,7 @@ public final class LegacyEntityHosting {
                 LegacyWorldGraphics.translate(-x, -y, -z);
                 loader.loadClass("net.minecraft.client.renderer.entity.Render").getMethod("func_76986_a", entity, double.class, double.class, double.class, float.class, float.class)
                         .invoke(render, value, x, y, z, yawValue, partialTick);
-                return LegacyIconResolver.resolve(frame.primitives(), services.items().iconLayout());
+                return services.items().resolveIcons(frame.primitives());
             }
         });
     }

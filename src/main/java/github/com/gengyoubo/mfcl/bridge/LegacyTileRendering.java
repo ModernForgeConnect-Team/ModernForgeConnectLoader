@@ -26,7 +26,7 @@ public final class LegacyTileRendering {
             try (var frame = LegacyWorldGraphics.begin()) {
                 LegacyWorldGraphics.translate(-x,-y,-z);
                 draw.invoke(implementation, tile, x,y,z,partialTick);
-                return LegacyIconResolver.resolve(frame.primitives(), services.items().iconLayout());
+                return services.items().resolveIcons(frame.primitives());
             }
         });
     }

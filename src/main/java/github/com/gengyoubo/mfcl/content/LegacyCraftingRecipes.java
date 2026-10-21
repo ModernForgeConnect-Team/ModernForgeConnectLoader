@@ -42,7 +42,7 @@ public final class LegacyCraftingRecipes {
         var variants=new ArrayList<Option>();
         for(var old:input) {
             boolean wildcard=old.metadata()==32767;
-            var candidates=wildcard?content.services().items().catalog().stream().filter(s->s.key().equals(old.key())&&s.metadata()!=32767).toList():List.of(old);
+            var candidates=wildcard?content.services().items().catalog(old.key()).stream().filter(s->s.metadata()!=32767).toList():List.of(old);
             if(candidates.isEmpty())candidates=List.of(new LegacyClientData.Stack(old.key(),0,1,"",old.tag()));
             for(var candidate:candidates) {
                 ItemStack mapped=content.mapStack(candidate);if(mapped.isEmpty())continue;

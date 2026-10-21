@@ -7,6 +7,18 @@ import java.util.*;
 final class RuntimeHostRegistryProbe {
     static void verify(LegacyServices services, Map<String, Object> report) throws Exception {
         var loader = services.loader();
+        var common = loader.loadClass("cpw.mods.fml.common.FMLCommonHandler");
+        Object handler = common.getMethod("instance").invoke(null);
+        var currentLanguage = common.getMethod("getCurrentLanguage");
+        if (!currentLanguage.invoke(handler).equals("en_US")) throw new AssertionError("Initial FML language must be en_US");
+        var languages = loader.loadClass("cpw.mods.fml.common.registry.LanguageRegistry");
+        Object languageRegistry = languages.getMethod("instance").invoke(null);
+        var addName = languages.getMethod("addStringLocalization", String.class, String.class, String.class);
+        addName.invoke(languageRegistry, "mfcl.test.activeLanguage", "en_US", "English");
+        addName.invoke(languageRegistry, "mfcl.test.activeLanguage", "zh_CN", "中文");
+        var localized = languages.getMethod("getStringLocalization", String.class);
+        if (!localized.invoke(languageRegistry, "mfcl.test.activeLanguage").equals("English"))
+            throw new AssertionError("FML localization did not use the initial language");
         var blockType = loader.loadClass("net.minecraft.block.Block");
         var itemType = loader.loadClass("net.minecraft.item.Item");
         Object itemRegistry = itemType.getField("field_150901_e").get(null);
@@ -30,6 +42,9 @@ final class RuntimeHostRegistryProbe {
         var translated = new java.util.concurrent.atomic.AtomicReference<>("深板岩");
         LegacyHostRegistry.label(loader, "tile.mfcl_host:test/block.name", translated::get);
         services.items().language("zh_cn");
+        if (!currentLanguage.invoke(handler).equals("zh_CN")
+                || !localized.invoke(languageRegistry, "mfcl.test.activeLanguage").equals("中文"))
+            throw new AssertionError("FML localization did not follow the host language");
         var displayStack = new LegacyClientData.Stack("mfcl_host:test/block", 0, 1, "", "");
         if (!services.items().displayName(displayStack).equals("深板岩")) throw new AssertionError("Original item label shows an internal translation key");
         report.put("vanillaZhCnDiamondName", services.items().displayName(new LegacyClientData.Stack("minecraft:diamond", 0, 1, "", "")));
@@ -46,6 +61,10 @@ final class RuntimeHostRegistryProbe {
         if (!translate.invoke(null, "tile.oreDiamond.name").equals("MFCL override")) throw new AssertionError("Language override did not replace the original translation");
         report.put("genericLanguageSupplementVerified", true);
         translated.set("Deepslate"); services.items().language("en_us");
+        if (!currentLanguage.invoke(handler).equals("en_US")
+                || !localized.invoke(languageRegistry, "mfcl.test.activeLanguage").equals("English"))
+            throw new AssertionError("FML localization did not switch back to English");
+        report.put("genericFmlCurrentLanguageVerified", true);
         if (!services.items().displayName(displayStack).equals("Deepslate")) throw new AssertionError("Host labels did not follow language changes");
         int itemId = (int)itemType.getMethod("func_150891_b", itemType).invoke(null, item);
         int blockId = (int)blockType.getMethod("func_149682_b", blockType).invoke(null, block);

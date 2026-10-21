@@ -82,6 +82,14 @@ public final class RuntimeDriver {
                         @Override public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                             String n = method.getName();
                             if (n.equals("getSide")) return Side.CLIENT;
+                            if (n.equals("getCurrentLanguage")) {
+                                // The embedded client has no vanilla language-reload loop. Its settings
+                                // are kept in sync with the translation tables by LegacyClientData.
+                                Class<?> minecraft = loader.loadClass("net.minecraft.client.Minecraft");
+                                Object client = minecraft.getMethod("func_71410_x").invoke(null);
+                                Object settings = minecraft.getField("field_71474_y").get(client);
+                                return settings.getClass().getField("field_74363_ab").get(settings);
+                            }
                             if (n.equals("showGuiScreen")) {
                                 loader.loadClass("github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics").getMethod("showScreen",Object.class).invoke(null,args[0]);return null;
                             }

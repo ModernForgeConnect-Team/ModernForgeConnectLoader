@@ -13,6 +13,8 @@ public final class LegacyCrafting {
     private final Map<String,Object> originals=new LinkedHashMap<>();
     private final List<Definition> definitions=new ArrayList<>();
     private final List<Smelting> smelting=new ArrayList<>();
+    private final Map<String,Definition> definitionsByHash=new HashMap<>();
+    private final Map<String,Smelting> smeltingByHash=new HashMap<>();
     private final Set<String> smeltingHashes=new HashSet<>();
     private final List<String> diagnostics=new ArrayList<>();
     public LegacyCrafting(LegacyServices services) throws Exception {
@@ -59,6 +61,8 @@ public final class LegacyCrafting {
             captureSmelting(loader);
             services.items().preserveCrafting(retained);return null;
         });
+        for (var definition : definitions) definitionsByHash.put(definition.hash(), definition);
+        for (var definition : smelting) smeltingByHash.put(definition.hash(), definition);
     }
     /** The original furnace table is not a crafting recipe list; snapshot it before host projection replaces it. */
     private void captureSmelting(ClassLoader loader) throws Exception {
@@ -87,8 +91,8 @@ public final class LegacyCrafting {
     public List<Definition> definitions(){return List.copyOf(definitions);}
     public List<Smelting> smelting(){return List.copyOf(smelting);}
     public List<String> diagnostics(){return List.copyOf(diagnostics);}
-    public Definition definition(String hash){return definitions.stream().filter(d->d.hash().equals(hash)).findFirst().orElseThrow(()->new IllegalArgumentException("Unknown original crafting recipe: "+hash));}
-    public Smelting smeltingDefinition(String hash){return smelting.stream().filter(d->d.hash().equals(hash)).findFirst().orElseThrow(()->new IllegalArgumentException("Unknown original smelting recipe: "+hash));}
+    public Definition definition(String hash){var value=definitionsByHash.get(hash);if(value==null)throw new IllegalArgumentException("Unknown original crafting recipe: "+hash);return value;}
+    public Smelting smeltingDefinition(String hash){var value=smeltingByHash.get(hash);if(value==null)throw new IllegalArgumentException("Unknown original smelting recipe: "+hash);return value;}
     private Object grid(int width,int height,List<LegacyClientData.Stack> input) throws Exception {
         var loader=services.loader();var type=loader.loadClass("net.minecraft.inventory.InventoryCrafting");
         Object grid=type.getConstructor(loader.loadClass("net.minecraft.inventory.Container"),int.class,int.class).newInstance(null,width,height);

@@ -54,7 +54,7 @@ final class LegacyEffects {
                     try (var frame = LegacyWorldGraphics.begin()) {
                         effects.getClass().getMethod("func_78874_a", entity, float.class).invoke(effects, viewer, partial);
                         effects.getClass().getMethod("func_78872_b", entity, float.class).invoke(effects, viewer, partial);
-                        return LegacyIconResolver.resolve(frame.primitives(), services.items().iconLayout()).stream()
+                        return services.items().resolveIcons(frame.primitives()).stream()
                                 .filter(primitive -> !primitive.texture().endsWith(VANILLA_SHEET)).toList();
                     }
                 });

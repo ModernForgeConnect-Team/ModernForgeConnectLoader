@@ -81,6 +81,7 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 
 | Gradle property | Scope | Report under the selected game's `logs/mfcl/` |
 | --- | --- | --- |
+| `mfclHostSmokeTest` | Main menu, complete legacy block/item registration, vanilla disc/seamless-slab round trips, and native parsing of every exported crafting/smelting recipe; no world gameplay is tested | `host-startup-smoke.json` |
 | `mfclApiSmokeTest` | Public provider/ready callback, native stack/NBT copies, world identity/thread/unload guards, diagnostic command | `api-smoke.json` |
 | `mfclScannerSmokeTest` | TC4 held block/drop scans, real rewards/audio, cancellation/repeat/prerequisites, drop metadata and entity-ID validation, unmapped drops, persistence and dynamic lens/target coverage | `scanner-smoke.json` |
 | `mfclBiomeSmokeTest` | TC4 dynamic biome registry/colors, normal-world natural biome chunks, original biome mutation, native sync, negative coordinates/neighbors and save reload | `biome-smoke.json` |

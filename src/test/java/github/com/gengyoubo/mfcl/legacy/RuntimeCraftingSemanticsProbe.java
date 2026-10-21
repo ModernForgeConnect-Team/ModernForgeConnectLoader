@@ -7,7 +7,9 @@ import java.lang.reflect.Array;
 final class RuntimeCraftingSemanticsProbe {
     static void verify(LegacyServices services,Map<String,Object> report) throws Exception {
         var loader=services.loader();Class<?> itemType=loader.loadClass("net.minecraft.item.Item"),stackType=loader.loadClass("net.minecraft.item.ItemStack");
+        if (!services.items().catalog("mfcl_host:mfcl/crafting_fixture").isEmpty()) throw new AssertionError("Unexpected fixture before import");
         services.items().importHostItems(List.of(new LegacyClientData.HostItem("mfcl:crafting_fixture","Crafting fixture",64,0)));
+        if (services.items().catalog("mfcl_host:mfcl/crafting_fixture").size() != 1) throw new AssertionError("Catalog index was not refreshed after import");
         var exact=new LegacyClientData.Stack("mfcl_host:mfcl/crafting_fixture",2,1,"","");
         var output=tagged(services,new LegacyClientData.Stack(exact.key(),7,3,"","{result_payload:23}"));
         var diamond=new LegacyClientData.Stack("minecraft:diamond",0,1,"","");var emerald=new LegacyClientData.Stack("minecraft:emerald",0,1,"","");
@@ -25,6 +27,12 @@ final class RuntimeCraftingSemanticsProbe {
         Object copying=plainType.getConstructor(int.class,int.class,ingredients.getClass(),stackType).newInstance(1,1,ingredients,services.items().materialize(new LegacyClientData.Stack(exact.key(),11,1,"","")));
         plainType.getMethod("func_92100_c").invoke(copying);recipes.add(copying);
         var bridge=new LegacyCrafting(services);
+        for (var definition : bridge.definitions()) if (bridge.definition(definition.hash()) != definition)
+            throw new AssertionError("Recipe index changed definition identity");
+        for (var definition : bridge.smelting()) if (bridge.smeltingDefinition(definition.hash()) != definition)
+            throw new AssertionError("Smelting index changed definition identity");
+        try { bridge.definition("absent"); throw new AssertionError("Missing recipe accepted"); }
+        catch (IllegalArgumentException expected) { }
         var shape=bridge.definitions().stream().filter(d->d.output().metadata()==7&&d.output().key().equals(exact.key())).findFirst().orElseThrow();
         var shapelessDefinition=bridge.definitions().stream().filter(d->d.output().metadata()==9&&d.output().key().equals(exact.key())).findFirst().orElseThrow();
         var copy=bridge.definitions().stream().filter(d->d.output().metadata()==11&&d.output().key().equals(exact.key())).findFirst().orElseThrow();

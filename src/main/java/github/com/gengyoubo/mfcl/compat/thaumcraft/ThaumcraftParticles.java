@@ -58,7 +58,7 @@ final class ThaumcraftParticles {
                     Object legacyEvent = last.getConstructor(loader.loadClass("net.minecraft.client.renderer.RenderGlobal"), float.class).newInstance(null, partial);
                     try (var frame = LegacyWorldGraphics.begin()) {
                         engine.getClass().getMethod("onRenderWorldLast", last).invoke(engine, legacyEvent);
-                        return LegacyIconResolver.resolve(frame.primitives(), services.items().iconLayout());
+                        return services.items().resolveIcons(frame.primitives());
                     }
                 });
                 if (primitives.isEmpty()) return null;

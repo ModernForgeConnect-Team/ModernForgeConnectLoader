@@ -69,11 +69,25 @@ public final class ModernContentBridge {
         }
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
+        LogUtils.getLogger().info("MFCL content: generating resource pack");
+        net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: Generating legacy resource pack");
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
         LegacyBiomePack.generate(pack,services.biomes());
         LegacyDimensionPack.generate(pack,services.dimensions());
-        for(var recipe:crafting.definitions())pack.craftingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
-        for(var recipe:crafting.smelting())pack.smeltingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
+        var recipes = crafting.definitions();
+        LogUtils.getLogger().info("MFCL content: exporting {} crafting recipes", recipes.size());
+        int exportedRecipes = 0;
+        for (var recipe : recipes) {
+            pack.craftingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()), recipe.hash());
+            if (++exportedRecipes % 4096 == 0) {
+                String message = "Exporting crafting recipes (" + exportedRecipes + "/" + recipes.size() + ")";
+                LogUtils.getLogger().info("MFCL content: {}", message);
+                net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: " + message);
+            }
+        }
+        var smeltingRecipes = crafting.smelting();
+        LogUtils.getLogger().info("MFCL content: exporting {} smelting recipes", smeltingRecipes.size());
+        for(var recipe:smeltingRecipes)pack.smeltingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
         for(var tag:services.hostItemTags().entrySet())pack.itemTag(tag.getKey(),tag.getValue().stream().filter(key->declarations.items().stream().anyMatch(item->item.key().equals(key))).map(key->id(key).toString()).toList());
         creative = new CreativeTabBridge(this);
     }
@@ -347,6 +361,8 @@ public final class ModernContentBridge {
         if (reverseItems.containsKey(stack.getItem())) return snapshot(stack);
         if (stack.hasTag() && stack.getTag().getAllKeys().stream().anyMatch(key -> !key.equals("Damage")))
             throw new UnsupportedOperationException("Unmapped host inventory NBT: " + stack);
+        var nonCreative = HostStackMapping.nonCreativeStack(stack);
+        if (nonCreative != null) return nonCreative;
         if (vanillaStacks == null) {
             var mapped = new IdentityHashMap<Item,LegacyClientData.Stack>();
             for (var original : services.items().catalog()) if (original.key().startsWith("minecraft:") && original.tag().isEmpty()) {

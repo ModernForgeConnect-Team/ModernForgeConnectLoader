@@ -123,7 +123,7 @@ public final class LegacyBlockRendering {
                         start.invoke(tessellator);
                         try { render.invoke(renderer, block, 0, 0, 0); }
                         finally { draw.invoke(tessellator); }
-                        var geometry = LegacyIconResolver.resolve(frame.primitives(), data.iconLayout());
+                        var geometry = data.resolveIcons(frame.primitives());
                         if (!geometry.isEmpty()) result.add(new Layer(pass, geometry));
                     }
                 }

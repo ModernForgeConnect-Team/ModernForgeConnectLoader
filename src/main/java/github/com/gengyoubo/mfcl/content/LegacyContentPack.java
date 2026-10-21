@@ -27,6 +27,8 @@ public final class LegacyContentPack {
         this.content = content;
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
         directory = Files.createTempDirectory(parent, "content-1.7.10-");
+        progress("Copying legacy textures and sounds");
+        int copied = 0;
         // TESRs select additional skins and animation textures at runtime, beyond creative inventory snapshots.
         if (content.loader() instanceof URLClassLoader urls) for (var url : urls.getURLs()) {
             if (!url.getProtocol().equals("file")) continue;
@@ -48,6 +50,7 @@ public final class LegacyContentPack {
                             Files.writeString(target,converted.toString(),StandardCharsets.UTF_8);
                         }else Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
                     }
+                    if (++copied % 2048 == 0) progress("Copied " + copied + " legacy textures and sounds");
                 }
             }
         }
@@ -62,7 +65,13 @@ public final class LegacyContentPack {
         // builtin/entity item models reference no texture, so their sprites must be stitched explicitly.
         json("assets/mfcl/atlases/blocks.json", Map.of("sources", List.of(Map.of("type", "minecraft:directory", "source", "block/legacy"))));
         // Contextual world icons (e.g. connected glass) may never appear in an inventory capture.
-        for (String icon : content.registeredIcons()) if (!icon.isBlank() && !icon.startsWith("MISSING_ICON_")) texture(icon, "blocks");
+        progress("Exporting legacy atlas textures");
+        int exported = 0;
+        for (String icon : content.registeredIcons()) {
+            if (!icon.isBlank() && !icon.startsWith("MISSING_ICON_")) texture(icon, "blocks");
+            if (++exported % 2048 == 0) progress("Exported " + exported + " legacy atlas textures");
+        }
+        progress("Writing legacy block and item models");
         for (var block : content.blocks()) {
             var id = ModernContentBridge.id(block.key()); var variants = new LinkedHashMap<String, Object>();
             for (int meta = 0; meta < 16; meta++) {
@@ -113,6 +122,12 @@ public final class LegacyContentPack {
                 "registryIds", Map.of("blocks",content.blocks().stream().collect(java.util.stream.Collectors.toMap(LegacyContent.Block::key,entry->ModernContentBridge.id(entry.key()).toString())),
                         "items",content.items().stream().collect(java.util.stream.Collectors.toMap(LegacyContent.Item::key,entry->ModernContentBridge.id(entry.key()).toString()))),
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
+        progress("Legacy resource pack ready");
+    }
+    private static void progress(String message) {
+        com.mojang.logging.LogUtils.getLogger().info("MFCL content: {}", message);
+        try { net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: " + message); }
+        catch (RuntimeException | LinkageError unavailable) { /* CLI probes have no host loading screen. */ }
     }
     private void resolveGeometry(Map<String, List<LegacyVertexStream.Primitive>> source, Map<String, List<LegacyVertexStream.Primitive>> target) throws Exception {
         for (var entry : source.entrySet()) {

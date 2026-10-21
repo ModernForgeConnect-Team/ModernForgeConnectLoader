@@ -22,6 +22,11 @@ final class RuntimeItemUseSemanticsProbe {
         var annotation=writer.visitAnnotation("Lcpw/mods/fml/common/Mod;",true);annotation.visit("modid","mfcl_return_fixture");annotation.visit("version","1.0");annotation.visitEnd();
         method=writer.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);method.visitCode();method.visitVarInsn(Opcodes.ALOAD,0);method.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);method.visitInsn(Opcodes.RETURN);method.visitMaxs(0,0);method.visitEnd();
         method=writer.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);method.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true).visitEnd();method.visitCode();
+        // GregTech queries FML's active language through this overload during preinitialization.
+        method.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/LanguageRegistry","instance","()Lcpw/mods/fml/common/registry/LanguageRegistry;",false);
+        method.visitLdcInsn("mfcl.test.preinit.language");
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"cpw/mods/fml/common/registry/LanguageRegistry","getStringLocalization","(Ljava/lang/String;)Ljava/lang/String;",false);
+        method.visitInsn(Opcodes.POP);
         method.visitTypeInsn(Opcodes.NEW,name);method.visitInsn(Opcodes.DUP);method.visitMethodInsn(Opcodes.INVOKESPECIAL,name,"<init>","()V",false);method.visitLdcInsn("returned_stack_fixture");method.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem","(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);method.visitInsn(Opcodes.RETURN);method.visitMaxs(0,0);method.visitEnd();writer.visitEnd();
         TestArchives.jar(game.resolve("mods/1.7.10/returned-stack-fixture.jar"),Map.of(),Map.of(name+".class",itemBytes,"mfcl/fixture/ReturnedStackMod.class",writer.toByteArray()));
     }

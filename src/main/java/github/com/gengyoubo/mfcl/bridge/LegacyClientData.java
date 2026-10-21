@@ -26,6 +26,7 @@ public final class LegacyClientData {
     private final Method itemOfStack, nameOfItem, itemByName, copyStack;
     private List<Object> catalog = List.of();
     private List<Stack> catalogSnapshots;
+    private Map<String, List<Stack>> catalogByKey;
     private final Map<Stack, Object> originals = new HashMap<>();
     private final List<String> diagnostics = new ArrayList<>();
     private boolean ready;
@@ -36,6 +37,7 @@ public final class LegacyClientData {
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
     private Map<String, float[]> iconLayout = Map.of();
+    private LegacyIconResolver iconResolver = new LegacyIconResolver(Map.of());
     private Map<String, LegacySpriteTextures.Texture> iconTextures = Map.of();
     private boolean contextInitialized;
     private LegacyClientResources.Context resourceContext;
@@ -58,6 +60,7 @@ public final class LegacyClientData {
         return represented == null ? itemByName.invoke(registry, key) : represented;
     }
     public Map<String, float[]> iconLayout() { return iconLayout; }
+    public List<LegacyVertexStream.Primitive> resolveIcons(List<LegacyVertexStream.Primitive> primitives) { return iconResolver.resolve(primitives); }
     public byte[] iconTexture(String name) { var value=iconTextures.get(name);return value==null?null:value.png().clone(); }
     public String iconTextureMetadata(String name) { var value=iconTextures.get(name);return value==null?null:value.metadata(); }
     /** The original icon whose synthetic atlas cell contains the given legacy UV, or null. */
@@ -167,7 +170,7 @@ public final class LegacyClientData {
     }
     public synchronized void replaceCatalog(List<?> values) {
         for (Object value : values) if (!stackType.isInstance(value)) throw new IllegalArgumentException("Stack belongs to a different runtime");
-        catalog = new ArrayList<>(values); catalogSnapshots = null; ready = true;
+        catalog = new ArrayList<>(values); catalogSnapshots = null; catalogByKey = null; ready = true;
     }
     public synchronized void onCatalogChanged(Consumer<List<Object>> listener) { catalogListeners.add(Objects.requireNonNull(listener)); }
     public synchronized List<Stack> catalog() throws Exception {
@@ -181,6 +184,15 @@ public final class LegacyClientData {
         });
     }
     public synchronized boolean ready() { return ready; }
+    public synchronized List<Stack> catalog(String key) throws Exception {
+        if (catalogByKey == null) {
+            var grouped = new HashMap<String, List<Stack>>();
+            for (var stack : catalog()) grouped.computeIfAbsent(stack.key(), ignored -> new ArrayList<>()).add(stack);
+            grouped.replaceAll((name, values) -> List.copyOf(values));
+            catalogByKey = grouped;
+        }
+        return catalogByKey.getOrDefault(key, List.of());
+    }
     public Map<String, Object> registrySummary() throws Exception {
         return inLegacy(() -> {
             Object blocks = loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
@@ -281,6 +293,10 @@ public final class LegacyClientData {
             table.putAll(overrides.getOrDefault(oldCode, Map.of()));
             table.putAll(LegacyHostRegistry.translations(loader));
             loader.loadClass("net.minecraft.util.StringTranslate").getMethod("func_135063_a", Map.class).invoke(null, table);
+            Class<?> minecraft = loader.loadClass("net.minecraft.client.Minecraft");
+            Object client = minecraft.getMethod("func_71410_x").invoke(null);
+            Object settings = minecraft.getField("field_71474_y").get(client);
+            setField(settings.getClass(), settings, "field_74363_ab", oldCode);
             currentLanguage = code;
             hostLanguageRevision = revision;
             appliedSupplementRevision = supplementRevision;
@@ -344,6 +360,7 @@ public final class LegacyClientData {
                     (float) sprite.getMethod("func_94210_h").invoke(value)});
         }
         iconLayout = Map.copyOf(layout);
+        iconResolver = new LegacyIconResolver(iconLayout);
         iconTextures = Map.copyOf(images);
     }
     private Object metadataAtlas(Class<?> atlas, int type, String path) throws Exception {
@@ -373,6 +390,7 @@ public final class LegacyClientData {
             }
             catalog = List.copyOf(next);
             catalogSnapshots = null;
+            catalogByKey = null;
             for (var listener : catalogListeners) listener.accept(List.copyOf(catalog));
             return imported;
         });

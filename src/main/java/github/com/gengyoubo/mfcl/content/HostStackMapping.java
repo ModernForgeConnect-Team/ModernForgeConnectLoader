@@ -22,7 +22,13 @@ public final class HostStackMapping {
             Map.entry("speckled_melon", "glistering_melon_slice"), Map.entry("melon", "melon_slice"), Map.entry("snow_layer", "snow"),
             Map.entry("brick_block", "bricks"), Map.entry("stonebrick", "stone_bricks"), Map.entry("stone_stairs", "cobblestone_stairs"),
             Map.entry("hardened_clay", "terracotta"), Map.entry("double_plant", "sunflower"), Map.entry("deadbush", "dead_bush"),
-            Map.entry("golden_rail", "powered_rail"), Map.entry("slime_ball", "slime_ball"), Map.entry("web", "cobweb"));
+            Map.entry("golden_rail", "powered_rail"), Map.entry("slime_ball", "slime_ball"), Map.entry("web", "cobweb"),
+            Map.entry("record_13", "music_disc_13"), Map.entry("record_cat", "music_disc_cat"),
+            Map.entry("record_blocks", "music_disc_blocks"), Map.entry("record_chirp", "music_disc_chirp"),
+            Map.entry("record_far", "music_disc_far"), Map.entry("record_mall", "music_disc_mall"),
+            Map.entry("record_mellohi", "music_disc_mellohi"), Map.entry("record_stal", "music_disc_stal"),
+            Map.entry("record_strad", "music_disc_strad"), Map.entry("record_ward", "music_disc_ward"),
+            Map.entry("record_11", "music_disc_11"), Map.entry("record_wait", "music_disc_wait"));
     private HostStackMapping() {}
     public static ItemStack renderStack(LegacyClientData.Stack old) {
         String key = old.key(); int meta = old.metadata();
@@ -39,6 +45,7 @@ public final class HostStackMapping {
             else if (path.equals("carpet") && meta >= 0 && meta < 16) path = COLORS[meta] + "_carpet";
             else if (path.equals("golden_apple") && meta == 1) path = "enchanted_golden_apple";
             else if (path.equals("bed") && meta == 0) path = "red_bed";
+            else if (path.equals("double_stone_slab") && meta == 8) path = "smooth_stone";
             else if (variants(path) != null && meta >= 0 && meta < variants(path).length) path = variants(path)[meta];
             else if (meta != 0 && !isDamageable(key)) return ItemStack.EMPTY;
             else path = RENAMES.getOrDefault(path, path);
@@ -71,6 +78,11 @@ public final class HostStackMapping {
             case "skull" -> new String[]{"skeleton_skull", "wither_skeleton_skull", "zombie_head", "player_head", "creeper_head"};
             default -> null;
         };
+    }
+    /** Non-creative old item variants cannot be found by reversing the old creative catalog. */
+    static LegacyClientData.Stack nonCreativeStack(ItemStack stack) {
+        if (!stack.is(net.minecraft.world.item.Items.SMOOTH_STONE)) return null;
+        return new LegacyClientData.Stack("minecraft:double_stone_slab", 8, stack.getCount(), stack.getHoverName().getString(), "");
     }
     private static boolean isDamageable(String key) {
         ResourceLocation id = ResourceLocation.tryParse(key);

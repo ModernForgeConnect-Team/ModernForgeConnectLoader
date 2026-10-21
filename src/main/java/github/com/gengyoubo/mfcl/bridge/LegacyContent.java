@@ -51,10 +51,18 @@ public final class LegacyContent {
 
     public LegacyContent(LegacyClientData data) throws Exception {
         this.data = data;
+        progress("Reading legacy blocks, item variants and creative tabs");
         var declarations = data.inLegacy(() -> read());
         items = declarations.items; blocks = declarations.blocks; tabs = declarations.tabs;
+        progress("Capturing inventory block models (" + blocks.size() + " blocks)");
         captureStaticGeometry();
+        progress("Capturing custom item renderers");
         captureItemRenderers();
+    }
+    private static void progress(String message) {
+        com.mojang.logging.LogUtils.getLogger().info("MFCL content: {}", message);
+        try { net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: " + message); }
+        catch (RuntimeException | LinkageError unavailable) { /* CLI probes have no host loading screen. */ }
     }
 
     /**
@@ -99,11 +107,15 @@ public final class LegacyContent {
             for (String name : List.of("INVENTORY", "EQUIPPED", "EQUIPPED_FIRST_PERSON", "ENTITY")) renderTypes.add(renderType.getField(name).get(null));
             Object inventory = renderType.getField("INVENTORY").get(null);
             var stacks = new ArrayList<LegacyClientData.Stack>(data.catalog());
+            var seen = new HashSet<RenderStack>();
+            for (var stack : stacks) seen.add(RenderStack.of(stack));
             for (var tab : tabs) {
-                for (var entry : tab.contents()) if (!contains(stacks, entry)) stacks.add(entry);
-                if (tab.icon() != null && !contains(stacks, tab.icon())) stacks.add(tab.icon());
+                for (var entry : tab.contents()) if (seen.add(RenderStack.of(entry))) stacks.add(entry);
+                if (tab.icon() != null && seen.add(RenderStack.of(tab.icon()))) stacks.add(tab.icon());
             }
+            int processed = 0;
             for (var snapshot : stacks) {
+                if (processed++ % 2048 == 0) progress("Capturing custom item renderers (" + processed + "/" + stacks.size() + ")");
                 if (snapshot.key().startsWith("minecraft:")) continue;
                 Object stack = data.materialize(snapshot); // keeps the original NBT, e.g. a wand's rod and cap
                 Object inventoryRenderer = getRenderer.invoke(null, stack, inventory);
@@ -142,8 +154,8 @@ public final class LegacyContent {
             }
         } catch (Throwable unavailable) { captureDiagnostics.add("item renderer bridge unavailable: " + unavailable); }
     }
-    private static boolean contains(List<LegacyClientData.Stack> stacks, LegacyClientData.Stack stack) {
-        return stacks.stream().anyMatch(s -> s.key().equals(stack.key()) && s.metadata() == stack.metadata() && s.tag().equals(stack.tag()));
+    private record RenderStack(String key, int metadata, String tag) {
+        static RenderStack of(LegacyClientData.Stack stack) { return new RenderStack(stack.key(), stack.metadata(), stack.tag()); }
     }
 
     /** Executes the real old inventory renderers once and keeps their geometry; texture stays the icon name. */
@@ -188,7 +200,7 @@ public final class LegacyContent {
         }
     }
     private List<LegacyVertexStream.Primitive> resolveIcons(List<LegacyVertexStream.Primitive> primitives) {
-        return LegacyIconResolver.resolve(primitives, data.iconLayout());
+        return data.resolveIcons(primitives);
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
     public Map<String, List<LegacyVertexStream.Primitive>> contextGeometry() { return contextGeometry; }
@@ -243,15 +255,17 @@ public final class LegacyContent {
             oldBlocks.put(key, block);
         }
         var itemValues = new ArrayList<Item>();
+        var metadataByItem = new HashMap<String, Set<Integer>>();
+        for (var stack : data.catalog()) metadataByItem.computeIfAbsent(stack.key(), ignored -> new TreeSet<>()).add(stack.metadata());
+        for (var tab : tabValues) for (var stack : tab.contents())
+            metadataByItem.computeIfAbsent(stack.key(), ignored -> new TreeSet<>()).add(stack.metadata());
         for (Object item : (Iterable<?>) itemRegistry) {
             String key = (String) itemKey.invoke(itemRegistry, item);
             if (key == null || key.startsWith("minecraft:")) continue;
             String linkedBlock = null;
             if (itemBlock.isInstance(item)) linkedBlock = (String) blockKey.invoke(blockRegistry, itemBlock.getField("field_150939_a").get(item));
             var variants = new ArrayList<Variant>();
-            var metas = new TreeSet<Integer>();
-            for (var stack : data.catalog()) if (stack.key().equals(key)) metas.add(stack.metadata());
-            for (var tab : tabValues) for (var stack : tab.contents()) if (stack.key().equals(key)) metas.add(stack.metadata());
+            var metas = new TreeSet<>(metadataByItem.getOrDefault(key, Set.of()));
             if (metas.isEmpty()) metas.add(0);
             int limit = (int)itemType.getMethod("func_77639_j").invoke(item), damage = 0;
             for (int meta : metas) {
