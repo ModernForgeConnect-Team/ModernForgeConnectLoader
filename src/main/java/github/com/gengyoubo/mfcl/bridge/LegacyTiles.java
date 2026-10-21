@@ -25,7 +25,9 @@ public final class LegacyTiles {
     }
     public Object create(String key, int metadata, Object world, int x, int y, int z) throws Exception {
         return services.items().inLegacy(() -> {
-            Object tile = blockType.getMethod("createTileEntity", worldType, int.class).invoke(block(key), world, metadata);
+            Object block=block(key);
+            if(!(boolean)blockType.getMethod("hasTileEntity",int.class).invoke(block,metadata))return null;
+            Object tile = blockType.getMethod("createTileEntity", worldType, int.class).invoke(block, world, metadata);
             if (tile == null) return null; // A technical block may report hasTileEntity but expose no tile for this metadata.
             attach(tile, key, metadata, world, x, y, z); return tile;
         });

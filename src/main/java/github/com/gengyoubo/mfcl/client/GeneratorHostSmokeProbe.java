@@ -22,7 +22,7 @@ final class GeneratorHostSmokeProbe {
     private int stage,frames;
     private BlockPos position;
     private GeneratorHostSmokeProbe(ModernContentBridge content){this.content=content;}
-    static void install(ModernContentBridge content){net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(new GeneratorHostSmokeProbe(content)::tick);}
+    static void install(ModernContentBridge content){EnergyHostAcceptance.install();net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(new GeneratorHostSmokeProbe(content)::tick);}
     private void tick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END||stage==99)return;var mc=Minecraft.getInstance();
         try {
@@ -61,10 +61,17 @@ final class GeneratorHostSmokeProbe {
                 if(energy<=0)throw new IllegalStateException("Live generated energy did not reach GUI");
                 proof.put("clientEnergy",energy);proof.put("fuelSlotClicks",true);proof.put("liveWidgetSync",true);
                 if(((LegacyBlockEntity)mc.level.getBlockEntity(position)).logicSuspended())throw new IllegalStateException("Client generator logic was paused");
+                var clientEnergy=mc.level.getBlockEntity(position).getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ENERGY,null).orElseThrow(IllegalStateException::new);
+                int before=clientEnergy.getEnergyStored();
+                if(clientEnergy.extractEnergy(1,false)!=0||clientEnergy.receiveEnergy(1,false)!=0||clientEnergy.getEnergyStored()!=before)throw new IllegalStateException("Client mutated authoritative RF energy");
+                proof.put("clientEnergyReadOnly",true);
                 pending=mc.getSingleplayerServer().submit(()->{
                     var tile=(LegacyBlockEntity)mc.getSingleplayerServer().overworld().getBlockEntity(position);
                     if(tile.logicSuspended()||tile.successfulTicks()==0)throw new IllegalStateException("Server generator logic was paused");
-                    proof.put("serverTicks",tile.successfulTicks());return true;
+                    proof.put("serverTicks",tile.successfulTicks());
+                    try{proof.put("energyBridge",EnergyHostAcceptance.verify(content,mc.getSingleplayerServer().overworld(),position));}
+                    catch(Exception failure){throw new IllegalStateException("Energy bridge acceptance failed",failure);}
+                    return true;
                 });stage=6;
             }else if(stage==6&&pending.isDone()) {
                 pending.join();proof.put("clientAndServerTicks",true);mc.player.closeContainer();mc.level.disconnect();mc.clearLevel();stage=7;frames=0;

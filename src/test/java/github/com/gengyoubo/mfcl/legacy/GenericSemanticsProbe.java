@@ -13,6 +13,8 @@ public final class GenericSemanticsProbe {
     static void verify(EmbeddedLegacyRuntime runtime, Map<String, Object> report) throws Exception {
         if (!Boolean.TRUE.equals(report.get("legacyFmlStarted"))) throw new AssertionError(report);
         LegacyServices services = runtime.services(); ClassLoader loader = services.loader();
+        if(services.energy().supports(loader.loadClass("net.minecraft.tileentity.TileEntityChest").getConstructor().newInstance()))
+            throw new AssertionError("A vanilla inventory exposed RF without an RF API");
         RuntimeApiSemanticsProbe.verify(runtime, report);
         RuntimeLogicSemanticsProbe.verify(services,report);
         RuntimeDeviceSemanticsProbe.verify(services,report);

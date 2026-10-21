@@ -90,6 +90,7 @@ public final class LevelWorldBridge {
         return new net.minecraft.world.damagesource.DamageSource(type, direct, attacker);
     }
     private HostWorldAccess access(ServerLevel level, int dimension) {
+        var energyTiles=new HostEnergyTiles(content,level);
         return new HostWorldAccess() {
             private void check() {
                 if (!level.getServer().isSameThread()) throw new IllegalStateException("Legacy server world requires the server thread");
@@ -257,10 +258,11 @@ public final class LevelWorldBridge {
             }
             @Override public boolean originalBlockRayTrace() { check(); return true; }
             @Override public Object tileEntity(int x, int y, int z) {
-                check(); content.beforeMutation(level,new BlockPos(x,y,z)); var tile = level.getBlockEntity(new BlockPos(x, y, z));
+                check();var pos=new BlockPos(x,y,z);if(!level.hasChunkAt(pos))return null;
+                content.beforeMutation(level,pos); var tile = level.getBlockEntity(pos);
                 if (tile == null) return null;
                 if (tile instanceof LegacyBlockEntity legacy) return legacy.legacy();
-                return null; // An unsupported native tile is not an instance of any legacy machine/interface.
+                return energyTiles.find(new BlockPos(x,y,z));
             }
             @Override public void setTileEntity(int x, int y, int z, Object old) {
                 check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));

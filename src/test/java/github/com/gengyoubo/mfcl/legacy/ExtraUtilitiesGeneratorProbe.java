@@ -83,7 +83,8 @@ public final class ExtraUtilitiesGeneratorProbe {
             window.setInt(clientContainer,8);
             for(var packet:initial)LegacyPackets.receiveClient(services,packet);
             assertEnergy(loader,clientContainer,energy+123);
-            System.out.println("MFCL_XU_GENERATOR_PASS: client ticks, sound lifecycle, fuel generation, captured initial GUI data, live codec delivery, stale-window rejection");
+            ExtraUtilitiesEnergyProbe.verify(services);
+            System.out.println("MFCL_XU_GENERATOR_PASS: client ticks, sound lifecycle, fuel generation, captured initial GUI data, live codec delivery, stale-window rejection, RF energy bridge");
         }
     }
     private static void assertEnergy(ClassLoader loader,Object container,int expected) throws Exception {

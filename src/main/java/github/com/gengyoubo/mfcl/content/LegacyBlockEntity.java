@@ -16,6 +16,7 @@ public final class LegacyBlockEntity extends BlockEntity {
     private boolean updatePending, logicSuspended;
     private long successfulTicks;
     private final java.util.Map<net.minecraft.core.Direction,net.minecraftforge.common.util.LazyOptional<net.minecraftforge.items.IItemHandler>> inventories = new java.util.HashMap<>();
+    private final java.util.Map<net.minecraft.core.Direction,net.minecraftforge.common.util.LazyOptional<net.minecraftforge.energy.IEnergyStorage>> energy = new java.util.HashMap<>();
     public ModernContentBridge content() { return content; }
     public boolean owns(Object original) { return legacy == original; }
     public boolean logicSuspended() { return logicSuspended; }
@@ -136,6 +137,13 @@ public final class LegacyBlockEntity extends BlockEntity {
         }
     }
     @Override public <T> net.minecraftforge.common.util.LazyOptional<T> getCapability(net.minecraftforge.common.capabilities.Capability<T> capability, net.minecraft.core.Direction side) {
+        if(capability==net.minecraftforge.common.capabilities.ForgeCapabilities.ENERGY&&level!=null&&!isRemoved()) {
+            try {
+                var access=content.services().energy();
+                if(access.connected(legacyOrNull(),side==null?null:side.get3DDataValue()))return energy.computeIfAbsent(side,key->
+                        net.minecraftforge.common.util.LazyOptional.of(()->new LegacyEnergyHandler(this,key))).cast();
+            }catch(Exception failure){throw new IllegalStateException("Cannot expose original RF energy",failure);}
+        }
         if (capability == net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER && level != null && !isRemoved()) {
             try {
                 if (content.services().inventories().supports(legacyOrNull())) return inventories.computeIfAbsent(side,key ->
@@ -146,6 +154,7 @@ public final class LegacyBlockEntity extends BlockEntity {
     }
     @Override public void invalidateCaps() {
         super.invalidateCaps(); inventories.values().forEach(net.minecraftforge.common.util.LazyOptional::invalidate); inventories.clear();
+        energy.values().forEach(net.minecraftforge.common.util.LazyOptional::invalidate);energy.clear();
     }
     @Override public void setBlockState(BlockState state) {
         super.setBlockState(state);

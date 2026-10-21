@@ -37,6 +37,7 @@ Read each record's date, tested versions and stated limits. A historical experim
 | Block placement coverage | [Placement audit](block-placement-audit.md), [audit data](block-placement-audit.json) |
 | Original NBT and JEI item previews | [Item rendering](jei-item-rendering.md) |
 | Original device containers, slot authority and tile synchronization | [Device container bridge](device-containers.md) |
+| Legacy CoFH RF and modern Forge Energy, directions, authority and persistence | [Bidirectional RF/FE bridge](rf-energy-bridge.md) |
 | Sound resources and playback routing | [Legacy sound bridge](legacy-sounds.md) |
 | Legacy packets and current TC4-specific path | [Runtime design: network boundary](runtime-design.md#network-and-event-boundary), [scanner bridge](thaumometer-bridge.md), [migration boundary](developer-api.md) |
 | Legacy Scala / Typesafe inputs | [Pinned language-runtime inputs](legacy-language-inputs.json) |
