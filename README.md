@@ -41,6 +41,10 @@ The core provides generic mechanisms. Mod-specific behavior belongs in optional 
 
 MFCL reads the game's own directory and scans only JARs directly inside `mods/1.7.10/`. Original Minecraft, Forge and third-party mod files are not redistributed with MFCL.
 
+If a launcher or modpack installer puts original 1.7.10 JARs straight into `mods/`, MFCL moves them to `mods/1.7.10/` at startup, before it prepares the runtime and scans that folder, so they load in the same launch with no restart. Forge 1.20.1 skips such JARs without an error because they have no `mods.toml`. A JAR is moved only if MFCL's passive inspection finds a legacy FML mod or coremod and the file name or `mcmod.info` names Minecraft 1.7.10. Other old FML versions are left in place with a notice. Files are moved unchanged. A JAR in `mods/` takes precedence over `mods/1.7.10/`, because that is where the launcher installs updates: when a modpack update installs a new version (same file name, or a new file name declaring the same mod ID), the old file in `mods/1.7.10/` is moved to `mfcl/legacy-replaced/<time>/` rather than deleted. There it is invisible to Forge and to MFCL; a `LEGACY_MOD_REPLACED` notice names it. Without this, both versions would end up in `mods/1.7.10/` and fail with `DUPLICATE_MOD_ID`. A byte-identical copy of a file already in `mods/1.7.10/` is simply removed from `mods/`. Each move is logged to `logs/latest.log`, recorded in `logs/mfcl/legacy-1.7.10.json` and appended with its SHA-256 to `logs/mfcl/legacy-relocations.jsonl`. Disable it with `-Dmfcl.autoRelocateLegacyMods=false`.
+
+A 1.7.10 mod that a modpack update drops entirely is not removed: the launcher looks for it in `mods/`, but it has already been moved to `mods/1.7.10/`. Delete it from there by hand.
+
 ### Installing for players
 
 1. Put the MFCL JAR in the instance's `mods/` folder (for example a PCL / MultiMC / official-launcher game directory).

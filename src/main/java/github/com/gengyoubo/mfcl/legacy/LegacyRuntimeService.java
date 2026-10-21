@@ -21,6 +21,16 @@ public final class LegacyRuntimeService {
     public java.util.Set<String> loadedModIds() { return loadedModIds; }
     public java.util.Map<String, String> loadedModVersions() { return loadedModVersions; }
     private String autoPrepareFailure;
+    private List<LegacyDiagnostic> relocationDiagnostics = List.of();
+
+    /**
+     * Moves 1.7.10 JARs that were installed into the modern {@code mods/} root (for example by a modpack launcher) to
+     * {@code mods/1.7.10/}; call first, before {@link #prepareRuntime}. Results are reported with the next inspection.
+     */
+    public void relocateRootLegacyMods(Path gameDirectory) {
+        relocationDiagnostics = LegacyModRelocator.enabled()
+                ? List.copyOf(new LegacyModRelocator().relocate(new LegacyPaths(gameDirectory))) : List.of();
+    }
 
     /**
      * Downloads and prepares the private runtime when legacy mods need it and it is missing or broken; call before
@@ -100,7 +110,7 @@ public final class LegacyRuntimeService {
 
     public Report inspect(Path gameDirectory) {
         LegacyPaths paths = new LegacyPaths(gameDirectory);
-        List<LegacyDiagnostic> diagnostics = new ArrayList<>();
+        List<LegacyDiagnostic> diagnostics = new ArrayList<>(relocationDiagnostics);
         List<LegacyArchive> archives = List.of();
         try {
             var discovery = new LegacyDiscovery().scan(paths);
