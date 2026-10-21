@@ -67,6 +67,8 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
         // Entity.moveEntity uses World's reusable collision list, even in a façade allocated without its constructor.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72998_d", new ArrayList<>());
+        // Some mods explicitly register active tiles here instead of returning canUpdate=true.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_147482_g", new ArrayList<>());
         // theProfiler: Entity.onEntityUpdate and other original update loops open profiler sections unconditionally.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72984_F", loader.loadClass("net.minecraft.profiler.Profiler").getConstructor().newInstance());
         // playerEntities: old code (eldritch lock messages...) reads it directly; it mirrors the host players, refreshed once per tick.
@@ -89,6 +91,7 @@ public final class LegacyWorlds implements AutoCloseable {
         }
         set(providerType, provider, "field_76579_a", world);
         var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
+        if(!host.clientSide())dimensionWorlds().put(dimension,world);
         refreshDifficulty(binding);
         return world;
     }
@@ -103,6 +106,7 @@ public final class LegacyWorlds implements AutoCloseable {
         Binding binding = worlds.get(hostIdentity);
         if (binding != null) {
             binding.check(); worlds.remove(hostIdentity); DISPATCH.remove(binding.world);
+            if(!binding.host.clientSide())dimensionWorlds().remove(binding.host.legacyDimensionId(),binding.world);
             var directory = binding.host.legacySaveDirectory();
             if (directory != null && worlds.values().stream().noneMatch(other -> directory.equals(other.host.legacySaveDirectory()))) storages.remove(directory);
         }
@@ -111,9 +115,19 @@ public final class LegacyWorlds implements AutoCloseable {
     public interface Lifecycle {
         default void loaded(Object world, int dimension) throws Exception {}
         default void saving(Object world, int dimension) throws Exception {}
+        default void tick(Object world, boolean start) throws Exception {}
+        default void unloaded(Object world) throws Exception {}
     }
     private final List<Lifecycle> lifecycles = new java.util.concurrent.CopyOnWriteArrayList<>();
     public void lifecycle(Lifecycle hooks) { lifecycles.add(Objects.requireNonNull(hooks)); }
+    public void tick(Object hostIdentity,boolean start) throws Exception {
+        Object world=bound(hostIdentity);
+        items.inLegacy(()->{for(var hooks:lifecycles)hooks.tick(world,start);return null;});
+    }
+    public void unloaded(Object hostIdentity) throws Exception {
+        Object world=bound(hostIdentity);
+        items.inLegacy(()->{for(var hooks:lifecycles)hooks.unloaded(world);return null;});
+    }
     // Not synchronized: inLegacy takes the runtime lock, which other threads hold while they look up bound worlds.
     public void loaded(Object hostIdentity) throws Exception {
         Object world = bound(hostIdentity); int dimension = binding(world).host.legacyDimensionId();
@@ -174,11 +188,24 @@ public final class LegacyWorlds implements AutoCloseable {
         try { return LegacyChunkFacades.create(binding.loader, world, x, z); }
         catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
-    @Override public synchronized void close() { for (Binding binding : worlds.values()) DISPATCH.remove(binding.world); worlds.clear(); }
+    @SuppressWarnings("unchecked") private Map<Integer,Object> dimensionWorlds() {
+        try {
+            var field=loader.loadClass("net.minecraftforge.common.DimensionManager").getDeclaredField("worlds");field.setAccessible(true);
+            return (Map<Integer,Object>)field.get(null);
+        }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot expose host dimensions to original mods",failure);}
+    }
+    @Override public synchronized void close() {
+        for (Binding binding : worlds.values()) {
+            DISPATCH.remove(binding.world);
+            if(!binding.host.clientSide())dimensionWorlds().remove(binding.host.legacyDimensionId(),binding.world);
+        }
+        worlds.clear();
+    }
     private static Binding binding(Object world) {
         Binding binding = DISPATCH.get(world); if (binding == null) throw new IllegalStateException("Legacy world binding has expired"); binding.check(); return binding;
     }
     public static long time(Object world, boolean total) { var binding = binding(world); return total ? binding.host.gameTime() : binding.host.dayTime(); }
+    public static int viewDistance(Object world) { return binding(world).host.viewDistance(); }
     public static void sound(Object world,double x,double y,double z,String id,float volume,float pitch) {
         binding(world).host.playSound(new HostWorldAccess.Sound(x,y,z,id,volume,pitch,false,null));
     }
@@ -219,6 +246,10 @@ public final class LegacyWorlds implements AutoCloseable {
                 type.getField("field_70161_v").getDouble(entity),id,volume,pitch,false,except));
     }
     public static void setTime(Object world, long time) { binding(world).host.setDayTime(time); }
+    public static boolean explosionEffect(Object world,double x,double y,double z) {
+        var host=hostOrNull(world);if(host==null)return false;
+        host.explosionEffect(x,y,z);return true;
+    }
     /** The plain arrow becomes a host arrow and drops become host items; every other old entity is hosted with its original logic. */
     public static boolean spawn(Object world, Object entity) {
         var bound = binding(world);

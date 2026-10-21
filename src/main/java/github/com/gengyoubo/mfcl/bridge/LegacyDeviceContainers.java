@@ -95,4 +95,12 @@ public final class LegacyDeviceContainers {
                 .invoke(registry(loader),owner,player,descriptor.id(),world,descriptor.x(),descriptor.y(),descriptor.z());
     }
     public static List<?> slots(Object container) throws Exception {return (List<?>)container.getClass().getField("field_75151_b").get(container);}
+    /** Original machine containers publish their live fields to registered ICrafting viewers. */
+    public static void attachViewer(Open opened,int windowId) throws Exception {
+        var loader=opened.player().getClass().getClassLoader();
+        var container=loader.loadClass("net.minecraft.inventory.Container");
+        container.getField("field_75152_c").setInt(opened.container(),windowId);
+        loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71070_bA").set(opened.player(),opened.container());
+        container.getMethod("func_75132_a",loader.loadClass("net.minecraft.inventory.ICrafting")).invoke(opened.container(),opened.player());
+    }
 }

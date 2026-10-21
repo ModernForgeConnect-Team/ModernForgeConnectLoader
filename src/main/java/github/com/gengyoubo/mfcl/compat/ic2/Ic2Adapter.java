@@ -8,9 +8,12 @@ public final class Ic2Adapter implements LegacyModAdapter {
     public String id() { return "ic2"; }
     public boolean supports(Set<String> mods) { return mods.contains("IC2"); }
     public void beforeBoot(ClassLoader loader) throws Exception {
-        LegacyModAdapter.registerBytecodeAdapters(loader,"github.com.gengyoubo.mfcl.legacy1710.compat.ic2.Ic2GuiAdapter");
+        LegacyModAdapter.registerBytecodeAdapters(loader,"github.com.gengyoubo.mfcl.legacy1710.compat.ic2.Ic2GuiAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.ic2.Ic2NetworkAdapter");
     }
     public Map<String,Object> initialize(LegacyServices services) throws Exception {
+        Ic2WorldTicks.install(services);
+        Ic2Packets.install(services);
         var loader=services.loader();var source=loader.loadClass("ic2.core.IHasGui");
         var player=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         var container=source.getMethod("getGuiContainer",player);

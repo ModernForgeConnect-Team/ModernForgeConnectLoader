@@ -54,6 +54,7 @@ final class LegacyEntityAccess {
                 watch(watcher,add,exists,16,(byte)0);watch(watcher,add,exists,17,0f);watch(watcher,add,exists,18,0);
                 var profile=playerType.getDeclaredField("field_146106_i");profile.setAccessible(true);
                 profile.set(entity,loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(snapshot.id(),snapshot.name()));
+                LegacyPlayerFood.initialize(entity);
             }
         }
         // Age and breeding state are what old animal logic (lamp of fertility) checks before setInLove.

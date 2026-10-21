@@ -9,6 +9,11 @@ public interface HostWorldAccess {
     /** A legacy projectile reduced to host-neutral data so the modern side can spawn an equivalent entity. */
     record Projectile(double x,double y,double z,double motionX,double motionY,double motionZ,double damage,boolean burning,java.util.UUID owner) {}
     record Abilities(boolean creative,boolean invulnerable) {}
+    record Food(int level,float saturation) {}
+    /** Null means this binding has no authoritative player with that identity. */
+    default Food food(java.util.UUID player) { return null; }
+    default void setFood(java.util.UUID player,Food food) { throw new UnsupportedOperationException("Host player food mutation is not available"); }
+    default void addExhaustion(java.util.UUID player,float amount) { throw new UnsupportedOperationException("Host player exhaustion is not available"); }
     record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities) {
         public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love) {
             this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,null);
@@ -26,6 +31,8 @@ public interface HostWorldAccess {
     int legacyDimensionId();
     boolean clientSide();
     default int difficulty() { return 2; }
+    /** Server tracking distance in chunks, used by original packet range checks. */
+    default int viewDistance() { return 10; }
     long gameTime();
     long dayTime();
     void setDayTime(long time);
@@ -40,6 +47,10 @@ public interface HostWorldAccess {
     default void playSound(Sound sound) { }
     /** A modern level event whose payload has already been translated by the legacy world bridge. */
     default void levelEvent(java.util.UUID excludedPlayer,int event,int x,int y,int z,int data) { }
+    /** Visual effect only; the original explosion retains authority over damage and block destruction. */
+    default void explosionEffect(double x,double y,double z) { }
+    /** An original adapter's encoded client packet, delivered over the authenticated host connection. */
+    default void sendPacket(java.util.UUID recipient,LegacyPackets.Message packet) { }
     default void spawnProjectile(Projectile projectile) { }
     /** An old entity with no host translation; the host keeps it alive and runs its original onUpdate. */
     default boolean spawnLegacyEntity(Object entity) { return false; }

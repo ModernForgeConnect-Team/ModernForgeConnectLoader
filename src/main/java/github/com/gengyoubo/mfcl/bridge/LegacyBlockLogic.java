@@ -35,6 +35,15 @@ public final class LegacyBlockLogic {
     private final LegacyServices services;
     private final Class<?> blockType, worldType, tileType;
     private final Object registry;
+    @FunctionalInterface public interface TickPolicy { boolean scheduled(Object tile) throws Exception; }
+    private final java.util.List<TickPolicy> tickPolicies=new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Original mods can maintain their own tick list despite canUpdate=false. */
+    public void tickPolicy(TickPolicy policy) { tickPolicies.add(java.util.Objects.requireNonNull(policy)); }
+    private boolean scheduled(Object tile) throws Exception {
+        if((boolean)tileType.getMethod("canUpdate").invoke(tile))return true;
+        for(var policy:tickPolicies)if(policy.scheduled(tile))return true;
+        return false;
+    }
     public LegacyBlockLogic(LegacyServices services) throws Exception {
         this.services = services; var loader = services.loader();
         blockType = loader.loadClass("net.minecraft.block.Block"); worldType = loader.loadClass("net.minecraft.world.World");
@@ -43,7 +52,7 @@ public final class LegacyBlockLogic {
     private Object block(String key) throws Exception { return registry.getClass().getMethod("func_82594_a",String.class).invoke(registry,key); }
     public boolean tick(Object tile) throws Exception {
         return services.items().inLegacy(() -> {
-            if (tile == null || (boolean)tileType.getMethod("func_145837_r").invoke(tile) || !(boolean)tileType.getMethod("canUpdate").invoke(tile)) return false;
+            if (tile == null || (boolean)tileType.getMethod("func_145837_r").invoke(tile) || !scheduled(tile)) return false;
             Object world=tileType.getMethod("func_145831_w").invoke(tile);LegacyWorlds.beginEntityQueries(world);
             try {tileType.getMethod("func_145845_h").invoke(tile);LegacyWorlds.commitEntityMotion(world);return true;}
             finally {LegacyWorlds.clearEntityQueries(world);}

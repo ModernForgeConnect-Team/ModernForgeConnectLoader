@@ -37,7 +37,7 @@ public final class LegacyContentPack {
                     boolean definition=path.matches("assets/(?!minecraft/)[^/]+/sounds\\.json");
                     boolean audio=path.matches("assets/(?!minecraft/)[^/]+/sounds/.*\\.ogg");
                     if (entry.isDirectory() || !definition&&!audio&&!path.matches("assets/(?!minecraft/)[^/]+/textures/.*\\.(png|mcmeta)")) continue;
-                    Path target = directory.resolve(audio?path.toLowerCase(Locale.ROOT):path).normalize();
+                    Path target = directory.resolve(path.toLowerCase(Locale.ROOT)).normalize();
                     if (!target.startsWith(directory)) throw new IllegalArgumentException(path);
                     Files.createDirectories(target.getParent()); try (var input = jar.getInputStream(entry)) {
                         if(definition) {
@@ -237,7 +237,7 @@ public final class LegacyContentPack {
         if (value == null) throw new IllegalArgumentException("World renderer referenced an unregistered icon: " + icon);
         return value;
     }
-    public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, github.com.gengyoubo.mfcl.bridge.LegacyTexturePaths.modernResource(resource)); }
+    public String worldResource(String resource) { return textures.getOrDefault("path:" + resource, github.com.gengyoubo.mfcl.bridge.LegacyTexturePaths.modernResource(resource).toLowerCase(Locale.ROOT)); }
     public static final String TRANSPARENT_ARMOR = "mfcl:textures/models/armor/transparent.png";
     /** Host texture for an original worn armor layer, or null when the old resource was missing. */
     public String armorTexture(String resource) {

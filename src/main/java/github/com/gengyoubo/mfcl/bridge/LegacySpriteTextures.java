@@ -27,9 +27,11 @@ final class LegacySpriteTextures {
             }
         }
         var result=new LinkedHashMap<String,Texture>();
+        var encoded=new IdentityHashMap<Object,Texture>();
         for(var entry:custom.entrySet()) {
             Object pixels=pixels(sprite,entry.getValue(),Collections.newSetFromMap(new IdentityHashMap<>()));
             if(pixels==null)continue;
+            Texture cached=encoded.get(pixels);if(cached!=null){result.put(entry.getKey(),cached);continue;}
             int width=(int)sprite.getMethod("func_94211_a").invoke(pixels),height=(int)sprite.getMethod("func_94216_b").invoke(pixels);
             int count=(int)sprite.getMethod("func_110970_k").invoke(pixels);
             if(width<=0||height<=0)continue;
@@ -53,8 +55,9 @@ final class LegacySpriteTextures {
                 }
                 metadata=new com.google.gson.Gson().toJson(Map.of("animation",values));
             }
-            var output=new ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",output);
-            result.put(entry.getKey(),new Texture(output.toByteArray(),metadata));
+            var output=new ByteArrayOutputStream();
+            try(var memory=new javax.imageio.stream.MemoryCacheImageOutputStream(output)){javax.imageio.ImageIO.write(image,"png",memory);}
+            var texture=new Texture(output.toByteArray(),metadata);encoded.put(pixels,texture);result.put(entry.getKey(),texture);
         }
         return result;
     }

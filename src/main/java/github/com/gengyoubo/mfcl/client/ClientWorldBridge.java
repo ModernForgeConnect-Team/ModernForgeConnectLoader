@@ -24,15 +24,18 @@ public final class ClientWorldBridge {
         return services.items().inLegacy(()->{active.refresh();return services.worlds().bound(active.current);});
     }
     private void tick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        try {services.items().inLegacy(()->{refresh();return null;});}
+        try {services.items().inLegacy(()->{
+            refresh();
+            if(current!=null&&!Minecraft.getInstance().isPaused())services.worlds().tick(current,event.phase==TickEvent.Phase.START);
+            return null;
+        });}
         catch(Exception failure){throw new IllegalStateException("Cannot refresh legacy client world",failure);}
     }
     private void refresh() {
         Level next = Minecraft.getInstance().level;
         if (next == current) return;
         try {
-            if (current != null) services.worlds().unbind(current);
+            if (current != null) {services.worlds().unloaded(current);services.worlds().unbind(current);}
             current = null;
             Object oldWorld = null;
             if (next != null) {
@@ -43,6 +46,10 @@ public final class ClientWorldBridge {
                     @Override public int legacyDimensionId() { return oldDimension; }
                     @Override public boolean clientSide() { return true; }
                     @Override public int difficulty() { return next.getDifficulty().getId(); }
+                    @Override public Food food(java.util.UUID id) {
+                        var player=next.getPlayerByUUID(id);if(player==null)return null;
+                        var food=player.getFoodData();return new Food(food.getFoodLevel(),food.getSaturationLevel());
+                    }
                     @Override public String biome(int x,int z) {return github.com.gengyoubo.mfcl.content.HostBiomeQueries.key(next,x,z);}
                     @Override public void playSound(Sound sound) {
                         if(sound.excludedPlayer()!=null&&Minecraft.getInstance().player!=null&&sound.excludedPlayer().equals(Minecraft.getInstance().player.getUUID()))return;
@@ -50,6 +57,9 @@ public final class ClientWorldBridge {
                         next.playLocalSound(sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch(),sound.distanceDelay());
                     }
                     @Override public long gameTime() { return next.getGameTime(); }
+                    @Override public void explosionEffect(double x,double y,double z) {
+                        next.addParticle(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,x,y,z,0,0,0);
+                    }
                     @Override public void levelEvent(java.util.UUID excluded,int event,int x,int y,int z,int data) {
                         if(excluded!=null&&Minecraft.getInstance().player!=null&&excluded.equals(Minecraft.getInstance().player.getUUID()))return;
                         next.levelEvent(event,new BlockPos(x,y,z),data);

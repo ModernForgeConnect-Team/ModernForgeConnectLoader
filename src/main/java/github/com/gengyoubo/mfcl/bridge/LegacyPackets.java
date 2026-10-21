@@ -15,6 +15,22 @@ public final class LegacyPackets {
     public interface ServerPolicy { boolean prepare(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception; }
     private static final Map<ClassLoader,List<ServerPolicy>> SERVER_POLICIES=new java.util.WeakHashMap<>();
     private static final ThreadLocal<Object> SERVER_PLAYER=new ThreadLocal<>();
+    @FunctionalInterface public interface ClientReceiver { void receive(byte[] payload) throws Exception; }
+    private static final Map<ClassLoader,Map<String,ClientReceiver>> CLIENT_RECEIVERS=new java.util.WeakHashMap<>();
+    public static synchronized void clientReceiver(ClassLoader loader,String channel,ClientReceiver receiver) {
+        CLIENT_RECEIVERS.computeIfAbsent(loader,key->new LinkedHashMap<>()).put(channel,receiver);
+    }
+    private static synchronized ClientReceiver clientReceiver(ClassLoader loader,String channel) {
+        return CLIENT_RECEIVERS.getOrDefault(loader,Map.of()).get(channel);
+    }
+    /** Raw event channels retain their original codec; the host owns routing and transport. */
+    public static boolean sendClientPayload(Object player,String channel,byte[] payload) throws Exception {
+        var entity=player.getClass().getClassLoader().loadClass("net.minecraft.entity.Entity");
+        var host=LegacyWorlds.hostOrNull(entity.getField("field_70170_p").get(player));
+        if(host==null||host.clientSide())return false;
+        if(payload.length>1024*1024)throw new IllegalArgumentException("Old client packet exceeds host limit");
+        host.sendPacket((UUID)entity.getMethod("func_110124_au").invoke(player),new Message(channel,0,payload.clone()));return true;
+    }
     public static void allowServer(ClassLoader loader,ServerPolicy policy){SERVER_POLICIES.computeIfAbsent(loader,key->new ArrayList<>()).add(policy);}
     private LegacyPackets() {}
     public static void channel(Object wrapper, String name) { CHANNELS.put(wrapper,new Channel(name)); }
@@ -133,6 +149,8 @@ public final class LegacyPackets {
     public static void receiveClient(LegacyServices services, Message message) throws Exception {
         services.items().inLegacy(()->{
             var loader=services.loader();
+            var receiver=clientReceiver(loader,message.channel());
+            if(receiver!=null){receiver.receive(message.payload());return null;}
             Channel channel=CHANNELS.entrySet().stream().filter(e->e.getKey().getClass().getClassLoader()==loader&&e.getValue().name.equals(message.channel())).map(Map.Entry::getValue).findFirst().orElseThrow();
             Handler handler=channel.handlers.stream().filter(h->h.side.equals("CLIENT")&&h.discriminator==message.discriminator()).findFirst().orElseThrow();
             Class<?> bufferType=loader.loadClass("io.netty.buffer.ByteBuf");

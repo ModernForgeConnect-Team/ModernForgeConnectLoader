@@ -84,6 +84,7 @@ public final class LegacyClientData {
             setField(fmlClient, fmlClient.getMethod("instance").invoke(null), "client", client);
             setField(mcType, client, "field_71474_y", loader.loadClass("net.minecraft.client.settings.GameSettings").getConstructor().newInstance());
             setField(mcType, client, "field_71428_T", loader.loadClass("net.minecraft.util.Timer").getConstructor(float.class).newInstance(20f));
+            setField(mcType, client, "field_71424_I", loader.loadClass("net.minecraft.profiler.Profiler").getConstructor().newInstance());
             setField(mcType, client, "field_71443_c", 854); setField(mcType, client, "field_71440_d", 480);
             Class<?> fontType = loader.loadClass("net.minecraft.client.gui.FontRenderer");
             Object font = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, fontType);

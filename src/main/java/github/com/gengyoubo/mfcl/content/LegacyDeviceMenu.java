@@ -46,8 +46,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private LegacyDeviceMenu(int id,Inventory inventory,ModernContentBridge content,LegacyDeviceContainers.Open request) {
         this(id,inventory,content,request,request.descriptor(),positions(request));
         try {
-            content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71070_bA").set(request.player(),request.container());
-            refresh();
+            content.services().items().inLegacy(()->{LegacyDeviceContainers.attachViewer(request,id);refresh();return null;});
         }catch(Exception failure){throw new IllegalStateException("Cannot open original container",failure);}
     }
     private static List<int[]> positions(LegacyDeviceContainers.Open request) {

@@ -5,6 +5,10 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class LegacyTexturePathsTest {
+    @Test void preservesUppercaseGuiPathsFromLegacyJars() {
+        assertEquals("assets/ic2/textures/gui/GUIGenerator.png",LegacyTexturePaths.legacyResource("ic2:textures/gui/GUIGenerator.png"));
+        assertEquals("assets/minecraft/textures/gui/Foo.png",LegacyTexturePaths.legacyResource("textures/gui/Foo.png"));
+    }
     @Test void vanillaArrowMovesWhileModResourcesKeepTheirIdentity() {
         assertEquals("minecraft:textures/entity/projectiles/arrow.png",LegacyTexturePaths.modernResource("minecraft:textures/entity/arrow.png"));
         assertEquals("thaumcraft:textures/models/arrow.png",LegacyTexturePaths.modernResource("thaumcraft:textures/models/arrow.png"));

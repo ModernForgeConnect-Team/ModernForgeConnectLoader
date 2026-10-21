@@ -31,10 +31,18 @@ public final class LevelWorldBridge {
         dimensions.loaded(level);
     }
     private void unload(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel level) { dimensions.unloading(level); content.services().worlds().unbind(level); hostTicks.remove(level); }
+        if (event.getLevel() instanceof ServerLevel level) {
+            dimensions.unloading(level);
+            try {content.services().worlds().unloaded(level);}
+            catch(Exception failure){throw new IllegalStateException("Cannot unload original world",failure);}
+            content.services().worlds().unbind(level); hostTicks.remove(level);
+        }
     }
     private void tick(net.minecraftforge.event.TickEvent.LevelTickEvent event) {
-        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END || !(event.level instanceof ServerLevel level)) return;
+        if (!(event.level instanceof ServerLevel level)) return;
+        try {content.services().worlds().tick(level,event.phase==net.minecraftforge.event.TickEvent.Phase.START);}
+        catch(Exception failure){throw new IllegalStateException("Cannot tick original world "+level.dimension().location(),failure);}
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
         var pending = hostTicks.get(level); if (pending == null || pending.isEmpty()) return;
         long now = level.getGameTime(); var due = new ArrayList<BlockPos>();
         pending.entrySet().removeIf(entry -> { if (entry.getValue() > now) return false; due.add(entry.getKey()); return true; });
@@ -90,6 +98,19 @@ public final class LevelWorldBridge {
             @Override public int legacyDimensionId() { return dimension; }
             @Override public boolean clientSide() { return false; }
             @Override public int difficulty() { check(); return level.getDifficulty().getId(); }
+            @Override public int viewDistance() { check(); return level.getServer().getPlayerList().getViewDistance(); }
+            @Override public Food food(UUID id) {
+                check();var player=level.getPlayerByUUID(id);if(player==null)return null;
+                var food=player.getFoodData();return new Food(food.getFoodLevel(),food.getSaturationLevel());
+            }
+            @Override public void setFood(UUID id,Food value) {
+                check();var player=level.getPlayerByUUID(id);if(player!=null)content.afterCommit(level,()->{
+                    player.getFoodData().setFoodLevel(value.level());player.getFoodData().setSaturation(value.saturation());
+                });
+            }
+            @Override public void addExhaustion(UUID id,float amount) {
+                check();var player=level.getPlayerByUUID(id);if(player!=null)content.afterCommit(level,()->player.causeFoodExhaustion(amount));
+            }
             @Override public String biome(int x,int z) {check();return HostBiomeQueries.key(level,x,z);}
             @Override public void setBiome(int x,int z,String key) {check();content.afterCommit(level,()->HostBiomeQueries.set(level,x,z,key));}
             @Override public void playSound(Sound sound) {
@@ -98,6 +119,13 @@ public final class LevelWorldBridge {
                 content.afterCommit(level,()->level.playSound(excluded,sound.x(),sound.y(),sound.z(),net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id),net.minecraft.sounds.SoundSource.MASTER,sound.volume(),sound.pitch()));
             }
             @Override public long gameTime() { check(); return level.getGameTime(); }
+            @Override public void sendPacket(UUID recipient,github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message message) {
+                check();var player=level.getPlayerByUUID(recipient);
+                if(player instanceof net.minecraft.server.level.ServerPlayer server)content.afterCommit(level,()->ScanSyncChannel.sendToPlayer(server,message));
+            }
+            @Override public void explosionEffect(double x,double y,double z) {
+                check();content.afterCommit(level,()->level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,x,y,z,1,0,0,0,0));
+            }
             @Override public void levelEvent(java.util.UUID excluded,int event,int x,int y,int z,int data) {
                 check(); var player=excluded==null?null:level.getServer().getPlayerList().getPlayer(excluded);
                 content.afterCommit(level,()->level.levelEvent(player,event,new BlockPos(x,y,z),data));

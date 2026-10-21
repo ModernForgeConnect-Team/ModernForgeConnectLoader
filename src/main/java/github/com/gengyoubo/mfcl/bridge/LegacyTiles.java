@@ -32,10 +32,13 @@ public final class LegacyTiles {
     }
     public void attach(Object tile, String key, int metadata, Object world, int x, int y, int z) throws Exception {
         if (!tileType.isInstance(tile) || !worldType.isInstance(world)) throw new IllegalArgumentException("Tile/world belongs to another runtime");
+        boolean validate=tileType.getMethod("func_145831_w").invoke(tile)!=world
+                ||tileType.getField("field_145851_c").getInt(tile)!=x||tileType.getField("field_145848_d").getInt(tile)!=y||tileType.getField("field_145849_e").getInt(tile)!=z
+                ||(boolean)tileType.getMethod("func_145837_r").invoke(tile);
         tileType.getMethod("func_145834_a", worldType).invoke(tile, world);
         tileType.getField("field_145851_c").setInt(tile, x); tileType.getField("field_145848_d").setInt(tile, y); tileType.getField("field_145849_e").setInt(tile, z);
         tileType.getField("field_145847_g").setInt(tile, metadata); tileType.getField("field_145854_h").set(tile, block(key));
-        tileType.getMethod("func_145829_t").invoke(tile);
+        if(validate)tileType.getMethod("func_145829_t").invoke(tile);
     }
     public byte[] save(Object tile) throws Exception {
         return services.items().inLegacy(() -> {
@@ -115,6 +118,7 @@ public final class LegacyTiles {
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?2:0));
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
         entity.getField("field_70170_p").set(actor, world);
+        LegacyPlayerFood.initialize(actor);
         // Entity.dimension: old code compares it with dimension ids (TC4 eldritch portals pick the travel direction by it).
         entity.getField("field_71093_bK").setInt(actor, loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(worldType.getField("field_73011_w").get(world)));
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()+(client?1.62:0)); entity.getField("field_70161_v").setDouble(actor, placer.z());

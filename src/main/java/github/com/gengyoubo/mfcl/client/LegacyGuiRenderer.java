@@ -114,17 +114,18 @@ final class LegacyGuiRenderer {
     }
     private Texture texture(String key) throws Exception {
         Texture cached=textures.get(key);if(cached!=null)return cached;
-        ResourceLocation old=Objects.requireNonNull(ResourceLocation.tryParse(key));
         // Legacy jars first; then the host resource manager so modern mods/resource packs can supply textures (e.g. addon aspects).
-        try(var input=openTexture(old)) {
+        try(var input=openTexture(key)) {
             if(input==null)throw new IllegalArgumentException("Missing original GUI texture: "+key);
             var image=NativeImage.read(input);var location=Minecraft.getInstance().getTextureManager().register("mfcl/legacy_gui",new DynamicTexture(image));
             Texture texture=new Texture(location,image.getWidth(),image.getHeight());textures.put(key,texture);return texture;
         }
     }
-    private java.io.InputStream openTexture(ResourceLocation id) throws java.io.IOException {
-        var legacy=services.loader().getResourceAsStream("assets/"+id.getNamespace()+"/"+id.getPath());
+    private java.io.InputStream openTexture(String key) throws java.io.IOException {
+        var legacy=services.loader().getResourceAsStream(LegacyTexturePaths.legacyResource(key));
         if(legacy!=null)return legacy;
+        var id=ResourceLocation.tryParse(LegacyTexturePaths.modernResource(key).toLowerCase(Locale.ROOT));
+        if(id==null)return null;
         var modern=Minecraft.getInstance().getResourceManager().getResource(id);
         return modern.isPresent()?modern.get().open():null;
     }

@@ -77,8 +77,8 @@ class LegacyIconMetadataIntegrationTest {
                 String name = (String) sprite.getMethod("func_94215_i").invoke(icon);
                 float[] cell = data.iconLayout().get(name);
                 assertNotNull(cell, "Custom sprite was omitted: " + name);
-                assertEquals(16, sprite.getMethod("func_94211_a").invoke(icon));
-                assertEquals(16, sprite.getMethod("func_94216_b").invoke(icon));
+                int width=(int)sprite.getMethod("func_94211_a").invoke(icon),height=(int)sprite.getMethod("func_94216_b").invoke(icon);
+                assertTrue(width>0&&height>0,name);
                 assertEquals(cell[0], (float) sprite.getMethod("func_94209_e").invoke(icon));
                 assertEquals(cell[3], (float) sprite.getMethod("func_94210_h").invoke(icon));
                 assertTrue(cell[2] > cell[0] && cell[3] > cell[1]);
@@ -86,15 +86,21 @@ class LegacyIconMetadataIntegrationTest {
                 byte[] png=data.iconTexture(name);
                 assertNotNull(png,"Custom loader pixels were omitted: "+name);
                 var image=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png));
-                assertEquals(16,image.getWidth());
+                assertEquals(width,image.getWidth(),name);
+                assertEquals(0,image.getHeight()%height,name);
                 int split=name.lastIndexOf(':');String path=name.substring(name.indexOf(':')+1,split);
                 try(var input=loader.getResourceAsStream("assets/ic2/textures/blocks/"+path+".png")) {
                     if(input!=null) {
                         var source=javax.imageio.ImageIO.read(input);
-                        if(source.getHeight()==16) {
-                            int columns=source.getWidth()/16,index=Integer.parseInt(name.substring(split+1));
+                        if(source.getHeight()==height) {
+                            int columns=source.getWidth()/width,index=Integer.parseInt(name.substring(split+1));
                             int column=columns==2?index/6:index%columns;
-                            assertArrayEquals(source.getRGB(column*16,0,16,16,null,0,16),image.getRGB(0,0,16,16,null,0,16),name);
+                            int[] expected=source.getRGB(column*width,0,width,height,null,0,width),actual=image.getRGB(0,0,width,height,null,0,width);
+                            // The original loader fills RGB underneath fully transparent pixels to prevent atlas seams.
+                            for(int pixel=0;pixel<expected.length;pixel++) {
+                                assertEquals(expected[pixel]>>>24,actual[pixel]>>>24,name+" alpha at "+pixel);
+                                if((expected[pixel]>>>24)!=0)assertEquals(expected[pixel],actual[pixel],name+" visible pixel "+pixel);
+                            }
                             comparedPixels++;
                         }
                     }
