@@ -1,8 +1,12 @@
 package github.com.gengyoubo.mfcl.legacy;
 
 import com.google.gson.GsonBuilder;
+import com.mojang.logging.LogUtils;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -13,6 +17,7 @@ import java.util.List;
 import github.com.gengyoubo.mfcl.legacy.runtime.EmbeddedLegacyRuntime;
 
 public final class LegacyRuntimeService {
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
     public enum State { NO_LEGACY_MODS, DEPENDENCY_ERRORS, RUNTIME_NOT_READY, RUNTIME_FAILED, FML_AVAILABLE, CLIENT_DATA_AVAILABLE }
     private EmbeddedLegacyRuntime runtime;
     private java.util.Set<String> loadedModIds = java.util.Set.of();
@@ -21,16 +26,6 @@ public final class LegacyRuntimeService {
     public java.util.Set<String> loadedModIds() { return loadedModIds; }
     public java.util.Map<String, String> loadedModVersions() { return loadedModVersions; }
     private String autoPrepareFailure;
-    private List<LegacyDiagnostic> relocationDiagnostics = List.of();
-
-    /**
-     * Moves 1.7.10 JARs that were installed into the modern {@code mods/} root (for example by a modpack launcher) to
-     * {@code mods/1.7.10/}; call first, before {@link #prepareRuntime}. Results are reported with the next inspection.
-     */
-    public void relocateRootLegacyMods(Path gameDirectory) {
-        relocationDiagnostics = LegacyModRelocator.enabled()
-                ? List.copyOf(new LegacyModRelocator().relocate(new LegacyPaths(gameDirectory))) : List.of();
-    }
 
     /**
      * Downloads and prepares the private runtime when legacy mods need it and it is missing or broken; call before
@@ -86,14 +81,38 @@ public final class LegacyRuntimeService {
                 clientDataReady = started && stages.get("adapters") instanceof java.util.Map<?, ?> reports
                         && !reports.isEmpty() && reports.values().stream().allMatch(v -> v instanceof java.util.Map<?, ?> details && "READY".equals(details.get("status")));
                 state = clientDataReady ? State.CLIENT_DATA_AVAILABLE : started ? State.FML_AVAILABLE : State.RUNTIME_FAILED;
-                if (!started) diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", stages.get("stage") + ": "
-                        + stages.get("failure") + (stages.containsKey("rootCause") ? " / " + stages.get("rootCause") : "")));
+                if (!started) {
+                    diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", stages.get("stage") + ": "
+                            + stages.get("failure") + (stages.containsKey("rootCause") ? " / " + stages.get("rootCause") : "")));
+                    LOGGER.error("MFCL legacy runtime failed at {}:\n{}", stages.get("stage"), stages.get("stackTrace"));
+                }
                 else if (!clientDataReady && stages.get("adapters") instanceof java.util.Map<?, ?> reports && !reports.isEmpty())
                     diagnostics.add(LegacyDiagnostic.notice("LEGACY_CLIENT_DATA_FAILED", String.valueOf(reports)));
             }
         } catch (Throwable failure) {
             state = State.RUNTIME_FAILED;
-            diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", failure.toString()));
+            LOGGER.error("MFCL legacy runtime startup failed", failure);
+            Throwable cause = failure;
+            var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+            while (cause instanceof InvocationTargetException && cause.getCause() != null && seen.add(cause)) cause = cause.getCause();
+            Throwable rootCause = cause;
+            seen.clear();
+            while (rootCause.getCause() != null && seen.add(rootCause)) rootCause = rootCause.getCause();
+            String summary = cause.toString() + (rootCause != cause ? " / " + rootCause : "");
+            diagnostics.add(LegacyDiagnostic.error("LEGACY_BOOT_FAILED", summary));
+            var trace = new StringWriter();
+            failure.printStackTrace(new PrintWriter(trace));
+            var details = new java.util.LinkedHashMap<String, Object>();
+            details.put("stage", "EMBEDDED_RUNTIME");
+            details.put("legacyFmlStarted", started);
+            details.put("failure", cause.toString());
+            details.put("rootCause", rootCause.toString());
+            details.put("stackTrace", trace.toString());
+            try { writeReport(gameDirectory.resolve("logs/mfcl/runtime-1.7.10.json"), details); }
+            catch (IOException reportFailure) {
+                LOGGER.error("Cannot save legacy runtime failure report", reportFailure);
+                diagnostics.add(LegacyDiagnostic.error("REPORT_WRITE_FAILED", reportFailure.toString()));
+            }
         }
         Report result = new Report(inspected.targetMinecraft(), inspected.sourceMinecraft(), inspected.modDirectory(), inspected.reportFile(),
                 state, started, false, inspected.archives(), diagnostics);
@@ -110,7 +129,7 @@ public final class LegacyRuntimeService {
 
     public Report inspect(Path gameDirectory) {
         LegacyPaths paths = new LegacyPaths(gameDirectory);
-        List<LegacyDiagnostic> diagnostics = new ArrayList<>(relocationDiagnostics);
+        List<LegacyDiagnostic> diagnostics = new ArrayList<>();
         List<LegacyArchive> archives = List.of();
         try {
             var discovery = new LegacyDiscovery().scan(paths);

@@ -27,6 +27,25 @@ class LegacyModDetectionIntegrationTest {
         Path mods = Files.createDirectories(temporary.resolve("mods/1.7.10"));
         Files.copy(Path.of(tc), mods.resolve("Thaumcraft.jar"));
         Files.copy(Path.of(baubles), mods.resolve("Baubles.jar"));
+        boot(support);
+    }
+
+    /** CurseForge layout: originals next to modern mods in mods/, which legacy FML itself must never list. */
+    @Test void bootsTc4InstalledInTheModernModsRoot() throws Exception {
+        String support = System.getProperty("mfcl.test.legacySupportDir", "");
+        String tc = System.getProperty("mfcl.test.thaumcraftJar", "");
+        String baubles = System.getProperty("mfcl.test.baublesJar", "");
+        assumeTrue(!support.isBlank() && !tc.isBlank() && !baubles.isBlank(), "Supply original TC4/Baubles and prepared runtime");
+        Path mods = Files.createDirectories(temporary.resolve("mods"));
+        Files.copy(Path.of(tc), mods.resolve(Path.of(tc).getFileName()));
+        Files.copy(Path.of(baubles), mods.resolve(Path.of(baubles).getFileName()));
+        TestArchives.jar(mods.resolve("modern-mod.jar"), java.util.Map.of(), java.util.Map.of("META-INF/mods.toml", TestArchives.text("modern"),
+                "modern/Broken.class", new byte[]{0}));
+        boot(support);
+        assertFalse(Files.exists(mods.resolve("1.7.10").resolve(Path.of(tc).getFileName())), "originals are not moved");
+    }
+
+    private void boot(String support) throws Exception {
         Path log = temporary.resolve("detection.log");
         var process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "-Dfile.encoding=UTF-8", "-cp", System.getProperty("mfcl.test.runtimeClasspath"),

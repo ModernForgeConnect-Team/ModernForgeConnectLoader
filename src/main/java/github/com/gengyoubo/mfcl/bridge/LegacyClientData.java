@@ -284,34 +284,60 @@ public final class LegacyClientData {
         });
     }
     private void prepareIconMetadata() throws Exception {
-        Class<?> icon = loader.loadClass("net.minecraft.util.IIcon"), register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");
-        Map<String, Object> icons = new HashMap<>();
-        Map<String, float[]> layout = new LinkedHashMap<>();
-        java.util.concurrent.atomic.AtomicInteger cell = new java.util.concurrent.atomic.AtomicInteger();
-        Object registrar = Proxy.newProxyInstance(loader, new Class<?>[]{register}, (p, method, args) -> icons.computeIfAbsent((String) args[0], name -> {
-            // A synthetic atlas cell makes captured geometry self-describing: a quad's UV range tells the
-            // host which original icon texture it belongs to, without running the old texture stitcher.
-            int index = cell.getAndIncrement(), column = index % 16, row = index / 16;
-            float minU = column / 16f, maxU = (column + 1) / 16f, minV = row / 16f, maxV = (row + 1) / 16f;
-            layout.put(name, new float[]{minU, minV, maxU, maxV});
-            return Proxy.newProxyInstance(loader, new Class<?>[]{icon}, (ignored, m, a) -> switch (m.getName()) {
-                case "func_94211_a", "func_94216_b" -> 16;
-                case "func_94209_e" -> minU;
-                case "func_94206_g" -> minV;
-                case "func_94212_f" -> maxU;
-                case "func_94210_h" -> maxV;
-                case "func_94214_a" -> minU + (maxU - minU) * (((Double) a[0]).floatValue() / 16f);
-                case "func_94207_b" -> minV + (maxV - minV) * (((Double) a[0]).floatValue() / 16f);
-                case "func_94215_i", "toString" -> name;
-                case "hashCode" -> name.hashCode();
-                case "equals" -> ignored == a[0];
-                default -> throw new UnsupportedOperationException("Legacy icon metadata: " + m);
-            });
-        }));
+        Class<?> register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");
+        Class<?> atlas = loader.loadClass("net.minecraft.client.renderer.texture.TextureMap");
+        Class<?> sprite = loader.loadClass("net.minecraft.client.renderer.texture.TextureAtlasSprite");
+        Object blocks = metadataAtlas(atlas, 0, "textures/blocks"), items = metadataAtlas(atlas, 1, "textures/items");
+        Class<?> minecraft = loader.loadClass("net.minecraft.client.Minecraft");
+        Object client = minecraft.getMethod("func_71410_x").invoke(null);
+        setField(minecraft, client, "field_147128_au", blocks);
+        Object manager = minecraft.getField("field_71446_o").get(client);
+        Field textures = manager.getClass().getDeclaredField("field_110585_a"); textures.setAccessible(true);
+        @SuppressWarnings("unchecked") var textureObjects = (Map<Object, Object>) textures.get(manager);
+        textureObjects.put(atlas.getField("field_110575_b").get(null), blocks);
+        textureObjects.put(atlas.getField("field_110576_c").get(null), items);
         Class<?> block = loader.loadClass("net.minecraft.block.Block");
-        for (Object b : (Iterable<?>) block.getField("field_149771_c").get(null)) block.getMethod("func_149651_a", register).invoke(b, registrar);
-        for (Object i : (Iterable<?>) registry) itemType.getMethod("func_94581_a", register).invoke(i, registrar);
+        for (Object b : (Iterable<?>) block.getField("field_149771_c").get(null)) block.getMethod("func_149651_a", register).invoke(b, blocks);
+        Method atlasOfItem = itemType.getMethod("func_94901_k");
+        for (Object i : (Iterable<?>) registry) itemType.getMethod("func_94581_a", register)
+                .invoke(i, (int) atlasOfItem.invoke(i) == 0 ? blocks : items);
+
+        // Keep real TextureAtlasSprite instances, including entries installed by custom mod loaders.
+        Field entries = atlas.getDeclaredField("field_110574_e"); entries.setAccessible(true);
+        Field missing = atlas.getDeclaredField("field_94249_f"); missing.setAccessible(true);
+        Field uploaded = atlas.getDeclaredField("field_94252_e"); uploaded.setAccessible(true);
+        Map<String, List<Object>> icons = new TreeMap<>();
+        for (Object map : List.of(blocks, items)) {
+            for (var entry : ((Map<?, ?>) entries.get(map)).entrySet())
+                icons.computeIfAbsent((String) entry.getKey(), ignored -> new ArrayList<>()).add(entry.getValue());
+            icons.computeIfAbsent("missingno", ignored -> new ArrayList<>()).add(missing.get(map));
+            // Atlas lookups must return the same sprites as registration, without uploading a legacy GL texture.
+            @SuppressWarnings("unchecked") var lookup = (Map<Object, Object>) uploaded.get(map);
+            lookup.putAll((Map<?, ?>) entries.get(map));
+        }
+        Map<String, float[]> layout = new LinkedHashMap<>();
+        Method width = sprite.getMethod("func_110966_b", int.class), height = sprite.getMethod("func_110969_c", int.class);
+        Method initialize = sprite.getMethod("func_110971_a", int.class, int.class, int.class, int.class, boolean.class);
+        int cell = 0;
+        for (var entry : icons.entrySet()) {
+            // A synthetic atlas cell identifies the source texture of captured geometry without a GL stitch.
+            int x = cell % 16 * 16, y = cell / 16 * 16; cell++;
+            for (Object value : entry.getValue()) {
+                width.invoke(value, 16); height.invoke(value, 16);
+                initialize.invoke(value, 256, 256, x, y, false);
+            }
+            Object value = entry.getValue().get(0);
+            layout.put(entry.getKey(), new float[]{(float) sprite.getMethod("func_94209_e").invoke(value),
+                    (float) sprite.getMethod("func_94206_g").invoke(value), (float) sprite.getMethod("func_94212_f").invoke(value),
+                    (float) sprite.getMethod("func_94210_h").invoke(value)});
+        }
         iconLayout = Map.copyOf(layout);
+    }
+    private Object metadataAtlas(Class<?> atlas, int type, String path) throws Exception {
+        // -1 skips the constructor's automatic registry/renderer scan before the client is fully connected.
+        Object value = atlas.getConstructor(int.class, String.class).newInstance(-1, path);
+        setField(atlas, value, "field_94255_a", type);
+        return value;
     }
     public void refreshIconMetadata() throws Exception { inLegacy(() -> { prepareIconMetadata(); return null; }); }
 

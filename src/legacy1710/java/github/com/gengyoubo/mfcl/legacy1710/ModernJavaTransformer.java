@@ -78,8 +78,10 @@ public final class ModernJavaTransformer implements IClassTransformer {
                 }
             }
             if (name.equals("cpw.mods.fml.common.Loader") && method.name.equals("initializeLoader")) {
+                // Legacy FML must not list the modern mods/ folder. Point it at an empty private folder; RuntimeDriver passes
+                // MFCL's validated JARs (from mods/1.7.10/ and mods/) explicitly through ModListHelper.additionalMods.
                 for (AbstractInsnNode insn : method.instructions.toArray()) if (insn instanceof LdcInsnNode && "mods".equals(((LdcInsnNode) insn).cst))
-                    ((LdcInsnNode) insn).cst = "mods/1.7.10";
+                    ((LdcInsnNode) insn).cst = "mfcl/legacy-fml-mods";
             }
             if (!name.equals("net.minecraftforge.common.util.EnumHelper")) continue;
             if (method.name.equals("setup")) {

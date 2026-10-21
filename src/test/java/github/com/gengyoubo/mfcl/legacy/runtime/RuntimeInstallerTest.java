@@ -123,4 +123,21 @@ class RuntimeInstallerTest {
         assertFalse(Files.exists(runtime()));
         assertFalse(Files.exists(game.resolve("mfcl")), "nothing is created when preparation is disabled");
     }
+
+    @Test void startupPreparationAlsoNoticesOriginal1710ModsInTheModernRoot() throws Exception {
+        var log = new ArrayList<String>();
+        github.com.gengyoubo.mfcl.legacy.TestArchives.jar(game.resolve("mods/modern.jar"), java.util.Map.of(),
+                java.util.Map.of("META-INF/mods.toml", github.com.gengyoubo.mfcl.legacy.TestArchives.text("modern")));
+        assertNull(RuntimeInstaller.prepareIfNeeded(game, runtime(), log::add));
+        github.com.gengyoubo.mfcl.legacy.TestArchives.jar(game.resolve("mods/Legacy-1.7.10.jar"), java.util.Map.of(),
+                java.util.Map.of("test/Legacy.class", github.com.gengyoubo.mfcl.legacy.TestArchives.classBytes("test.Legacy", "Legacy")));
+        String previous = System.setProperty(RuntimeInstaller.AUTO_PREPARE_PROPERTY, "false");
+        try {
+            String reason = RuntimeInstaller.prepareIfNeeded(game, runtime(), log::add);
+            assertTrue(reason != null && reason.contains("-Dmfcl.autoPrepareRuntime=false"), String.valueOf(reason));
+        } finally {
+            if (previous == null) System.clearProperty(RuntimeInstaller.AUTO_PREPARE_PROPERTY);
+            else System.setProperty(RuntimeInstaller.AUTO_PREPARE_PROPERTY, previous);
+        }
+    }
 }

@@ -71,7 +71,7 @@ public final class LegacyAddonDependencies {
                 return null;
             LegacyModInfo mod = loaded.get(id);
             if (mod == null) return mandatory ? "requires original Forge 1.7.10 mod " + id + " " + displayVersion()
-                    + ", but it was not successfully loaded. Install it and its legacy dependencies in mods/1.7.10/; "
+                    + ", but it was not successfully loaded. Install it and its legacy dependencies in mods/ or mods/1.7.10/; "
                     + "check logs/mfcl/legacy-1.7.10.json and runtime-1.7.10.json for runtime failures." : null;
             if (version.isEmpty()) return null;
             boolean matches = !mod.version().isBlank() && (range == null ? version.equals(mod.version())

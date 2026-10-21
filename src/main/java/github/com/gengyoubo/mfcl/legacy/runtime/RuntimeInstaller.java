@@ -103,13 +103,14 @@ public final class RuntimeInstaller {
     }
 
     /**
-     * Startup entry: prepares the runtime only when {@code mods/1.7.10} contains JARs, the runtime fails
+     * Startup entry: prepares the runtime only when {@code mods/1.7.10} contains JARs or {@code mods/} contains original
+     * 1.7.10 mods, the runtime fails
      * {@link LegacyRuntimeCheck} and {@code -Dmfcl.autoPrepareRuntime=false} is not set. Never throws.
      *
      * @return null when the runtime is usable afterwards or not needed; otherwise why it was not prepared.
      */
     public static String prepareIfNeeded(Path gameDirectory, Path runtimeDirectory, Consumer<String> progress) {
-        if (!hasLegacyJars(gameDirectory.resolve("mods/1.7.10"))) return null;
+        if (!hasLegacyJars(gameDirectory.resolve("mods/1.7.10")) && !hasRootLegacyMods(gameDirectory)) return null;
         List<LegacyDiagnostic> errors = LegacyRuntimeCheck.errors(runtimeDirectory);
         if (errors.isEmpty()) return null;
         if (!Boolean.parseBoolean(System.getProperty(AUTO_PREPARE_PROPERTY, "true"))) {
@@ -124,6 +125,11 @@ public final class RuntimeInstaller {
             progress.accept("Automatic runtime preparation failed: " + failure);
             return "the automatic download failed this startup: " + failure;
         }
+    }
+
+    private static boolean hasRootLegacyMods(Path gameDirectory) {
+        try { return !new github.com.gengyoubo.mfcl.legacy.LegacyDiscovery().rootArchives(new github.com.gengyoubo.mfcl.legacy.LegacyPaths(gameDirectory)).archives().isEmpty(); }
+        catch (IOException failure) { return false; }
     }
 
     static boolean hasLegacyJars(Path modDirectory) {

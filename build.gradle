@@ -229,7 +229,7 @@ tasks.named('test', Test).configure {
         inputs.files(fileTree(file(project.property('legacySupportDir'))) { include '*.jar', 'runtime/*.jar', 'runtime/runtime-manifest.json' })
         systemProperty 'mfcl.test.legacySupportDir', file(project.property('legacySupportDir')).absolutePath
     }
-    for (String input : ['thaumcraftJar', 'baublesJar']) {
+    for (String input : ['thaumcraftJar', 'baublesJar', 'ic2Jar']) {
         if (project.hasProperty(input)) {
             inputs.file(file(project.property(input)))
             systemProperty "mfcl.test.${input}", file(project.property(input)).absolutePath

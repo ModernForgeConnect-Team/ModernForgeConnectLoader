@@ -21,6 +21,52 @@ class LegacyDiscoveryTest {
         assertTrue(result.diagnostics().isEmpty());
     }
 
+    private static Map<String, byte[]> legacyMod(String id, String mcversion) {
+        return Map.of("test/" + id + ".class", TestArchives.classBytes("test." + id, id),
+                "mcmod.info", TestArchives.text("[{\"modid\":\"" + id + "\",\"mcversion\":\"" + mcversion + "\"}]"));
+    }
+
+    @Test void alsoReadsOriginal1710ModsInstalledInTheModernRoot() throws Exception {
+        var paths = new LegacyPaths(temporary);
+        Path root = paths.rootModDirectory();
+        Path legacy = TestArchives.jar(root.resolve("Legacy.jar"), Map.of(), legacyMod("Legacy", "1.7.10"));
+        TestArchives.jar(root.resolve("Named-1.7.10-1.0.jar"), Map.of(), Map.of("test/Named.class", TestArchives.classBytes("test.Named", "named")));
+        TestArchives.jar(root.resolve("modern.jar"), Map.of(), Map.of("META-INF/mods.toml", TestArchives.text("modern"),
+                "mcmod.info", TestArchives.text("[]")));
+        TestArchives.jar(root.resolve("library-1.7.10.jar"), Map.of(), Map.of("lib/Util.class", TestArchives.classBytes("lib.Util", null)));
+        TestArchives.jar(root.resolve("service.jar"), Map.of("FMLModType", "LIBRARY"), legacyMod("Service", "1.7.10"));
+        Files.writeString(root.resolve("broken-1.7.10.jar"), "not a zip");
+        TestArchives.jar(paths.modDirectory().resolve("Versioned.jar"), Map.of(), legacyMod("Versioned", "1.7.10"));
+        String hash = LegacyDiscovery.sha256(legacy);
+
+        var result = new LegacyDiscovery().scan(paths);
+
+        assertEquals(java.util.List.of("Versioned", "Legacy", "named"),
+                result.archives().stream().map(a -> a.mods().get(0).id()).toList());
+        assertTrue(result.diagnostics().isEmpty(), result.diagnostics().toString());
+        assertEquals(hash, LegacyDiscovery.sha256(legacy), "the original stays where the launcher put it");
+    }
+
+    @Test void leavesOlderFmlModsInTheRootAloneWithANotice() throws Exception {
+        var paths = new LegacyPaths(temporary);
+        TestArchives.jar(paths.rootModDirectory().resolve("Old.jar"), Map.of(), legacyMod("Old", "1.6.4"));
+        var result = new LegacyDiscovery().scan(paths);
+        assertTrue(result.archives().isEmpty());
+        assertTrue(result.diagnostics().stream().anyMatch(d -> d.code().equals("LEGACY_ROOT_SKIPPED") && !d.error()));
+    }
+
+    @Test void theSameModInBothFoldersIsReportedWithBothFiles() throws Exception {
+        var paths = new LegacyPaths(temporary);
+        TestArchives.jar(paths.modDirectory().resolve("Legacy-1.0.jar"), Map.of(), legacyMod("Legacy", "1.7.10"));
+        var update = new java.util.HashMap<>(legacyMod("Legacy", "1.7.10"));
+        update.put("changed.txt", TestArchives.text("1.1"));
+        TestArchives.jar(paths.rootModDirectory().resolve("Legacy-1.1.jar"), Map.of(), update);
+        var report = new LegacyRuntimeService().inspect(temporary);
+        assertEquals(LegacyRuntimeService.State.DEPENDENCY_ERRORS, report.state());
+        var duplicate = report.diagnostics().stream().filter(d -> d.code().equals("DUPLICATE_MOD_ID")).findFirst().orElseThrow();
+        assertTrue(duplicate.message().contains("Legacy-1.0.jar") && duplicate.message().contains("Legacy-1.1.jar"), duplicate.message());
+    }
+
     @Test void createsAnEmptyVersionFolder() throws Exception {
         var paths = new LegacyPaths(temporary);
         assertTrue(new LegacyDiscovery().scan(paths).archives().isEmpty());

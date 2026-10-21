@@ -29,9 +29,18 @@ import java.util.Set;
 import java.util.jar.JarFile;
 import java.util.regex.Pattern;
 
-/** Passive inspection only: no Class.forName, service providers, or mod initializers. */
+/**
+ * Passive inspection only: no Class.forName, service providers, or mod initializers.
+ * <p>
+ * Every JAR directly in {@code mods/1.7.10/} is a legacy candidate. JARs directly in the modern {@code mods/} folder,
+ * where launchers such as CurseForge install every file of a pack, are taken only when they are clearly original
+ * Forge 1.7.10 mods (see {@link #rootArchives}). Forge 1.20.1 skips those JARs without an error: they have no
+ * {@code mods.toml} or {@code FMLModType}, so its mods-folder locator returns a plain {@code ModFileLoadingException},
+ * which is not recorded as a broken file, and they provide no ModLauncher services.
+ */
 public final class LegacyDiscovery {
     private static final long MAX_ENTRY_BYTES = 8L * 1024 * 1024;
+    private static final String SOURCE_MINECRAFT = "1.7.10";
     private static final Pattern MOD_REFERENCE = Pattern.compile("[A-Za-z0-9_.|\\-]+(?:@[^;\\s]+)?");
 
     public record Result(List<LegacyArchive> archives, List<LegacyDiagnostic> diagnostics) {
@@ -54,7 +63,62 @@ public final class LegacyDiscovery {
                 diagnostics.add(LegacyDiagnostic.error("INVALID_ARCHIVE", candidate.getFileName() + ": " + failure.getMessage()));
             }
         }
+        var root = rootArchives(paths);
+        archives.addAll(root.archives());
+        diagnostics.addAll(root.diagnostics());
         return new Result(archives, diagnostics);
+    }
+
+    /**
+     * Original Forge 1.7.10 mods directly in the modern {@code mods/} folder. Unlike {@code mods/1.7.10/}, that folder
+     * belongs to Forge 1.20.1, so a JAR is taken only if it has no modern loader marker, {@link #inspect} accepts it,
+     * it declares a legacy mod or coremod and its file name or {@code mcmod.info} names Minecraft 1.7.10. Anything
+     * else is not ours and is left alone silently; older FML mods (same annotation) only get a notice.
+     */
+    public Result rootArchives(LegacyPaths paths) throws IOException {
+        List<LegacyArchive> archives = new ArrayList<>();
+        List<LegacyDiagnostic> diagnostics = new ArrayList<>();
+        if (!Files.isDirectory(paths.rootModDirectory())) return new Result(archives, diagnostics);
+        List<Path> candidates;
+        try (var files = Files.list(paths.rootModDirectory())) {
+            candidates = files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".jar"))
+                    .filter(LegacyDiscovery::mayBeLegacy)
+                    .sorted(Comparator.comparing(p -> p.getFileName().toString())).toList();
+        }
+        for (Path candidate : candidates) {
+            LegacyArchive archive;
+            try { archive = inspect(candidate); }
+            catch (IOException | RuntimeException notLegacy) { continue; }
+            if (archive.mods().isEmpty() && archive.corePlugin().isEmpty()) continue;
+            String name = candidate.getFileName().toString();
+            if (name.contains(SOURCE_MINECRAFT) || archive.mods().stream().anyMatch(mod -> mod.minecraftVersion().contains(SOURCE_MINECRAFT))) {
+                archives.add(archive);
+            } else {
+                diagnostics.add(LegacyDiagnostic.notice("LEGACY_ROOT_SKIPPED", "mods/" + name
+                        + " looks like an old FML mod but does not identify as Minecraft 1.7.10; put it in mods/1.7.10/ if it is one"));
+            }
+        }
+        return new Result(archives, diagnostics);
+    }
+
+    /** Cheap pre-filter so the JARs of a large modern pack are not fully inspected on every launch. */
+    private static boolean mayBeLegacy(Path jar) {
+        try (JarFile file = new JarFile(jar.toFile(), false)) {
+            if (file.getEntry("META-INF/mods.toml") != null || file.getEntry("META-INF/neoforge.mods.toml") != null
+                    || file.getEntry("fabric.mod.json") != null || file.getEntry("quilt.mod.json") != null) return false;
+            var manifest = file.getManifest();
+            var attributes = manifest == null ? null : manifest.getMainAttributes();
+            if (attributes != null && attributes.getValue("FMLModType") != null) return false;
+            if (file.stream().anyMatch(e -> e.getName().startsWith("META-INF/services/cpw.mods.modlauncher")
+                    || e.getName().startsWith("META-INF/services/net.minecraftforge."))) return false;
+            if (attributes != null && attributes.getValue("FMLCorePlugin") != null) return true;
+            if (jar.getFileName().toString().contains(SOURCE_MINECRAFT)) return true;
+            return file.stream().anyMatch(e -> !e.isDirectory() && !e.getName().contains("/")
+                    && e.getName().endsWith(".info") && !e.getName().equals("dependencies.info"));
+        } catch (IOException | RuntimeException unreadable) {
+            return false;
+        }
     }
 
     public LegacyArchive inspect(Path path) throws IOException {

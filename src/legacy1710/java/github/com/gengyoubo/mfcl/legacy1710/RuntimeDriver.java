@@ -98,6 +98,9 @@ public final class RuntimeDriver {
             FMLCommonHandler.instance().beginLoading(sided);
             initializeClient.run();
             completed.add(stage); stage = "CONSTRUCTING";
+            // The only mod candidates: Loader's own mods directory is an empty private folder (ModernJavaTransformer).
+            ModListHelper.additionalMods.clear();
+            for (File mod : mods) ModListHelper.additionalMods.put(mod.getAbsolutePath(), mod);
             Loader.instance().loadMods(); completed.add(stage); stage = "PREINITIALIZATION";
             Loader.instance().preinitializeMods(); completed.add(stage); stage = "INITIALIZATION_POSTINITIALIZATION";
             Loader.instance().initializeMods(); completed.add(stage);
