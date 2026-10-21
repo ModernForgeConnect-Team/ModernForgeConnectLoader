@@ -20,6 +20,7 @@ class GenericRuntimeIntegrationTest {
             assertEquals(0, process.exitValue(), new String(Files.readAllBytes(output), java.nio.charset.StandardCharsets.UTF_8));
             var result = com.google.gson.JsonParser.parseString(Files.readString(temporary.resolve("logs/mfcl/runtime-1.7.10.json"))).getAsJsonObject();
             assertTrue(result.get("genericItemWorldGuiSemanticsVerified").getAsBoolean());
+            assertTrue(result.get("genericPreInitSessionVerified").getAsBoolean());
             assertTrue(result.get("genericDeveloperApiVerified").getAsBoolean());
             assertTrue(result.get("genericGuiCaptureVerified").getAsBoolean());
             assertTrue(result.get("genericContainerPlayerPotionStateVerified").getAsBoolean());

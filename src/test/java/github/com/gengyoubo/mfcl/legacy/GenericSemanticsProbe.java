@@ -372,7 +372,24 @@ public final class GenericSemanticsProbe {
         Path game = Path.of(args[0]);
         RuntimeItemUseSemanticsProbe.install(game);
         try (var runtime = new EmbeddedLegacyRuntime(game, Path.of(args[1]), new LegacyRuntimeService().inspect(game))) {
+            var identity = new LegacyClientData.ClientSession("SessionProbe", "12345678123456789abcdef012345678", "fixture-token", "mojang");
+            runtime.clientSession(identity);
             var report = runtime.boot(); verify(runtime, report);
+            ClassLoader loader = runtime.services().loader();
+            Object profile = loader.loadClass("mfcl.fixture.ReturnedStackMod").getField("preInitProfile").get(null);
+            if (!identity.name().equals(profile.getClass().getMethod("getName").invoke(profile))
+                    || !UUID.fromString("12345678-1234-5678-9abc-def012345678").equals(profile.getClass().getMethod("getId").invoke(profile)))
+                throw new AssertionError("Legacy preInit did not receive the launcher profile");
+            Class<?> minecraft = loader.loadClass("net.minecraft.client.Minecraft");
+            Object client = minecraft.getMethod("func_71410_x").invoke(null);
+            Object session = minecraft.getMethod("func_110432_I").invoke(client);
+            runtime.services().items().initializeContext(game, List.of());
+            if (session != minecraft.getMethod("func_110432_I").invoke(client)
+                    || !identity.accessToken().equals(session.getClass().getMethod("func_148254_d").invoke(session))
+                    || !"MOJANG".equals(session.getClass().getMethod("func_152428_f").invoke(session).toString())
+                    || profile.getClass().getClassLoader() != loader)
+                throw new AssertionError("Legacy session values, lifetime or authlib isolation were lost");
+            report.put("genericPreInitSessionVerified", true);
             Files.writeString(game.resolve("logs/mfcl/runtime-1.7.10.json"), new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(report));
             System.out.println("MFCL_GENERIC_SEMANTICS_PASS");
         }

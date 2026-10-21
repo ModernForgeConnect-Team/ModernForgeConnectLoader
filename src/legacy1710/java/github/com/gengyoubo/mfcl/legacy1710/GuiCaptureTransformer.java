@@ -17,11 +17,19 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
                 || name.equals("net.minecraft.client.multiplayer.PlayerControllerMP")
                 || name.equals("cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper")
+                || name.equals("cpw.mods.fml.common.network.FMLOutboundHandler")
                 || name.equals("net.minecraft.client.audio.SoundHandler")
                 || name.equals("net.minecraft.client.renderer.RenderHelper") || name.equals("net.minecraft.client.renderer.OpenGlHelper")
                 || name.equals("cpw.mods.fml.common.eventhandler.EventBus"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (name.endsWith(".FMLOutboundHandler") && m.name.equals("write")) {
+                InsnList send=new InsnList();LabelNode original=new LabelNode();
+                load(send,Opcodes.ALOAD,1,3);
+                send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyEmbeddedPackets","send","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",false));
+                send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));
+                send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);continue;
+            }
             if (name.equals("cpw.mods.fml.common.eventhandler.EventBus")) {
                 // Records which old event types are actually delivered, for the undelivered-subscription diagnostic.
                 if(m.name.equals("post")&&m.desc.equals("(Lcpw/mods/fml/common/eventhandler/Event;)Z")) {

@@ -75,7 +75,18 @@ final class ClientStartupSmokeProbe {
             json.addProperty("type", smelting ? "mfcl:legacy_smelting" : "mfcl:legacy_crafting");
             json.addProperty("original", hash);
             var id = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("mfcl", (smelting ? "legacy_smelting/" : "legacy_crafting/") + hash);
-            net.minecraft.world.item.crafting.RecipeManager.fromJson(id, json);
+            var parsed=net.minecraft.world.item.crafting.RecipeManager.fromJson(id, json);
+            if(!smelting) {
+                var definition=content.crafting().definition(hash);
+                for(int index=0;index<definition.inputs().size();index++) {
+                    var input=definition.inputs().get(index);
+                    if(input.size()==1&&input.get(0).metadata()==1&&java.util.Set.of("minecraft:stick","minecraft:redstone_torch").contains(input.get(0).key())) {
+                        var ordinary=net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.tryParse(input.get(0).key()));
+                        if(parsed.getIngredients().get(index).test(new net.minecraft.world.item.ItemStack(ordinary)))
+                            throw new IllegalStateException("Projected metadata-one ingredient accepts metadata zero: "+input);
+                    }
+                }
+            }
             if (++count % 16384 == 0) LogUtils.getLogger().info("MFCL recipe parse smoke: {} {} recipes", count, smelting ? "smelting" : "crafting");
         }
         return count;

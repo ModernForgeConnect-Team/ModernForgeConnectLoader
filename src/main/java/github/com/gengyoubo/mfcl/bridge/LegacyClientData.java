@@ -8,6 +8,15 @@ import java.util.function.Consumer;
 
 /** Forge 1.7.10 Item/ItemStack semantics. Owns identity, copies, variant/NBT snapshots and host recipe publication. */
 public final class LegacyClientData {
+    /** Plain values only: the private runtime owns its own Session and authlib types. */
+    public record ClientSession(String name, String uuid, String accessToken, String type) {
+        public static ClientSession offline() {
+            String name = "MFCL";
+            return new ClientSession(name, UUID.nameUUIDFromBytes(("OfflinePlayer:" + name)
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString(), "0", "legacy");
+        }
+        @Override public String toString() { return "ClientSession[credentials redacted]"; }
+    }
     public record Stack(String key, int metadata, int count, String name, String tag) {}
     public record Ingredient(int x, int y, List<Stack> alternatives) { public Ingredient { alternatives = List.copyOf(alternatives); } }
     public record Recipe(String handler, String name, List<Ingredient> ingredients, Stack result, List<Ingredient> other) {
@@ -72,6 +81,9 @@ public final class LegacyClientData {
         return null;
     }
     public synchronized void initializeContext(Path gameDir, List<String> languageResources) throws Exception {
+        initializeContext(gameDir, languageResources, ClientSession.offline());
+    }
+    public synchronized void initializeContext(Path gameDir, List<String> languageResources, ClientSession session) throws Exception {
         inLegacy(() -> {
             if (contextInitialized) { addLanguages(languageResources); return null; }
             // A typed old client context supplies settings and data; it never starts an old window or game loop.
@@ -79,6 +91,10 @@ public final class LegacyClientData {
             Field unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); unsafeField.setAccessible(true);
             Object unsafe = unsafeField.get(null);
             Object client = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, mcType);
+            Object oldSession = loader.loadClass("net.minecraft.util.Session")
+                    .getConstructor(String.class, String.class, String.class, String.class)
+                    .newInstance(session.name(), session.uuid(), session.accessToken(), session.type());
+            setField(mcType, client, "field_71449_j", oldSession);
             setField(mcType, client, "field_71432_P", client);
             setField(mcType, client, "field_71412_D", gameDir.toFile());
             resourceContext = LegacyClientResources.create(loader, resourcePacks);
@@ -130,8 +146,14 @@ public final class LegacyClientData {
             Object dispatcher = dispatcherType.getField("field_147556_a").get(null);
             setField(dispatcherType, dispatcher, "field_147553_e", textureManager);
             setField(dispatcherType, dispatcher, "field_147557_n", font);
-            setField(mcType, client, "field_147127_av", unsafe.getClass().getMethod("allocateInstance", Class.class)
-                    .invoke(unsafe, loader.loadClass("net.minecraft.client.audio.SoundHandler")));
+            Class<?> soundHandlerType=loader.loadClass("net.minecraft.client.audio.SoundHandler");
+            Object soundHandler=unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,soundHandlerType);
+            // Initializes bookkeeping only; never reload/start the old audio engine.
+            Object soundManager=loader.loadClass("net.minecraft.client.audio.SoundManager")
+                    .getConstructor(soundHandlerType,loader.loadClass("net.minecraft.client.settings.GameSettings"))
+                    .newInstance(soundHandler,mcType.getField("field_71474_y").get(client));
+            setField(soundHandlerType,soundHandler,"field_147694_f",soundManager);
+            setField(mcType, client, "field_147127_av", soundHandler);
             setField(mcType, client, "field_135017_as", loader.loadClass("net.minecraft.client.resources.LanguageManager")
                     .getConstructor(loader.loadClass("net.minecraft.client.resources.data.IMetadataSerializer"), String.class).newInstance(null, "en_US"));
             Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale"); Object locale = localeType.getConstructor().newInstance();

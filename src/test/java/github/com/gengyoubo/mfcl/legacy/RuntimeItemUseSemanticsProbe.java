@@ -20,8 +20,14 @@ final class RuntimeItemUseSemanticsProbe {
         method.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/ItemStack","<init>","(Lnet/minecraft/item/Item;II)V",false);method.visitLdcInsn("Revealed");method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/item/ItemStack","func_151001_c","(Ljava/lang/String;)Lnet/minecraft/item/ItemStack;",false);method.visitInsn(Opcodes.ARETURN);method.visitMaxs(0,0);method.visitEnd();writer.visitEnd();
         byte[] itemBytes=writer.toByteArray();writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);writer.visit(Opcodes.V1_8,Opcodes.ACC_PUBLIC,"mfcl/fixture/ReturnedStackMod",null,"java/lang/Object",null);
         var annotation=writer.visitAnnotation("Lcpw/mods/fml/common/Mod;",true);annotation.visit("modid","mfcl_return_fixture");annotation.visit("version","1.0");annotation.visitEnd();
+        writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,"preInitProfile","Lcom/mojang/authlib/GameProfile;",null,null).visitEnd();
         method=writer.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);method.visitCode();method.visitVarInsn(Opcodes.ALOAD,0);method.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);method.visitInsn(Opcodes.RETURN);method.visitMaxs(0,0);method.visitEnd();
         method=writer.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);method.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true).visitEnd();method.visitCode();
+        // Extra Utilities reads this exact chain before a world or player exists.
+        method.visitMethodInsn(Opcodes.INVOKESTATIC,"net/minecraft/client/Minecraft","func_71410_x","()Lnet/minecraft/client/Minecraft;",false);
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/client/Minecraft","func_110432_I","()Lnet/minecraft/util/Session;",false);
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/util/Session","func_148256_e","()Lcom/mojang/authlib/GameProfile;",false);
+        method.visitFieldInsn(Opcodes.PUTSTATIC,"mfcl/fixture/ReturnedStackMod","preInitProfile","Lcom/mojang/authlib/GameProfile;");
         // GregTech queries FML's active language through this overload during preinitialization.
         method.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/LanguageRegistry","instance","()Lcpw/mods/fml/common/registry/LanguageRegistry;",false);
         method.visitLdcInsn("mfcl.test.preinit.language");

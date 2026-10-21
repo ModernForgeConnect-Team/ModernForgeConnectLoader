@@ -89,6 +89,7 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclLogicSmokeTest` | Supported native/legacy block and inventory logic | Consult the logic [acceptance record](runtime-logic-progress.json) |
 | `mfclCraftingSmokeTest` | Standard workbench recipes, native output consumption, JEI projection and reload | `crafting-smoke.json` |
 | `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence, note insertion/place/erase/sync, native reveal/learning and lifter motion | `device-smoke.json` |
+| `mfclGeneratorSmokeTest` | Original Extra Utilities furnace generator, client/server ticks, initial/live widget packets, native coal slot clicks, energy generation and sound cleanup on world unload | `generator-smoke.json` |
 | `mfclTooltipSmokeTest` | Actual JEI single/batch item rendering followed by tooltip depth verification | `jei-tooltip-smoke.json` |
 | `mfclContentSmokeTest` | Reference content registration, rendering, placement and persistence | `content-1.7.10-smoke.json` |
 
@@ -106,6 +107,8 @@ The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client co
 `-PmfclServerSmokeTest=gameplay` instead runs the door, hellbat, loot and elemental-arrow regressions once and writes `gameplay-smoke.json`. Use a disposable game directory: it creates and clears test entities and blocks. See the [gameplay fix record](gameplay-fixes-2026-10-21.md) for the isolated command and coverage.
 
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
+
+Extra Utilities input and focused regression/graphical commands are recorded in [the compatibility fix record](extrautilities-startup.md). The original-JAR regression uses `-PextrautilitiesJar=<original-file>` with `-PlegacySupportDir=<support-root>` and skips explicitly when either input is missing.
 
 Check both the process exit status and the probe JSON `status` / recorded assertions. A clean Gradle exit alone is not sufficient evidence that every in-game assertion passed. Preserve logs when reporting a new failure; source-controlled acceptance JSON is a dated summary, not a promise about untested mod combinations.
 

@@ -17,6 +17,10 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     private final Map<Path, String> originalHashes = new LinkedHashMap<>();
     private github.com.gengyoubo.mfcl.bridge.LegacyServices services;
     private github.com.gengyoubo.mfcl.bridge.LegacyClientData earlyClient;
+    private github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession clientSession = github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession.offline();
+    public void clientSession(github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession session) {
+        this.clientSession = Objects.requireNonNull(session);
+    }
     private github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime developerApi;
     public synchronized github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime developerApi(Set<String> loadedMods) {
         if (developerApi == null) developerApi = github.com.gengyoubo.mfcl.internal.api.ApiRuntimeFactory.create(services(), loadedMods);
@@ -124,7 +128,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             Runnable initializeClient = () -> {
                 try {
                     earlyClient = new github.com.gengyoubo.mfcl.bridge.LegacyClientData(legacy, resourcePacks);
-                    earlyClient.initializeContext(gameDirectory, List.of("assets/minecraft/lang/en_US.lang"));
+                    earlyClient.initializeContext(gameDirectory, List.of("assets/minecraft/lang/en_US.lang"), clientSession);
                 } catch (Exception failure) { throw new IllegalStateException("Cannot initialize legacy client services", failure); }
             };
             Map<String, Object> result = (Map<String, Object>) driver.getMethod("boot", File.class, File.class, List.class, Runnable.class)

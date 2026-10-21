@@ -101,8 +101,8 @@ public final class LegacyGuiGraphics {
         try {
             String id=sound.getClass().getMethod("func_147650_b").invoke(sound).toString();
             if(id.equals("minecraft:gui.button.press")){clickSound();return;}
-            throw new UnsupportedOperationException("Unmapped legacy GUI sound: "+id);
-        } catch(ReflectiveOperationException failure){throw new IllegalArgumentException("Invalid legacy GUI sound",failure);}
+            LegacyAudio.play(sound);
+        } catch(Exception failure){throw new IllegalArgumentException("Cannot play legacy sound",failure);}
     }
     public static int mouseX() { return frame().mouseX; }
     public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }

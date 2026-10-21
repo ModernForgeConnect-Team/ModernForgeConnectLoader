@@ -38,6 +38,7 @@ minecraft {
             if (project.hasProperty('mfclBiomeSmokeTest')) property 'mfcl.test.biomes', 'true'
             if (project.hasProperty('mfclTooltipSmokeTest')) property 'mfcl.test.tooltip', 'true'
             if (project.hasProperty('mfclDeviceSmokeTest')) property 'mfcl.test.device', 'true'
+            if (project.hasProperty('mfclGeneratorSmokeTest')) property 'mfcl.test.generator', 'true'
             if (project.hasProperty('mfclCraftingSmokeTest')) property 'mfcl.test.crafting', 'true'
             if (project.hasProperty('mfclApiSmokeTest')) property 'mfcl.test.api', 'true'
             if (project.hasProperty('mfclOuterSmokeTest')) property 'mfcl.test.outer', 'true'
@@ -229,7 +230,7 @@ tasks.named('test', Test).configure {
         inputs.files(fileTree(file(project.property('legacySupportDir'))) { include '*.jar', 'runtime/*.jar', 'runtime/runtime-manifest.json' })
         systemProperty 'mfcl.test.legacySupportDir', file(project.property('legacySupportDir')).absolutePath
     }
-    for (String input : ['thaumcraftJar', 'baublesJar', 'ic2Jar']) {
+    for (String input : ['thaumcraftJar', 'baublesJar', 'ic2Jar', 'extrautilitiesJar']) {
         if (project.hasProperty(input)) {
             inputs.file(file(project.property(input)))
             systemProperty "mfcl.test.${input}", file(project.property(input)).absolutePath

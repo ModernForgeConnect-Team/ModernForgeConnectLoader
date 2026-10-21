@@ -45,12 +45,24 @@ public final class LegacyCraftingRecipes {
             var candidates=wildcard?content.services().items().catalog(old.key()).stream().filter(s->s.metadata()!=32767).toList():List.of(old);
             if(candidates.isEmpty())candidates=List.of(new LegacyClientData.Stack(old.key(),0,1,"",old.tag()));
             for(var candidate:candidates) {
-                ItemStack mapped=content.mapStack(candidate);if(mapped.isEmpty())continue;
+                ItemStack mapped=recipeStack(candidate);if(mapped.isEmpty())continue;
                 if(variants.stream().noneMatch(o->o.wildcard()==wildcard&&ItemStack.isSameItemSameTags(o.stack(),mapped)))variants.add(new Option(mapped,wildcard,strictNbt));
             }
         }
         if(variants.isEmpty())throw new JsonParseException("No host ingredient representation for original stack: "+input);
         return new StackIngredient(variants);
+    }
+    /** Old recipes can explicitly request damage on a non-subtype item (stick@1, torch@1).
+     * Keep that exact requirement in the projected ingredient; an ordinary metadata-zero item must not match it. */
+    private static ItemStack recipeStack(LegacyClientData.Stack old) throws Exception {
+        var content=bridge();ItemStack mapped=content.mapStack(old);
+        if(!mapped.isEmpty()||old.metadata()<=0||old.metadata()==32767||!old.key().startsWith("minecraft:")||!old.tag().isEmpty())return mapped;
+        Object item=content.services().items().legacyItem(old.key());
+        Class<?> type=content.services().loader().loadClass("net.minecraft.item.Item");
+        if(item==null||(boolean)type.getMethod("func_77614_k").invoke(item)||(boolean)type.getMethod("func_77645_m").invoke(item))return mapped;
+        mapped=content.mapStack(new LegacyClientData.Stack(old.key(),0,old.count(),old.name(),""));
+        if(!mapped.isEmpty())mapped.getOrCreateTagElement(ModernContentBridge.STACK_TAG).putInt("metadata",old.metadata());
+        return mapped;
     }
     private static List<LegacyClientData.Stack> input(CraftingContainer grid) throws Exception {
         var result=new ArrayList<LegacyClientData.Stack>();var content=bridge();
@@ -63,6 +75,11 @@ public final class LegacyCraftingRecipes {
     }
     private static LegacyClientData.Stack legacy(ItemStack stack) throws Exception {
         var old=bridge().renderSnapshot(stack);if(old!=null)return old;
+        var stored=stack.getTagElement(ModernContentBridge.STACK_TAG);
+        if(stored!=null&&stored.contains("metadata")) {
+            ItemStack base=stack.copy();base.removeTagKey(ModernContentBridge.STACK_TAG);var original=bridge().gameplayStack(base);
+            return new LegacyClientData.Stack(original.key(),stored.getInt("metadata"),stack.getCount(),original.name(),original.tag());
+        }
         ItemStack clean=stack.copy();clean.setTag(null);if(stack.getItem().canBeDepleted())clean.setDamageValue(stack.getDamageValue());return bridge().gameplayStack(clean);
     }
     private static boolean matches(String hash,CraftingContainer grid,Level level) {

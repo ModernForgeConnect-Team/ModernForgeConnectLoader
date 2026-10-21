@@ -9,6 +9,8 @@ import net.minecraftforge.eventbus.api.IEventBus;
 public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
+        ClientLegacyAudio.install(bridge.services());
+        if(Boolean.getBoolean("mfcl.test.generator"))GeneratorHostSmokeProbe.install(bridge);
         if (Boolean.getBoolean("mfcl.test.exitAtTitleScreen") && !Boolean.getBoolean("mfcl.test.neiUiSmoke"))
             ClientStartupSmokeProbe.install(bridge);
         LegacyScanNotifications.install(bridge);

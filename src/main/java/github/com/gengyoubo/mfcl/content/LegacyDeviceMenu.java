@@ -22,6 +22,8 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private final LegacyDeviceContainers.Descriptor descriptor;
     private final SimpleContainer contents;
     private boolean failed;
+    private boolean opening=true;
+    private final List<LegacyPackets.Message> initialPackets=new ArrayList<>();
     public Object originalPlayer(){return original==null?null:original.player();}
     public LegacyDeviceContainers.Descriptor descriptor(){return descriptor;}
     public static void open(ServerPlayer player,ModernContentBridge content,LegacyDeviceContainers.Open request) {
@@ -32,6 +34,11 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
                 for(Object slot:slots){buffer.writeInt(slot.getClass().getField("field_75223_e").getInt(slot));buffer.writeInt(slot.getClass().getField("field_75221_f").getInt(slot));}
             }catch(Exception failure){throw new IllegalStateException("Cannot describe original slots",failure);}
         });
+        if(player.containerMenu instanceof LegacyDeviceMenu menu) {
+            menu.opening=false;
+            menu.initialPackets.forEach(packet->ScanSyncChannel.sendToPlayer(player,packet));
+            menu.initialPackets.clear();
+        }
         com.mojang.logging.LogUtils.getLogger().debug("MFCL opened native device menu {} at {}",player.containerMenu.containerId,request.descriptor());
     }
     public static LegacyDeviceMenu fromNetwork(int id,Inventory inventory,FriendlyByteBuf buffer) {
@@ -46,7 +53,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private LegacyDeviceMenu(int id,Inventory inventory,ModernContentBridge content,LegacyDeviceContainers.Open request) {
         this(id,inventory,content,request,request.descriptor(),positions(request));
         try {
-            content.services().items().inLegacy(()->{LegacyDeviceContainers.attachViewer(request,id);refresh();return null;});
+            playerContext(()->{LegacyDeviceContainers.attachViewer(request,id);refresh();return null;});
         }catch(Exception failure){throw new IllegalStateException("Cannot open original container",failure);}
     }
     private static List<int[]> positions(LegacyDeviceContainers.Open request) {
@@ -90,7 +97,9 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
                 try {
                     T result=action.call();
                     server.getPersistentData().putByteArray(ModernContentBridge.LEGACY_ENTITY_DATA,services.playerData().read(original.player()));
-                    outgoing.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));return result;
+                    if(opening)initialPackets.addAll(outgoing.messages());
+                    else outgoing.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));
+                    return result;
                 } catch(Exception | Error failure){services.playerData().write(original.player(),prior);throw failure;}
             }
         });

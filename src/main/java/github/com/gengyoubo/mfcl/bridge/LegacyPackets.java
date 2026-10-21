@@ -29,7 +29,14 @@ public final class LegacyPackets {
         var host=LegacyWorlds.hostOrNull(entity.getField("field_70170_p").get(player));
         if(host==null||host.clientSide())return false;
         if(payload.length>1024*1024)throw new IllegalArgumentException("Old client packet exceeds host limit");
-        host.sendPacket((UUID)entity.getMethod("func_110124_au").invoke(player),new Message(channel,0,payload.clone()));return true;
+        UUID recipient=(UUID)entity.getMethod("func_110124_au").invoke(player);
+        var message=new Message(channel,0,payload.clone());
+        Scope scope=CURRENT.get();
+        if(scope!=null) {
+            if(!scope.recipients.contains(recipient))throw new UnsupportedOperationException("Old callback sent a packet to another player");
+            scope.messages.add(message);scope.addressed.computeIfAbsent(recipient,key->new ArrayList<>()).add(message);
+        } else host.sendPacket(recipient,message);
+        return true;
     }
     public static void allowServer(ClassLoader loader,ServerPolicy policy){SERVER_POLICIES.computeIfAbsent(loader,key->new ArrayList<>()).add(policy);}
     private LegacyPackets() {}
@@ -148,6 +155,7 @@ public final class LegacyPackets {
     }
     public static void receiveClient(LegacyServices services, Message message) throws Exception {
         services.items().inLegacy(()->{
+            if(LegacyEmbeddedPackets.receive(services,message))return null;
             var loader=services.loader();
             var receiver=clientReceiver(loader,message.channel());
             if(receiver!=null){receiver.receive(message.payload());return null;}

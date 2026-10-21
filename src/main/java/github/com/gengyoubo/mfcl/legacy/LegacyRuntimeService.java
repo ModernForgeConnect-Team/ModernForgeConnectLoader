@@ -39,6 +39,10 @@ public final class LegacyRuntimeService {
         return start(gameDirectory, runtimeDirectory, null);
     }
     public Report start(Path gameDirectory, Path runtimeDirectory, github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend backend) {
+        return start(gameDirectory, runtimeDirectory, backend, github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession.offline());
+    }
+    public Report start(Path gameDirectory, Path runtimeDirectory, github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend backend,
+                        github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession session) {
         loadedModIds = java.util.Set.of();
         loadedModVersions = java.util.Map.of();
         Report inspected = inspect(gameDirectory);
@@ -66,6 +70,7 @@ public final class LegacyRuntimeService {
                 state = State.RUNTIME_FAILED;
             } else {
                 runtime = new EmbeddedLegacyRuntime(gameDirectory, runtimeDirectory, inspected);
+                runtime.clientSession(session);
                 runtime.openGlBackend(backend);
                 var stages = runtime.boot();
                 if (stages.get("loadedMods") instanceof List<?> loaded) {
