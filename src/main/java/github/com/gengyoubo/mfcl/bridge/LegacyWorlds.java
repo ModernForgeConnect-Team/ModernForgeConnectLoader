@@ -82,6 +82,11 @@ public final class LegacyWorlds implements AutoCloseable {
         if (host.legacySaveDirectory() != null) storage(world, host.legacySaveDirectory(), dimension);
         set(providerType, provider, "field_76574_g", dimension);
         if (original) providerType.getMethod("func_76558_a", loader.loadClass("net.minecraft.world.World")).invoke(provider, world);
+        else {
+            // Host worlds skip registerWorld's chunk-manager setup, but mods still query terrain type/sea level.
+            set(providerType, provider, "field_76577_b", info.getClass().getMethod("func_76067_t").invoke(info));
+            set(providerType, provider, "field_82913_c", info.getClass().getMethod("func_82571_y").invoke(info));
+        }
         set(providerType, provider, "field_76579_a", world);
         var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
         refreshDifficulty(binding);
@@ -163,10 +168,10 @@ public final class LegacyWorlds implements AutoCloseable {
         }
         return null;
     }
-    /** Old getChunkFromChunkCoords: the host owns chunks, so callers (setChunkModified...) get a detached empty chunk. */
+    /** Old Chunk queries share the world's host state, including heights outside the old 0..255 storage array. */
     public static Object chunk(Object world, int x, int z) {
         var binding = binding(world);
-        try { return binding.loader.loadClass("net.minecraft.world.chunk.Chunk").getConstructor(binding.loader.loadClass("net.minecraft.world.World"), int.class, int.class).newInstance(world, x, z); }
+        try { return LegacyChunkFacades.create(binding.loader, world, x, z); }
         catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
     @Override public synchronized void close() { for (Binding binding : worlds.values()) DISPATCH.remove(binding.world); worlds.clear(); }

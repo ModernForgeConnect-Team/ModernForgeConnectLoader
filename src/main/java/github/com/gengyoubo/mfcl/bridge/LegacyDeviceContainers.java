@@ -7,6 +7,30 @@ public final class LegacyDeviceContainers {
     public record Descriptor(String mod,int id,int x,int y,int z,boolean inventory) {}
     public record Open(Descriptor descriptor,Object container,Object player) {}
     private static final ThreadLocal<Capture> CURRENT=new ThreadLocal<>();
+    public interface GuiProvider {
+        Object container(Object player,Object source) throws Exception;
+        Object screen(Object player,Object source) throws Exception;
+    }
+    private static final Map<ClassLoader,Map<String,GuiProvider>> PROVIDERS=new WeakHashMap<>();
+    public static synchronized void registerProvider(ClassLoader loader,String id,GuiProvider provider) {
+        PROVIDERS.computeIfAbsent(loader,ignored->new HashMap<>()).put(id,provider);
+    }
+    private static synchronized GuiProvider provider(ClassLoader loader,String id) {
+        var providers=PROVIDERS.get(loader);
+        if(providers==null||!providers.containsKey(id))throw new IllegalArgumentException("Unknown original GUI provider: "+id);
+        return providers.get(id);
+    }
+    /** Optional adapters use this for positioned devices with their own GUI protocol instead of FML openGui. */
+    public static boolean openProvider(String id,Object player,Object source) throws Exception {
+        var capture=CURRENT.get();if(capture==null)return false;
+        var loader=capture.services.loader();var tile=loader.loadClass("net.minecraft.tileentity.TileEntity");
+        if(!tile.isInstance(source))return false;
+        Object container=provider(loader,id).container(player,source);
+        if(container!=null)capture.opened=new Open(new Descriptor("mfcl:provider/"+id,0,
+                tile.getField("field_145851_c").getInt(source),tile.getField("field_145848_d").getInt(source),
+                tile.getField("field_145849_e").getInt(source),false),container,player);
+        return true;
+    }
     @FunctionalInterface public interface DropSink {void accept(Object entity) throws Exception;}
     private static final ThreadLocal<DropSink> DROPS=new ThreadLocal<>();
     public static <T> T withDrops(DropSink sink,java.util.concurrent.Callable<T> action) throws Exception {
@@ -53,6 +77,12 @@ public final class LegacyDeviceContainers {
     }
     public static Object clientGui(LegacyServices services,Descriptor descriptor,Object player,Object world) throws Exception {
         var loader=services.loader();
+        if(descriptor.mod().startsWith("mfcl:provider/")) {
+            Object source=loader.loadClass("net.minecraft.world.World").getMethod("func_147438_o",int.class,int.class,int.class)
+                    .invoke(world,descriptor.x(),descriptor.y(),descriptor.z());
+            if(source==null)throw new IllegalStateException("Original GUI tile is missing");
+            return provider(loader,descriptor.mod().substring("mfcl:provider/".length())).screen(player,source);
+        }
         if(descriptor.inventory()) {
             Object inventory=loader.loadClass("net.minecraft.world.World").getMethod("func_147438_o",int.class,int.class,int.class).invoke(world,descriptor.x(),descriptor.y(),descriptor.z());
             Object playerInventory=loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);

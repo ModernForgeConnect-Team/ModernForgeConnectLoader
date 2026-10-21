@@ -52,7 +52,7 @@ public final class CreativeTabBridge {
         for (var tab : content.declarations().tabs()) if (!tab.builtin()) {
             ResourceLocation id = id(tab);
             if (BuiltInRegistries.CREATIVE_MODE_TAB.containsKey(id) || customTabs.containsKey(tab.key())) throw new IllegalStateException("Creative tab ID collision: " + tab.key());
-            var builder = CreativeModeTab.builder().title(Component.translatable(tab.nameKey())).icon(() -> icon(tab))
+            var builder = CreativeModeTab.builder().title(Component.translatableWithFallback(tab.nameKey(),tab.label())).icon(() -> icon(tab))
                     .displayItems((parameters, output) -> stacks(tab).forEach(output::accept));
             if (!tab.showTitle()) builder.hideTitle();
             if (!tab.scroll()) builder.noScrollBar();

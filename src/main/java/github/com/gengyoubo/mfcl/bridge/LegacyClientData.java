@@ -36,6 +36,7 @@ public final class LegacyClientData {
     private final Map<String, Object> hostItemsByKey = new HashMap<>();
     private Class<?> facadeType;
     private Map<String, float[]> iconLayout = Map.of();
+    private Map<String, LegacySpriteTextures.Texture> iconTextures = Map.of();
     private boolean contextInitialized;
     private LegacyClientResources.Context resourceContext;
     private final List<Path> resourcePacks;
@@ -57,6 +58,8 @@ public final class LegacyClientData {
         return represented == null ? itemByName.invoke(registry, key) : represented;
     }
     public Map<String, float[]> iconLayout() { return iconLayout; }
+    public byte[] iconTexture(String name) { var value=iconTextures.get(name);return value==null?null:value.png().clone(); }
+    public String iconTextureMetadata(String name) { var value=iconTextures.get(name);return value==null?null:value.metadata(); }
     /** The original icon whose synthetic atlas cell contains the given legacy UV, or null. */
     public String iconAt(float u, float v) {
         for (var entry : iconLayout.entrySet()) {
@@ -301,13 +304,16 @@ public final class LegacyClientData {
         Method atlasOfItem = itemType.getMethod("func_94901_k");
         for (Object i : (Iterable<?>) registry) itemType.getMethod("func_94581_a", register)
                 .invoke(i, (int) atlasOfItem.invoke(i) == 0 ? blocks : items);
+        for(Object map:List.of(blocks,items))LegacySpriteTextures.event(loader,map,"Pre");
 
         // Keep real TextureAtlasSprite instances, including entries installed by custom mod loaders.
         Field entries = atlas.getDeclaredField("field_110574_e"); entries.setAccessible(true);
         Field missing = atlas.getDeclaredField("field_94249_f"); missing.setAccessible(true);
         Field uploaded = atlas.getDeclaredField("field_94252_e"); uploaded.setAccessible(true);
         Map<String, List<Object>> icons = new TreeMap<>();
+        Map<String,LegacySpriteTextures.Texture> images = new LinkedHashMap<>();
         for (Object map : List.of(blocks, items)) {
+            images.putAll(LegacySpriteTextures.load(loader,resourceContext.manager(),(Map<?,?>)entries.get(map)));
             for (var entry : ((Map<?, ?>) entries.get(map)).entrySet())
                 icons.computeIfAbsent((String) entry.getKey(), ignored -> new ArrayList<>()).add(entry.getValue());
             icons.computeIfAbsent("missingno", ignored -> new ArrayList<>()).add(missing.get(map));
@@ -323,15 +329,21 @@ public final class LegacyClientData {
             // A synthetic atlas cell identifies the source texture of captured geometry without a GL stitch.
             int x = cell % 16 * 16, y = cell / 16 * 16; cell++;
             for (Object value : entry.getValue()) {
-                width.invoke(value, 16); height.invoke(value, 16);
-                initialize.invoke(value, 256, 256, x, y, false);
+                int w=(int)sprite.getMethod("func_94211_a").invoke(value),h=(int)sprite.getMethod("func_94216_b").invoke(value);
+                if(w<=0)w=16;if(h<=0)h=16;
+                width.invoke(value, w); height.invoke(value, h);
+                initialize.invoke(value, w*16, h*16, x/16*w, y/16*h, false);
             }
+        }
+        for(Object map:List.of(blocks,items))LegacySpriteTextures.event(loader,map,"Post");
+        for(var entry:icons.entrySet()) {
             Object value = entry.getValue().get(0);
             layout.put(entry.getKey(), new float[]{(float) sprite.getMethod("func_94209_e").invoke(value),
                     (float) sprite.getMethod("func_94206_g").invoke(value), (float) sprite.getMethod("func_94212_f").invoke(value),
                     (float) sprite.getMethod("func_94210_h").invoke(value)});
         }
         iconLayout = Map.copyOf(layout);
+        iconTextures = Map.copyOf(images);
     }
     private Object metadataAtlas(Class<?> atlas, int type, String path) throws Exception {
         // -1 skips the constructor's automatic registry/renderer scan before the client is fully connected.

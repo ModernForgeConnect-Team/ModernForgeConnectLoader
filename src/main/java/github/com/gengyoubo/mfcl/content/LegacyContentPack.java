@@ -162,6 +162,14 @@ public final class LegacyContentPack {
     private String texture(String icon, String preferred) throws Exception {
         String cacheKey = preferred + ":" + icon;
         if (textures.containsKey(cacheKey)) return textures.get(cacheKey);
+        byte[] generated=content.iconTexture(icon);
+        if(generated!=null) {
+            String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(icon.getBytes(StandardCharsets.UTF_8)));
+            Path path=directory.resolve("assets/mfcl/textures/block/legacy/"+hash+".png");Files.createDirectories(path.getParent());Files.write(path,generated);
+            String metadata=content.iconTextureMetadata(icon);
+            if(metadata!=null)Files.writeString(path.resolveSibling(path.getFileName()+".mcmeta"),metadata,StandardCharsets.UTF_8);
+            String id="mfcl:block/legacy/"+hash;textures.put(cacheKey,id);return id;
+        }
         String namespace = icon.contains(":") ? icon.substring(0, icon.indexOf(':')) : "minecraft";
         String name = icon.contains(":") ? icon.substring(icon.indexOf(':') + 1) : icon;
         for (String folder : List.of(preferred, preferred.equals("items") ? "blocks" : "items")) {

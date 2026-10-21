@@ -372,6 +372,8 @@ public final class LegacyContent {
     public List<LegacyCreativeTabs.Tab> tabs() { return tabs; }
     public ClassLoader loader() { return data.loader(); }
     public Set<String> registeredIcons() { return Set.copyOf(data.iconLayout().keySet()); }
+    public byte[] iconTexture(String name) { return data.iconTexture(name); }
+    public String iconTextureMetadata(String name) { return data.iconTextureMetadata(name); }
     /** Forge's extensible drop callback, including mod loot generators and the real world's random/context. */
     public List<LegacyClientData.Stack> drops(String key,int metadata,Object world,int x,int y,int z,int fortune) throws Exception {
         return data.inLegacy(() -> {

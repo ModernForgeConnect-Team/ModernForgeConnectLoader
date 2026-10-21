@@ -28,7 +28,7 @@ class LegacyIconMetadataIntegrationTest {
                 getClass().getName(), temporary.toString(), runtime.toAbsolutePath().toString())
                 .directory(temporary.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start();
         try {
-            assertTrue(process.waitFor(60, TimeUnit.SECONDS), "IC2 icon registration timed out");
+            assertTrue(process.waitFor(180, TimeUnit.SECONDS), ()->"IC2 icon registration timed out: "+readLog(log));
             String output = Files.readString(log);
             assertEquals(0, process.exitValue(), output);
             assertTrue(output.contains("MFCL_IC2_ICON_METADATA_PASS"), output);
@@ -36,6 +36,8 @@ class LegacyIconMetadataIntegrationTest {
             if (process.isAlive()) { process.destroyForcibly(); process.waitFor(10, TimeUnit.SECONDS); }
         }
     }
+
+    private static String readLog(Path log) { try{return Files.readString(log);}catch(Exception failure){return failure.toString();} }
 
     public static void main(String[] args) throws Exception {
         var service = new LegacyRuntimeService();
@@ -68,6 +70,7 @@ class LegacyIconMetadataIntegrationTest {
                 }
             }
             int custom = 0;
+            int comparedPixels=0;
             for (Object value : (Iterable<?>) block.getField("field_149771_c").get(null)) {
                 Object icon = block.getMethod("func_149691_a", int.class, int.class).invoke(value, 0, 0);
                 if (!customSprite.isInstance(icon)) continue;
@@ -80,9 +83,26 @@ class LegacyIconMetadataIntegrationTest {
                 assertEquals(cell[3], (float) sprite.getMethod("func_94210_h").invoke(icon));
                 assertTrue(cell[2] > cell[0] && cell[3] > cell[1]);
                 assertEquals(name, data.iconAt((cell[0] + cell[2]) / 2, (cell[1] + cell[3]) / 2));
+                byte[] png=data.iconTexture(name);
+                assertNotNull(png,"Custom loader pixels were omitted: "+name);
+                var image=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png));
+                assertEquals(16,image.getWidth());
+                int split=name.lastIndexOf(':');String path=name.substring(name.indexOf(':')+1,split);
+                try(var input=loader.getResourceAsStream("assets/ic2/textures/blocks/"+path+".png")) {
+                    if(input!=null) {
+                        var source=javax.imageio.ImageIO.read(input);
+                        if(source.getHeight()==16) {
+                            int columns=source.getWidth()/16,index=Integer.parseInt(name.substring(split+1));
+                            int column=columns==2?index/6:index%columns;
+                            assertArrayEquals(source.getRGB(column*16,0,16,16,null,0,16),image.getRGB(0,0,16,16,null,0,16),name);
+                            comparedPixels++;
+                        }
+                    }
+                }
                 custom++;
             }
             assertTrue(custom > 0, "No original IC2 custom block sprite was checked");
+            assertTrue(comparedPixels>0,"No custom sprite was compared with the original texture sheet");
             var original = data.iconLayout();
             data.refreshIconMetadata();
             assertEquals(original.keySet(), data.iconLayout().keySet());
