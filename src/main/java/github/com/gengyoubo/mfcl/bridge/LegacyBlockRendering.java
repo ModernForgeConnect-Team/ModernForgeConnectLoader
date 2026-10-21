@@ -14,6 +14,12 @@ public final class LegacyBlockRendering {
     public record Layer(int pass, List<LegacyVertexStream.Primitive> geometry) {
         public Layer { geometry = List.copyOf(geometry); }
     }
+    /** Render type 0 draws the block's bounds, which need not fill a voxel (e.g. XU's Magnum Torch). */
+    public record Cuboid(double minX,double minY,double minZ,double maxX,double maxY,double maxZ) {
+        public static final Cuboid FULL=new Cuboid(0,0,0,1,1,1);
+        public boolean full(){return equals(FULL);}
+    }
+    private final Map<String,Cuboid> cuboids=new HashMap<>(),inventoryCuboids=new HashMap<>();
     private final LegacyClientData data;
     private final LegacyServices services;
     private final LegacyTileRendering tiles;
@@ -48,7 +54,9 @@ public final class LegacyBlockRendering {
         Object dispatcher = dispatcherType.getField("field_147556_a").get(null);
         Method special = dispatcherType.getMethod("func_147547_b", loader.loadClass("net.minecraft.tileentity.TileEntity"));
         for (var declaration : content.blocks()) {
-            if (declaration.renderType() == 0) continue;
+            if (declaration.renderType() == 0) {
+                captureCuboids(declaration.key());continue;
+            }
             Set<Integer> metas = new TreeSet<>();
             for (var item : content.items()) if (declaration.key().equals(item.blockKey()))
                 for (var variant : item.variants()) metas.add(variant.metadata());
@@ -90,6 +98,41 @@ public final class LegacyBlockRendering {
         }
     }
     public boolean supports(String key, int metadata) { return supported.getOrDefault(key, Set.of()).contains(metadata); }
+    public Cuboid cuboid(String key,int metadata){return cuboids.getOrDefault(key+"@"+metadata,Cuboid.FULL);}
+    public Cuboid inventoryCuboid(String key,int metadata){return inventoryCuboids.getOrDefault(key+"@"+metadata,Cuboid.FULL);}
+    private void captureCuboids(String key) {
+        for(int metadata=0;metadata<16;metadata++) {
+            int meta=metadata;
+            try {
+                data.inLegacy(()->{
+                    Object block=block(key);
+                    String[] names={"field_149759_B","field_149760_C","field_149754_D","field_149755_E","field_149756_F","field_149757_G"};
+                    Field[] fields=new Field[6];double[] saved=new double[6];
+                    for(int i=0;i<6;i++){fields[i]=blockType.getDeclaredField(names[i]);fields[i].setAccessible(true);saved[i]=fields[i].getDouble(block);}
+                    try(var scene=new LegacyBlockScene(services,isolatedView(key,meta))) {
+                        blockType.getMethod("func_149683_g").invoke(block);
+                        inventoryCuboids.put(key+"@"+meta,readCuboid(block,fields));
+                        for(int i=0;i<6;i++)fields[i].setDouble(block,saved[i]);
+                        blockType.getMethod("func_149719_a",accessType,int.class,int.class,int.class).invoke(block,scene.world(),0,0,0);
+                        cuboids.put(key+"@"+meta,readCuboid(block,fields));
+                    }finally{for(int i=0;i<6;i++)fields[i].setDouble(block,saved[i]);}
+                    return null;
+                });
+            }catch(Exception failure){
+                Throwable cause=failure;while(cause.getCause()!=null)cause=cause.getCause();
+                diagnostics.add(key+"@"+meta+" cuboid bounds: "+cause);
+            }
+        }
+    }
+    private static Cuboid readCuboid(Object block,Field[] fields) throws IllegalAccessException {
+        double[] value=new double[6];
+        for(int i=0;i<6;i++){
+            value[i]=fields[i].getDouble(block);
+            if(!Double.isFinite(value[i])||value[i]<-1||value[i]>2)throw new UnsupportedOperationException("Original cuboid exceeds host model bounds");
+        }
+        if(value[0]>value[3]||value[1]>value[4]||value[2]>value[5])throw new UnsupportedOperationException("Invalid original cuboid bounds");
+        return new Cuboid(value[0],value[1],value[2],value[3],value[4],value[5]);
+    }
     public boolean hasTileRenderer(String key, int metadata) { return tileSupported.getOrDefault(key, Set.of()).contains(metadata); }
     public LegacyTileRendering tiles() { return tiles; }
     public List<LegacyVertexStream.Primitive> tilePreviews() { return List.copyOf(tilePreviews); }

@@ -23,6 +23,18 @@ public final class LegacyTravel {
     public static Object legacyServer(Object handler) { return null; }
     /** MinecraftServer.getConfigurationManager(): travel is resolved by {@link #transferPlayer}, which ignores the manager. */
     public static Object configurationManager(Object server) { return null; }
+    /** True only for an exact old player actor backed by a current player in its authoritative host world. */
+    public static boolean hostPlayer(Object actor) {
+        if(actor==null)return false;
+        try {
+            var loader=actor.getClass().getClassLoader();
+            if(actor.getClass()!=loader.loadClass("net.minecraft.entity.player.EntityPlayerMP"))return false;
+            var entity=loader.loadClass("net.minecraft.entity.Entity");
+            var host=LegacyWorlds.hostOrNull(entity.getField("field_70170_p").get(actor));
+            var id=(java.util.UUID)entity.getMethod("func_110124_au").invoke(actor);
+            return host!=null&&!host.clientSide()&&host.players().stream().anyMatch(player->player.id().equals(id));
+        }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot identify hosted portal player",failure);}
+    }
     /** MinecraftServer.worldServerForDimension(int). */
     public static Object serverWorld(Object server, int dimension) {
         Object world = LegacyWorlds.serverWorld(dimension);
@@ -53,4 +65,5 @@ public final class LegacyTravel {
     }
     /** Nearest block of an old registry key around a position of a bound world, found in host chunks. */
     public static int[] findBlock(Object world, String legacyKey, int x, int y, int z, int radius) { return LegacyWorlds.access(world).findBlock(legacyKey, x, y, z, radius); }
+    public static int[] findBlock(Object world,String legacyKey,int mask,int metadata,int x,int y,int z,int radius) { return LegacyWorlds.access(world).findBlock(legacyKey,mask,metadata,x,y,z,radius); }
 }

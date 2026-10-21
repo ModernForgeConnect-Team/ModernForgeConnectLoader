@@ -37,4 +37,8 @@
 
 测试报告位于测试游戏的 `logs/mfcl/generator-smoke.json`，能源断言在 `energyBridge` 字段；测试版本与限制应结合实际报告阅读。
 
+本轮实际客户端报告为 `PASS`，四种传输方向、方向/限速/模拟、原生端口重配置、跨运行时回滚、两端 NBT 保存恢复、拆除/替换失效均通过；客户端能源只读检查也通过。全量测试 119 项中 109 项通过、10 项因缺少其他可选输入跳过，失败和错误为 0。
+
+同时修复启动预览扫描：`LegacyTiles.create` 先检查原方块的 `hasTileEntity(metadata)`，避免对 Extra Utilities 发电机未定义的 metadata 调用工厂并触发 `BlockGenerator.tiles[metadata] == null`。原始模组回归覆盖所有这些空槽。
+
 构建产物：`build/rf-bridge/libs/mfcl-0.2.8.jar`。

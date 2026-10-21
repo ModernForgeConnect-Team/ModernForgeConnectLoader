@@ -13,6 +13,7 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.client.Minecraft") || name.equals("net.minecraft.client.entity.AbstractClientPlayer") || name.equals("net.minecraft.entity.player.EntityPlayer")
                 || name.equals("net.minecraft.client.entity.EntityPlayerSP") || name.equals("net.minecraft.client.entity.EntityClientPlayerMP")
                 || name.equals("net.minecraft.entity.player.EntityPlayerMP") || name.equals("net.minecraft.network.NetHandlerPlayServer")
+                || name.equals("net.minecraft.tileentity.MobSpawnerBaseLogic")
                 || name.equals("net.minecraft.client.gui.GuiButton")
                 || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
                 || name.equals("net.minecraft.client.multiplayer.PlayerControllerMP")
@@ -23,6 +24,12 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("cpw.mods.fml.common.eventhandler.EventBus"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if(name.equals("net.minecraft.tileentity.MobSpawnerBaseLogic")&&m.name.equals("func_98272_a")&&m.desc.equals("(Ljava/lang/String;)V")) {
+                for(AbstractInsnNode instruction:m.instructions.toArray())if(instruction.getOpcode()==Opcodes.RETURN){
+                    InsnList update=new InsnList();update.add(new VarInsnNode(Opcodes.ALOAD,0));update.add(new VarInsnNode(Opcodes.ALOAD,1));
+                    update.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyWorlds","spawnerType","(Ljava/lang/Object;Ljava/lang/String;)V",false));m.instructions.insertBefore(instruction,update);
+                }
+            }
             if (name.endsWith(".FMLOutboundHandler") && m.name.equals("write")) {
                 InsnList send=new InsnList();LabelNode original=new LabelNode();
                 load(send,Opcodes.ALOAD,1,3);

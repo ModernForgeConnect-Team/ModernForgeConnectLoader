@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.content;
 import com.google.gson.GsonBuilder;
 import github.com.gengyoubo.mfcl.bridge.LegacyContent;
 import github.com.gengyoubo.mfcl.bridge.LegacyVertexStream;
+import github.com.gengyoubo.mfcl.bridge.LegacyBlockRendering;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.*;
 import net.minecraft.server.packs.repository.*;
@@ -19,12 +20,13 @@ import java.util.jar.JarFile;
 public final class LegacyContentPack {
     private final Path directory;
     private final LegacyContent content;
+    private final LegacyBlockRendering worldRendering;
     private final Map<String, String> textures = new HashMap<>();
     private final Set<String> missingIcons = new TreeSet<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> contextGeometry = new LinkedHashMap<>();
     public LegacyContentPack(Path gameDirectory, LegacyContent content, github.com.gengyoubo.mfcl.bridge.LegacyBlockRendering worldRendering) throws Exception {
-        this.content = content;
+        this.content = content;this.worldRendering=worldRendering;
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
         directory = Files.createTempDirectory(parent, "content-1.7.10-");
         progress("Copying legacy textures and sounds");
@@ -76,11 +78,7 @@ public final class LegacyContentPack {
             var id = ModernContentBridge.id(block.key()); var variants = new LinkedHashMap<String, Object>();
             for (int meta = 0; meta < 16; meta++) {
                 String model = id.getNamespace() + ":block/" + id.getPath() + "_" + meta;
-                var sides = new LinkedHashMap<String, String>();
-                String[] names = {"down", "up", "north", "south", "west", "east"};
-                for (int side = 0; side < 6; side++) sides.put(names[side], texture(block.faces().get(meta).get(side), "blocks"));
-                sides.put("particle", sides.get("north"));
-                json("assets/" + id.getNamespace() + "/models/block/" + id.getPath() + "_" + meta + ".json", Map.of("parent", "minecraft:block/cube", "textures", sides));
+                json("assets/" + id.getNamespace() + "/models/block/" + id.getPath() + "_" + meta + ".json",cuboidModel(block,meta,worldRendering.cuboid(block.key(),meta)));
                 variants.put("legacy_meta=" + meta, Map.of("model", model));
             }
             json("assets/" + id.getNamespace() + "/blockstates/" + id.getPath() + ".json", Map.of("variants", variants));
@@ -147,12 +145,32 @@ public final class LegacyContentPack {
         var block = item.blockKey() == null ? null : content.blocks().stream()
                 .filter(b -> b.key().equals(item.blockKey())).findFirst().orElse(null);
         if (block != null && block.blockModel()) {
+            if(block.renderType()==0)return new LinkedHashMap<>(cuboidModel(block,variant.metadata()&15,worldRendering.inventoryCuboid(block.key(),variant.metadata()&15)));
             var id = ModernContentBridge.id(block.key());
             return new LinkedHashMap<>(Map.of("parent", id.getNamespace() + ":block/" + id.getPath() + "_" + (variant.metadata() & 15)));
         }
         var layers = new LinkedHashMap<String, String>();
         for (int pass = 0; pass < variant.layers().size(); pass++) layers.put("layer" + pass, texture(variant.layers().get(pass).icon(), "items"));
         return new LinkedHashMap<>(Map.of("parent", "minecraft:item/generated", "textures", layers));
+    }
+    private Map<String,Object> cuboidModel(LegacyContent.Block block,int meta,LegacyBlockRendering.Cuboid bounds) throws Exception {
+        String[] names={"down","up","north","south","west","east"};
+        var textures=new LinkedHashMap<String,String>();
+        for(int side=0;side<6;side++)textures.put(names[side],texture(block.faces().get(meta).get(side),"blocks"));
+        textures.put("particle",textures.get("north"));
+        if(bounds.full())return Map.of("parent","minecraft:block/cube","textures",textures);
+        var faces=new LinkedHashMap<String,Object>();
+        boolean[] boundary={bounds.minY()==0,bounds.maxY()==1,bounds.minZ()==0,bounds.maxZ()==1,bounds.minX()==0,bounds.maxX()==1};
+        for(int side=0;side<6;side++){
+            var face=new LinkedHashMap<String,Object>();face.put("texture","#"+names[side]);
+            // Inset sides remain visible beside neighboring blocks. Only boundary faces can be culled.
+            if(boundary[side])face.put("cullface",names[side]);
+            faces.put(names[side],face);
+        }
+        // Omitted face UVs use the bounds-derived vanilla crop, matching the original RenderBlocks cuboid.
+        return Map.of("parent","minecraft:block/block","textures",textures,"elements",List.of(Map.of(
+                "from",List.of(bounds.minX()*16,bounds.minY()*16,bounds.minZ()*16),
+                "to",List.of(bounds.maxX()*16,bounds.maxY()*16,bounds.maxZ()*16),"faces",faces)));
     }
     /** Copies a whole old texture resource (for IItemRenderer models) and returns its standalone modern path. */
     private String texturePath(String resource) throws Exception {

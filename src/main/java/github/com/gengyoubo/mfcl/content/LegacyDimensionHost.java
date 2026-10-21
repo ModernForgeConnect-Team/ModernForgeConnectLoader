@@ -23,13 +23,14 @@ import java.util.*;
  * saves, and player transfers between levels. Everything runs on the server thread, where legacy worlds are owned.
  */
 final class LegacyDimensionHost {
-    /** Longest time one server tick spends in original chunk population; the rest waits for later ticks. */
-    private static final long POPULATION_BUDGET_NANOS = 25_000_000L;
+    /** Soft budget between indivisible old populate calls; a single original callback may exceed it. */
+    private static final long POPULATION_BUDGET_NANOS = 8_000_000L;
     private final ModernContentBridge content;
     private final LegacyGeneration generation;
     private final Map<ServerLevel, LongLinkedOpenHashSet> pending = new WeakHashMap<>();
     private final List<HostWorldAccess.Transfer> transfers = new ArrayList<>();
     private final Set<String> skippedBlocks = new HashSet<>();
+    private final Map<ServerLevel,LongOpenHashSet> importing=new WeakHashMap<>(), failedTerrain=new WeakHashMap<>();
     private boolean generating;
     LegacyDimensionHost(ModernContentBridge content) {
         this.content = content; this.generation = new LegacyGeneration(content.services());
@@ -50,7 +51,7 @@ final class LegacyDimensionHost {
         try { content.services().worlds().loaded(level); }
         catch (Exception failure) { LogUtils.getLogger().error("MFCL original world load hooks failed for {}", level.dimension().location(), failure); }
     }
-    void unloading(ServerLevel level) { generation.forget(level); pending.remove(level); }
+    void unloading(ServerLevel level) { generation.forget(level); pending.remove(level);importing.remove(level);failedTerrain.remove(level); }
     private void save(LevelEvent.Save event) {
         if (!(event.getLevel() instanceof ServerLevel level) || content.services().worlds().findBound(level) == null) return;
         try { content.services().worlds().save(level); }
@@ -61,10 +62,25 @@ final class LegacyDimensionHost {
     /** Chunks of a mirrored dimension that already ran original population. Saved with the host level. */
     private static final class Populated extends SavedData {
         final LongOpenHashSet chunks = new LongOpenHashSet();
-        static Populated load(CompoundTag tag) { var data = new Populated(); for (long chunk : tag.getLongArray("chunks")) data.chunks.add(chunk); return data; }
-        @Override public CompoundTag save(CompoundTag tag) { tag.putLongArray("chunks", chunks.toLongArray()); return tag; }
+        final LongOpenHashSet terrain = new LongOpenHashSet();
+        static Populated load(CompoundTag tag) { var data = new Populated(); for (long chunk : tag.getLongArray("chunks")) data.chunks.add(chunk); for(long chunk:tag.getLongArray("terrain"))data.terrain.add(chunk); return data; }
+        @Override public CompoundTag save(CompoundTag tag) { tag.putLongArray("chunks", chunks.toLongArray()); tag.putLongArray("terrain",terrain.toLongArray()); return tag; }
     }
     private static Populated populated(ServerLevel level) { return level.getDataStorage().computeIfAbsent(Populated::load, Populated::new, "mfcl_legacy_population"); }
+    /** Base terrain precedes any old feature reads/writes in that chunk; never replace a previously generated palette. */
+    void terrain(ServerLevel level,int cx,int cz) {
+        if(!content.services().dimensions().hasTerrain(level.dimension().location().toString()))return;
+        var done=populated(level);long key=ChunkPos.asLong(cx,cz);
+        if(done.terrain.contains(key))return;
+        var active=importing.computeIfAbsent(level,ignored->new LongOpenHashSet());
+        if(!active.add(key))return;
+        var failed=failedTerrain.computeIfAbsent(level,ignored->new LongOpenHashSet());
+        try {
+            if(failed.contains(key))throw new IllegalStateException("Original terrain previously failed in this session at "+cx+", "+cz);
+            HostTerrain.copy(content,generation,level,cx,cz);done.terrain.add(key);done.setDirty();
+        }catch(Exception failure){failed.add(key);throw new IllegalStateException("Cannot generate original terrain at "+cx+", "+cz,failure);}
+        finally{active.remove(key);}
+    }
     private void chunkLoaded(ChunkEvent.Load event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !mirrored(level)) return;
         long chunk = event.getChunk().getPos().toLong();
@@ -79,15 +95,20 @@ final class LegacyDimensionHost {
         // Marked first: a generator that fails would otherwise be retried on every load.
         done.chunks.add(chunk); done.setDirty();
         boolean outer = generating; generating = true;
-        try { generation.populate(level, x, z); }
+        try { terrain(level,x,z); generation.populate(level, x, z); }
         catch (Exception | LinkageError failure) { LogUtils.getLogger().error("MFCL original population of chunk [{}, {}] in {} failed", x, z, level.dimension().location(), failure); }
         finally { generating = outer; }
     }
     /** Loads the chunks around a column and, in a mirrored dimension, populates them before anyone arrives. */
     private void prepare(ServerLevel level, int blockX, int blockZ, int radius) {
+        boolean baseTerrain=content.services().dimensions().hasTerrain(level.dimension().location().toString());
+        if(baseTerrain)radius=Math.min(radius,1);
         int cx = blockX >> 4, cz = blockZ >> 4;
         for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) level.getChunk(cx + dx, cz + dz);
         if (!mirrored(level)) return;
+        for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) terrain(level,cx+dx,cz+dz);
+        // A Deep Dark room only needs its base palette. Decoration can wait for budgeted ticks after arrival.
+        if(baseTerrain)return;
         for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) populate(level, ChunkPos.asLong(cx + dx, cz + dz));
     }
     private void serverTick(TickEvent.ServerTickEvent event) {
@@ -99,13 +120,22 @@ final class LegacyDimensionHost {
             catch (Exception | LinkageError failure) { LogUtils.getLogger().error("MFCL original dimension transfer to {} failed", transfer.legacyDimension(), failure); }
         }
         long deadline = System.nanoTime() + POPULATION_BUDGET_NANOS;
+        int decorated=0;
         for (var level : event.getServer().getAllLevels()) {
             LongLinkedOpenHashSet queue;
             synchronized (pending) { queue = pending.get(level); }
-            while (queue != null && System.nanoTime() < deadline) {
+            int remaining; synchronized(pending){remaining=queue==null?0:queue.size();}
+            while (remaining-->0 && decorated<1 && System.nanoTime() < deadline) {
                 long chunk;
                 synchronized (pending) { if (queue.isEmpty()) break; chunk = queue.removeFirstLong(); }
+                if(populated(level).chunks.contains(chunk)||level.getChunkSource().getChunkNow(ChunkPos.getX(chunk),ChunkPos.getZ(chunk))==null)continue;
+                // Feature lookups may load neighboring chunks. Do not decorate those endlessly away from players.
+                if(content.services().dimensions().hasTerrain(level.dimension().location().toString())
+                        &&level.getChunkSource().chunkMap.getPlayers(new ChunkPos(chunk),false).isEmpty()) {
+                    synchronized(pending){queue.add(chunk);}continue;
+                }
                 populate(level, chunk);
+                decorated++;
             }
         }
     }
@@ -135,6 +165,9 @@ final class LegacyDimensionHost {
     }
     /** Nearest block of an old registry key in loaded host chunks, scanning only sections whose palette can contain it. */
     int[] findBlock(ServerLevel level, String legacyKey, int x, int y, int z, int radius) {
+        return findBlock(level,legacyKey,0,0,x,y,z,radius);
+    }
+    int[] findBlock(ServerLevel level,String legacyKey,int mask,int metadata,int x,int y,int z,int radius) {
         var target = content.modernBlock(new HostWorldAccess.Block(legacyKey, 0)).getBlock();
         int[] best = null; double bestDistance = Double.MAX_VALUE;
         for (int cx = (x - radius) >> 4; cx <= (x + radius) >> 4; cx++) for (int cz = (z - radius) >> 4; cz <= (z + radius) >> 4; cz++) {
@@ -146,6 +179,7 @@ final class LegacyDimensionHost {
                 int baseY = chunk.getSectionYFromSectionIndex(index) << 4;
                 for (int dx = 0; dx < 16; dx++) for (int dy = 0; dy < 16; dy++) for (int dz = 0; dz < 16; dz++) {
                     if (section.getBlockState(dx, dy, dz).getBlock() != target) continue;
+                    if(mask!=0&&(content.legacyBlock(section.getBlockState(dx,dy,dz)).metadata()&mask)!=(metadata&mask))continue;
                     int bx = (cx << 4) + dx, by = baseY + dy, bz = (cz << 4) + dz;
                     if (Math.abs(bx - x) > radius || Math.abs(bz - z) > radius) continue;
                     double distance = (bx + .5 - x) * (bx + .5 - x) + (by + .5 - y) * (by + .5 - y) + (bz + .5 - z) * (bz + .5 - z);

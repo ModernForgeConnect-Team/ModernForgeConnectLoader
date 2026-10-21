@@ -43,7 +43,7 @@ final class HostEnergyTiles {
         Endpoint(BlockEntity tile){this.tile=tile;position=tile.getBlockPos().immutable();}
         private IEnergyStorage storage(int side) {
             if(side<0||side>6)throw new IllegalArgumentException("Invalid RF side: "+side);
-            if(tile.isRemoved()||!level.hasChunkAt(position)||level.getBlockEntity(position)!=tile)return null;
+            if(content.services().worlds().findBound(level)==null||tile.isRemoved()||!level.hasChunkAt(position)||level.getBlockEntity(position)!=tile)return null;
             return tile.getCapability(ForgeCapabilities.ENERGY,side==6?null:Direction.from3DDataValue(side)).orElse(null);
         }
         @Override public boolean canReceive(int side){return host(()->{var energy=storage(side);return energy!=null&&energy.canReceive();});}

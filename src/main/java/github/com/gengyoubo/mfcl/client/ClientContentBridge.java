@@ -11,6 +11,7 @@ public final class ClientContentBridge {
     public static void install(ModernContentBridge bridge, IEventBus bus) {
         ClientLegacyAudio.install(bridge.services());
         if(Boolean.getBoolean("mfcl.test.generator"))GeneratorHostSmokeProbe.install(bridge);
+        if(Boolean.getBoolean("mfcl.test.deepDark"))DeepDarkHostSmokeProbe.install(bridge);
         if (Boolean.getBoolean("mfcl.test.exitAtTitleScreen") && !Boolean.getBoolean("mfcl.test.neiUiSmoke"))
             ClientStartupSmokeProbe.install(bridge);
         LegacyScanNotifications.install(bridge);

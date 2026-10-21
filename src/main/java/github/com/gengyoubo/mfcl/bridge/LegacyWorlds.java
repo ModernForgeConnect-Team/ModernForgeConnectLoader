@@ -83,17 +83,20 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_96442_D", loader.loadClass("net.minecraft.scoreboard.Scoreboard").getConstructor().newInstance());
         if (host.legacySaveDirectory() != null) storage(world, host.legacySaveDirectory(), dimension);
         set(providerType, provider, "field_76574_g", dimension);
+        set(providerType, provider, "field_76579_a", world);
+        // WorldChunkManager(World) calls getSeed/getWorldInfo through the facade during provider registration.
+        var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
+        try {
         if (original) providerType.getMethod("func_76558_a", loader.loadClass("net.minecraft.world.World")).invoke(provider, world);
         else {
             // Host worlds skip registerWorld's chunk-manager setup, but mods still query terrain type/sea level.
             set(providerType, provider, "field_76577_b", info.getClass().getMethod("func_76067_t").invoke(info));
             set(providerType, provider, "field_82913_c", info.getClass().getMethod("func_82571_y").invoke(info));
         }
-        set(providerType, provider, "field_76579_a", world);
-        var binding = new Binding(world, host, items,biomes); worlds.put(hostIdentity, binding); DISPATCH.put(world, binding);
         if(!host.clientSide())dimensionWorlds().put(dimension,world);
         refreshDifficulty(binding);
         return world;
+        }catch(Exception | LinkageError failure){unbind(hostIdentity);throw failure;}
     }
     private static void refreshDifficulty(Binding binding) {
         try {
@@ -303,6 +306,13 @@ public final class LegacyWorlds implements AutoCloseable {
         } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
     public static Object tile(Object world, int x, int y, int z) { return binding(world).host.tileEntity(x, y, z); }
+    public static void spawnerType(Object logic,String entity) {
+        try {
+            var type=logic.getClass().getClassLoader().loadClass("net.minecraft.tileentity.MobSpawnerBaseLogic");
+            var host=hostOrNull(type.getMethod("func_98271_a").invoke(logic));if(host==null)return;
+            host.spawnerType((int)type.getMethod("func_98275_b").invoke(logic),(int)type.getMethod("func_98274_c").invoke(logic),(int)type.getMethod("func_98266_d").invoke(logic),logic,entity);
+        }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot mirror original spawner type",failure);}
+    }
     public static void tile(Object world, int x, int y, int z, Object tile) { binding(world).host.setTileEntity(x, y, z, tile); }
     public static void removeTile(Object world, int x, int y, int z) { binding(world).host.removeTileEntity(x, y, z); }
     public static void dirty(Object world, int x, int y, int z, Object tile) { binding(world).host.markTileDirty(x, y, z, tile); }

@@ -18,8 +18,8 @@ final class ExtraUtilitiesEnergyProbe {
         });
         try {
             var energy=services.energy();Object generator=services.tiles().create("ExtraUtilities:generator",0,world,0,64,0);tiles.put(0,generator);
-            Object block=loader.loadClass("com.rwtema.extrautils.tileentity.generators.BlockGenerator");
-            var classes=(Class<?>[])((Class<?>)block).getField("tiles").get(null);
+            Class<?> block=loader.loadClass("com.rwtema.extrautils.tileentity.generators.BlockGenerator");
+            var classes=(Class<?>[])block.getField("tiles").get(null);
             for(int meta=0;meta<16;meta++)if(classes[meta]==null&&services.tiles().create("ExtraUtilities:generator",meta,world,0,64,0)!=null)
                 throw new AssertionError("Preview created a generator for an unsupported metadata");
             Object storage=generator.getClass().getMethod("getStorage").invoke(generator);

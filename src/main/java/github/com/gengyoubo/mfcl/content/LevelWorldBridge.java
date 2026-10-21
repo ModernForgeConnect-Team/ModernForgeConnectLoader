@@ -91,6 +91,7 @@ public final class LevelWorldBridge {
     }
     private HostWorldAccess access(ServerLevel level, int dimension) {
         var energyTiles=new HostEnergyTiles(content,level);
+        var spawnerTiles=new HostSpawnerTiles(content,level);
         return new HostWorldAccess() {
             private void check() {
                 if (!level.getServer().isSameThread()) throw new IllegalStateException("Legacy server world requires the server thread");
@@ -229,7 +230,8 @@ public final class LevelWorldBridge {
                 }
             }
             @Override public Block block(int x, int y, int z) {
-                check(); var state = level.getBlockState(new BlockPos(x, y, z));
+                check(); if(dimensions.generating())dimensions.terrain(level,x>>4,z>>4);
+                var state = level.getBlockState(new BlockPos(x, y, z));
                 // Post-1.7 neighbours (deepslate, copper, mangrove...) must not abort and suspend original tile ticks.
                 var known = content.hostRepresentations().knownOpaque(state);
                 if (known != null) return known;
@@ -237,7 +239,8 @@ public final class LevelWorldBridge {
                 catch (github.com.gengyoubo.mfcl.bridge.UnmappedLegacyBlockException absent) { return content.hostRepresentations().opaque(state); }
             }
             @Override public boolean setBlock(int x, int y, int z, Block block, int flags) {
-                check(); var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
+                check(); dimensions.terrain(level,x>>4,z>>4);
+                var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
                 net.minecraft.world.level.block.state.BlockState state;
                 try { state = content.modernBlock(block); }
                 catch (UnsupportedOperationException unsupported) { if (dimensions.skipUnsupported(block, unsupported)) return false; throw unsupported; }
@@ -262,6 +265,7 @@ public final class LevelWorldBridge {
                 content.beforeMutation(level,pos); var tile = level.getBlockEntity(pos);
                 if (tile == null) return null;
                 if (tile instanceof LegacyBlockEntity legacy) return legacy.legacy();
+                if(tile instanceof net.minecraft.world.level.block.entity.SpawnerBlockEntity spawner)return spawnerTiles.find(spawner);
                 return energyTiles.find(new BlockPos(x,y,z));
             }
             @Override public void setTileEntity(int x, int y, int z, Object old) {
@@ -269,9 +273,11 @@ public final class LevelWorldBridge {
                 if (!(tile instanceof LegacyBlockEntity legacy)) throw new UnsupportedOperationException("No legacy tile envelope at requested position");
                 legacy.replace(old); legacy.synchronize();
             }
+            @Override public void spawnerType(int x,int y,int z,Object logic,String entity){check();spawnerTiles.type(new BlockPos(x,y,z),logic,entity);}
             @Override public void removeTileEntity(int x, int y, int z) { check(); level.removeBlockEntity(new BlockPos(x, y, z)); }
             @Override public void markTileDirty(int x, int y, int z, Object old) {
                 check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));
+                if(tile instanceof net.minecraft.world.level.block.entity.SpawnerBlockEntity spawner&&spawnerTiles.owns(spawner,old)){spawner.setChanged();return;}
                 if (!(tile instanceof LegacyBlockEntity legacy) || !legacy.owns(old)) throw new IllegalStateException("Legacy tile identity mismatch");
                 legacy.markLegacyDirty();
             }
@@ -293,6 +299,7 @@ public final class LevelWorldBridge {
                 check(); var player = level.getServer().getPlayerList().getPlayer(id); return player == null ? 0 : player.getPortalCooldown();
             }
             @Override public int[] findBlock(String legacyKey, int x, int y, int z, int radius) { check(); return dimensions.findBlock(level, legacyKey, x, y, z, radius); }
+            @Override public int[] findBlock(String legacyKey,int mask,int metadata,int x,int y,int z,int radius) {check();return dimensions.findBlock(level,legacyKey,mask,metadata,x,y,z,radius);}
             @Override public void blockUpdated(int x, int y, int z) {
                 check(); BlockPos pos = new BlockPos(x, y, z); var state = level.getBlockState(pos);
                 if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.markLegacyDirty();

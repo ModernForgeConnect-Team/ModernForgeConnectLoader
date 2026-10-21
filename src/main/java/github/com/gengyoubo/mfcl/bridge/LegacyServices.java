@@ -31,8 +31,8 @@ public final class LegacyServices {
         this.items.refreshIconMetadata();
         this.items.loadRegistryCatalog();
         this.biomes = new LegacyBiomes(loader);
-        this.dimensions = new LegacyDimensions(loader);
         this.worlds = new LegacyWorlds(items,biomes); this.screens = new LegacyScreens(loader);
+        this.dimensions = new LegacyDimensions(loader,worlds);
         this.containers = new LegacyContainers(this);
         this.tiles = new LegacyTiles(this);
         this.playerData = new LegacyPlayerData(this);

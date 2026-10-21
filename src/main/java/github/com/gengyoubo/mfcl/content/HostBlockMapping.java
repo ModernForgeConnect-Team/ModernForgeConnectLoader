@@ -10,7 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.*;
 import java.util.*;
 
-/** Read-side vanilla block flattening. World mutations still use the separately validated write mapping. */
+/** Explicit vanilla state flattening, including the decorations used by original portal arrival rooms. */
 public final class HostBlockMapping {
     private final Map<Block,HostWorldAccess.Block> blocks=new IdentityHashMap<>();
     public HostBlockMapping(Set<String> oldKeys) {
@@ -28,6 +28,8 @@ public final class HostBlockMapping {
         Map<String,String> blockOnly=Map.ofEntries(
                 Map.entry("oak_sign","standing_sign"),Map.entry("oak_wall_sign","wall_sign"),
                 Map.entry("redstone_wall_torch","redstone_torch"),Map.entry("wall_torch","torch"),
+                Map.entry("water_cauldron","cauldron"),
+                Map.entry("spawner","mob_spawner"),
                 Map.entry("carrots","carrots"),Map.entry("potatoes","potatoes"),
                 Map.entry("nether_portal","portal"),Map.entry("tripwire","tripwire"),Map.entry("dead_bush","deadbush"),
                 // Post-1.7 variants that are the same thing to old logic (crucible heat, bellows and spill neighbour reads).
@@ -42,7 +44,12 @@ public final class HostBlockMapping {
         String key=mapped.legacyKey();int meta=mapped.metadata();
         // Connection, shape and waterlogged properties do not change the original block/item variant.
         // Old fences/panes/stairs compute their connections from neighboring world cells.
-        if(state.getBlock() instanceof RotatedPillarBlock&&state.hasProperty(BlockStateProperties.AXIS)) {
+        if(state.getBlock() instanceof TorchBlock) {
+            meta=state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)?switch(state.getValue(BlockStateProperties.HORIZONTAL_FACING)){case EAST->1;case WEST->2;case SOUTH->3;default->4;}:5;
+            if(state.getBlock() instanceof RedstoneTorchBlock&&!state.getValue(BlockStateProperties.LIT))key="minecraft:unlit_redstone_torch";
+        } else if(state.is(Blocks.WATER_CAULDRON)) {
+            key="minecraft:cauldron";meta=state.getValue(LayeredCauldronBlock.LEVEL);
+        } else if(state.getBlock() instanceof RotatedPillarBlock&&state.hasProperty(BlockStateProperties.AXIS)) {
             var axis=state.getValue(BlockStateProperties.AXIS);
             if(key.equals("minecraft:log")||key.equals("minecraft:log2"))meta|=axis==Direction.Axis.X?4:axis==Direction.Axis.Z?8:0;
             else if(key.equals("minecraft:quartz_block")&&meta==2)meta=axis==Direction.Axis.X?3:axis==Direction.Axis.Z?4:2;
@@ -61,6 +68,32 @@ public final class HostBlockMapping {
             if(state.getValue(BlockStateProperties.PERSISTENT))meta|=4;
         } else if(state.getBlock() instanceof LiquidBlock)meta=state.getValue(LiquidBlock.LEVEL);
         return new HostWorldAccess.Block(key,meta);
+    }
+    /** Null leaves unsupported states to the caller's explicit mapping error. */
+    public BlockState write(HostWorldAccess.Block old) {
+        String key=old.legacyKey();int meta=old.metadata();
+        if(key.equals("minecraft:mob_spawner")&&meta==0)return Blocks.SPAWNER.defaultBlockState();
+        if(key.equals("minecraft:water")||key.equals("minecraft:flowing_water")||key.equals("minecraft:lava")||key.equals("minecraft:flowing_lava")) {
+            if(meta<0||meta>15)return null;
+            return (key.endsWith("water")?Blocks.WATER:Blocks.LAVA).defaultBlockState().setValue(LiquidBlock.LEVEL,meta);
+        }
+        if(key.equals("minecraft:torch")||key.equals("minecraft:redstone_torch")||key.equals("minecraft:unlit_redstone_torch")) {
+            if(meta<0||meta>5)return null;
+            boolean redstone=!key.equals("minecraft:torch"),wall=meta>=1&&meta<=4;
+            BlockState state=(redstone?(wall?Blocks.REDSTONE_WALL_TORCH:Blocks.REDSTONE_TORCH):(wall?Blocks.WALL_TORCH:Blocks.TORCH)).defaultBlockState();
+            if(wall)state=state.setValue(BlockStateProperties.HORIZONTAL_FACING,switch(meta){case 1->Direction.EAST;case 2->Direction.WEST;case 3->Direction.SOUTH;default->Direction.NORTH;});
+            return redstone?state.setValue(BlockStateProperties.LIT,!key.equals("minecraft:unlit_redstone_torch")):state;
+        }
+        if(key.equals("minecraft:cauldron"))return meta==0?Blocks.CAULDRON.defaultBlockState():meta>=1&&meta<=3?Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL,meta):null;
+        if((key.equals("minecraft:stonebrick")&&meta>=0&&meta<=3)||(key.equals("minecraft:stone_slab")&&meta>=0&&meta<=15)) {
+            int variant=key.equals("minecraft:stone_slab")?meta&7:meta;
+            var stack=HostStackMapping.renderStack(new LegacyClientData.Stack(key,variant,1,"",""));
+            if(stack.getItem() instanceof BlockItem item){
+                var state=item.getBlock().defaultBlockState();
+                return state.getBlock() instanceof SlabBlock?state.setValue(BlockStateProperties.SLAB_TYPE,(meta&8)!=0?SlabType.TOP:SlabType.BOTTOM):state;
+            }
+        }
+        return null;
     }
     private static int horizontal(BlockState state) {
         return switch(state.getValue(BlockStateProperties.HORIZONTAL_FACING)){case SOUTH->0;case WEST->1;case NORTH->2;default->3;};

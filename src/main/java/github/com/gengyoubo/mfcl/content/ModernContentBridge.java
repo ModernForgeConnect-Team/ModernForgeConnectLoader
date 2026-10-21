@@ -436,6 +436,8 @@ public final class ModernContentBridge {
     public BlockState modernBlock(HostWorldAccess.Block old) {
         var represented = hostRepresentations.block(old);
         if (represented != null) return represented;
+        var vanilla=hostBlocks.write(old);
+        if(vanilla!=null)return vanilla;
         Block block = blocks.get(old.legacyKey());
         if (block != null) {
             if (!canPlace(((MirroredBlock) block).entry, old.metadata())) throw new UnsupportedOperationException("Legacy special rendering/placement bridge is pending: " + old.legacyKey() + "@" + old.metadata());

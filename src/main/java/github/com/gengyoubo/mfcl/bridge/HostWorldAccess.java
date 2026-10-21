@@ -84,6 +84,8 @@ public interface HostWorldAccess {
     /** Real world bindings can run the original per-block ray test against their mirrored blocks. */
     default boolean originalBlockRayTrace() { return false; }
     default Object tileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity lookup is not available"); }
+    /** Original dungeon/mineshaft spawner selection, applied to the authoritative native spawner. */
+    default void spawnerType(int x,int y,int z,Object logic,String entity) { throw new UnsupportedOperationException("Host spawner mutation is not available"); }
     default void setTileEntity(int x, int y, int z, Object tile) { throw new UnsupportedOperationException("Host TileEntity assignment is not available"); }
     default void removeTileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity removal is not available"); }
     default void markTileDirty(int x, int y, int z, Object tile) { throw new UnsupportedOperationException("Host TileEntity dirty tracking is not available"); }
@@ -107,4 +109,9 @@ public interface HostWorldAccess {
     default int portalCooldown(java.util.UUID player) { return 0; }
     /** Nearest block of {@code legacyKey} in host chunks within {@code radius} columns, as {x,y,z}, or null. */
     default int[] findBlock(String legacyKey, int x, int y, int z, int radius) { return null; }
+    /** Variant-aware search: locked/unlocked portals may share a type while destinations must remain distinct. */
+    default int[] findBlock(String legacyKey,int mask,int metadata,int x,int y,int z,int radius) {
+        int[] found=findBlock(legacyKey,x,y,z,radius);
+        return found!=null&&(block(found[0],found[1],found[2]).metadata()&mask)==(metadata&mask)?found:null;
+    }
 }
