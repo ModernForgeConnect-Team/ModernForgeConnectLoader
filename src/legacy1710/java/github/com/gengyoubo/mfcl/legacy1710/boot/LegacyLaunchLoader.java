@@ -38,10 +38,12 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                 "net.minecraftforge.classloading.", "net.minecraftforge.transformers.")) addTransformerExclusion(prefix);
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ModernJavaTransformer");
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer");
+        registerTransformer(REDIRECTS);
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.ForgeChunkManagerAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.FakePlayerAdapter");
     }
+    private static final String REDIRECTS = "github.com.gengyoubo.mfcl.legacy1710.LegacyRedirectTransformer";
     private final List<LegacyBytecodeAdapter> bytecodeAdapters = new ArrayList<LegacyBytecodeAdapter>();
     public void registerBytecodeAdapter(String name) throws Exception {
         bytecodeAdapters.add((LegacyBytecodeAdapter) root.loadClass(name).getConstructor().newInstance());
@@ -54,6 +56,8 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
             byte[] bytes = super.getClassBytes(name);
             if (bytes == null) throw new ClassNotFoundException(name);
             for (LegacyBytecodeAdapter adapter : bytecodeAdapters) if (adapter.targets(name)) bytes = adapter.adapt(name, bytes);
+            // Adapted classes skip the transformer chain; developer API call-site redirects still apply to them.
+            for (IClassTransformer transformer : getTransformers()) if (transformer.getClass().getName().equals(REDIRECTS)) bytes = transformer.transform(name, name, bytes);
             URL resource = findResource(name.replace('.', '/') + ".class");
             if (resource == null) throw new ClassNotFoundException(name);
             java.net.URLConnection connection = resource.openConnection();

@@ -79,6 +79,29 @@ public final class ApiRuntimeFactory {
                 return runtime.reference(services.items().materialize(value));
             }), old -> runtime.call("MAPPING_EXPORT", LegacyMappings.ITEM_STACK,
                 () -> content.gameplayStack(services.items().snapshot(runtime.raw(old))).copy()));
+        runtime.installMerge(LegacyMappings.ITEM_STACK, (existing, old) -> {
+            try { return content.applyTo((net.minecraft.world.item.ItemStack) existing, old == null ? null : services.items().snapshot(runtime.raw(old))); }
+            catch (RuntimeException failure) { throw failure; }
+            catch (Exception failure) { throw new IllegalStateException("Cannot snapshot legacy stack", failure); }
+        });
+        var players = content.players();
+        players.diagnostics(runtime::note);
+        runtime.installEquipment(players);
+        runtime.installEvents(players);
+        if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
+            runtime.installClientPlayerAccess(new LegacyApiRuntime.PlayerAccess() {
+                @Override public <T> T run(Object ignored, java.util.function.Function<LegacyObject, T> operation) {
+                    var alive = new java.util.concurrent.atomic.AtomicBoolean(true);
+                    try { return content.withApiClientPlayer(old -> operation.apply(runtime.borrowed(old, alive::get))); }
+                    finally { alive.set(false); }
+                }
+            });
+            runtime.addFeatures(LegacyFeatures.CLIENT_PLAYER);
+        }
+        runtime.addFeatures(LegacyFeatures.HOST_REPRESENTATIONS, LegacyFeatures.HOST_BLOCKS, LegacyFeatures.PLAYER, LegacyFeatures.PLAYER_IDENTITY,
+                LegacyFeatures.PLAYER_SYNC, LegacyFeatures.EQUIPMENT, LegacyFeatures.EQUIPMENT_TICK, LegacyFeatures.EQUIPMENT_WRITE_BACK,
+                LegacyFeatures.EVENTS, LegacyFeatures.MAPPINGS_APPLY, LegacyFeatures.REDIRECTS);
+        if (players.baubles()) runtime.addFeatures(LegacyFeatures.EQUIPMENT_BAUBLES);
         runtime.mappings().register(LegacyMappings.WORLD, net.minecraft.world.level.Level.class, host -> {
             Object old = services.worlds().findBound(host);
             return runtime.borrowed(old, () -> services.worlds().findBound(host) == old);

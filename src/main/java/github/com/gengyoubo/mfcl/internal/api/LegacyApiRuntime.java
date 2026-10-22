@@ -68,6 +68,38 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         return Objects.requireNonNull(languages, "Legacy languages are unavailable");
     }
 
+    private final Set<String> features = Collections.synchronizedSet(new TreeSet<>(Set.of(
+            LegacyFeatures.LANGUAGES, LegacyFeatures.MLA_ARRAYS, LegacyFeatures.MLA_COLLECTIONS, LegacyFeatures.MLA_INSTANCE)));
+    /** Host installation only; the set is fixed once the runtime is published. */
+    public void addFeatures(String... names) { features.addAll(List.of(names)); }
+    @Override public Set<String> features() { return Set.copyOf(features); }
+
+    private PlayerAccess clientPlayerAccess;
+    public void installClientPlayerAccess(PlayerAccess access) { this.clientPlayerAccess = Objects.requireNonNull(access); }
+    @Override public <T> T withClientPlayer(Function<LegacyObject, T> operation) {
+        Objects.requireNonNull(operation);
+        return call("CLIENT_PLAYER", "withClientPlayer", () -> {
+            if (clientPlayerAccess == null) throw new UnsupportedOperationException("Client player access is unavailable");
+            return clientPlayerAccess.run(null, operation);
+        });
+    }
+    private LegacyEquipment equipment;
+    public void installEquipment(LegacyEquipment value) { this.equipment = Objects.requireNonNull(value); }
+    @Override public LegacyEquipment equipment() {
+        checkOpen();
+        if (equipment == null) throw new UnsupportedOperationException("Equipment sources are unavailable");
+        return equipment;
+    }
+    private LegacyEvents events;
+    public void installEvents(LegacyEvents value) { this.events = Objects.requireNonNull(value); }
+    @Override public LegacyEvents events() {
+        checkOpen();
+        if (events == null) throw new UnsupportedOperationException("Event forwarding is unavailable");
+        return events;
+    }
+    private final LegacyValues valueAccess = new ValueAccess();
+    @Override public LegacyValues values() { checkOpen(); return valueAccess; }
+
     public void installPlayerAccess(PlayerAccess access) { this.playerAccess = Objects.requireNonNull(access); }
     @Override public <T> T withPlayer(Object hostPlayer, Function<LegacyObject, T> operation) {
         Objects.requireNonNull(hostPlayer); Objects.requireNonNull(operation);
@@ -108,6 +140,8 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         return call("STACK_EXPORT", stack.typeName(), () -> values.snapshot(raw(stack)));
     }
     @Override public LegacyMappings mappings() { checkOpen(); return mappings; }
+    /** Host merge for {@link LegacyMappings#applyTo}; the mapping key itself is registered separately. */
+    public void installMerge(String key, BiFunction<Object, LegacyObject, Object> merge) { mappings.merge(key, Objects.requireNonNull(merge)); }
     @Override public synchronized List<Diagnostic> diagnostics() { return List.copyOf(diagnostics); }
     public synchronized void note(String code, String operation, Throwable failure) {
         while (failure instanceof InvocationTargetException && failure.getCause() != null) failure = failure.getCause();
@@ -127,6 +161,17 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         }
     }
     public LegacyObject reference(Object old) { return old == null ? null : new Reference(old, List.of()); }
+    /** Old value as API callers see it: null, String and boxed primitives as themselves, anything else a reference. */
+    public Object exposed(Object old) { return exposed(old, List.of()); }
+    private Object exposed(Object old, List<Guard> guards) {
+        if (old == null || old instanceof String || old instanceof Number || old instanceof Boolean || old instanceof Character) return old;
+        return new Reference(old, guards);
+    }
+    /** Inverse of {@link #exposed}: references and accessor proxies become their old object. */
+    public Object unexposed(Object value) {
+        LegacyObject reference = referenceOf(value);
+        return reference == null ? value : raw(reference);
+    }
     public LegacyObject borrowed(Object old, BooleanSupplier alive) {
         return old == null ? null : new Reference(old, List.of(new Guard(Thread.currentThread(), alive)));
     }
@@ -196,9 +241,68 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         catch (Exception failure) { throw new IllegalStateException("Cannot wrap legacy value as " + apiType.getName(), failure); }
     }
     @Override public void close() {
-        try { scope.call(() -> { open = false; synchronized (mappings) { mappings.entries.clear(); } return null; }); }
+        try { scope.call(() -> { open = false; synchronized (mappings) { mappings.entries.clear(); mappings.merges.clear(); } return null; }); }
         catch (Exception failure) { throw new IllegalStateException("Cannot close developer API", failure); }
         ApiRuntimeProvider.remove(this);
+    }
+
+    private final class ValueAccess implements LegacyValues {
+        private Object array(LegacyObject array) {
+            Object value = raw(Objects.requireNonNull(array));
+            if (!value.getClass().isArray()) throw new IllegalArgumentException("Not an old array: " + value.getClass().getName());
+            return value;
+        }
+        private List<Guard> guards(LegacyObject source) { var guards = new ArrayList<Guard>(); collectGuards(source, guards); return guards; }
+        @Override public int length(LegacyObject array) { return call("MLA_ARRAY", "length", () -> Array.getLength(array(array))); }
+        @Override public Object get(LegacyObject array, int index) {
+            return call("MLA_ARRAY", "get[" + index + "]", () -> exposed(Array.get(array(array), index), guards(array)));
+        }
+        @Override public void set(LegacyObject array, int index, Object value) {
+            call("MLA_ARRAY", "set[" + index + "]", () -> {
+                Object target = array(array); Class<?> component = target.getClass().getComponentType();
+                Object old = unexposed(value);
+                if (old == null && component.isPrimitive()) throw new IllegalArgumentException("Null primitive array element");
+                if (old != null && !component.isPrimitive() && !component.isInstance(old))
+                    throw new IllegalArgumentException("Wrong old array element type: " + component.getName());
+                Array.set(target, index, old);
+                return null;
+            });
+        }
+        @Override public List<Object> list(LegacyObject source) {
+            return call("MLA_COLLECTION", "list", () -> {
+                Object value = raw(Objects.requireNonNull(source)); var guards = guards(source); var result = new ArrayList<Object>();
+                if (value.getClass().isArray()) for (int i = 0, n = Array.getLength(value); i < n; i++) result.add(exposed(Array.get(value, i), guards));
+                else if (value instanceof Iterable<?> iterable) for (Object entry : iterable) result.add(exposed(entry, guards));
+                else throw new IllegalArgumentException("Not an old Iterable or array: " + value.getClass().getName());
+                return Collections.unmodifiableList(result);
+            });
+        }
+        @Override public Map<Object, Object> map(LegacyObject source) {
+            return call("MLA_COLLECTION", "map", () -> {
+                Object value = raw(Objects.requireNonNull(source)); var guards = guards(source);
+                if (!(value instanceof Map<?, ?> map)) throw new IllegalArgumentException("Not an old Map: " + value.getClass().getName());
+                // References compare by identity, so keys stay distinct exactly as the original map's entries.
+                var result = new LinkedHashMap<Object, Object>();
+                for (var entry : map.entrySet()) result.put(exposed(entry.getKey(), guards), exposed(entry.getValue(), guards));
+                return Collections.unmodifiableMap(result);
+            });
+        }
+        @Override public boolean isInstance(LegacyObject value, String legacyType) {
+            Objects.requireNonNull(legacyType);
+            return call("MLA_INSTANCE", legacyType, () -> {
+                Object old = raw(Objects.requireNonNull(value));
+                try { return Class.forName(legacyType, false, loader).isInstance(old); }
+                catch (ClassNotFoundException absent) { return false; }
+            });
+        }
+        @Override public boolean isInstance(LegacyObject value, Class<?> contract) {
+            var annotation = contract.getAnnotation(github.com.gengyoubo.mfcl.api.mla.LegacyType.class);
+            if (annotation == null) throw new IllegalArgumentException("Expected a @LegacyType contract: " + contract.getName());
+            return isInstance(value, annotation.value());
+        }
+        @Override public <T> Optional<T> as(LegacyObject value, Class<T> contract) {
+            return isInstance(value, contract) ? Optional.of(accessor(contract, value)) : Optional.empty();
+        }
     }
 
     private final class Conversions implements LegacyMappings {
@@ -225,6 +329,21 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
                 var entry = entry(mapping);
                 if (!hostType.isAssignableFrom(entry.type)) throw new IllegalArgumentException("Wrong host type for " + mapping);
                 return Optional.ofNullable(hostType.cast(entry.to(old)));
+            });
+        }
+        private final Map<String, BiFunction<Object, LegacyObject, Object>> merges = new HashMap<>();
+        synchronized void merge(String key, BiFunction<Object, LegacyObject, Object> merge) { merges.put(key, merge); }
+        @Override public <H> H applyTo(String mapping, H existing, LegacyObject old) {
+            Objects.requireNonNull(existing);
+            return call("MAPPING_EXPORT", mapping, () -> {
+                if (old != null) raw(old);
+                var entry = entry(mapping);
+                BiFunction<Object, LegacyObject, Object> merge;
+                synchronized (this) { merge = merges.get(mapping); }
+                if (merge == null) throw new UnsupportedOperationException("Mapping cannot merge into host values: " + mapping);
+                if (!entry.type.isInstance(existing)) throw new IllegalArgumentException("Wrong host type for " + mapping);
+                @SuppressWarnings("unchecked") H result = (H) entry.type.cast(merge.apply(existing, old));
+                return result;
             });
         }
         @Override public synchronized <H> AutoCloseable register(String key, Class<H> hostType,

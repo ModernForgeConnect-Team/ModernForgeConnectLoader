@@ -22,6 +22,8 @@ public final class ApiRuntimeProvider implements RuntimeProvider {
     @Override public Map<String, LegacyModInfo> loadedMods() {
         synchronized (ApiRuntimeProvider.class) { return active != null && !active.isOpen() ? Map.of() : mods; }
     }
+    /** The published, open runtime, or null. */
+    static synchronized LegacyApiRuntime active() { return active != null && active.isOpen() ? active : null; }
     @Override public Optional<LegacyRuntime> current() {
         synchronized (ApiRuntimeProvider.class) { return active != null && active.isOpen() ? Optional.of(active) : Optional.empty(); }
     }

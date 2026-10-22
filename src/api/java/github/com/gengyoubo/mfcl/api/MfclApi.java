@@ -8,7 +8,8 @@ import java.util.function.Consumer;
 
 /** Host-only entry point. The API artifact contains no Minecraft or Forge classes. */
 public final class MfclApi {
-    public static final int API_VERSION = 1;
+    /** 2: features(), equipment, events, client player, values, applyTo, redirects. */
+    public static final int API_VERSION = 2;
     private MfclApi() { }
     private static final class Provider {
         static final Optional<RuntimeProvider> INSTANCE = load();

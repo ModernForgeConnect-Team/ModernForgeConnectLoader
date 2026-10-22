@@ -233,8 +233,13 @@ public final class LegacyItemUse {
     /** Restores previously persisted old player data into the cached actor before any legacy logic reads it. */
     public void loadPersisted(Object world, LegacyTiles.Placer placer, byte[] data) throws Exception {
         services.items().inLegacy(() -> {try(var state=services.playerState().enter(world)) {
-            Object player=actor(world,placer,null);if(data!=null&&data.length!=0)services.playerData().write(player,data);return null;
+            Object player=actor(world,placer,null);if(data!=null&&data.length!=0)services.playerData().restore(player,data);return null;
         }});
+    }
+    /** {@link #savePersisted}, or null while the player has no actor in that world. */
+    public byte[] savePersistedIfPresent(Object world,LegacyTiles.Placer placer) throws Exception {
+        synchronized(services.items()){if(!actors.containsKey(System.identityHashCode(world)+"|"+placer.id()))return null;}
+        return savePersisted(world,placer);
     }
     public byte[] savePersisted(Object world,LegacyTiles.Placer placer) throws Exception {
         return services.items().inLegacy(()->{try(var state=services.playerState().enter(world)){return services.playerData().read(actor(world,placer,null));}});
@@ -249,7 +254,7 @@ public final class LegacyItemUse {
         return services.items().inLegacy(() -> {
             try(var knowledge=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id())) {
             Object player = actor(world, placer, held);
-            if (priorData != null && priorData.length != 0) services.playerData().write(player, priorData);
+            if (priorData != null && priorData.length != 0) services.playerData().restore(player, priorData);
             boolean accepted=scanner.complete(world,player,services.items().materialize(held),scan,prefix);
             services.playerState().synchronize(player);
             return new AppliedScan(accepted,services.playerData().read(player),packets.messages());
@@ -383,6 +388,7 @@ public final class LegacyItemUse {
             var potions = living.getDeclaredField("field_70713_bf"); potions.setAccessible(true);
             @SuppressWarnings("unchecked") Map<Object, Object> active = (Map<Object, Object>) potions.get(player);
             if (active == null) { active = new HashMap<>(); potions.set(player, active); }
+            var kept = new HashMap<>(active);
             active.clear();
             Object stack = services.items().materialize(worn);
             itemType.getMethod("onArmorTick", loader.loadClass("net.minecraft.world.World"), loader.loadClass("net.minecraft.entity.player.EntityPlayer"), stackType)
@@ -391,7 +397,7 @@ public final class LegacyItemUse {
             Class<?> effect = loader.loadClass("net.minecraft.potion.PotionEffect");
             for (Object value : active.values()) effects.add(new Effect((int) effect.getMethod("func_76456_a").invoke(value), (int) effect.getMethod("func_76459_b").invoke(value),
                     (int) effect.getMethod("func_76458_c").invoke(value), (boolean) effect.getMethod("func_82720_e").invoke(value)));
-            active.clear();
+            active.clear(); active.putAll(kept);
             var after = new Body(entity.getField("field_70159_w").getDouble(player), entity.getField("field_70181_x").getDouble(player), entity.getField("field_70179_y").getDouble(player),
                     entity.getField("field_70143_R").getFloat(player), body.onGround(), body.inWater(), body.forward(), body.strafe(), body.ticksExisted());
             int count = stackType.getField("field_77994_a").getInt(stack);
@@ -424,6 +430,8 @@ public final class LegacyItemUse {
         if (actor == null) {
             actor = services.tiles().actor(world, placer, snapshot);
             services.playerState().initialize(actor);
+            // A new server actor (first use, another dimension) starts from the host's persisted old entity data.
+            if (!loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world)) services.playerData().restore(actor, placer.id());
             actors.put(key, actor);
         }
         else refresh(actor, world, placer, snapshot);
@@ -453,6 +461,7 @@ public final class LegacyItemUse {
         capabilities.getClass().getField("field_75098_d").setBoolean(capabilities,placer.creative());
         LegacyPlayerFlight.refresh(actor);
         LegacyPlayerAttributes.pull(actor);
+        LegacyPlayerBody.pull(actor, client);
         Object watcher=entity.getMethod("func_70096_w").invoke(actor);
         byte flags=(byte)watcher.getClass().getMethod("func_75683_a",int.class).invoke(watcher,0);
         watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?flags|2:flags&~2));

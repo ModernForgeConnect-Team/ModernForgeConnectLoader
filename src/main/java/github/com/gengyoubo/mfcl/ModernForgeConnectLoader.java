@@ -22,6 +22,8 @@ public final class ModernForgeConnectLoader {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> backend.set(new github.com.gengyoubo.mfcl.client.ClientOpenGlBackend()));
         var session = new java.util.concurrent.atomic.AtomicReference<>(github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession.offline());
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> session.set(github.com.gengyoubo.mfcl.client.ClientSessionBridge.capture()));
+        // Developer API call-site redirects must be known before any original class is loaded.
+        github.com.gengyoubo.mfcl.internal.api.ApiRedirects.collect();
         runtimeService.prepareRuntime(gameDirectory, supportDirectory, message -> {
             LOGGER.info("MFCL runtime: {}", message);
             try { net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: " + message); }

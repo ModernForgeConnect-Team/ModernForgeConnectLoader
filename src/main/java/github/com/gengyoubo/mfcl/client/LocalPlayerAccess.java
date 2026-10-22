@@ -4,4 +4,5 @@ package github.com.gengyoubo.mfcl.client;
 public final class LocalPlayerAccess {
     private LocalPlayerAccess() {}
     public static net.minecraft.world.entity.player.Player player() { return net.minecraft.client.Minecraft.getInstance().player; }
+    public static boolean onClientThread() { return net.minecraft.client.Minecraft.getInstance().isSameThread(); }
 }

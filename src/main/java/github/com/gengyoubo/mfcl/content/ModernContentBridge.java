@@ -112,7 +112,7 @@ public final class ModernContentBridge {
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
             LegacyCommands.install(bridge);
-            github.com.gengyoubo.mfcl.bridge.LegacyPlayerArmor.source(bridge::wornArmor);
+            bridge.players = new HostPlayers(bridge);
             LogUtils.getLogger().info("MFCL content barrier: {} blocks, {} items declared before modern registration", bridge.declarations.blocks().size(), bridge.declarations.items().size());
             LogUtils.getLogger().info("MFCL legacy static models: {} items custom-rendered", bridge.declarations.customItems().size());
             for (String diagnostic : bridge.declarations.captureDiagnostics()) LogUtils.getLogger().info("MFCL capture: {}", diagnostic);
@@ -122,28 +122,9 @@ public final class ModernContentBridge {
         } catch (Exception failure) { throw new IllegalStateException("Cannot freeze legacy content declarations", failure); }
     }
     public static ModernContentBridge active() { return active; }
-    /** Host armor as old stacks, old armorInventory order (boots first); unmappable pieces are left empty. */
-    private List<LegacyClientData.Stack> wornArmor(UUID id, boolean client) {
-        net.minecraft.world.entity.player.Player player;
-        if (client) player = net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient() ? github.com.gengyoubo.mfcl.client.LocalPlayerAccess.player() : null;
-        else {
-            var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
-            player = server == null || id == null ? null : server.getPlayerList().getPlayer(id);
-        }
-        if (player == null) return null;
-        var worn = new ArrayList<LegacyClientData.Stack>(4);
-        for (var slot : List.of(net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.entity.EquipmentSlot.LEGS,
-                net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.HEAD)) {
-            ItemStack stack = player.getItemBySlot(slot);
-            LegacyClientData.Stack old = null;
-            try {
-                // Enchantments and other host tags must not hide original armor from old "is wearing" checks.
-                if (!stack.isEmpty()) { old = renderSnapshot(stack); if (old == null) old = gameplayStack(stack); }
-            } catch (Exception unmapped) { old = null; }
-            worn.add(old);
-        }
-        return worn;
-    }
+    private HostPlayers players;
+    /** Equipment sources, forwarded events and persistent player state of the developer API. */
+    public HostPlayers players() { return players; }
     public LegacyContent declarations() { return declarations; }
     public LegacyBlockRendering blockRendering() { return blockRendering; }
     public LegacyBlockShapes blockShapes() { return blockShapes; }
@@ -175,14 +156,17 @@ public final class ModernContentBridge {
                 try (var state = services.playerState().enter(world)) {
                     Object actor = itemUse.clientActor(world, source, null);
                     byte[] saved = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
-                    if (saved.length != 0) services.playerData().write(actor, saved);
+                    if (saved.length != 0) services.playerData().restore(actor, saved);
                     services.playerState().initialize(actor);
                     byte[] before = services.playerData().read(actor);
+                    var inventory = hostInventory(player);
+                    services.playerInventory().expose(actor, inventory);
                     T result;
                     java.util.List<LegacyPackets.Message> outgoing;
                     try (var packets = LegacyPackets.capture(player.getUUID())) {
                         try { result = operation.apply(actor); }
                         catch (RuntimeException | Error failure) { services.playerData().write(actor, before); throw failure; }
+                        writeBack(player, actor);
                         outgoing = packets.messages();
                     }
                     byte[] after = services.playerData().read(actor);
@@ -210,6 +194,44 @@ public final class ModernContentBridge {
             return null;
         });
         return true;
+    }
+    /**
+     * The old client player, refreshed from the local player, for {@code withClientPlayer}. Client thread only; nothing
+     * is persisted or written back.
+     */
+    public <T> T withApiClientPlayer(java.util.function.Function<Object,T> operation) {
+        if (!net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient() || !github.com.gengyoubo.mfcl.client.LocalPlayerAccess.onClientThread())
+            throw new IllegalStateException("Client player access requires the client thread");
+        var player = github.com.gengyoubo.mfcl.client.LocalPlayerAccess.player();
+        if (player == null) throw new IllegalStateException("No local player");
+        try {
+            return services.items().inLegacy(() -> {
+                Object world = services.worlds().bound(player.level());
+                try (var state = services.playerState().enter(world)) { return operation.apply(itemUse.clientActor(world, placer(player), null)); }
+            });
+        } catch (RuntimeException failure) { throw failure; }
+        catch (Exception failure) { throw new IllegalStateException("Legacy client player access failed", failure); }
+    }
+    /**
+     * Applies what old code changed on a server actor to the host player: supplied equipment (through its sources),
+     * main inventory slots, player state and attribute modifiers. Runs inside the runtime and player-state scope.
+     */
+    void writeBack(net.minecraft.world.entity.player.Player player, Object actor) throws Exception {
+        LegacyPlayerBody.push(actor);
+        if (player.level().isClientSide) return;
+        LegacyPlayerArmor.collect(services, actor, player.getUUID());
+        for (var change : services.playerInventory().changes(actor).entrySet())
+            if (change.getKey() < 36) writeBackSlot(player, change.getKey(), change.getValue(), net.minecraft.world.InteractionHand.MAIN_HAND);
+        player.getInventory().setChanged();
+        LegacyPlayerAttributes.push(actor);
+    }
+    /** {@code LegacyMappings.applyTo} for item stacks: the converted stack, keeping host-owned tags and capabilities of an unchanged item. */
+    public ItemStack applyTo(ItemStack existing, LegacyClientData.Stack old) {
+        var updated = gameplayStack(old);
+        if (existing.isEmpty() || updated.isEmpty() || existing.getItem() != updated.getItem()) return updated;
+        var merged = existing.copy(); merged.setCount(updated.getCount());
+        merged.setTag(updated.getTag() == null ? null : updated.getTag().copy());
+        return keepHostTags(existing, merged);
     }
     private void playerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
@@ -830,7 +852,7 @@ public final class ModernContentBridge {
                 player.getAbilities().instabuild, player.isShiftKeyDown());
     }
     /** The host main inventory as old stacks; unmappable host items become empty slots old logic can ignore. */
-    private List<LegacyClientData.Stack> hostInventory(net.minecraft.world.entity.player.Player player) {
+    List<LegacyClientData.Stack> hostInventory(net.minecraft.world.entity.player.Player player) {
         var inventory = player.getInventory(); var result = new ArrayList<LegacyClientData.Stack>(36);
         for (int slot = 0; slot < 36; slot++) { var stack = inventory.getItem(slot); result.add(stack.isEmpty() ? null : toLegacy(stack)); }
         return result;
@@ -851,26 +873,30 @@ public final class ModernContentBridge {
         var after = services.playerInventory().read(actor); var inventory = player.getInventory();
         for (int slot = 0; slot < after.size() && slot < 36; slot++) {
             if (sameLegacy(before.get(slot), after.get(slot))) continue;
-            try {
-                var updated=after.get(slot)==null?ItemStack.EMPTY:gameplayStack(after.get(slot));
-                var current=hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected?player.getOffhandItem():inventory.getItem(slot);
-                // Keep the live use-item reference while NBT/vis changes, so a held action can continue next tick.
-                if(!current.isEmpty()&&!updated.isEmpty()&&current.getItem()==updated.getItem()) {
-                    keepHostTags(current,updated);
-                    // Original wear ignores host Unbreaking; replay it through the host so the enchantment applies.
-                    int wear=current.isDamageableItem()&&current.getEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.UNBREAKING)>0?updated.getDamageValue()-current.getDamageValue():0;
-                    if(wear>0)updated.setDamageValue(current.getDamageValue());
-                    current.setCount(updated.getCount());current.setTag(updated.getTag()==null?null:updated.getTag().copy());
-                    if(wear>0)current.hurt(wear,player.getRandom(),player instanceof net.minecraft.server.level.ServerPlayer server?server:null);
-                }
-                else if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
-            }
-            catch (Exception unmapped) { }
+            writeBackSlot(player, slot, after.get(slot), hand);
         }
         inventory.setChanged();
     }
+    private void writeBackSlot(net.minecraft.world.entity.player.Player player, int slot, LegacyClientData.Stack after, net.minecraft.world.InteractionHand hand) {
+        var inventory = player.getInventory();
+        try {
+            var updated=after==null?ItemStack.EMPTY:gameplayStack(after);
+            var current=hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected?player.getOffhandItem():inventory.getItem(slot);
+            // Keep the live use-item reference while NBT/vis changes, so a held action can continue next tick.
+            if(!current.isEmpty()&&!updated.isEmpty()&&current.getItem()==updated.getItem()) {
+                keepHostTags(current,updated);
+                // Original wear ignores host Unbreaking; replay it through the host so the enchantment applies.
+                int wear=current.isDamageableItem()&&current.getEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.UNBREAKING)>0?updated.getDamageValue()-current.getDamageValue():0;
+                if(wear>0)updated.setDamageValue(current.getDamageValue());
+                current.setCount(updated.getCount());current.setTag(updated.getTag()==null?null:updated.getTag().copy());
+                if(wear>0)current.hurt(wear,player.getRandom(),player instanceof net.minecraft.server.level.ServerPlayer server?server:null);
+            }
+            else if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
+        }
+        catch (Exception unmapped) { }
+    }
     /** Re-attaches the host-owned tags of a stack an original callback rewrote, while it is still the same item. */
-    private static ItemStack keepHostTags(ItemStack current, ItemStack updated) {
+    static ItemStack keepHostTags(ItemStack current, ItemStack updated) {
         var kept = current.getTag(); if (kept == null || updated.isEmpty() || current.getItem() != updated.getItem()) return updated;
         for (String key : HOST_OWNED_TAGS) if (kept.contains(key)) updated.getOrCreateTag().put(key, kept.get(key).copy());
         return updated;

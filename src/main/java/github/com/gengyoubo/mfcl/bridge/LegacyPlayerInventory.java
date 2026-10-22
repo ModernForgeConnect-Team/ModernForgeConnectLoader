@@ -42,4 +42,53 @@ public final class LegacyPlayerInventory {
     public void select(Object player, int slot) throws Exception {
         services.items().inLegacy(() -> { currentField.setInt(inventoryField.get(player), slot); return null; });
     }
+    /** What {@link #expose} last put in each slot: the host's view, the old object and a copy to detect in-place changes. */
+    private record Exposed(LegacyClientData.Stack[] host, Object[] objects, Object[] copies) {}
+    private final Map<Object, Exposed> exposed = new com.google.common.collect.MapMaker().weakKeys().makeMap();
+    /**
+     * Like {@link #write}, for a persistent actor exposed every tick: slots whose host stack and old object are
+     * unchanged since the last exposure are kept, so only real changes are materialized.
+     */
+    public void expose(Object player, List<LegacyClientData.Stack> main) throws Exception {
+        services.items().inLegacy(() -> {
+            Object[] slots = (Object[]) mainField.get(inventoryField.get(player));
+            var prior = exposed.get(player); var stackType = services.loader().loadClass("net.minecraft.item.ItemStack");
+            var state = new Exposed(new LegacyClientData.Stack[slots.length], new Object[slots.length], new Object[slots.length]);
+            for (int index = 0; index < slots.length; index++) {
+                LegacyClientData.Stack value = index < main.size() ? main.get(index) : null;
+                boolean kept = prior != null && sameValue(prior.host[index], value) && slots[index] == prior.objects[index] && same(stackType, slots[index], prior.copies[index]);
+                if (!kept) slots[index] = value == null ? null : services.items().materialize(value);
+                state.host[index] = value; state.objects[index] = slots[index];
+                state.copies[index] = slots[index] == null ? null : services.items().copyLegacyStack(slots[index]);
+            }
+            exposed.put(player, state);
+            return null;
+        });
+    }
+    /** Slots old code changed since {@link #expose}, as their new contents (null: emptied). */
+    public Map<Integer, LegacyClientData.Stack> changes(Object player) throws Exception {
+        return services.items().inLegacy(() -> {
+            var state = exposed.get(player); if (state == null) return Map.<Integer, LegacyClientData.Stack>of();
+            Object[] slots = (Object[]) mainField.get(inventoryField.get(player)); var stackType = services.loader().loadClass("net.minecraft.item.ItemStack");
+            var result = new TreeMap<Integer, LegacyClientData.Stack>();
+            for (int index = 0; index < slots.length && index < state.host.length; index++) {
+                if (slots[index] == state.objects[index] && same(stackType, slots[index], state.copies[index])) continue;
+                Object slot = slots[index];
+                var now = slot == null || slot.getClass().getField("field_77994_a").getInt(slot) <= 0 ? null : services.items().snapshot(slot);
+                state.objects[index] = slot; state.copies[index] = slot == null ? null : services.items().copyLegacyStack(slot);
+                if (sameValue(now, state.host[index])) continue;
+                state.host[index] = now; result.put(index, now);
+            }
+            return result;
+        });
+    }
+    /** Display names are presentation only. */
+    private static boolean sameValue(LegacyClientData.Stack left, LegacyClientData.Stack right) {
+        if (left == null || right == null) return left == right;
+        return left.key().equals(right.key()) && left.metadata() == right.metadata() && left.count() == right.count() && left.tag().equals(right.tag());
+    }
+    private static boolean same(Class<?> stackType, Object left, Object right) throws Exception {
+        if (left == null || right == null) return left == right;
+        return (boolean) stackType.getMethod("func_77989_b", stackType, stackType).invoke(null, left, right);
+    }
 }
