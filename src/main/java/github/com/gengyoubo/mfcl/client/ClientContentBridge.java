@@ -10,6 +10,7 @@ public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
         ClientLegacyAudio.install(bridge.services());
+        ExtraUtilitiesWings.install(bridge,bus);
         if(Boolean.getBoolean("mfcl.test.generator"))GeneratorHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.deepDark"))DeepDarkHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.itemAudit"))ItemUseHostAudit.install(bridge);

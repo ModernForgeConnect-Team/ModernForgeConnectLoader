@@ -26,6 +26,8 @@ final class ItemUseHostAudit {
     private int stage,index,frames;
     private String lastScreen;
     private BlockPos anchor;
+    private UUID combatTarget;
+    private final java.util.concurrent.atomic.AtomicBoolean screenshotSaved=new java.util.concurrent.atomic.AtomicBoolean();
     private ItemUseHostAudit(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(new ItemUseHostAudit(content)::tick);}
     private void tick(TickEvent.ClientTickEvent event){
@@ -74,9 +76,18 @@ final class ItemUseHostAudit {
             }else if(stage==10&&++frames>10){
                 pending=mc.getSingleplayerServer().submit(()->{
                     var p=player(mc);fixture(p,cases.stream().filter(c->c.key().equals("ExtraUtilities:golden_lasso")).findFirst().orElseThrow());
-                    var pig=net.minecraft.world.entity.EntityType.PIG.create(p.serverLevel());pig.moveTo(p.getX()+1,p.getY(),p.getZ());p.serverLevel().addFreshEntity(pig);
+                    var pig=net.minecraft.world.entity.EntityType.PIG.create(p.serverLevel());pig.moveTo(p.getX()+1,p.getY(),p.getZ());pig.setCustomName(net.minecraft.network.chat.Component.literal("Captured Pig"));pig.setAge(-1234);pig.setHealth(3);pig.getPersistentData().putString("mfcl_capture_fixture","preserve");p.serverLevel().addFreshEntity(pig);
+                    var pigId=pig.getUUID();p.setGameMode(GameType.SURVIVAL);
                     var result=p.getMainHandItem().interactLivingEntity(p,pig,InteractionHand.MAIN_HAND);
-                    report.put("goldenLassoEntityScenario",Map.of("result",result.toString(),"targetRemoved",pig.isRemoved(),"heldTag",String.valueOf(p.getMainHandItem().getTag())));pig.discard();
+                    require(result.consumesAction()&&pig.isRemoved(),"Golden lasso did not capture native pig");
+                    var target=p.blockPosition().offset(1,-1,1);p.serverLevel().setBlockAndUpdate(target,net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+                    var released=p.gameMode.useItemOn(p,p.serverLevel(),p.getMainHandItem(),InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(target),Direction.UP,target,false));
+                    require(released.consumesAction(),"Golden lasso did not release captured pig");
+                    require(p.serverLevel().getEntity(pigId) instanceof net.minecraft.world.entity.animal.Pig,"Released pig was not restored as a native entity");
+                    var restored=(net.minecraft.world.entity.animal.Pig)p.serverLevel().getEntity(pigId);
+                    require(restored.getHealth()==3&&restored.getAge()==-1234&&restored.getName().getString().equals("Captured Pig")&&restored.getPersistentData().getString("mfcl_capture_fixture").equals("preserve"),"Lasso lost native entity state");
+                    restored.discard();report.put("goldenLassoCaptureReleasePreservesNativeState",true);
+                    soul(p);
                     p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:angelRing",0,1,""));return true;
                 });stage=11;frames=0;
             }else if(stage==11&&pending.isDone()&&++frames>30){
@@ -84,11 +95,61 @@ final class ItemUseHostAudit {
             }else if(stage==12&&pending.isDone()&&++frames>35){
                 pending=mc.getSingleplayerServer().submit(()->{require(!player(mc).getAbilities().mayfly,"Removed angel ring retained flight");report.put("angelRingRemovalRevokesFlight",true);return true;});stage=13;
             }else if(stage==13&&pending.isDone()){
+                pending=mc.getSingleplayerServer().submit(()->{
+                    var p=player(mc);shears(p);p.getInventory().clearContent();p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:ethericsword",0,1,""));
+                    var victim=net.minecraft.world.entity.EntityType.PIG.create(p.serverLevel());victim.moveTo(p.getX()+1,p.getY(),p.getZ());victim.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(200);victim.setHealth(200);p.serverLevel().addFreshEntity(victim);combatTarget=victim.getUUID();return true;
+                });stage=14;frames=0;
+            }else if(stage==14&&pending.isDone()&&++frames>20){
+                pending=mc.getSingleplayerServer().submit(()->{
+                    var p=player(mc);var victim=(net.minecraft.world.entity.LivingEntity)p.serverLevel().getEntity(combatTarget);
+                    require(p.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE)>1,"Original sword damage attribute was missing");
+                    p.attack(victim);require(victim.getHealth()<199,"Native sword attack did not apply original damage");victim.discard();report.put("swordNativeDamageAndCallback",true);
+                    p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:destructionpickaxe",0,1,""));return true;
+                });stage=15;frames=0;
+            }else if(stage==15&&pending.isDone()&&++frames>15){
+                pending=mc.getSingleplayerServer().submit(()->{
+                    var p=player(mc);var stone=net.minecraft.world.level.block.Blocks.STONE.defaultBlockState();var tool=p.getMainHandItem();
+                    require(tool.getDestroySpeed(stone)>1&&tool.isCorrectToolForDrops(stone),"Original pickaxe efficiency/harvest capability missing");
+                    var target=p.blockPosition().offset(1,0,1);p.serverLevel().setBlockAndUpdate(target,stone);
+                    require(p.gameMode.destroyBlock(target)&&p.serverLevel().getBlockState(target).isAir(),"Native pickaxe mining failed");
+                    require(p.getMainHandItem().getDamageValue()>0,"Original mining callback did not wear tool");report.put("pickaxeHarvestEfficiencyAndWear",true);
+                    p.getInventory().clearContent();p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:angelRing",1,1,""));return true;
+                });stage=16;frames=0;
+            }else if(stage==16&&pending.isDone()&&++frames>30){
+                var wings=ExtraUtilitiesWings.capture(content,mc.player,.5f);int count=wings.stream().mapToInt(primitive->primitive.vertices().size()).sum();
+                require(count>=8,"Golden wing style did not generate original geometry");report.put("goldenWingVertices",count);report.put("goldenWingTextures",wings.stream().map(primitive->primitive.texture()).distinct().toList());
+                mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);mc.player.setXRot(10);stage=17;frames=0;
+            }else if(stage==17&&++frames>20){
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-golden-wings.png",mc.getMainRenderTarget(),message->screenshotSaved.set(true));stage=18;frames=0;
+            }else if(stage==18&&screenshotSaved.get()&&++frames>3){
+                report.put("goldenWingScreenshot","screenshots/mfcl-golden-wings.png");
                 report.put("status",rows.stream().anyMatch(row->String.valueOf(row.get("status")).equals("FAIL"))?"FAILURES_FOUND":"COMPLETED");finish(mc,null);
             }
         }catch(Throwable failure){finish(mc,failure);}
     }
     private static void require(boolean condition,String message){if(!condition)throw new IllegalStateException(message);}
+    private void soul(ServerPlayer p) {
+        p.getInventory().clearContent();p.getInventory().selected=0;
+        double initial=p.getMaxHealth();p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:mini-soul",2,1,""));
+        p.getMainHandItem().inventoryTick(p.serverLevel(),p,0,true);
+        require(p.getMaxHealth()<initial,"Split soul did not reduce native maximum health");
+        var saved=p.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).save();
+        require(!saved.getList("Modifiers",10).isEmpty(),"Soul health modifier was not persistent");
+        p.getMainHandItem().getItem().use(p.serverLevel(),p,InteractionHand.MAIN_HAND);
+        require(Math.abs(p.getMaxHealth()-initial)<.001&&p.getMainHandItem().isEmpty(),"Soul consumption did not restore native health cap");
+        report.put("soulHealthModifierAndRestoration",true);
+    }
+    private void shears(ServerPlayer p){
+        p.getInventory().clearContent();p.getInventory().selected=0;p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:shears",0,1,""));
+        var sheep=net.minecraft.world.entity.EntityType.SHEEP.create(p.serverLevel());sheep.moveTo(p.getX()+1,p.getY(),p.getZ());sheep.setColor(net.minecraft.world.item.DyeColor.BLUE);p.serverLevel().addFreshEntity(sheep);
+        var result=p.getMainHandItem().interactLivingEntity(p,sheep,InteractionHand.MAIN_HAND);
+        require(result.consumesAction()&&sheep.isSheared(),"Precision shears did not update native sheep");
+        int count=p.getInventory().items.stream().filter(stack->stack.is(Items.BLUE_WOOL)).mapToInt(ItemStack::getCount).sum();
+        require(count>0,"Precision shears did not collect the correct wool into inventory");
+        p.getMainHandItem().interactLivingEntity(p,sheep,InteractionHand.MAIN_HAND);
+        require(p.getInventory().items.stream().filter(stack->stack.is(Items.BLUE_WOOL)).mapToInt(ItemStack::getCount).sum()==count,"Repeated shearing duplicated wool");
+        sheep.discard();report.put("precisionShearsNativeStateAndPickup",true);
+    }
     private ServerPlayer player(Minecraft mc){return mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);}
     private void profile() throws Exception {
         var loader=content.services().loader();Class<?> item=loader.loadClass("net.minecraft.item.Item"),stack=loader.loadClass("net.minecraft.item.ItemStack"),world=loader.loadClass("net.minecraft.world.World"),player=loader.loadClass("net.minecraft.entity.player.EntityPlayer"),entity=loader.loadClass("net.minecraft.entity.Entity"),living=loader.loadClass("net.minecraft.entity.EntityLivingBase");
@@ -116,7 +177,7 @@ final class ItemUseHostAudit {
     private void audit(ServerPlayer player,Case item) {
         var row=new LinkedHashMap<String,Object>();row.put("key",item.key());row.put("metadata",item.meta());row.put("block",item.block());
         var actions=new LinkedHashMap<String,Object>();row.put("actions",actions);
-        row.put("additionalScenarios",List.of(item.entity()?"entity interaction not yet bridged":"",item.weapon()?"weapon hit not yet bridged":"",item.finish()?"completion needs held-use scenario":"").stream().filter(s->!s.isEmpty()).toList());
+        row.put("additionalScenarios",List.of(item.entity()?"entity interaction requires target-specific scenario":"",item.weapon()?"weapon hit requires combat scenario":"",item.finish()?"completion needs held-use scenario":"").stream().filter(s->!s.isEmpty()).toList());
         com.mojang.logging.LogUtils.getLogger().info("MFCL_ITEM_AUDIT_CASE {}@{}",item.key(),item.meta());
         try {
             if(item.air()) {

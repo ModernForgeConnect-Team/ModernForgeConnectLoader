@@ -5,6 +5,12 @@ import java.util.*;
 
 /** Exposes the host main inventory to old item logic and applies old-code changes back, slot by slot. */
 public final class LegacyPlayerInventory {
+    /** The host collects and synchronizes this actor's inventory after its callback transaction commits. */
+    public static void synchronize(Object ignored,Object actor) throws Exception {
+        var loader=actor.getClass().getClassLoader();var entity=loader.loadClass("net.minecraft.entity.Entity");
+        if(LegacyWorlds.hostOrNull(entity.getField("field_70170_p").get(actor))!=null)return;
+        if(ignored!=null)ignored.getClass().getMethod("func_72385_f",loader.loadClass("net.minecraft.entity.player.EntityPlayerMP")).invoke(ignored,actor);
+    }
     private final LegacyServices services;
     private final Field inventoryField, mainField, currentField;
     public LegacyPlayerInventory(LegacyServices services) throws Exception {

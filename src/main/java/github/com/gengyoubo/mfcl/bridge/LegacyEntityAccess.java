@@ -82,6 +82,12 @@ final class LegacyEntityAccess {
         Object box=loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a",double.class,double.class,double.class,double.class,double.class,double.class).invoke(null,snapshot.x()-half,snapshot.y(),snapshot.z()-half,snapshot.x()+half,snapshot.y()+snapshot.height(),snapshot.z()+half);
         var bounds=base.getField("field_70121_D");bounds.setAccessible(true);bounds.set(entity,box);
         if(generic&&existing==null)type.getField("mfclPushable").setBoolean(entity,snapshot.pushable());
+        var living=loader.loadClass("net.minecraft.entity.EntityLiving");
+        if(living.isInstance(entity)&&!snapshot.name().isEmpty())living.getMethod("func_94058_c",String.class).invoke(entity,snapshot.name());
+        if(loader.loadClass("net.minecraft.entity.passive.EntitySheep").isInstance(entity)){
+            var sheep=LegacyWorlds.access(world).sheep(snapshot.id());
+            if(sheep!=null){Object watcher=base.getMethod("func_70096_w").invoke(entity);watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,16,(byte)(sheep.color()|(sheep.sheared()?16:0)));}
+        }
         LegacyEntityHooks.mirrored(entity);
         return entity;
     }

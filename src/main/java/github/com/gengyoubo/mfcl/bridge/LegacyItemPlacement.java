@@ -42,6 +42,7 @@ public final class LegacyItemPlacement {
             Object[] arguments = {stack,player,world,x,y,z,side,hitX,hitY,hitZ};
             try(var menus=LegacyDeviceContainers.captureItem(services);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture()) {
                 boolean used = (boolean)itemType.getMethod(first ? "onItemUseFirst" : "func_77648_a",signature).invoke(item,arguments);
+                LegacyPlayerAttributes.push(player);
                 var inventory = services.playerInventory().read(player);
                 return new Result(used||menus.opened()!=null, inventory.get(selected), inventory,menus.opened(),packets.messages(),chat.messages());
             }

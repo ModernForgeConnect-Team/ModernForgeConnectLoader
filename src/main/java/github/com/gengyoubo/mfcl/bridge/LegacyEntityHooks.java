@@ -31,6 +31,12 @@ public final class LegacyEntityHooks {
     }
     static void mirrored(Object entity) { MIRRORS.put(entity, Boolean.TRUE); }
     static boolean isMirror(Object entity) { return MIRRORS.containsKey(entity); }
+    public static void sheared(Object entity,boolean value) throws ReflectiveOperationException {
+        var loader=entity.getClass().getClassLoader();Object watcher=loader.loadClass("net.minecraft.entity.Entity").getMethod("func_70096_w").invoke(entity);
+        byte flags=(byte)watcher.getClass().getMethod("func_75683_a",int.class).invoke(watcher,16);
+        watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,16,(byte)(value?flags|16:flags&~16));
+        host(entity).sheared(access(entity).idOf(entity),value);
+    }
     /** Actors and query mirrors both lack the old MinecraftServer used by EntityPlayerMP. */
     public static boolean hasServerHost(Object entity) {
         try {var host=host(entity);return host!=null&&!host.clientSide();}

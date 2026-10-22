@@ -9,6 +9,7 @@ import java.util.*;
 
 /** Server levels own all authoritative mutations; the old World façade keeps its owner-thread checks. */
 public final class LevelWorldBridge {
+    private static final net.minecraft.server.level.TicketType<java.util.UUID> LEGACY_TICKET=net.minecraft.server.level.TicketType.create("mfcl_legacy",java.util.Comparator.naturalOrder());
     private final ModernContentBridge content;
     private final LegacyDimensionHost dimensions;
     /**
@@ -152,7 +153,34 @@ public final class LevelWorldBridge {
                 content.afterCommit(level,()->level.levelEvent(player,event,new BlockPos(x,y,z),data));
             }
             @Override public java.util.List<HostWorldAccess.Entity> entities(double a,double b,double c,double d,double e,double f) {check();return HostEntityQueries.query(level,a,b,c,d,e,f);}
+            @Override public java.util.List<HostWorldAccess.Attribute> attributes(java.util.UUID id){check();var p=level.getPlayerByUUID(id);return p==null?null:HostPlayerAttributes.read(p);}
+            @Override public void attributes(java.util.UUID id,java.util.List<HostWorldAccess.Attribute> before,java.util.List<HostWorldAccess.Attribute> after){
+                check();var p=level.getPlayerByUUID(id);if(p!=null)content.afterCommit(level,()->HostPlayerAttributes.apply(p,before,after));
+            }
             @Override public HostWorldAccess.Entity entity(java.util.UUID id) {check();var entity=level.getEntity(id);return entity==null||!entity.isAlive()?null:HostEntityQueries.snapshot(level,entity);}
+            @Override public Sheep sheep(java.util.UUID id){check();return level.getEntity(id) instanceof net.minecraft.world.entity.animal.Sheep sheep?new Sheep(sheep.getColor().getId(),sheep.isSheared()):null;}
+            @Override public void sheared(java.util.UUID id,boolean value){check();if(level.getEntity(id) instanceof net.minecraft.world.entity.animal.Sheep sheep)content.afterCommit(level,()->sheep.setSheared(value));}
+            @Override public void forceChunk(java.util.UUID id,int x,int z,boolean force){
+                check();var pos=new net.minecraft.world.level.ChunkPos(x,z);
+                content.afterCommit(level,()->{if(force)level.getChunkSource().addRegionTicket(LEGACY_TICKET,pos,2,id,true);else level.getChunkSource().removeRegionTicket(LEGACY_TICKET,pos,2,id,true);});
+            }
+            @Override public String entityData(java.util.UUID id){
+                check();var entity=level.getEntity(id);
+                if(!(entity instanceof net.minecraft.world.entity.Mob mob)||entity.isPassenger()||entity.isVehicle()||mob.getTarget()!=null)return null;
+                var tag=new net.minecraft.nbt.CompoundTag();return entity.save(tag)?tag.toString():null;
+            }
+            @Override public void removeEntity(java.util.UUID id){check();var entity=level.getEntity(id);if(entity!=null)content.afterCommit(level,entity::discard);}
+            @Override public boolean restoreEntity(String data,double x,double y,double z,String name){
+                check();
+                try {
+                    var tag=net.minecraft.nbt.TagParser.parseTag(data);
+                    var entity=net.minecraft.world.entity.EntityType.loadEntityRecursive(tag,level,e->e);
+                    if(!(entity instanceof net.minecraft.world.entity.Mob)||level.getEntity(entity.getUUID())!=null)return false;
+                    entity.moveTo(x,y,z,entity.getYRot(),entity.getXRot());entity.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);entity.fallDistance=0;
+                    if(!name.isEmpty())entity.setCustomName(net.minecraft.network.chat.Component.literal(name));
+                    content.afterCommit(level,()->{if(!level.addFreshEntity(entity))throw new IllegalStateException("Captured entity could not join host world");});return true;
+                }catch(com.mojang.brigadier.exceptions.CommandSyntaxException failure){throw new IllegalArgumentException("Invalid captured host entity data",failure);}
+            }
             @Override public void applyMotion(HostWorldAccess.Motion motion) {check();content.afterCommit(level,()->HostEntityQueries.apply(level,motion));}
             @Override public java.util.List<HostWorldAccess.Entity> players() {
                 check(); return level.players().stream().map(player -> HostEntityQueries.snapshot(level, player)).filter(java.util.Objects::nonNull).toList();

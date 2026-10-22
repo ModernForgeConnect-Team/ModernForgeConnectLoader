@@ -11,6 +11,17 @@ public interface HostWorldAccess {
     record Abilities(boolean creative,boolean invulnerable) {}
     record Food(int level,float saturation) {}
     record Flight(boolean allowed,boolean flying) {}
+    record Modifier(java.util.UUID id,String name,double amount,int operation,boolean permanent) {}
+    record Attribute(String name,double base,java.util.List<Modifier> modifiers) {}
+    default java.util.List<Attribute> attributes(java.util.UUID player){return null;}
+    default void attributes(java.util.UUID player,java.util.List<Attribute> before,java.util.List<Attribute> after){throw new UnsupportedOperationException("Host attributes are not available");}
+    default String entityData(java.util.UUID entity){return null;}
+    default void removeEntity(java.util.UUID entity){throw new UnsupportedOperationException("Host entity removal is not available");}
+    default boolean restoreEntity(String data,double x,double y,double z,String name){throw new UnsupportedOperationException("Host entity restoration is not available");}
+    record Sheep(int color,boolean sheared){}
+    default Sheep sheep(java.util.UUID id){return null;}
+    default void sheared(java.util.UUID id,boolean value){throw new UnsupportedOperationException("Host shearing is not available");}
+    default void forceChunk(java.util.UUID ticket,int x,int z,boolean force){throw new UnsupportedOperationException("Host chunk tickets are not available");}
     default Flight flight(java.util.UUID player){return null;}
     default void flight(java.util.UUID player,Flight flight){throw new UnsupportedOperationException("Host flight mutation is not available");}
     /** Null means this binding has no authoritative player with that identity. */

@@ -120,6 +120,7 @@ public final class LegacyTiles {
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?2:0));
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
         entity.getField("field_70170_p").set(actor, world);
+        LegacyPlayerAttributes.initialize(actor);
         LegacyPlayerFood.initialize(actor);
         LegacyPlayerFlight.refresh(actor);
         // Entity.dimension: old code compares it with dimension ids (TC4 eldritch portals pick the travel direction by it).
@@ -135,6 +136,7 @@ public final class LegacyTiles {
         Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class,player).newInstance(inventory,false,actor);
         player.getField("field_71069_bz").set(actor,container);
         player.getField("field_71070_bA").set(actor,container);
+        LegacyEntityHooks.mirrored(actor);
         return actor;
     }
     public List<LegacyClientData.Stack> inventory(Object tile) throws Exception {

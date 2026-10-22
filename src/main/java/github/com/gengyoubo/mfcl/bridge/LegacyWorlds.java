@@ -108,7 +108,7 @@ public final class LegacyWorlds implements AutoCloseable {
     public synchronized void unbind(Object hostIdentity) {
         Binding binding = worlds.get(hostIdentity);
         if (binding != null) {
-            binding.check(); worlds.remove(hostIdentity); DISPATCH.remove(binding.world);
+            binding.check(); LegacyChunkTickets.unload(binding.world);worlds.remove(hostIdentity); DISPATCH.remove(binding.world);
             if(!binding.host.clientSide())dimensionWorlds().remove(binding.host.legacyDimensionId(),binding.world);
             var directory = binding.host.legacySaveDirectory();
             if (directory != null && worlds.values().stream().noneMatch(other -> directory.equals(other.host.legacySaveDirectory()))) storages.remove(directory);
@@ -199,6 +199,7 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     @Override public synchronized void close() {
         for (Binding binding : worlds.values()) {
+            if(binding.owner==Thread.currentThread())LegacyChunkTickets.unload(binding.world);
             DISPATCH.remove(binding.world);
             if(!binding.host.clientSide())dimensionWorlds().remove(binding.host.legacyDimensionId(),binding.world);
         }
@@ -258,6 +259,7 @@ public final class LegacyWorlds implements AutoCloseable {
         var bound = binding(world);
         if (bound.host.clientSide()) return false;
         try {
+            Boolean captured=LegacyEntityCapture.spawn(world,entity);if(captured!=null)return captured;
             ClassLoader loader = bound.loader;
             Class<?> arrowType = loader.loadClass("net.minecraft.entity.projectile.EntityArrow");
             if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity))return LegacyDeviceContainers.drop(entity);
@@ -340,6 +342,10 @@ public final class LegacyWorlds implements AutoCloseable {
         if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
         return entity;
     }
+    static LegacyClientData items(Object world){return binding(world).items;}
+    public static Object entity(Object world,UUID id) throws Exception {
+        var binding=binding(world);var snapshot=binding.host.entity(id);return snapshot==null?null:mirrored(binding,world,snapshot);
+    }
     private static List<Object> players(Object world) {
         var binding=binding(world);long now=binding.host.gameTime();
         if(binding.playersAt!=now||binding.motionCapture) try {
@@ -368,6 +374,13 @@ public final class LegacyWorlds implements AutoCloseable {
             for(var snapshot:snapshots) {
                 Object entity=mirrored(binding,world,snapshot);
                 if(type.isInstance(entity)&&(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",binding.loader.loadClass("net.minecraft.entity.Entity")).invoke(selector,entity)))result.add(entity);
+            }
+            var entityType=binding.loader.loadClass("net.minecraft.entity.Entity");
+            for(Object pending:LegacyDeviceContainers.pendingDrops()){
+                if(!type.isInstance(pending)||entityType.getField("field_70170_p").get(pending)!=world||entityType.getField("field_70128_L").getBoolean(pending))continue;
+                Object bounds=entityType.getField("field_70121_D").get(pending);
+                if(!(boolean)aabb.getMethod("func_72326_a",aabb).invoke(box,bounds))continue;
+                if(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",entityType).invoke(selector,pending))result.add(pending);
             }
             return result;
         }catch(Exception failure){throw new IllegalStateException("Cannot query host entities",failure);}

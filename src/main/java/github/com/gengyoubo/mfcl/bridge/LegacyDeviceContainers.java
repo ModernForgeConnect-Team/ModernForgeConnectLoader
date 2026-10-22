@@ -35,11 +35,13 @@ public final class LegacyDeviceContainers {
     }
     @FunctionalInterface public interface DropSink {void accept(Object entity) throws Exception;}
     private static final ThreadLocal<DropSink> DROPS=new ThreadLocal<>();
+    private static final ThreadLocal<List<Object>> PENDING_DROPS=new ThreadLocal<>();
+    static List<Object> pendingDrops(){var drops=PENDING_DROPS.get();return drops==null?List.of():List.copyOf(drops);}
     public static <T> T withDrops(DropSink sink,java.util.concurrent.Callable<T> action) throws Exception {
-        DropSink previous=DROPS.get();DROPS.set(sink);
-        try{return action.call();}finally{if(previous==null)DROPS.remove();else DROPS.set(previous);}
+        DropSink previous=DROPS.get();var pending=PENDING_DROPS.get();DROPS.set(sink);PENDING_DROPS.set(new ArrayList<>());
+        try{return action.call();}finally{if(previous==null)DROPS.remove();else DROPS.set(previous);if(pending==null)PENDING_DROPS.remove();else PENDING_DROPS.set(pending);}
     }
-    public static boolean drop(Object entity) throws Exception {var sink=DROPS.get();if(sink==null)return false;sink.accept(entity);return true;}
+    public static boolean drop(Object entity) throws Exception {var sink=DROPS.get();if(sink==null)return false;PENDING_DROPS.get().add(entity);sink.accept(entity);return true;}
     public static final class Capture implements AutoCloseable {
         final LegacyServices services;final boolean item;Open opened;
         private Capture(LegacyServices services,boolean item){this.services=services;this.item=item;}

@@ -569,7 +569,38 @@ public final class ModernContentBridge {
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
         @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
+        @Override public com.google.common.collect.Multimap<net.minecraft.world.entity.ai.attributes.Attribute,net.minecraft.world.entity.ai.attributes.AttributeModifier> getAttributeModifiers(net.minecraft.world.entity.EquipmentSlot slot,ItemStack stack){
+            var result=com.google.common.collect.HashMultimap.<net.minecraft.world.entity.ai.attributes.Attribute,net.minecraft.world.entity.ai.attributes.AttributeModifier>create();
+            if(slot!=net.minecraft.world.entity.EquipmentSlot.MAINHAND)return result;
+            try{for(var value:itemUse.itemAttributes(snapshot(stack))){var attribute=HostPlayerAttributes.type(value.name());if(attribute==null)continue;var m=value.modifier();result.put(attribute,new net.minecraft.world.entity.ai.attributes.AttributeModifier(m.id(),m.name(),m.amount(),net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.fromValue(m.operation())));}}
+            catch(Exception failure){throw new IllegalStateException("Cannot bridge original item attributes",failure);}return result;
+        }
+        @Override public float getDestroySpeed(ItemStack stack,BlockState state){
+            try{var block=legacyBlock(state);return block==null?1:itemUse.destroySpeed(snapshot(stack),block.legacyKey());}catch(Exception failure){return 1;}
+        }
+        @Override public boolean isCorrectToolForDrops(ItemStack stack,BlockState state){
+            try{var block=legacyBlock(state);return block!=null&&itemUse.harvest(snapshot(stack),block.legacyKey());}catch(Exception failure){return false;}
+        }
+        @Override public boolean onBlockStartBreak(ItemStack stack,BlockPos pos,net.minecraft.world.entity.player.Player player){
+            if(player.level().isClientSide)return false;
+            return mineLegacyItem(stack,player,player.level().getBlockState(pos),pos,true);
+        }
+        @Override public boolean mineBlock(ItemStack stack,Level level,BlockState state,BlockPos pos,LivingEntity actor){
+            return actor instanceof net.minecraft.world.entity.player.Player player&&!level.isClientSide&&mineLegacyItem(stack,player,state,pos,false);
+        }
         @Override public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) { return useLegacyItem(context, true); }
+        @Override public InteractionResult interactLivingEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,LivingEntity target,net.minecraft.world.InteractionHand hand){
+            try{
+                if(!itemUse.entityInteraction(snapshot(stack)))return InteractionResult.PASS;
+                if(player.level().isClientSide)return InteractionResult.SUCCESS;
+                return interactLegacyEntity(stack,player,target,hand,false)?InteractionResult.CONSUME:InteractionResult.PASS;
+            }catch(Exception failure){LogUtils.getLogger().error("MFCL original entity interaction failed for {}",entry.key(),failure);return InteractionResult.FAIL;}
+        }
+        @Override public boolean hurtEnemy(ItemStack stack,LivingEntity target,LivingEntity attacker){
+            if(!(attacker instanceof net.minecraft.world.entity.player.Player player)||player.level().isClientSide)return false;
+            try{return interactLegacyEntity(stack,player,target,net.minecraft.world.InteractionHand.MAIN_HAND,true);}
+            catch(Exception failure){LogUtils.getLogger().error("MFCL original weapon callback failed for {}",entry.key(),failure);return false;}
+        }
         @Override public void inventoryTick(ItemStack stack,Level level,net.minecraft.world.entity.Entity entity,int slot,boolean selected) {
             if(level.isClientSide||!(entity instanceof net.minecraft.world.entity.player.Player player)||slot<0||slot>=36)return;
             try {
@@ -667,6 +698,33 @@ public final class ModernContentBridge {
         }
     }
     private final Set<String> itemTickFailures=java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private boolean mineLegacyItem(ItemStack stack,net.minecraft.world.entity.player.Player player,BlockState state,BlockPos pos,boolean start){
+        var block=legacyBlock(state);if(block==null)return false;
+        try {
+            var world=services.worlds().bound(player.level());var source=placer(player);var held=snapshot(stack);var before=hostInventory(player);
+            Object actor=exposeLegacyInventory(player,world,before,held);
+            var result=logicTransaction(player.level(),pos,()->LegacyItemDrops.capture(this,player,()->itemUse.mine(world,source,held,block.legacyKey(),pos.getX(),pos.getY(),pos.getZ(),start)),true);
+            collectLegacyInventory(player,actor,before);
+            if(player instanceof net.minecraft.server.level.ServerPlayer server){result.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));result.feedback().forEach(message->server.displayClientMessage(Component.literal(message),false));}
+            return result.used();
+        }catch(Exception failure){LogUtils.getLogger().error("MFCL original mining callback failed at {}",pos,failure);return false;}
+    }
+    private boolean interactLegacyEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,LivingEntity target,net.minecraft.world.InteractionHand hand,boolean hit) throws Exception {
+        var world=services.worlds().bound(player.level());var source=placer(player);var held=snapshot(stack);var before=hostInventory(player);
+        if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
+        itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
+        Object actor=exposeLegacyInventory(player,world,before,held);
+        LegacyItemUse.Result result;
+        try{result=logicTransaction(player.level(),target.blockPosition(),()->LegacyItemDrops.capture(this,player,()->itemUse.interact(world,source,held,target.getUUID(),hit)),true);}
+        catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
+        collectLegacyInventory(player,actor,before,hand);
+        if(player instanceof net.minecraft.server.level.ServerPlayer server){
+            result.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));result.feedback().forEach(message->server.displayClientMessage(Component.literal(message),false));
+            server.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
+            if(result.device()!=null)LegacyDeviceMenu.open(server,this,result.device());
+        }
+        return result.used();
+    }
     static LegacyTiles.Placer placer(net.minecraft.world.entity.player.Player player) {
         return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(),
                 player.getAbilities().instabuild, player.isShiftKeyDown());

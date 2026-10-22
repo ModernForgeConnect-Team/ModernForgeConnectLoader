@@ -14,7 +14,7 @@ public final class EntityHostTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null) return null;
         String constants = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a")) return bytes;
+        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a") && !constants.contains("func_70893_e")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
         boolean changed = false;
         for (MethodNode m : node.methods) {
@@ -49,6 +49,8 @@ public final class EntityHostTransformer implements IClassTransformer {
                 code.add(new VarInsnNode(Opcodes.ALOAD, 1));
                 code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, "effect", "(Ljava/lang/Object;Ljava/lang/Object;)V", false));
                 code.add(new InsnNode(Opcodes.RETURN));
+            } else if(m.name.equals("func_70893_e")&&m.desc.equals("(Z)V")){
+                code.add(new VarInsnNode(Opcodes.ILOAD,1));code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"sheared","(Ljava/lang/Object;Z)V",false));code.add(new InsnNode(Opcodes.RETURN));
             } else continue;
             code.add(original);
             // The jump target has the method's entry state. A frame already describing offset 0 is reused as is.

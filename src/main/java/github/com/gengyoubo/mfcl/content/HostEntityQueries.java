@@ -39,7 +39,7 @@ public final class HostEntityQueries {
             if(item==null)return null;
         }
         var motion=entity.getDeltaMovement();
-        return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable(),entity.getId(),item,
+        return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():entity.hasCustomName()?entity.getCustomName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable(),entity.getId(),item,
                 entity instanceof AgeableMob ageable?ageable.getAge():0,entity instanceof net.minecraft.world.entity.animal.Animal animal?animal.getInLoveTime():0,
                 entity instanceof Player player?new HostWorldAccess.Abilities(player.getAbilities().instabuild,player.getAbilities().invulnerable):null);
     }

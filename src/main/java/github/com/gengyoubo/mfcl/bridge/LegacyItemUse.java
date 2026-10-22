@@ -23,6 +23,72 @@ public final class LegacyItemUse {
     private final Map<String, Object> actors = new HashMap<>();
     private final Map<String,Boolean> inventoryUpdates = new HashMap<>();
     public LegacyItemUse(LegacyServices services) { this.services = services; }
+    public record ItemAttribute(String name,HostWorldAccess.Modifier modifier){}
+    public List<ItemAttribute> itemAttributes(LegacyClientData.Stack held) throws Exception {
+        return services.items().inLegacy(()->{
+            var loader=services.loader();var stack=loader.loadClass("net.minecraft.item.ItemStack");Object original=services.items().materialize(held);
+            Object item=stack.getMethod("func_77973_b").invoke(original);
+            Object map=loader.loadClass("net.minecraft.item.Item").getMethod("getAttributeModifiers",stack).invoke(item,original);
+            var modifiers=loader.loadClass("com.google.common.collect.Multimap").getMethod("entries").invoke(map);
+            var type=loader.loadClass("net.minecraft.entity.ai.attributes.AttributeModifier");var result=new ArrayList<ItemAttribute>();
+            for(Object entry:(Collection<?>)modifiers){var pair=(Map.Entry<?,?>)entry;Object m=pair.getValue();result.add(new ItemAttribute((String)pair.getKey(),new HostWorldAccess.Modifier(
+                    (UUID)type.getMethod("func_111167_a").invoke(m),(String)type.getMethod("func_111166_b").invoke(m),(double)type.getMethod("func_111164_d").invoke(m),(int)type.getMethod("func_111169_c").invoke(m),false)));}
+            return List.copyOf(result);
+        });
+    }
+    public float destroySpeed(LegacyClientData.Stack held,String block) throws Exception {
+        return services.items().inLegacy(()->{
+            var loader=services.loader();var stack=loader.loadClass("net.minecraft.item.ItemStack");Object original=services.items().materialize(held);
+            Object registry=loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);Object target=registry.getClass().getMethod("func_82594_a",String.class).invoke(registry,block);
+            return (float)loader.loadClass("net.minecraft.item.Item").getMethod("func_150893_a",stack,loader.loadClass("net.minecraft.block.Block")).invoke(stack.getMethod("func_77973_b").invoke(original),original,target);
+        });
+    }
+    public boolean harvest(LegacyClientData.Stack held,String block) throws Exception {
+        return services.items().inLegacy(()->{
+            var loader=services.loader();var stack=loader.loadClass("net.minecraft.item.ItemStack");Object original=services.items().materialize(held);
+            Object registry=loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);Object target=registry.getClass().getMethod("func_82594_a",String.class).invoke(registry,block);
+            return (boolean)loader.loadClass("net.minecraft.item.Item").getMethod("canHarvestBlock",loader.loadClass("net.minecraft.block.Block"),stack).invoke(stack.getMethod("func_77973_b").invoke(original),target,original);
+        });
+    }
+    public Result mine(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,String key,int x,int y,int z,boolean start) throws Exception {
+        return services.items().inLegacy(()->{
+            try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture()){
+                var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var itemType=loader.loadClass("net.minecraft.item.Item");var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+                Object actor=actor(world,placer,held),stack=services.items().materialize(held);bindHeld(actor,stack);Object item=stackType.getMethod("func_77973_b").invoke(stack);
+                boolean used;
+                if(start)used=(boolean)itemType.getMethod("onBlockStartBreak",stackType,int.class,int.class,int.class,playerType).invoke(item,stack,x,y,z,actor);
+                else {
+                    Object registry=loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);Object block=registry.getClass().getMethod("func_82594_a",String.class).invoke(registry,key);
+                    used=(boolean)itemType.getMethod("func_150894_a",stackType,loader.loadClass("net.minecraft.world.World"),loader.loadClass("net.minecraft.block.Block"),int.class,int.class,int.class,loader.loadClass("net.minecraft.entity.EntityLivingBase")).invoke(item,stack,world,block,x,y,z,actor);
+                }
+                LegacyPlayerAttributes.push(actor);return new Result(used,0,null,packets.messages(),chat.messages());
+            }
+        });
+    }
+    private final Map<String,Boolean> entityUpdates=new HashMap<>();
+    public boolean entityInteraction(LegacyClientData.Stack held) throws Exception {
+        return services.items().inLegacy(()->{
+            if(entityUpdates.containsKey(held.key()))return entityUpdates.get(held.key());
+            var loader=services.loader();var stack=loader.loadClass("net.minecraft.item.ItemStack");var item=loader.loadClass("net.minecraft.item.Item");
+            Object original=stack.getMethod("func_77973_b").invoke(services.items().materialize(held));
+            boolean present=original.getClass().getMethod("func_111207_a",stack,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),loader.loadClass("net.minecraft.entity.EntityLivingBase")).getDeclaringClass()!=item;
+            entityUpdates.put(held.key(),present);return present;
+        });
+    }
+    public Result interact(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target,boolean hit) throws Exception {
+        return services.items().inLegacy(()->{
+            try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture();var menus=LegacyDeviceContainers.captureItem(services)){
+                var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var living=loader.loadClass("net.minecraft.entity.EntityLivingBase");
+                Object actor=actor(world,placer,held),victim=LegacyWorlds.entity(world,target);if(!living.isInstance(victim))return new Result(false,0,null);
+                Object stack=services.items().materialize(held);bindHeld(actor,stack);
+                Object item=stackType.getMethod("func_77973_b").invoke(stack);
+                boolean used=(boolean)loader.loadClass("net.minecraft.item.Item").getMethod(hit?"func_77644_a":"func_111207_a",stackType,hit?living:loader.loadClass("net.minecraft.entity.player.EntityPlayer"),living)
+                        .invoke(item,stack,hit?victim:actor,hit?actor:victim);
+                LegacyPlayerAttributes.push(actor);
+                return new Result(used||menus.opened()!=null,0,null,packets.messages(),chat.messages(),menus.opened());
+            }
+        });
+    }
     public Result rightClick(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader();
@@ -41,6 +107,7 @@ public final class LegacyItemUse {
             Object returned; List<LegacyPackets.Message> messages;List<String> feedback;LegacyDeviceContainers.Open device;
             try(var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture();var menus=LegacyDeviceContainers.captureItem(services)) {
                 returned = itemType.getMethod("func_77659_a", stackType, worldType, playerType).invoke(item, stack, world, player);
+                LegacyPlayerAttributes.push(player);
                 messages=packets.messages();feedback=chat.messages();device=menus.opened();
             }
             if(returned!=null&&stackType.getField("field_77994_a").getInt(returned)<=0)returned=null;
@@ -135,6 +202,7 @@ public final class LegacyItemUse {
                 var entity=loader.loadClass("net.minecraft.entity.Entity");entity.getField("field_70173_aa").setInt(player,ticks);
                 Object item=stackType.getMethod("func_77973_b").invoke(stack);
                 loader.loadClass("net.minecraft.item.Item").getMethod("func_77663_a",stackType,loader.loadClass("net.minecraft.world.World"),entity,int.class,boolean.class).invoke(item,stack,world,player,slot,selected);
+                LegacyPlayerAttributes.push(player);
             }
             return outgoing.messages();
         }});
@@ -333,6 +401,7 @@ public final class LegacyItemUse {
         Object capabilities=playerType.getField("field_71075_bZ").get(actor);
         capabilities.getClass().getField("field_75098_d").setBoolean(capabilities,placer.creative());
         LegacyPlayerFlight.refresh(actor);
+        LegacyPlayerAttributes.pull(actor);
         Object watcher=entity.getMethod("func_70096_w").invoke(actor);
         byte flags=(byte)watcher.getClass().getMethod("func_75683_a",int.class).invoke(watcher,0);
         watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?flags|2:flags&~2));
