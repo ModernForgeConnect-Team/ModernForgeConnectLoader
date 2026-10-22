@@ -10,7 +10,8 @@ public final class ExtraUtilitiesPortalAdapter implements LegacyBytecodeAdapter 
         return name.equals("com.rwtema.extrautils.block.BlockPortal") || name.equals("com.rwtema.extrautils.particle.ParticleHelperClient")
                 || name.equals("com.rwtema.extrautils.worldgen.endoftime.TeleporterEndOfTime")
                 || name.equals("com.rwtema.extrautils.item.ItemGlove")||name.equals("com.rwtema.extrautils.item.ItemSoul")
-                || name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")||name.equals("net.minecraftforge.common.ForgeChunkManager");
+                || name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")||name.equals("com.rwtema.extrautils.item.ItemPrecisionShears")
+                || name.equals("net.minecraftforge.common.ForgeChunkManager");
     }
     public byte[] adapt(String name, byte[] bytes) {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

@@ -9,7 +9,7 @@ import java.util.*;
 
 /** Server levels own all authoritative mutations; the old World façade keeps its owner-thread checks. */
 public final class LevelWorldBridge {
-    private static final net.minecraft.server.level.TicketType<java.util.UUID> LEGACY_TICKET=net.minecraft.server.level.TicketType.create("mfcl_legacy",java.util.Comparator.naturalOrder());
+    private static final net.minecraft.server.level.TicketType<java.util.UUID> LEGACY_TICKET=net.minecraft.server.level.TicketType.create("mfcl_legacy",java.util.Comparator.<java.util.UUID>naturalOrder());
     private final ModernContentBridge content;
     private final LegacyDimensionHost dimensions;
     /**
@@ -177,7 +177,7 @@ public final class LevelWorldBridge {
                     var entity=net.minecraft.world.entity.EntityType.loadEntityRecursive(tag,level,e->e);
                     if(!(entity instanceof net.minecraft.world.entity.Mob)||level.getEntity(entity.getUUID())!=null)return false;
                     entity.moveTo(x,y,z,entity.getYRot(),entity.getXRot());entity.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);entity.fallDistance=0;
-                    if(!name.isEmpty())entity.setCustomName(net.minecraft.network.chat.Component.literal(name));
+                    if(!name.isEmpty()&&(entity.getCustomName()==null||!entity.getCustomName().getString().equals(name)))entity.setCustomName(net.minecraft.network.chat.Component.literal(name));
                     content.afterCommit(level,()->{if(!level.addFreshEntity(entity))throw new IllegalStateException("Captured entity could not join host world");});return true;
                 }catch(com.mojang.brigadier.exceptions.CommandSyntaxException failure){throw new IllegalArgumentException("Invalid captured host entity data",failure);}
             }

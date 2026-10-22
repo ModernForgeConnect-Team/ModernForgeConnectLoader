@@ -59,7 +59,8 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                 Field manifests = LaunchClassLoader.class.getDeclaredField("packageManifests"); manifests.setAccessible(true);
                 @SuppressWarnings("unchecked") Map<Package, java.util.jar.Manifest> packageManifests = (Map<Package, java.util.jar.Manifest>) manifests.get(this);
                 Package defined = (Package) ClassLoader.class.getMethod("getDefinedPackage", String.class).invoke(this, packageName);
-                packageManifests.put(defined, jar.getManifest());
+                java.util.jar.Manifest manifest=jar.getManifest();
+                if(manifest!=null)packageManifests.put(defined, manifest);
             }
             return defineClass(name, bytes, 0, bytes.length, source);
         } catch (IOException error) { throw new ClassNotFoundException(name, error); }

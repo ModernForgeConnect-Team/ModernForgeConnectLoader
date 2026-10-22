@@ -80,7 +80,8 @@ public final class LegacyBlockRendering {
                         List<Layer> layers;
                         try { layers = capture(declaration.key(), meta, view); }
                         catch (Exception failure) { if (!hasTile) throw failure; layers = List.of(); }
-                        if (layers.isEmpty() && !hasTile) return null;
+                        boolean invisibleTechnical=declaration.renderType()==-1&&content.items().stream().filter(item->declaration.key().equals(item.blockKey())).noneMatch(LegacyContent.Item::creative);
+                        if (layers.isEmpty() && !hasTile && !invisibleTechnical) return null;
                         for (var layer : layers) for (var primitive : layer.geometry()) {
                             if (primitive.mode() != LegacyVertexStream.GL_QUADS || primitive.vertices().size() % 4 != 0) return null;
                             if (!data.iconLayout().containsKey(primitive.texture()) || primitive.texture().startsWith("MISSING_ICON_")) return null;

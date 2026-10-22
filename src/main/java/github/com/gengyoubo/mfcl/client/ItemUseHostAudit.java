@@ -27,6 +27,7 @@ final class ItemUseHostAudit {
     private String lastScreen;
     private BlockPos anchor;
     private UUID combatTarget;
+    private long wingFramesBefore;
     private final java.util.concurrent.atomic.AtomicBoolean screenshotSaved=new java.util.concurrent.atomic.AtomicBoolean();
     private ItemUseHostAudit(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(new ItemUseHostAudit(content)::tick);}
@@ -112,14 +113,16 @@ final class ItemUseHostAudit {
                     require(tool.getDestroySpeed(stone)>1&&tool.isCorrectToolForDrops(stone),"Original pickaxe efficiency/harvest capability missing");
                     var target=p.blockPosition().offset(1,0,1);p.serverLevel().setBlockAndUpdate(target,stone);
                     require(p.gameMode.destroyBlock(target)&&p.serverLevel().getBlockState(target).isAir(),"Native pickaxe mining failed");
-                    require(p.getMainHandItem().getDamageValue()>0,"Original mining callback did not wear tool");report.put("pickaxeHarvestEfficiencyAndWear",true);
-                    p.getInventory().clearContent();p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:angelRing",1,1,""));return true;
+                    require(p.getMainHandItem().getDamageValue()==0,"Destruction pickaxe lost its original no-wear mining behavior");report.put("pickaxeHarvestEfficiencyAndOriginalDurability",true);
+                    p.getInventory().clearContent();p.setItemInHand(InteractionHand.MAIN_HAND,content.stack("ExtraUtilities:angelRing",4,1,""));return true;
                 });stage=16;frames=0;
             }else if(stage==16&&pending.isDone()&&++frames>30){
                 var wings=ExtraUtilitiesWings.capture(content,mc.player,.5f);int count=wings.stream().mapToInt(primitive->primitive.vertices().size()).sum();
                 require(count>=8,"Golden wing style did not generate original geometry");report.put("goldenWingVertices",count);report.put("goldenWingTextures",wings.stream().map(primitive->primitive.texture()).distinct().toList());
-                mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);mc.player.setXRot(10);stage=17;frames=0;
+                require(wings.stream().allMatch(primitive->primitive.texture().equals("extrautils:textures/wing_golden.png")),"Golden ring selected the wrong original texture");
+                wingFramesBefore=ExtraUtilitiesWings.renderedFrames;mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);mc.player.setXRot(10);stage=17;frames=0;
             }else if(stage==17&&++frames>20){
+                require(ExtraUtilitiesWings.renderedFrames>wingFramesBefore,"Original wings were captured but native player render layer never drew them");report.put("goldenWingNativeRenderFrames",ExtraUtilitiesWings.renderedFrames-wingFramesBefore);
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-golden-wings.png",mc.getMainRenderTarget(),message->screenshotSaved.set(true));stage=18;frames=0;
             }else if(stage==18&&screenshotSaved.get()&&++frames>3){
                 report.put("goldenWingScreenshot","screenshots/mfcl-golden-wings.png");
@@ -144,6 +147,7 @@ final class ItemUseHostAudit {
         var sheep=net.minecraft.world.entity.EntityType.SHEEP.create(p.serverLevel());sheep.moveTo(p.getX()+1,p.getY(),p.getZ());sheep.setColor(net.minecraft.world.item.DyeColor.BLUE);p.serverLevel().addFreshEntity(sheep);
         var result=p.getMainHandItem().interactLivingEntity(p,sheep,InteractionHand.MAIN_HAND);
         require(result.consumesAction()&&sheep.isSheared(),"Precision shears did not update native sheep");
+        require(p.getMainHandItem().getDamageValue()>0,"Original shearing callback did not wear precision shears");
         int count=p.getInventory().items.stream().filter(stack->stack.is(Items.BLUE_WOOL)).mapToInt(ItemStack::getCount).sum();
         require(count>0,"Precision shears did not collect the correct wool into inventory");
         p.getMainHandItem().interactLivingEntity(p,sheep,InteractionHand.MAIN_HAND);

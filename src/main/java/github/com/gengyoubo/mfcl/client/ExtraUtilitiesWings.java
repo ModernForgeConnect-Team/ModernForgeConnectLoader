@@ -16,9 +16,11 @@ public final class ExtraUtilitiesWings extends RenderLayer<AbstractClientPlayer,
     private long retryAfter;
     private static Object handler,renderer;
     private static ClassLoader owner;
+    static long renderedFrames;
     private ExtraUtilitiesWings(RenderLayerParent<AbstractClientPlayer,PlayerModel<AbstractClientPlayer>> parent,ModernContentBridge content){super(parent);this.content=content;replay=new LegacyBlockEntityRenderer(content);}
     static void install(ModernContentBridge content,net.minecraftforge.eventbus.api.IEventBus bus){
-        if(!content.items().containsKey("ExtraUtilities:angelRing"))return;
+        // Native item registration has not run yet at client listener installation.
+        if(content.declarations().items().stream().noneMatch(item->item.key().equals("ExtraUtilities:angelRing")))return;
         bus.addListener((EntityRenderersEvent.AddLayers event)->{for(String skin:event.getSkins()){net.minecraft.client.renderer.entity.player.PlayerRenderer parent=event.getSkin(skin);if(parent!=null)parent.addLayer(new ExtraUtilitiesWings(parent,content));}});
     }
     public static List<LegacyVertexStream.Primitive> capture(ModernContentBridge content,AbstractClientPlayer player,float partial) throws Exception {
@@ -42,7 +44,7 @@ public final class ExtraUtilitiesWings extends RenderLayer<AbstractClientPlayer,
         if(player.isInvisible()||System.nanoTime()<retryAfter)return;
         try {
             var geometry=capture(content,player,partial);if(geometry.isEmpty())return;
-            pose.pushPose();try{getParentModel().body.translateAndRotate(pose);replay.render(geometry,pose,buffers,light,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);}finally{pose.popPose();}
+            pose.pushPose();try{getParentModel().body.translateAndRotate(pose);replay.render(geometry,pose,buffers,light,net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);renderedFrames++;}finally{pose.popPose();}
         }catch(Exception|LinkageError failure){retryAfter=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);com.mojang.logging.LogUtils.getLogger().error("MFCL cannot render original angel ring wings; retrying in 5 seconds",failure);}
     }
 }

@@ -6,10 +6,17 @@ import java.util.*;
 public final class LegacyAudio {
     @FunctionalInterface public interface Backend { void play(Object sound,Runnable finished) throws Exception; }
     private static final Map<ClassLoader,Backend> BACKENDS=Collections.synchronizedMap(new WeakHashMap<>());
+    private static final ThreadLocal<Integer> PREVIEWS=ThreadLocal.withInitial(()->0);
+    public static final class Preview implements AutoCloseable {
+        private Preview(){PREVIEWS.set(PREVIEWS.get()+1);}
+        public void close(){int depth=PREVIEWS.get()-1;if(depth==0)PREVIEWS.remove();else PREVIEWS.set(depth);}
+    }
+    public static Preview preview(){return new Preview();}
     private LegacyAudio() {}
     public static void attach(ClassLoader loader,Backend backend){BACKENDS.put(loader,backend);}
     @SuppressWarnings("unchecked")
     public static void play(Object sound) throws Exception {
+        if(PREVIEWS.get()>0)return;
         ClassLoader loader=sound.getClass().getClassLoader();
         Backend backend=BACKENDS.get(loader);
         if(backend==null)throw new UnsupportedOperationException("Host audio is not connected for "+sound.getClass().getName());

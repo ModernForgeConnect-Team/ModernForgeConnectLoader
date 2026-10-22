@@ -7,6 +7,7 @@ public final class LegacyBlockScene implements AutoCloseable {
     private final LegacyServices services;
     private final Object identity = new Object();
     private final Object world;
+    private final LegacyAudio.Preview audio;
     private final Map<List<Integer>, Object> tiles = new HashMap<>();
     public LegacyBlockScene(LegacyServices services, LegacyBlockRendering.View view) throws Exception {
         this.services = services;
@@ -23,6 +24,7 @@ public final class LegacyBlockScene implements AutoCloseable {
             public void markTileDirty(int x, int y, int z, Object tile) { }
             public void blockUpdated(int x, int y, int z) { }
         });
+        audio=LegacyAudio.preview();
     }
     private Object tile(LegacyBlockRendering.View view, int x, int y, int z) {
         var position = List.of(x,y,z);
@@ -41,5 +43,5 @@ public final class LegacyBlockScene implements AutoCloseable {
         } catch (Exception error) { throw new IllegalStateException("Cannot construct preview tile at " + position, error); }
     }
     public Object world() { return world; }
-    @Override public void close() { services.worlds().unbind(identity); }
+    @Override public void close() {try{services.worlds().unbind(identity);}finally{audio.close();}}
 }
