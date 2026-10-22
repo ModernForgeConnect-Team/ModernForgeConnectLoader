@@ -154,12 +154,30 @@ public final class HostRepresentations implements LegacyHostRepresentations {
         });
     }
     public synchronized String entityClass(String id) { var type = entityClasses.get(id); return type == null ? null : type.getName(); }
+    /**
+     * Old tag carrying the complete host NBT of a represented host stack (hex of its SNBT, which 1.7.10 strings hold
+     * without escaping), so the stack survives old code and recipes unchanged. Original matching that ignores NBT,
+     * or only requires the recipe's own tags, is unaffected.
+     */
+    public static final String HOST_TAG = "mfcl_host";
+    private static final java.util.regex.Pattern HOST_TAG_VALUE = java.util.regex.Pattern.compile(HOST_TAG + ":\"([0-9a-f]*)\"");
     public synchronized LegacyClientData.Stack stack(ItemStack stack) {
         var old = items.get(stack.getItem());
-        return old == null ? null : new LegacyClientData.Stack(old.key(), old.metadata(), stack.getCount(), stack.getHoverName().getString(), "");
+        if (old == null) return null;
+        var tag = stack.getTag();
+        String carried = tag == null || tag.isEmpty() ? ""
+                : "{" + HOST_TAG + ":\"" + java.util.HexFormat.of().formatHex(tag.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)) + "\"}";
+        return new LegacyClientData.Stack(old.key(), old.metadata(), stack.getCount(), stack.getHoverName().getString(), carried);
     }
     public synchronized ItemStack stack(LegacyClientData.Stack stack) {
-        var item = reverseItems.get(stack.key()); return item == null ? ItemStack.EMPTY : new ItemStack(item, stack.count());
+        var item = reverseItems.get(stack.key());
+        if (item == null) return ItemStack.EMPTY;
+        var result = new ItemStack(item, stack.count());
+        var carried = HOST_TAG_VALUE.matcher(stack.tag());
+        if (carried.find()) try {
+            result.setTag(net.minecraft.nbt.TagParser.parseTag(new String(java.util.HexFormat.of().parseHex(carried.group(1)), java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException malformed) { throw new IllegalArgumentException("Malformed carried host NBT on " + stack.key(), malformed); }
+        return result;
     }
     public synchronized HostWorldAccess.Block block(BlockState state) {
         var old = blocks.get(state.getBlock()); return old == null ? null : new HostWorldAccess.Block(old.key(), 0);

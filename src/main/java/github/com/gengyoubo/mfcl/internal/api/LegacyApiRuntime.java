@@ -69,7 +69,8 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     }
 
     private final Set<String> features = Collections.synchronizedSet(new TreeSet<>(Set.of(
-            LegacyFeatures.LANGUAGES, LegacyFeatures.MLA_ARRAYS, LegacyFeatures.MLA_COLLECTIONS, LegacyFeatures.MLA_INSTANCE)));
+            LegacyFeatures.LANGUAGES, LegacyFeatures.MLA_ARRAYS, LegacyFeatures.MLA_COLLECTIONS, LegacyFeatures.MLA_COLLECTIONS_MUTABLE,
+            LegacyFeatures.MLA_INSTANCE, LegacyFeatures.MLA_OBJECT_ARGUMENTS)));
     /** Host installation only; the set is fixed once the runtime is published. */
     public void addFeatures(String... names) { features.addAll(List.of(names)); }
     @Override public Set<String> features() { return Set.copyOf(features); }
@@ -164,8 +165,7 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     /** Old value as API callers see it: null, String and boxed primitives as themselves, anything else a reference. */
     public Object exposed(Object old) { return exposed(old, List.of()); }
     private Object exposed(Object old, List<Guard> guards) {
-        if (old == null || old instanceof String || old instanceof Number || old instanceof Boolean || old instanceof Character) return old;
-        return new Reference(old, guards);
+        return old == null || plain(old) ? old : new Reference(old, guards);
     }
     /** Inverse of {@link #exposed}: references and accessor proxies become their old object. */
     public Object unexposed(Object value) {
@@ -206,13 +206,22 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
             if (!expected.isInstance(old)) throw new IllegalArgumentException("Wrong legacy argument type: " + expected.getName());
             return old;
         }
-        if (expected.isArray()) {
-            int size = Array.getLength(value); Object copy = Array.newInstance(expected.getComponentType(), size);
-            for (int i = 0; i < size; i++) Array.set(copy, i, argument(Array.get(value, i), expected.getComponentType()));
+        if (value.getClass().isArray()) {
+            // A host array is copied into an old one; under an Object parameter its elements stay Object (primitive arrays as they are).
+            Class<?> source = value.getClass().getComponentType();
+            Class<?> component = expected.isArray() ? expected.getComponentType() : source.isPrimitive() ? source : Object.class;
+            int size = Array.getLength(value); Object copy = Array.newInstance(component, size);
+            if (!expected.isInstance(copy)) throw new IllegalArgumentException("Wrong legacy argument type: " + expected.getName());
+            for (int i = 0; i < size; i++) Array.set(copy, i, argument(Array.get(value, i), component));
             return copy;
         }
-        if (expected.isPrimitive() || expected == String.class && value instanceof String) return value;
+        if (expected.isPrimitive()) return value;
+        // Strings and boxed values cross as themselves wherever the old parameter accepts them (Object, Object[] elements...).
+        if (plain(value) && expected.isInstance(value)) return value;
         throw new IllegalArgumentException("Legacy reference required: " + expected.getName());
+    }
+    static boolean plain(Object value) {
+        return value instanceof String || value instanceof Number || value instanceof Boolean || value instanceof Character;
     }
     Object result(Object value, Class<?> apiType, List<Guard> guards) {
         if (value == null || apiType == void.class) return null;
@@ -226,6 +235,7 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
             return value;
         }
         if (apiType == LegacyObject.class) return new Reference(value, guards);
+        if (apiType == Object.class) return exposed(value, guards);
         if (apiType.isArray()) {
             int size = Array.getLength(value); Object copy = Array.newInstance(apiType.getComponentType(), size);
             for (int i = 0; i < size; i++) Array.set(copy, i, result(Array.get(value, i), apiType.getComponentType(), guards));
@@ -233,7 +243,7 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         }
         if (apiType.isInterface() && apiType.isAnnotationPresent(github.com.gengyoubo.mfcl.api.mla.LegacyType.class))
             return wrap(apiType, new Reference(value, guards));
-        return value; // signature was checked at binding: only exact primitives and String
+        return value; // signature was checked at binding: only exact primitives, String and boxed types
     }
     private <T> T wrap(Class<T> apiType, LegacyObject reference) {
         try { return new AccessorEngine(this).bind(apiType, reference); }
@@ -259,13 +269,108 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         }
         @Override public void set(LegacyObject array, int index, Object value) {
             call("MLA_ARRAY", "set[" + index + "]", () -> {
-                Object target = array(array); Class<?> component = target.getClass().getComponentType();
-                Object old = unexposed(value);
-                if (old == null && component.isPrimitive()) throw new IllegalArgumentException("Null primitive array element");
-                if (old != null && !component.isPrimitive() && !component.isInstance(old))
-                    throw new IllegalArgumentException("Wrong old array element type: " + component.getName());
-                Array.set(target, index, old);
+                Object target = array(array);
+                Array.set(target, index, element(value, target.getClass().getComponentType()));
                 return null;
+            });
+        }
+        /** An API value as an old element of {@code type}: the same rules as accessor arguments. */
+        private Object element(Object value, Class<?> type) { return argument(value, type); }
+        @Override public LegacyObject newArray(String componentType, int length) {
+            Objects.requireNonNull(componentType);
+            return call("MLA_ARRAY", "new " + componentType + "[" + length + "]", () -> {
+                if (length < 0) throw new NegativeArraySizeException(String.valueOf(length));
+                Class<?> component = switch (componentType) {
+                    case "boolean" -> boolean.class; case "byte" -> byte.class; case "char" -> char.class; case "short" -> short.class;
+                    case "int" -> int.class; case "long" -> long.class; case "float" -> float.class; case "double" -> double.class;
+                    default -> Class.forName(componentType, false, loader);
+                };
+                return reference(Array.newInstance(component, length));
+            });
+        }
+        private Collection<Object> collection(LegacyObject source) {
+            Object value = raw(Objects.requireNonNull(source));
+            if (!(value instanceof Collection<?> collection)) throw new IllegalArgumentException("Not an old Collection: " + value.getClass().getName());
+            @SuppressWarnings("unchecked") var result = (Collection<Object>) collection;
+            return result;
+        }
+        private Map<Object, Object> oldMap(LegacyObject source) {
+            Object value = raw(Objects.requireNonNull(source));
+            if (!(value instanceof Map<?, ?> map)) throw new IllegalArgumentException("Not an old Map: " + value.getClass().getName());
+            @SuppressWarnings("unchecked") var result = (Map<Object, Object>) map;
+            return result;
+        }
+        @Override public int size(LegacyObject source) {
+            return call("MLA_COLLECTION", "size", () -> {
+                Object value = raw(Objects.requireNonNull(source));
+                if (value.getClass().isArray()) return Array.getLength(value);
+                if (value instanceof Collection<?> collection) return collection.size();
+                if (value instanceof Map<?, ?> map) return map.size();
+                throw new IllegalArgumentException("Not an old array, Collection or Map: " + value.getClass().getName());
+            });
+        }
+        @Override public LegacyObject newList(Iterable<?> elements) {
+            Objects.requireNonNull(elements);
+            return call("MLA_COLLECTION", "newList", () -> {
+                var list = new ArrayList<Object>();
+                for (Object element : elements) list.add(element(element, Object.class));
+                return reference(list);
+            });
+        }
+        @Override public LegacyObject newMap(Map<?, ?> entries) {
+            Objects.requireNonNull(entries);
+            return call("MLA_COLLECTION", "newMap", () -> {
+                var map = new LinkedHashMap<Object, Object>();
+                for (var entry : entries.entrySet()) map.put(element(entry.getKey(), Object.class), element(entry.getValue(), Object.class));
+                return reference(map);
+            });
+        }
+        @Override public boolean add(LegacyObject collection, Object value) {
+            return call("MLA_COLLECTION", "add", () -> collection(collection).add(element(value, Object.class)));
+        }
+        @Override public boolean remove(LegacyObject collection, Object value) {
+            return call("MLA_COLLECTION", "remove", () -> collection(collection).remove(element(value, Object.class)));
+        }
+        @Override public int removeIf(LegacyObject collection, java.util.function.Predicate<Object> filter) {
+            Objects.requireNonNull(filter);
+            return call("MLA_COLLECTION", "removeIf", () -> {
+                var target = collection(collection); var guards = guards(collection); int removed = 0;
+                for (var iterator = target.iterator(); iterator.hasNext(); )
+                    if (filter.test(exposed(iterator.next(), guards))) { iterator.remove(); removed++; }
+                return removed;
+            });
+        }
+        @Override public Object put(LegacyObject map, Object key, Object value) {
+            return call("MLA_COLLECTION", "put", () -> exposed(oldMap(map).put(element(key, Object.class), element(value, Object.class)), guards(map)));
+        }
+        @Override public Object removeKey(LegacyObject map, Object key) {
+            return call("MLA_COLLECTION", "removeKey", () -> exposed(oldMap(map).remove(element(key, Object.class)), guards(map)));
+        }
+        @Override public int removeEntries(LegacyObject map, java.util.function.BiPredicate<Object, Object> filter) {
+            Objects.requireNonNull(filter);
+            return call("MLA_COLLECTION", "removeEntries", () -> {
+                var target = oldMap(map); var guards = guards(map); int removed = 0;
+                for (var iterator = target.entrySet().iterator(); iterator.hasNext(); ) {
+                    var entry = iterator.next();
+                    if (filter.test(exposed(entry.getKey(), guards), exposed(entry.getValue(), guards))) { iterator.remove(); removed++; }
+                }
+                return removed;
+            });
+        }
+        @Override public void clear(LegacyObject source) {
+            call("MLA_COLLECTION", "clear", () -> {
+                Object value = raw(Objects.requireNonNull(source));
+                if (value instanceof Collection<?> collection) collection.clear();
+                else if (value instanceof Map<?, ?> map) map.clear();
+                else throw new IllegalArgumentException("Not an old Collection or Map: " + value.getClass().getName());
+                return null;
+            });
+        }
+        @Override public boolean same(Object left, Object right) {
+            return call("MLA_INSTANCE", "same", () -> {
+                LegacyObject a = referenceOf(left), b = referenceOf(right);
+                if (a == null || b == null) throw new IllegalArgumentException("Expected legacy references or accessor proxies");
+                return raw(a) == raw(b);
             });
         }
         @Override public List<Object> list(LegacyObject source) {

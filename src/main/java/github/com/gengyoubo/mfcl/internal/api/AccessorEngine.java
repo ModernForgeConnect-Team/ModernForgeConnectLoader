@@ -133,7 +133,7 @@ final class AccessorEngine {
         if (type == long.class) return "J";
         if (type == float.class) return "F";
         if (type == double.class) return "D";
-        if (type == String.class) return "Ljava/lang/String;";
+        if (type == String.class || type == Object.class || boxed(type)) return "L" + type.getName().replace('.', '/') + ";";
         if (type.isArray()) return "[" + infer(type.getComponentType(), api);
         var contract = type.getAnnotation(LegacyType.class);
         if (type.isInterface() && contract != null) return "L" + contract.value().replace('.', '/') + ";";
@@ -142,6 +142,10 @@ final class AccessorEngine {
         throw new IllegalArgumentException("Descriptor is required for " + type.getTypeName() + " in " + api);
     }
 
+    private static boolean boxed(Class<?> type) {
+        return type == Boolean.class || type == Character.class || type == Byte.class || type == Short.class || type == Integer.class
+                || type == Long.class || type == Float.class || type == Double.class;
+    }
     private void compatibleParameter(Class<?> api, Class<?> old) {
         if (api.isArray() && old.isArray()) { compatibleParameter(api.getComponentType(), old.getComponentType()); return; }
         Class<?> target = contractTarget(api);
@@ -150,6 +154,8 @@ final class AccessorEngine {
                 throw new IllegalArgumentException("Unsafe legacy contract parameter " + api.getTypeName() + "; descriptor type is " + old.getTypeName());
             return;
         }
+        // A String or boxed parameter may feed a wider old parameter (Object, Comparable...): the value crosses as itself.
+        if ((api == String.class || boxed(api)) && old.isAssignableFrom(api)) return;
         compatible(api, old);
     }
 
@@ -199,9 +205,10 @@ final class AccessorEngine {
         if (!expected && target == null) throw new IllegalArgumentException("Instance member requires a receiver");
     }
     private static void compatible(Class<?> api, Class<?> old) {
-        if (api == old && (old.isPrimitive() || old == String.class)) return;
-        if (api == LegacyObject.class && !old.isPrimitive()) return;
+        if (api == old && (old.isPrimitive() || old == String.class || boxed(old))) return;
+        // Object: Strings and boxed values cross as themselves, every other old value as a LegacyObject.
+        if ((api == LegacyObject.class || api == Object.class) && !old.isPrimitive()) return;
         throw new IllegalArgumentException("Unsafe MLA type " + api.getTypeName() + "; descriptor type is " + old.getTypeName()
-                + ". Use LegacyObject or a @LegacyType contract for legacy references.");
+                + ". Use LegacyObject, Object or a @LegacyType contract for legacy references.");
     }
 }
