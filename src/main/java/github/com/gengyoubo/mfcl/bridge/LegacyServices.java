@@ -16,6 +16,7 @@ public final class LegacyServices {
     private final LegacyBlockLogic logic;
     private final LegacyInventoryAccess inventories;
     private final LegacyEnergyAccess energy;
+    private final LegacyFluidAccess fluids;
     private final LegacyPlayerInventory playerInventory;
     private final LegacyPlayerState playerState = new LegacyPlayerState();
     private final LegacyDynamicItems dynamicItems = new LegacyDynamicItems();
@@ -38,6 +39,7 @@ public final class LegacyServices {
         this.playerData = new LegacyPlayerData(this);
         this.logic = new LegacyBlockLogic(this); this.inventories = new LegacyInventoryAccess(this);
         this.energy = new LegacyEnergyAccess(this);
+        this.fluids = new LegacyFluidAccess(this);
         this.playerInventory = new LegacyPlayerInventory(this);
         this.entityHosting = new LegacyEntityHosting(this);
     }
@@ -54,6 +56,7 @@ public final class LegacyServices {
     public LegacyBlockLogic logic() { return logic; }
     public LegacyInventoryAccess inventories() { return inventories; }
     public LegacyEnergyAccess energy() { return energy; }
+    public LegacyFluidAccess fluids() { return fluids; }
     public LegacyPlayerInventory playerInventory() { return playerInventory; }
     public LegacyPlayerState playerState() { return playerState; }
     public LegacyDynamicItems dynamicItems() { return dynamicItems; }

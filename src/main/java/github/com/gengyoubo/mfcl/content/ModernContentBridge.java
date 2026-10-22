@@ -37,6 +37,7 @@ public final class ModernContentBridge {
     private final LegacyBlockShapes blockShapes;
     private final LegacyItemUse itemUse;
     private final LegacyCrafting crafting;
+    private final LegacyOreDictionary oreDictionary;
     private final Set<String> legacyBlockKeys;
     private final HostBlockMapping hostBlocks;
     private final HostRepresentations hostRepresentations = new HostRepresentations(this);
@@ -63,6 +64,7 @@ public final class ModernContentBridge {
             blockRendering = new LegacyBlockRendering(services, declarations);
             itemUse = new LegacyItemUse(services);
             crafting = new LegacyCrafting(services);
+            oreDictionary = new LegacyOreDictionary(services);
             var registry = services.loader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
             legacyBlockKeys = Set.copyOf((Set<String>)registry.getClass().getMethod("func_148742_b").invoke(registry));
             hostBlocks = new HostBlockMapping(legacyBlockKeys);
@@ -88,6 +90,9 @@ public final class ModernContentBridge {
         var smeltingRecipes = crafting.smelting();
         LogUtils.getLogger().info("MFCL content: exporting {} smelting recipes", smeltingRecipes.size());
         for(var recipe:smeltingRecipes)pack.smeltingRecipe(LegacyRegistryIds.recipeNamespace(recipe.output()),recipe.hash());
+        var variantsByItem=new HashMap<String,Set<Integer>>();
+        for(var item:declarations.items())variantsByItem.put(item.key(),item.variants().stream().map(LegacyContent.Variant::metadata).collect(java.util.stream.Collectors.toSet()));
+        oreDictionary.tag(services,variantsByItem);
         for(var tag:services.hostItemTags().entrySet())pack.itemTag(tag.getKey(),tag.getValue().stream().filter(key->declarations.items().stream().anyMatch(item->item.key().equals(key))).map(key->id(key).toString()).toList());
         creative = new CreativeTabBridge(this);
     }
@@ -891,6 +896,8 @@ public final class ModernContentBridge {
         @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(METADATA); }
         @Override public InteractionResult use(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
             if (level.isClientSide) return InteractionResult.SUCCESS;
+            // Fluid containers (buckets, modded tanks/cells) exchange through the native fluid capability of original tanks.
+            if (useFluidContainer(level,pos,player,hand,hit.getDirection())) return InteractionResult.CONSUME;
             try {
                 var pendingInventory = new ArrayList<ItemStack>();
                 var pendingMessages = new ArrayList<String>();
@@ -935,6 +942,14 @@ public final class ModernContentBridge {
                 LogUtils.getLogger().error("MFCL original block interaction failed for {} at {}",entry.key(),pos,failure);
                 player.displayClientMessage(Component.literal("此设备的部分交互尚未支持。"),true); return InteractionResult.FAIL;
             }
+        }
+        private boolean useFluidContainer(Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, Direction side) {
+            var held = player.getItemInHand(hand);
+            if (held.isEmpty() || !held.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()) return false;
+            if (!(level.getBlockEntity(pos) instanceof LegacyBlockEntity tile)
+                    || !tile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.FLUID_HANDLER,side).isPresent()) return false;
+            try { return net.minecraftforge.fluids.FluidUtil.interactWithFluidHandler(player,hand,level,pos,side); }
+            catch (Exception failure) { LogUtils.getLogger().error("MFCL fluid container exchange failed for {} at {}",entry.key(),pos,failure); return false; }
         }
         @Override public boolean triggerEvent(BlockState state, Level level, BlockPos pos, int event, int data) {
             try { return services.logic().event(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),event,data); }
