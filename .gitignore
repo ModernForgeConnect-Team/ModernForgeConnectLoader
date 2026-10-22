@@ -26,3 +26,4 @@ logs
 forge*changelog.txt
 /src/generated/
 /CompatMods/
+/src/test/

@@ -96,7 +96,9 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 drop.add(new JumpInsnNode(Opcodes.IFNONNULL,original)); drop.add(new InsnNode(Opcodes.RETURN));
                 drop.add(original); drop.add(new FrameNode(Opcodes.F_SAME,0,null,0,null)); m.instructions.insert(drop); continue;
             }
-            if (m.name.equals("func_145747_a") && (m.access & Opcodes.ACC_ABSTRACT) == 0) {
+            // addChatComponentMessage (XU quarry/pump/soul feedback...) bypasses addChatMessage and writes S02 to the
+            // connection-less actor handler, which drops it; deliver it through the same chat capture instead.
+            if ((m.name.equals("func_145747_a") || name.equals("net.minecraft.entity.player.EntityPlayerMP") && m.name.equals("func_146105_b")) && (m.access & Opcodes.ACC_ABSTRACT) == 0) {
                 InsnList chat = new InsnList(); LabelNode original = new LabelNode();
                 chat.add(new VarInsnNode(Opcodes.ALOAD,0)); chat.add(new VarInsnNode(Opcodes.ALOAD,1));
                 chat.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyBlockLogic","chat","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));

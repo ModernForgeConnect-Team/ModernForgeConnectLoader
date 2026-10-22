@@ -162,6 +162,16 @@ public final class LegacyWorldGraphics {
     public static void texture(String resource) { Frame f = frame(); if (f != null) { f.check(); f.texture = resource; } }
     public static void glEnable(int cap) { state(cap, true); }
     public static void glDisable(int cap) { state(cap, false); }
+    /** Queries the captured state, never the host OpenGL context. */
+    public static boolean glIsEnabled(int cap) {
+        Frame f = frame();
+        if (f == null) throw new IllegalStateException("Legacy GL capability query outside a capture");
+        f.check();
+        if (cap == 3042) return f.state.blend();
+        if (cap == 2884) return f.state.cull();
+        if (cap >= 3168 && cap <= 3171) return f.generated[cap-3168];
+        throw new UnsupportedOperationException("Unsupported legacy GL capability query: " + cap);
+    }
     private static void state(int cap, boolean enabled) {
         if (cap == 2929) LegacyGuiGraphics.depthTest(enabled);
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
