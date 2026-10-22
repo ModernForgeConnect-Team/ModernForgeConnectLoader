@@ -62,6 +62,9 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
         root = new IsolatedLegacyClassLoader(urls, getClass().getClassLoader());
         legacy = (URLClassLoader) root.loadClass("github.com.gengyoubo.mfcl.legacy1710.boot.LegacyLaunchLoader")
                 .getConstructor(URL[].class, ClassLoader.class).newInstance(urls, root);
+        var apiSources=new LinkedHashMap<String,URL>();
+        for(var entry:LegacySharedApis.classOwners(report.archives()).entrySet())apiSources.put(entry.getKey(),Path.of(entry.getValue().file()).toUri().toURL());
+        legacy.getClass().getMethod("preferApiClasses",Map.class).invoke(legacy,apiSources);
     }
     private static List<Path> runtimeInputs(Path directory) throws Exception {
         Path manifest = directory.resolve("runtime-manifest.json");

@@ -19,13 +19,14 @@ public final class LegacyDependencyValidator {
         Map<String, String> archiveOwners = new HashMap<>();
         Map<String, String> classOwners = new HashMap<>();
         Set<String> hashes = new HashSet<>();
+        var sharedApis=LegacySharedApis.classOwners(archives);
         for (LegacyArchive archive : archives) {
             String sameArchive = archiveOwners.putIfAbsent(archive.sha256(), archive.file());
             if (!hashes.add(archive.sha256())) diagnostics.add(LegacyDiagnostic.error("DUPLICATE_ARCHIVE", "Same archive supplied more than once: "
                     + sameArchive + " and " + archive.file() + "; keep only one (mods/ or mods/1.7.10/)"));
             for (String name : archive.classes()) {
                 String owner = classOwners.putIfAbsent(name, archive.file());
-                if (owner != null) diagnostics.add(LegacyDiagnostic.error("DUPLICATE_CLASS", name + " exists in " + owner + " and " + archive.file()));
+                if (owner != null && !sharedApis.containsKey(name)) diagnostics.add(LegacyDiagnostic.error("DUPLICATE_CLASS", name + " exists in " + owner + " and " + archive.file()));
             }
             for (LegacyMod mod : archive.mods()) {
                 String owner = modOwners.putIfAbsent(mod.id(), archive.file());

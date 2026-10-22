@@ -265,6 +265,10 @@ public final class LegacyContentPack {
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
     public Map<String, List<LegacyVertexStream.Primitive>> contextGeometry() { return contextGeometry; }
+    /** Both frozen host texture IDs and live captures using original icon names enter the item replay path. */
+    public String renderTexture(String texture) {
+        return texture.contains("textures/") ? worldResource(texture) : textures.getOrDefault("blocks:"+texture,texture);
+    }
     public String worldTexture(String icon) {
         String value = textures.get("blocks:" + icon);
         if (value == null) throw new IllegalArgumentException("World renderer referenced an unregistered icon: " + icon);

@@ -12,6 +12,17 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
     private final ClassLoader root;
     private final List<String> audit = new ArrayList<String>();
     private final Map<IClassTransformer, IClassTransformer> originals = new IdentityHashMap<IClassTransformer, IClassTransformer>();
+    private final Map<String,URL> apiResources=new HashMap<String,URL>();
+    public void preferApiClasses(Map<String,URL> sources) throws java.net.MalformedURLException {
+        for(Map.Entry<String,URL> entry:sources.entrySet()) {
+            String resource=entry.getKey().replace('.','/')+".class";
+            apiResources.put(resource,new URL("jar:"+entry.getValue().toExternalForm()+"!/"+resource));
+        }
+    }
+    @Override public URL findResource(String name) {
+        URL preferred=apiResources==null?null:apiResources.get(name);
+        return preferred==null?super.findResource(name):preferred;
+    }
     public LegacyLaunchLoader(URL[] urls, ClassLoader root) throws Exception {
         super(urls); this.root = root;
         Field exceptions = LaunchClassLoader.class.getDeclaredField("classLoaderExceptions");
@@ -41,7 +52,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
             byte[] bytes = super.getClassBytes(name);
             if (bytes == null) throw new ClassNotFoundException(name);
             for (LegacyBytecodeAdapter adapter : bytecodeAdapters) if (adapter.targets(name)) bytes = adapter.adapt(name, bytes);
-            URL resource = super.findResource(name.replace('.', '/') + ".class");
+            URL resource = findResource(name.replace('.', '/') + ".class");
             if (resource == null) throw new ClassNotFoundException(name);
             java.net.URLConnection connection = resource.openConnection();
             java.security.CodeSource source = null;

@@ -26,8 +26,9 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
         String key = LegacyContent.geometryKey(itemKey,ModernContentBridge.metadata(stack),tag == null ? "" : tag.getString("snbt"));
         String type = contextType(context);
         var primitives = bridge.pack().contextGeometry().get(type + "|" + key);
-        if (primitives == null && tag != null && bridge.declarations().customItems().contains(itemKey)) {
-            // NBT no catalog variant had (a wand holding a focus...): the frozen no-NBT model may not exist or differ.
+        if (primitives == null && bridge.declarations().customItems().contains(itemKey)) {
+            // A recipe can omit NBT that every creative variant had (e.g. XU's creative unstable ingot).
+            // Capture the requested stack, including an absent tag, instead of requiring an existing tag to draw it.
             try { primitives = bridge.declarations().captureLive(bridge.renderSnapshot(stack), type); }
             catch (Exception unmapped) { primitives = null; }
             if (primitives != null && primitives.isEmpty()) primitives = null;
@@ -74,7 +75,7 @@ public final class LegacyItemRenderer extends BlockEntityWithoutLevelRenderer {
             var primitive = primitives.get(first); int end = first+1;
             while (end < primitives.size() && primitives.get(end).texture().equals(primitive.texture()) && primitives.get(end).state().equals(primitive.state())) end++;
             var group = primitives.subList(first,end);
-            ResourceLocation texture = ResourceLocation.parse(primitive.texture());
+            ResourceLocation texture = ResourceLocation.parse(bridge.pack().renderTexture(primitive.texture()));
             boolean standalone = primitive.texture().contains("textures/");
             if (primitive.texture().equals(LegacyItemRendering.PLAYER_SKIN)) {
                 texture = mc.player == null ? net.minecraft.client.resources.DefaultPlayerSkin.getDefaultSkin() : mc.player.getSkinTextureLocation();

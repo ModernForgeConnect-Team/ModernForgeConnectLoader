@@ -48,7 +48,7 @@ public final class CreativeTabBridge {
         return icon;
     }
     void register(RegisterEvent.RegisterHelper<CreativeModeTab> registry) {
-        ResourceLocation previous = null;
+        ResourceLocation previous = CreativeModeTabs.SPAWN_EGGS.location();
         for (var tab : content.declarations().tabs()) if (!tab.builtin()) {
             ResourceLocation id = id(tab);
             if (BuiltInRegistries.CREATIVE_MODE_TAB.containsKey(id) || customTabs.containsKey(tab.key())) throw new IllegalStateException("Creative tab ID collision: " + tab.key());
@@ -57,10 +57,12 @@ public final class CreativeTabBridge {
             if (!tab.showTitle()) builder.hideTitle();
             if (!tab.scroll()) builder.noScrollBar();
             if (tab.searchBar()) builder.withSearchBar(tab.searchWidth());
-            if (previous != null) builder.withTabsAfter(previous);
+            // Forge's "tabsBefore" are predecessors of this tab, not tabs to place this one before.
+            builder.withTabsBefore(previous,CreativeModeTabs.OP_BLOCKS.location());
             var modern = builder.build(); registry.register(id, modern); customTabs.put(tab.key(), modern); previous = id;
         }
         if (!fallback.isEmpty()) registry.register(ResourceLocation.tryParse("mfcl:unclassified_1_7_10"), CreativeModeTab.builder()
+                .withTabsBefore(previous,CreativeModeTabs.OP_BLOCKS.location())
                 .title(Component.translatable("itemGroup.mfcl.unclassified_1_7_10")).icon(() -> icon(fallback.get(0)))
                 .displayItems((parameters, output) -> { for (var tab : fallback) stacks(tab).forEach(output::accept); }).build());
     }
