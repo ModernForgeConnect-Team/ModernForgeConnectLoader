@@ -72,6 +72,7 @@ public final class HostBlockMapping {
     /** Null leaves unsupported states to the caller's explicit mapping error. */
     public BlockState write(HostWorldAccess.Block old) {
         String key=old.legacyKey();int meta=old.metadata();
+        if(key.equals("minecraft:fence")&&meta==0)return Blocks.OAK_FENCE.defaultBlockState();
         if(key.equals("minecraft:mob_spawner")&&meta==0)return Blocks.SPAWNER.defaultBlockState();
         if(key.equals("minecraft:water")||key.equals("minecraft:flowing_water")||key.equals("minecraft:lava")||key.equals("minecraft:flowing_lava")) {
             if(meta<0||meta>15)return null;

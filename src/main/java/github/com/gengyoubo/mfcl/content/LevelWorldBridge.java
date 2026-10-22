@@ -97,6 +97,25 @@ public final class LevelWorldBridge {
                 if (!level.getServer().isSameThread()) throw new IllegalStateException("Legacy server world requires the server thread");
             }
             @Override public String dimensionKey() { return level.dimension().location().toString(); }
+            @Override public Flight flight(java.util.UUID id){
+                check();var player=level.getServer().getPlayerList().getPlayer(id);
+                if(player==null||player.serverLevel()!=level)return null;
+                return new Flight(player.getAbilities().mayfly,player.getAbilities().flying);
+            }
+            @Override public void flight(java.util.UUID id,Flight flight){
+                check();var player=level.getServer().getPlayerList().getPlayer(id);
+                if(player==null||player.serverLevel()!=level)return;
+                content.afterCommit(level,()->{
+                    if(player.serverLevel()!=level)return;
+                    var abilities=player.getAbilities();boolean allowed=flight.allowed()||abilities.instabuild||player.isSpectator();
+                    boolean flying=allowed&&flight.flying();
+                    if(abilities.mayfly==allowed&&abilities.flying==flying)return;
+                    abilities.mayfly=allowed;abilities.flying=flying;player.onUpdateAbilities();
+                });
+            }
+            @Override public void broadcastPacket(github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message packet){
+                check();content.afterCommit(level,()->level.getServer().getPlayerList().getPlayers().forEach(player->ScanSyncChannel.sendToPlayer(player,packet)));
+            }
             @Override public int legacyDimensionId() { return dimension; }
             @Override public boolean clientSide() { return false; }
             @Override public int difficulty() { check(); return level.getDifficulty().getId(); }

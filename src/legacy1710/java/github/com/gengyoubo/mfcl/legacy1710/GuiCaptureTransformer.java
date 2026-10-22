@@ -24,6 +24,10 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("cpw.mods.fml.common.eventhandler.EventBus"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if(name.equals("net.minecraft.entity.player.EntityPlayerMP")&&m.name.equals("func_71016_p")&&m.desc.equals("()V")) {
+                InsnList sync=new InsnList();sync.add(new VarInsnNode(Opcodes.ALOAD,0));
+                sync.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyPlayerFlight","send","(Ljava/lang/Object;)V",false));m.instructions.insert(sync);
+            }
             if(name.equals("net.minecraft.tileentity.MobSpawnerBaseLogic")&&m.name.equals("func_98272_a")&&m.desc.equals("(Ljava/lang/String;)V")) {
                 for(AbstractInsnNode instruction:m.instructions.toArray())if(instruction.getOpcode()==Opcodes.RETURN){
                     InsnList update=new InsnList();update.add(new VarInsnNode(Opcodes.ALOAD,0));update.add(new VarInsnNode(Opcodes.ALOAD,1));

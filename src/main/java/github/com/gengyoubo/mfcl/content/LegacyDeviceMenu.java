@@ -26,9 +26,10 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private final List<LegacyPackets.Message> initialPackets=new ArrayList<>();
     public Object originalPlayer(){return original==null?null:original.player();}
     public LegacyDeviceContainers.Descriptor descriptor(){return descriptor;}
+    private BlockPos origin(){return descriptor.item()?inventory.player.blockPosition():new BlockPos(descriptor.x(),descriptor.y(),descriptor.z());}
     public static void open(ServerPlayer player,ModernContentBridge content,LegacyDeviceContainers.Open request) {
         NetworkHooks.openScreen(player,new SimpleMenuProvider((id,inventory,ignored)->new LegacyDeviceMenu(id,inventory,content,request),Component.empty()),buffer->{
-            var d=request.descriptor();buffer.writeUtf(d.mod(),128);buffer.writeVarInt(d.id());buffer.writeBlockPos(new BlockPos(d.x(),d.y(),d.z()));buffer.writeBoolean(d.inventory());
+            var d=request.descriptor();buffer.writeUtf(d.mod(),128);buffer.writeVarInt(d.id());buffer.writeBlockPos(new BlockPos(d.x(),d.y(),d.z()));buffer.writeBoolean(d.inventory());buffer.writeBoolean(d.item());
             try {
                 var slots=LegacyDeviceContainers.slots(request.container());buffer.writeVarInt(slots.size());
                 for(Object slot:slots){buffer.writeInt(slot.getClass().getField("field_75223_e").getInt(slot));buffer.writeInt(slot.getClass().getField("field_75221_f").getInt(slot));}
@@ -44,10 +45,10 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     public static LegacyDeviceMenu fromNetwork(int id,Inventory inventory,FriendlyByteBuf buffer) {
         com.mojang.logging.LogUtils.getLogger().debug("MFCL received native device menu {}",id);
         try {
-        String mod=buffer.readUtf(128);int gui=buffer.readVarInt();var pos=buffer.readBlockPos();boolean chest=buffer.readBoolean();int count=buffer.readVarInt();
+        String mod=buffer.readUtf(128);int gui=buffer.readVarInt();var pos=buffer.readBlockPos();boolean chest=buffer.readBoolean(),item=buffer.readBoolean();int count=buffer.readVarInt();
         if(count<0||count>512)throw new IllegalArgumentException("Invalid legacy menu size "+count);
         var positions=new ArrayList<int[]>();for(int index=0;index<count;index++)positions.add(new int[]{buffer.readInt(),buffer.readInt()});
-        return new LegacyDeviceMenu(id,inventory,ModernContentBridge.active(),null,new LegacyDeviceContainers.Descriptor(mod,gui,pos.getX(),pos.getY(),pos.getZ(),chest),positions);
+        return new LegacyDeviceMenu(id,inventory,ModernContentBridge.active(),null,new LegacyDeviceContainers.Descriptor(mod,gui,pos.getX(),pos.getY(),pos.getZ(),chest,item),positions);
         }catch(RuntimeException failure){com.mojang.logging.LogUtils.getLogger().error("Cannot decode original device menu",failure);throw failure;}
     }
     private LegacyDeviceMenu(int id,Inventory inventory,ModernContentBridge content,LegacyDeviceContainers.Open request) {
@@ -114,7 +115,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     }
     @Override public boolean stillValid(Player player) {
         if(original==null)return true;
-        if(player.level()!=inventory.player.level()||player.distanceToSqr(descriptor.x()+.5,descriptor.y()+.5,descriptor.z()+.5)>64)return false;
+        if(player.level()!=inventory.player.level()||(!descriptor.item()&&player.distanceToSqr(descriptor.x()+.5,descriptor.y()+.5,descriptor.z()+.5)>64))return false;
         try {positionActor(player);return playerContext(()->(boolean)original.container().getClass().getMethod("func_75145_c",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player()));}
         catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL original container validity check failed",failure);return false;}
     }
@@ -128,7 +129,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             var before=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<40;index++)before.add(content.toLegacy(inventory.getItem(index)));
             services.playerInventory().write(original.player(),before);services.playerInventory().select(original.player(),inventory.selected);
             oldInventory().getClass().getMethod("func_70437_b",stackType).invoke(oldInventory(),old(getCarried()));
-            var result=playerContext(()->content.logicTransaction(server.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
+            var result=playerContext(()->content.logicTransaction(server.serverLevel(),origin(),()->originalAction(()->{
                 original.container().getClass().getMethod("func_75144_a",int.class,int.class,int.class,playerType).invoke(original.container(),slot,button,mode,original.player());
                 var read=services.playerInventory().read(original.player());var next=new ArrayList<ItemStack>();
                 for(int index=0;index<read.size();index++)next.add(index<before.size()&&ModernContentBridge.sameLegacy(before.get(index),read.get(index))?null:content.gameplayStack(read.get(index)));
@@ -154,7 +155,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
                     services.playerState().initialize(original.player());
                     byte[] prior=services.playerData().read(original.player());
                     try {
-                        boolean handled=content.logicTransaction(server.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->(boolean)original.container().getClass()
+                        boolean handled=content.logicTransaction(server.serverLevel(),origin(),()->originalAction(()->(boolean)original.container().getClass()
                                 .getMethod("func_75140_a",services.loader().loadClass("net.minecraft.entity.player.EntityPlayer"),int.class).invoke(original.container(),original.player(),id)),true);
                         return new ButtonResult(handled,services.playerData().read(original.player()),outgoing.messages());
                     }catch(Exception failure){services.playerData().write(original.player(),prior);throw failure;}
@@ -182,7 +183,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
                     services.playerState().initialize(original.player());
                     byte[] prior=services.playerData().read(original.player());
                     try {
-                        byte[] saved=content.logicTransaction(player.serverLevel(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
+                        byte[] saved=content.logicTransaction(player.serverLevel(),origin(),()->originalAction(()->{
                             LegacyPackets.receiveServer(services,packet,original.player(),descriptor);
                             return services.playerData().read(original.player());
                         }),true);
@@ -198,7 +199,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     @Override public void removed(Player player) {
         if(original!=null&&!failed)try {
             importInventory();
-            var returned=playerContext(()->content.logicTransaction(player.level(),new BlockPos(descriptor.x(),descriptor.y(),descriptor.z()),()->originalAction(()->{
+            var returned=playerContext(()->content.logicTransaction(player.level(),origin(),()->originalAction(()->{
                 oldInventory().getClass().getMethod("func_70437_b",content.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(oldInventory(),new Object[]{null});
                 original.container().getClass().getMethod("func_75134_a",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player());
                 return content.services().playerInventory().read(original.player()).stream().map(content::gameplayStack).toList();

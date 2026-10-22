@@ -4,7 +4,9 @@ import java.util.*;
 
 /** Captures original FML/vanilla container requests without entering the old network stack. */
 public final class LegacyDeviceContainers {
-    public record Descriptor(String mod,int id,int x,int y,int z,boolean inventory) {}
+    public record Descriptor(String mod,int id,int x,int y,int z,boolean inventory,boolean item) {
+        public Descriptor(String mod,int id,int x,int y,int z,boolean inventory){this(mod,id,x,y,z,inventory,false);}
+    }
     public record Open(Descriptor descriptor,Object container,Object player) {}
     private static final ThreadLocal<Capture> CURRENT=new ThreadLocal<>();
     public interface GuiProvider {
@@ -39,15 +41,21 @@ public final class LegacyDeviceContainers {
     }
     public static boolean drop(Object entity) throws Exception {var sink=DROPS.get();if(sink==null)return false;sink.accept(entity);return true;}
     public static final class Capture implements AutoCloseable {
-        final LegacyServices services;Open opened;
-        private Capture(LegacyServices services){this.services=services;}
+        final LegacyServices services;final boolean item;Open opened;
+        private Capture(LegacyServices services,boolean item){this.services=services;this.item=item;}
         public Open opened(){return opened;}
         @Override public void close(){CURRENT.remove();}
     }
     private LegacyDeviceContainers() {}
     public static Capture capture(LegacyServices services) {
+        return capture(services,false);
+    }
+    public static Capture captureItem(LegacyServices services) {
+        return capture(services,true);
+    }
+    private static Capture capture(LegacyServices services,boolean item) {
         if(CURRENT.get()!=null)throw new IllegalStateException("Nested device activation");
-        var capture=new Capture(services);CURRENT.set(capture);return capture;
+        var capture=new Capture(services,item);CURRENT.set(capture);return capture;
     }
     private static Object registry(ClassLoader loader) throws Exception {
         return loader.loadClass("cpw.mods.fml.common.network.NetworkRegistry").getField("INSTANCE").get(null);
@@ -62,7 +70,7 @@ public final class LegacyDeviceContainers {
         var ownerType=loader.loadClass("cpw.mods.fml.common.ModContainer");
         Object container=registry(loader).getClass().getMethod("getRemoteGuiContainer",ownerType,loader.loadClass("net.minecraft.entity.player.EntityPlayerMP"),int.class,loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class)
                 .invoke(registry(loader),owner,player,id,world,x,y,z);
-        if(container!=null)capture.opened=new Open(new Descriptor((String)ownerType.getMethod("getModId").invoke(owner),id,x,y,z,false),container,player);
+        if(container!=null)capture.opened=new Open(new Descriptor((String)ownerType.getMethod("getModId").invoke(owner),id,x,y,z,false,capture.item),container,player);
         return true;
     }
     public static boolean openInventory(Object player,Object inventory) throws Exception {

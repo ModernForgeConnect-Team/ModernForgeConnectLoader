@@ -85,6 +85,7 @@ public final class ExtraUtilitiesGeneratorProbe {
             assertEnergy(loader,clientContainer,energy+123);
             ExtraUtilitiesEnergyProbe.verify(services);
             ExtraUtilitiesPortalProbe.verify(services);
+            ExtraUtilitiesItemProbe.verify(services,serverWorld);
             System.out.println("MFCL_XU_GENERATOR_PASS: client ticks, sound lifecycle, fuel generation, captured initial GUI data, live codec delivery, stale-window rejection, RF energy bridge");
         }
     }

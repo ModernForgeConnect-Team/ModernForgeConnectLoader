@@ -121,6 +121,7 @@ public final class LegacyTiles {
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
         entity.getField("field_70170_p").set(actor, world);
         LegacyPlayerFood.initialize(actor);
+        LegacyPlayerFlight.refresh(actor);
         // Entity.dimension: old code compares it with dimension ids (TC4 eldritch portals pick the travel direction by it).
         entity.getField("field_71093_bK").setInt(actor, loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(worldType.getField("field_73011_w").get(world)));
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()+(client?1.62:0)); entity.getField("field_70161_v").setDouble(actor, placer.z());
@@ -131,6 +132,9 @@ public final class LegacyTiles {
         var bbox = entity.getDeclaredField("field_70121_D"); bbox.setAccessible(true); bbox.set(actor, box);
         entity.getField("field_70130_N").setFloat(actor, 0.6f); entity.getField("field_70131_O").setFloat(actor, 1.8f);
         var potions = loader.loadClass("net.minecraft.entity.EntityLivingBase").getDeclaredField("field_70713_bf"); potions.setAccessible(true); potions.set(actor,new HashMap<>());
+        Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class,player).newInstance(inventory,false,actor);
+        player.getField("field_71069_bz").set(actor,container);
+        player.getField("field_71070_bA").set(actor,container);
         return actor;
     }
     public List<LegacyClientData.Stack> inventory(Object tile) throws Exception {

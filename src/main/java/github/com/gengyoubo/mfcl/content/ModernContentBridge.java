@@ -605,6 +605,7 @@ public final class ModernContentBridge {
                     result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
                     result.feedback().forEach(message->serverPlayer.displayClientMessage(Component.literal(message),false));
                     serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
+                    if(result.device()!=null)LegacyDeviceMenu.open(serverPlayer,ModernContentBridge.this,result.device());
                 }
                 ItemStack updated=player.getItemInHand(hand);
                 if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(updated);
@@ -1006,6 +1007,11 @@ public final class ModernContentBridge {
                     if (ItemStack.isSameItemSameTags(stack,updated)) stack.setCount(updated.getCount());
                     else { stack.setCount(0); player.setItemInHand(context.getHand(),updated); }
                 }
+            }
+            if(player instanceof net.minecraft.server.level.ServerPlayer server){
+                result.messages().forEach(message->ScanSyncChannel.sendToPlayer(server,message));
+                result.feedback().forEach(message->server.displayClientMessage(Component.literal(message),false));
+                if(result.device()!=null)LegacyDeviceMenu.open(server,ModernContentBridge.this,result.device());
             }
             return result.used() ? InteractionResult.CONSUME : InteractionResult.PASS;
         } catch (Exception failure) {

@@ -21,6 +21,7 @@ public final class LegacyPlayerState {
     private synchronized List<Hooks> snapshot() { return List.copyOf(hooks.values()); }
     public AutoCloseable enter(Object world) throws Exception {
         var scopes = new ArrayList<AutoCloseable>();
+        scopes.add(LegacyPackets.world(world));
         try { for (var hook : snapshot()) scopes.add(Objects.requireNonNull(hook.enter(world))); }
         catch (Exception | Error failure) { close(scopes, failure); throw failure; }
         return () -> close(scopes, null);

@@ -3,7 +3,8 @@ package github.com.gengyoubo.mfcl.bridge;
 /** Original ItemBlock and special Item placement callbacks, including their NBT and stack consumption. */
 public final class LegacyItemPlacement {
     /** {@code inventory} is the old main inventory afterwards; the selected slot is reported through {@code stack}. */
-    public record Result(boolean used, LegacyClientData.Stack stack, java.util.List<LegacyClientData.Stack> inventory) {}
+    public record Result(boolean used, LegacyClientData.Stack stack, java.util.List<LegacyClientData.Stack> inventory,
+                         LegacyDeviceContainers.Open device,java.util.List<LegacyPackets.Message> messages,java.util.List<String> feedback) {}
     private final LegacyServices services;
     public LegacyItemPlacement(LegacyServices services) { this.services = services; }
     public Result use(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, java.util.List<LegacyClientData.Stack> contents, int selected,
@@ -39,9 +40,11 @@ public final class LegacyItemPlacement {
             }
             Class<?>[] signature = {stackType,playerType,worldType,int.class,int.class,int.class,int.class,float.class,float.class,float.class};
             Object[] arguments = {stack,player,world,x,y,z,side,hitX,hitY,hitZ};
-            boolean used = (boolean)itemType.getMethod(first ? "onItemUseFirst" : "func_77648_a",signature).invoke(item,arguments);
-            var inventory = services.playerInventory().read(player);
-            return new Result(used, inventory.get(selected), inventory);
+            try(var menus=LegacyDeviceContainers.captureItem(services);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture()) {
+                boolean used = (boolean)itemType.getMethod(first ? "onItemUseFirst" : "func_77648_a",signature).invoke(item,arguments);
+                var inventory = services.playerInventory().read(player);
+                return new Result(used||menus.opened()!=null, inventory.get(selected), inventory,menus.opened(),packets.messages(),chat.messages());
+            }
             }
         });
     }

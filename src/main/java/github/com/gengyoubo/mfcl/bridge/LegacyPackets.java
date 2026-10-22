@@ -12,6 +12,18 @@ public final class LegacyPackets {
     }
     private static final Map<Object,Channel> CHANNELS = Collections.synchronizedMap(new IdentityHashMap<>());
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
+    private static final ThreadLocal<Object> WORLD=new ThreadLocal<>();
+    static AutoCloseable world(Object world){
+        Object before=WORLD.get();WORLD.set(world);
+        return ()->{if(before==null)WORLD.remove();else WORLD.set(before);};
+    }
+    /** Broadcasts use the current authoritative callback's world so host transaction rollback can discard them. */
+    public static boolean broadcastClientPayload(String channel,byte[] payload){
+        var host=LegacyWorlds.hostOrNull(WORLD.get());
+        if(host==null||host.clientSide())return false;
+        if(payload.length>1024*1024)throw new IllegalArgumentException("Old broadcast packet exceeds host limit");
+        host.broadcastPacket(new Message(channel,0,payload.clone()));return true;
+    }
     public interface ServerPolicy { boolean prepare(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception; }
     private static final Map<ClassLoader,List<ServerPolicy>> SERVER_POLICIES=new java.util.WeakHashMap<>();
     private static final ThreadLocal<Object> SERVER_PLAYER=new ThreadLocal<>();

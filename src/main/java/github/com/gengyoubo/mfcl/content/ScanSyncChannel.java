@@ -17,7 +17,7 @@ public final class ScanSyncChannel {
     // SimpleChannel selects an encoder by Java class, not by the send direction.
     // Keep this distinct from the clientbound Message used by login/research synchronization.
     public record ServerboundMessage(github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message packet) {}
-    private static final String VERSION = "5";
+    private static final String VERSION = "6";
     private static SimpleChannel channel;
     private ScanSyncChannel() { }
     @SuppressWarnings("removal")

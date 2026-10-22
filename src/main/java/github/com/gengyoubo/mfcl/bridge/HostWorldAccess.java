@@ -10,6 +10,9 @@ public interface HostWorldAccess {
     record Projectile(double x,double y,double z,double motionX,double motionY,double motionZ,double damage,boolean burning,java.util.UUID owner) {}
     record Abilities(boolean creative,boolean invulnerable) {}
     record Food(int level,float saturation) {}
+    record Flight(boolean allowed,boolean flying) {}
+    default Flight flight(java.util.UUID player){return null;}
+    default void flight(java.util.UUID player,Flight flight){throw new UnsupportedOperationException("Host flight mutation is not available");}
     /** Null means this binding has no authoritative player with that identity. */
     default Food food(java.util.UUID player) { return null; }
     default void setFood(java.util.UUID player,Food food) { throw new UnsupportedOperationException("Host player food mutation is not available"); }
@@ -51,6 +54,8 @@ public interface HostWorldAccess {
     default void explosionEffect(double x,double y,double z) { }
     /** An original adapter's encoded client packet, delivered over the authenticated host connection. */
     default void sendPacket(java.util.UUID recipient,LegacyPackets.Message packet) { }
+    /** Send through the actual server player list, including clients in other dimensions. */
+    default void broadcastPacket(LegacyPackets.Message packet){throw new UnsupportedOperationException("Host packet broadcast is not available");}
     default void spawnProjectile(Projectile projectile) { }
     /** An old entity with no host translation; the host keeps it alive and runs its original onUpdate. */
     default boolean spawnLegacyEntity(Object entity) { return false; }
