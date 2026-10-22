@@ -42,6 +42,8 @@ public final class HostBlockMapping {
     }
     public HostWorldAccess.Block read(BlockState state) {
         var mapped=blocks.get(state.getBlock());
+        // Modded bookshelves read as the old bookshelf (TC4's wand trigger, enchanting power), so old logic treats them alike.
+        if(mapped==null&&state.is(net.minecraftforge.common.Tags.Blocks.BOOKSHELVES))mapped=blocks.get(Blocks.BOOKSHELF);
         if(mapped==null){github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("block "+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()),"host block has no original representation");throw new UnmappedLegacyBlockException("No old Block representation: "+state);}
         String key=mapped.legacyKey();int meta=mapped.metadata();
         // Connection, shape and waterlogged properties do not change the original block/item variant.

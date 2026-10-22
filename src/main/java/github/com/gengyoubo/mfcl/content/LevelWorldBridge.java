@@ -18,6 +18,14 @@ public final class LevelWorldBridge {
      */
     private final Map<ServerLevel, Map<BlockPos, Long>> hostTicks = new WeakHashMap<>();
     private LevelWorldBridge(ModernContentBridge content) { this.content = content; this.dimensions = new LegacyDimensionHost(content); }
+    /** Original tiles of a loaded host chunk, for old chunkTileEntityMap scans; unloaded chunks report none. */
+    public static List<int[]> legacyTiles(net.minecraft.world.level.Level level, int chunkX, int chunkZ) {
+        if (!level.hasChunk(chunkX, chunkZ)) return List.of();
+        var result = new ArrayList<int[]>();
+        for (var entry : level.getChunk(chunkX, chunkZ).getBlockEntities().entrySet())
+            if (entry.getValue() instanceof LegacyBlockEntity tile && !tile.isRemoved()) { var pos = entry.getKey(); result.add(new int[]{pos.getX(), pos.getY(), pos.getZ()}); }
+        return result;
+    }
     public static void install(ModernContentBridge content) {
         var bridge = new LevelWorldBridge(content);
         MinecraftForge.EVENT_BUS.addListener(bridge::load); MinecraftForge.EVENT_BUS.addListener(bridge::unload);
@@ -93,6 +101,7 @@ public final class LevelWorldBridge {
     private HostWorldAccess access(ServerLevel level, int dimension) {
         var energyTiles=new HostEnergyTiles(content,level);
         var spawnerTiles=new HostSpawnerTiles(content,level);
+        var inventoryTiles=new HostInventoryTiles(content,level);
         return new HostWorldAccess() {
             private void check() {
                 if (!level.getServer().isSameThread()) throw new IllegalStateException("Legacy server world requires the server thread");
@@ -307,13 +316,18 @@ public final class LevelWorldBridge {
                 return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
             }
             @Override public boolean originalBlockRayTrace() { check(); return true; }
+            @Override public java.util.List<int[]> legacyTiles(int chunkX, int chunkZ) {
+                check(); return LevelWorldBridge.legacyTiles(level, chunkX, chunkZ);
+            }
             @Override public Object tileEntity(int x, int y, int z) {
                 check();var pos=new BlockPos(x,y,z);if(!level.hasChunkAt(pos))return null;
                 content.beforeMutation(level,pos); var tile = level.getBlockEntity(pos);
                 if (tile == null) return null;
                 if (tile instanceof LegacyBlockEntity legacy) return legacy.legacy();
                 if(tile instanceof net.minecraft.world.level.block.entity.SpawnerBlockEntity spawner)return spawnerTiles.find(spawner);
-                return energyTiles.find(new BlockPos(x,y,z));
+                // A native machine with FE keeps its RF view; plain storage (chests, barrels...) becomes an old IInventory.
+                var energy=energyTiles.find(pos);
+                return energy!=null?energy:inventoryTiles.find(pos);
             }
             @Override public void setTileEntity(int x, int y, int z, Object old) {
                 check(); var tile = level.getBlockEntity(new BlockPos(x, y, z));

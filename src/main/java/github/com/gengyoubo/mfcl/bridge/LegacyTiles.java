@@ -12,8 +12,10 @@ public final class LegacyTiles {
     private final ClassLoader loader;
     private final Class<?> blockType, tileType, worldType, nbtType;
     private final Object registry;
+    private static final Map<ClassLoader,LegacyTiles> RUNTIMES = Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<Object,Map<UUID,Object>> fakePlayers = Collections.synchronizedMap(new WeakHashMap<>());
     public LegacyTiles(LegacyServices services) throws Exception {
-        this.services = services; loader = services.loader();
+        this.services = services; loader = services.loader(); RUNTIMES.put(loader, this);
         blockType = loader.loadClass("net.minecraft.block.Block"); tileType = loader.loadClass("net.minecraft.tileentity.TileEntity");
         worldType = loader.loadClass("net.minecraft.world.World"); nbtType = loader.loadClass("net.minecraft.nbt.NBTTagCompound");
         registry = blockType.getField("field_149771_c").get(null);
@@ -79,10 +81,30 @@ public final class LegacyTiles {
             return null;
         });
     }
+    /**
+     * FakePlayerFactory.get(WorldServer, GameProfile): Forge's FakePlayer constructor needs the absent old server, so the
+     * fake player is a server actor of the exact FakePlayer type, one per world and profile like the original cache.
+     */
+    public static Object fakePlayer(Object world, Object profile) throws Exception {
+        var tiles = RUNTIMES.get(world.getClass().getClassLoader());
+        if (tiles == null) throw new IllegalStateException("No legacy runtime owns this world");
+        UUID id = (UUID) profile.getClass().getMethod("getId").invoke(profile); String name = (String) profile.getClass().getMethod("getName").invoke(profile);
+        var players = tiles.fakePlayers.computeIfAbsent(world, key -> Collections.synchronizedMap(new HashMap<>()));
+        Object player = players.get(id);
+        if (player == null) {
+            // Like Forge's FakePlayer, it stands at the origin; callers that need a position set it themselves.
+            player = tiles.actor(world, new Placer(id, name, 0, 0, 0, 0, 0), null, "net.minecraftforge.common.util.FakePlayer");
+            players.put(id, player);
+        }
+        return player;
+    }
     public Object actor(Object world, Placer placer, LegacyClientData.Stack stack) throws Exception {
+        return actor(world, placer, stack, "net.minecraft.entity.player.EntityPlayerMP");
+    }
+    private Object actor(Object world, Placer placer, LegacyClientData.Stack stack, String serverType) throws Exception {
         if (placer == null) return null;
         boolean client = worldType.getField("field_72995_K").getBoolean(world);
-        Class<?> actorType = loader.loadClass(client ? "net.minecraft.client.entity.EntityClientPlayerMP" : "net.minecraft.entity.player.EntityPlayerMP");
+        Class<?> actorType = loader.loadClass(client ? "net.minecraft.client.entity.EntityClientPlayerMP" : serverType);
         Field field = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); field.setAccessible(true); Object unsafe = field.get(null);
         Object actor = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, actorType);
         if(client) {
@@ -93,7 +115,7 @@ public final class LegacyTiles {
             Class<?> manager=loader.loadClass("net.minecraft.server.management.ItemInWorldManager");
             Object access=manager.getConstructor(worldType).newInstance(world);manager.getField("field_73090_b").set(access,actor);
             var interaction=actorType.getField("field_71134_c");interaction.setAccessible(true);interaction.set(actor,access);
-            var statistics=actorType.getDeclaredField("field_147103_bO");statistics.setAccessible(true);
+            var statistics=loader.loadClass("net.minecraft.entity.player.EntityPlayerMP").getDeclaredField("field_147103_bO");statistics.setAccessible(true);
             statistics.set(actor,LegacyPlayerStatistics.create(loader,services.gameDirectory().resolve("mfcl/player-stats/"+placer.id()+".json").toFile()));
             // Effect/inventory updates sent to the actor's connection are dropped (it has none); the host syncs the real player.
             Class<?> handler=loader.loadClass("net.minecraft.network.NetHandlerPlayServer");
@@ -137,7 +159,8 @@ public final class LegacyTiles {
         Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class,player).newInstance(inventory,false,actor);
         player.getField("field_71069_bz").set(actor,container);
         player.getField("field_71070_bA").set(actor,container);
-        LegacyEntityHooks.mirrored(actor);
+        // A fake player has no host entity to mirror; host-backed hooks must not look one up.
+        if (!actorType.getName().equals("net.minecraftforge.common.util.FakePlayer")) LegacyEntityHooks.mirrored(actor);
         return actor;
     }
     public List<LegacyClientData.Stack> inventory(Object tile) throws Exception {

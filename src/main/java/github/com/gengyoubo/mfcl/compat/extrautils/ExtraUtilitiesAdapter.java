@@ -10,7 +10,8 @@ public final class ExtraUtilitiesAdapter implements LegacyModAdapter {
     public void beforeBoot(ClassLoader loader) throws Exception {
         LegacyModAdapter.registerBytecodeAdapters(loader,"github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPortalAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPipeAdapter",
-                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesTextAdapter");
+                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesTextAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesNetworkAdapter");
     }
     public Map<String,Object> initialize(LegacyServices services) throws Exception {
         String config="com.rwtema.extrautils.ExtraUtils";
@@ -26,6 +27,7 @@ public final class ExtraUtilitiesAdapter implements LegacyModAdapter {
         try {
             Thread.currentThread().setContextClassLoader(ExtraUtilitiesAdapter.class.getClassLoader());
             ExtraUtilitiesFlight.install(services);
+            ExtraUtilitiesTradingPost.install(services);
         }finally{Thread.currentThread().setContextClassLoader(previous);}
         return Map.of("status","READY","dimensions",dimensions);
     }

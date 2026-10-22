@@ -3,14 +3,15 @@ package github.com.gengyoubo.mfcl.legacy1710.compat.extrautils;
 import github.com.gengyoubo.mfcl.legacy1710.boot.LegacyBytecodeAdapter;
 import org.objectweb.asm.*;
 
-/** Redirect only XU's portal and cached particle renderer; no running 1.7 server is created. */
+/** Redirect XU's portal, cached particle renderer and server-bound player code (wand inventory sync...); no running 1.7 server is created. */
 public final class ExtraUtilitiesPortalAdapter implements LegacyBytecodeAdapter {
     private static final String TRAVEL = "github/com/gengyoubo/mfcl/bridge/LegacyTravel";
     public boolean targets(String name) {
         return name.equals("com.rwtema.extrautils.block.BlockPortal") || name.equals("com.rwtema.extrautils.particle.ParticleHelperClient")
                 || name.equals("com.rwtema.extrautils.worldgen.endoftime.TeleporterEndOfTime")
                 || name.equals("com.rwtema.extrautils.item.ItemGlove")||name.equals("com.rwtema.extrautils.item.ItemSoul")
-                || name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")||name.equals("com.rwtema.extrautils.item.ItemPrecisionShears");
+                || name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")||name.equals("com.rwtema.extrautils.item.ItemPrecisionShears")
+                || name.equals("com.rwtema.extrautils.item.ItemBuildersWand");
     }
     public byte[] adapt(String name, byte[] bytes) {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);

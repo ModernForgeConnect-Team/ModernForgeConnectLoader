@@ -60,6 +60,9 @@ public final class ClientWorldBridge {
                     @Override public void explosionEffect(double x,double y,double z) {
                         next.addParticle(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,x,y,z,0,0,0);
                     }
+                    @Override public void particle(String name,double x,double y,double z,double vx,double vy,double vz) {
+                        LegacyParticles.spawn(next,name,x,y,z,vx,vy,vz);
+                    }
                     @Override public void levelEvent(java.util.UUID excluded,int event,int x,int y,int z,int data) {
                         if(excluded!=null&&Minecraft.getInstance().player!=null&&excluded.equals(Minecraft.getInstance().player.getUUID()))return;
                         next.levelEvent(event,new BlockPos(x,y,z),data);
@@ -102,6 +105,9 @@ public final class ClientWorldBridge {
                     }
                     @Override public boolean originalBlockRayTrace() { return true; }
                     @Override public HostWorldAccess.Entity entity(java.util.UUID id){var player=next.getPlayerByUUID(id);return player==null?null:github.com.gengyoubo.mfcl.content.HostEntityQueries.snapshot(next,player);}
+                    @Override public java.util.List<int[]> legacyTiles(int chunkX, int chunkZ) {
+                        return github.com.gengyoubo.mfcl.content.LevelWorldBridge.legacyTiles(next, chunkX, chunkZ);
+                    }
                     @Override public Object tileEntity(int x, int y, int z) {
                         var tile = next.getBlockEntity(new BlockPos(x, y, z));
                         // A host block entity without an old counterpart is simply invisible to legacy code.

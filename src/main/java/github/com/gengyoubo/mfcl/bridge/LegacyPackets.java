@@ -100,6 +100,25 @@ public final class LegacyPackets {
         }finally{bufferType.getMethod("release").invoke(buffer);}
     }
     /** Only the authenticated player is visible to this packet's legacy entity-ID lookup. */
+    /**
+     * FML's ALLAROUNDPOINT target walks the old server's player list. There is none, so the players of the bound world in
+     * {@code TargetPoint.dimension} within its range each get the packet through the mod's own per-player send method.
+     */
+    public static boolean sendAround(Object packet,Object point,String handler,String method) throws Exception {
+        var loader=point.getClass().getClassLoader();var type=point.getClass();
+        Object world=LegacyWorlds.serverWorld(type.getField("dimension").getInt(point));
+        if(world==null)return true; // No bound world, so no players to reach.
+        double x=type.getField("x").getDouble(point),y=type.getField("y").getDouble(point),z=type.getField("z").getDouble(point),range=type.getField("range").getDouble(point);
+        var entity=loader.loadClass("net.minecraft.entity.Entity");var player=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+        var send=Arrays.stream(loader.loadClass(handler).getMethods()).filter(candidate->candidate.getName().equals(method)&&candidate.getParameterCount()==2
+                &&candidate.getParameterTypes()[1]==player&&candidate.getParameterTypes()[0].isInstance(packet)).findFirst()
+                .orElseThrow(()->new NoSuchMethodException(handler+"."+method));
+        for(Object target:List.copyOf((List<?>)loader.loadClass("net.minecraft.world.World").getField("field_73010_i").get(world))) {
+            double dx=x-entity.getField("field_70165_t").getDouble(target),dy=y-entity.getField("field_70163_u").getDouble(target),dz=z-entity.getField("field_70161_v").getDouble(target);
+            if(dx*dx+dy*dy+dz*dz<range*range)send.invoke(null,packet,target);
+        }
+        return true;
+    }
     public static Object serverEntity(Object world,int id) throws Exception {
         Object player=SERVER_PLAYER.get();if(player==null)return null;
         var entity=player.getClass().getClassLoader().loadClass("net.minecraft.entity.Entity");

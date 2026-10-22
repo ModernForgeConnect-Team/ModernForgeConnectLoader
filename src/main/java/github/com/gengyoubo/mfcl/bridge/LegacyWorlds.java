@@ -65,6 +65,8 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
         // worldAccesses: allocated worlds skip field initializers, and spawnParticle/playSound iterate this list.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
+        // capturedBlockSnapshots: ForgeHooks.onPlaceItemIntoWorld clones it after every ItemStack.tryPlaceItemIntoWorld (builder's wand...).
+        set(loader.loadClass("net.minecraft.world.World"), world, "capturedBlockSnapshots", new ArrayList<>());
         // Entity.moveEntity uses World's reusable collision list, even in a façade allocated without its constructor.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72998_d", new ArrayList<>());
         // loadedEntityList: packet handlers (Witchery entity-size sync...) scan it for an id; host entities are not listed here.
@@ -207,7 +209,7 @@ public final class LegacyWorlds implements AutoCloseable {
     /** Old Chunk queries share the world's host state, including heights outside the old 0..255 storage array. */
     public static Object chunk(Object world, int x, int z) {
         var binding = binding(world);
-        try { return LegacyChunkFacades.create(binding.loader, world, x, z); }
+        try { return LegacyChunkFacades.create(binding.loader, world, x, z, binding.host.legacyTiles(x, z)); }
         catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
     @SuppressWarnings("unchecked") private Map<Integer,Object> dimensionWorlds() {
@@ -226,6 +228,11 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     private static Binding binding(Object world) {
         Binding binding = DISPATCH.get(world); if (binding == null) throw new IllegalStateException("Legacy world binding has expired"); binding.check(); return binding;
+    }
+    /** World.getCelestialAngle reads worldInfo's own time, which the host never advances; use the host's time of day. */
+    public static float celestialAngle(Object world, float partial) throws ReflectiveOperationException {
+        var bound = binding(world); Object provider = bound.loader.loadClass("net.minecraft.world.World").getField("field_73011_w").get(world);
+        return (float) provider.getClass().getMethod("func_76563_a", long.class, float.class).invoke(provider, bound.host.dayTime(), partial);
     }
     public static long time(Object world, boolean total) { var binding = binding(world); return total ? binding.host.gameTime() : binding.host.dayTime(); }
     public static int viewDistance(Object world) { return binding(world).host.viewDistance(); }
@@ -252,6 +259,11 @@ public final class LegacyWorlds implements AutoCloseable {
             bound.host.playSound(new HostWorldAccess.Sound(x+.5,y+.5,z+.5,random.nextBoolean()?"random.door_open":"random.door_close",1,random.nextFloat()*.1f+.9f,false,id));
         } else if(event==2004) bound.host.levelEvent(id,2004,x,y,z,data); // mob-spawner flames/smoke
         else LegacyDiagnostics.missingMapping("world event "+event,"legacy auxiliary event has no host translation");
+    }
+    public static void particle(Object world,String name,double x,double y,double z,double velocityX,double velocityY,double velocityZ) {
+        var host=binding(world).host;
+        // Like RenderGlobal, only the client world draws named particles; the server's world accesses ignore them.
+        if(host.clientSide())host.particle(name,x,y,z,velocityX,velocityY,velocityZ);
     }
     public static void localSound(Object world,double x,double y,double z,String id,float volume,float pitch,boolean delay) {
         var host=binding(world).host;
@@ -553,6 +565,7 @@ public final class LegacyWorlds implements AutoCloseable {
             mv.visitMethodInsn(Opcodes.INVOKESTATIC, bridge, "time", "(Ljava/lang/Object;Z)J", false); mv.visitInsn(Opcodes.LRETURN); mv.visitMaxs(2, 1); mv.visitEnd();
         }
         forward(writer, bridge, "func_72877_b", "(J)V", "setTime", "(Ljava/lang/Object;J)V", null);
+        forward(writer, bridge, "func_72826_c", "(F)F", "celestialAngle", "(Ljava/lang/Object;F)F", null);
         forward(writer, bridge, "func_147439_a", "(III)Lnet/minecraft/block/Block;", "block", "(Ljava/lang/Object;III)Ljava/lang/Object;", "net/minecraft/block/Block");
         forward(writer, bridge, "func_72805_g", "(III)I", "metadata", "(Ljava/lang/Object;III)I", null);
         forward(writer, bridge, "func_147465_d", "(IIILnet/minecraft/block/Block;II)Z", "setBlock", "(Ljava/lang/Object;IIILjava/lang/Object;II)Z", null);
@@ -593,6 +606,7 @@ public final class LegacyWorlds implements AutoCloseable {
         constant(writer, "func_72904_c", "(IIIIII)Z", 1);
         forward(writer,bridge,"func_72908_a","(DDDLjava/lang/String;FF)V","sound","(Ljava/lang/Object;DDDLjava/lang/String;FF)V",null);
         forward(writer,bridge,"func_72889_a","(Lnet/minecraft/entity/player/EntityPlayer;IIIII)V","auxiliaryEffect","(Ljava/lang/Object;Ljava/lang/Object;IIIII)V",null);
+        forward(writer,bridge,"func_72869_a","(Ljava/lang/String;DDDDDD)V","particle","(Ljava/lang/Object;Ljava/lang/String;DDDDDD)V",null);
         forward(writer,bridge,"func_72980_b","(DDDLjava/lang/String;FFZ)V","localSound","(Ljava/lang/Object;DDDLjava/lang/String;FFZ)V",null);
         for(String method:List.of("func_72956_a","func_85173_a")) {
             var sound=writer.visitMethod(Opcodes.ACC_PUBLIC,method,"("+(method.equals("func_72956_a")?"Lnet/minecraft/entity/Entity;":"Lnet/minecraft/entity/player/EntityPlayer;")+"Ljava/lang/String;FF)V",null,null);

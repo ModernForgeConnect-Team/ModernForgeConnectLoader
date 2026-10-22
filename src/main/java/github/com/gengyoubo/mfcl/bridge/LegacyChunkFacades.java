@@ -8,13 +8,24 @@ final class LegacyChunkFacades {
     private static final String CHUNK = "net/minecraft/world/chunk/Chunk";
     private static final String WORLD = "net/minecraft/world/World";
 
-    static Object create(ClassLoader loader, Object world, int x, int z) throws ReflectiveOperationException {
+    /** {@code tiles} are absolute positions; their old tiles fill chunkTileEntityMap (ender pillars scan it for QEDs...). */
+    static Object create(ClassLoader loader, Object world, int x, int z, java.util.List<int[]> tiles) throws ReflectiveOperationException {
         Class<?> type;
         synchronized (loader) {
             try { type = loader.loadClass(NAME.replace('/', '.')); }
             catch (ClassNotFoundException absent) { type = define(loader); }
         }
-        return type.getConstructor(loader.loadClass(WORLD.replace('/', '.')), int.class, int.class).newInstance(world, x, z);
+        Class<?> worldType = loader.loadClass(WORLD.replace('/', '.'));
+        Object chunk = type.getConstructor(worldType, int.class, int.class).newInstance(world, x, z);
+        if (tiles.isEmpty()) return chunk;
+        @SuppressWarnings("unchecked") var map = (java.util.Map<Object,Object>) loader.loadClass(CHUNK.replace('/', '.')).getField("field_150816_i").get(chunk);
+        var position = loader.loadClass("net.minecraft.world.ChunkPosition").getConstructor(int.class, int.class, int.class);
+        var lookup = worldType.getMethod("func_147438_o", int.class, int.class, int.class);
+        for (int[] tile : tiles) {
+            Object old = lookup.invoke(world, tile[0], tile[1], tile[2]);
+            if (old != null) map.put(position.newInstance(tile[0] & 15, tile[1], tile[2] & 15), old);
+        }
+        return chunk;
     }
 
     private static Class<?> define(ClassLoader loader) throws ReflectiveOperationException {

@@ -63,6 +63,8 @@ public interface HostWorldAccess {
     default void levelEvent(java.util.UUID excludedPlayer,int event,int x,int y,int z,int data) { }
     /** Visual effect only; the original explosion retains authority over damage and block destruction. */
     default void explosionEffect(double x,double y,double z) { }
+    /** Old World.spawnParticle by 1.7.10 particle name; only client worlds draw particles. */
+    default void particle(String name,double x,double y,double z,double velocityX,double velocityY,double velocityZ) { }
     /** An original adapter's encoded client packet, delivered over the authenticated host connection. */
     default void sendPacket(java.util.UUID recipient,LegacyPackets.Message packet) { }
     /** Send through the actual server player list, including clients in other dimensions. */
@@ -99,6 +101,8 @@ public interface HostWorldAccess {
     default Hit rayTrace(double startX, double startY, double startZ, double endX, double endY, double endZ) { return null; }
     /** Real world bindings can run the original per-block ray test against their mirrored blocks. */
     default boolean originalBlockRayTrace() { return false; }
+    /** Positions {x,y,z} of the original tiles in a loaded host chunk; old code reads them through Chunk.chunkTileEntityMap. */
+    default java.util.List<int[]> legacyTiles(int chunkX, int chunkZ) { return java.util.List.of(); }
     default Object tileEntity(int x, int y, int z) { throw new UnsupportedOperationException("Host TileEntity lookup is not available"); }
     /** Original dungeon/mineshaft spawner selection, applied to the authoritative native spawner. */
     default void spawnerType(int x,int y,int z,Object logic,String entity) { throw new UnsupportedOperationException("Host spawner mutation is not available"); }

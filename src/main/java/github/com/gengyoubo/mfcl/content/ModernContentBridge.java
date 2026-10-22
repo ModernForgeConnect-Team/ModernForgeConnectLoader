@@ -1134,9 +1134,10 @@ public final class ModernContentBridge {
             var held = snapshot(stack);
             if (context.getHand() == net.minecraft.world.InteractionHand.OFF_HAND) before.set(selected,held);
             var callback = new LegacyItemPlacement(services);
-            var result = first
+            // Use-on callbacks drop items too: TC4's wand turns a bookshelf into a dropped Thaumonomicon.
+            var result = LegacyItemDrops.capture(this,player,()->first
                     ? callback.useFirst(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z)
-                    : callback.use(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z);
+                    : callback.use(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z));
             transaction.commit();
             if (level.isClientSide) return result.used() ? InteractionResult.SUCCESS : InteractionResult.PASS;
             for (int slot = 0; slot < result.inventory().size() && slot < 36; slot++) {

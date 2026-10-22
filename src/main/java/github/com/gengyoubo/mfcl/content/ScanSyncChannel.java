@@ -17,7 +17,11 @@ public final class ScanSyncChannel {
     // SimpleChannel selects an encoder by Java class, not by the send direction.
     // Keep this distinct from the clientbound Message used by login/research synchronization.
     public record ServerboundMessage(github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message packet) {}
-    private static final String VERSION = "6";
+    /** Remote trading ({@link RemoteMerchants}): the villagers a device reaches, and the player's choice among them. */
+    public record MerchantEntry(int entityId, net.minecraft.network.chat.Component name, java.util.List<net.minecraft.world.item.ItemStack> results) {}
+    public record MerchantList(net.minecraft.core.BlockPos origin, java.util.List<MerchantEntry> merchants) {}
+    public record MerchantPick(net.minecraft.core.BlockPos origin, int entityId) {}
+    private static final String VERSION = "7";
     private static SimpleChannel channel;
     private ScanSyncChannel() { }
     @SuppressWarnings("removal")
@@ -45,7 +49,19 @@ public final class ScanSyncChannel {
                 buffer->new ServerboundMessage(new github.com.gengyoubo.mfcl.bridge.LegacyPackets.Message(buffer.readUtf(128),buffer.readVarInt(),buffer.readByteArray(1024*1024))),
                 (message,context)->{context.get().enqueueWork(()->{var player=context.get().getSender();if(player!=null){var bridge=ModernContentBridge.active();if(bridge!=null)bridge.applyServerLegacyMessage(player,message.packet());}});context.get().setPacketHandled(true);},
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        message(guard, 4, MerchantList.class,
+                (message,buffer)->{buffer.writeBlockPos(message.origin());buffer.writeCollection(message.merchants(),(out,entry)->{out.writeVarInt(entry.entityId());out.writeComponent(entry.name());out.writeCollection(entry.results(),FriendlyByteBuf::writeItem);});},
+                buffer->new MerchantList(buffer.readBlockPos(),buffer.readList(in->new MerchantEntry(in.readVarInt(),in.readComponent(),in.readList(FriendlyByteBuf::readItem)))),
+                (message,context)->{context.get().enqueueWork(()->net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->github.com.gengyoubo.mfcl.client.RemoteMerchantScreen.open(message)));context.get().setPacketHandled(true);},
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
+        message(guard, 5, MerchantPick.class,
+                (message,buffer)->{buffer.writeBlockPos(message.origin());buffer.writeVarInt(message.entityId());},
+                buffer->new MerchantPick(buffer.readBlockPos(),buffer.readVarInt()),
+                (message,context)->{context.get().enqueueWork(()->{var player=context.get().getSender();if(player!=null)RemoteMerchants.pick(player,message);});context.get().setPacketHandled(true);},
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
     }
+    static void sendMerchants(ServerPlayer player, MerchantList list){channel.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(()->player),list);}
+    public static void pickMerchant(MerchantPick pick){channel.sendToServer(pick);}
     /** Every index and Java type is checked before Forge's codec can silently replace an earlier registration. */
     private static <M> void message(github.com.gengyoubo.mfcl.bridge.NetworkRegistrationGuard guard, int index, Class<M> type,
             java.util.function.BiConsumer<M, FriendlyByteBuf> encoder, java.util.function.Function<FriendlyByteBuf, M> decoder,
