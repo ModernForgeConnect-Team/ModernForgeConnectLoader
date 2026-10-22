@@ -45,6 +45,12 @@ public final class LegacyDeviceScreen extends AbstractContainerScreen<LegacyDevi
     @Override public boolean mouseReleased(double x,double y,int button) {
         return ClientContainerBridge.active().deviceMouse(this,(int)x,(int)y,button,true)||super.mouseReleased(x,y,button);
     }
+    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy) {
+        ClientContainerBridge.active().deviceDrag(this,(int)x,(int)y,button);return super.mouseDragged(x,y,button,dx,dy);
+    }
+    @Override public boolean mouseScrolled(double x,double y,double delta) {
+        return ClientContainerBridge.active().deviceScroll(this,(int)x,(int)y,delta)||super.mouseScrolled(x,y,delta);
+    }
     @Override protected void renderLabels(GuiGraphics graphics,int x,int y) {}
     @Override public void render(GuiGraphics graphics,int x,int y,float partial) {
         renderBackground(graphics);super.render(graphics,x,y,partial);renderTooltip(graphics,x,y);

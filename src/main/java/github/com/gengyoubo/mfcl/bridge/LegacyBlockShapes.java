@@ -11,10 +11,11 @@ public final class LegacyBlockShapes {
         public Shapes { collision = List.copyOf(collision); outline = List.copyOf(outline); }
     }
     private final LegacyServices services;
-    private final Class<?> blockType, worldType, accessType, boxType;
+    private final Class<?> blockType, worldType, accessType, boxType, entityType;
     private final Object registry;
     private final Method getBlock, stateBounds, addCollision, selection, makeBox, collideCheck, replaceable;
     private record Cell(HostWorldAccess.Block block, java.nio.ByteBuffer tile) {}
+    private final Map<String,Boolean> contextual = new HashMap<>();
     private final Map<List<Cell>, Shapes> cache = new LinkedHashMap<>(128,.75f,true) {
         @Override protected boolean removeEldestEntry(Map.Entry<List<Cell>, Shapes> entry) { return size() > 512; }
     };
@@ -23,36 +24,51 @@ public final class LegacyBlockShapes {
         var loader = services.loader();
         blockType = loader.loadClass("net.minecraft.block.Block"); worldType = loader.loadClass("net.minecraft.world.World");
         accessType = loader.loadClass("net.minecraft.world.IBlockAccess"); boxType = loader.loadClass("net.minecraft.util.AxisAlignedBB");
+        entityType = loader.loadClass("net.minecraft.entity.Entity");
         registry = blockType.getField("field_149771_c").get(null);
         getBlock = registry.getClass().getMethod("func_82594_a", String.class);
         stateBounds = blockType.getMethod("func_149719_a", accessType, int.class, int.class, int.class);
-        addCollision = blockType.getMethod("func_149743_a", worldType, int.class, int.class, int.class, boxType, List.class, loader.loadClass("net.minecraft.entity.Entity"));
+        addCollision = blockType.getMethod("func_149743_a", worldType, int.class, int.class, int.class, boxType, List.class, entityType);
         selection = blockType.getMethod("func_149633_g", worldType, int.class, int.class, int.class);
         collideCheck = blockType.getMethod("func_149678_a", int.class, boolean.class);
         replaceable = blockType.getMethod("isReplaceable", accessType, int.class, int.class, int.class);
         makeBox = boxType.getMethod("func_72330_a", double.class, double.class, double.class, double.class, double.class, double.class);
     }
     public Shapes shapes(String key, LegacyBlockRendering.View view) throws Exception {
+        return shapes(key,view,null);
+    }
+    /** Entity positions are relative to the scene origin, as are the original collision boxes. */
+    public Shapes shapes(String key, LegacyBlockRendering.View view,HostWorldAccess.Entity entity) throws Exception {
         return services.items().inLegacy(() -> {
-            var cells = new ArrayList<Cell>(27);
-            for (int x=-1;x<=1;x++) for (int y=-1;y<=1;y++) for (int z=-1;z<=1;z++) {
-                byte[] tile = view.tileData(x,y,z);
-                cells.add(new Cell(view.block(x,y,z), java.nio.ByteBuffer.wrap(tile == null ? new byte[0] : tile).asReadOnlyBuffer()));
-            }
-            Shapes known = cache.get(cells); if (known != null) return known;
             Object block = getBlock.invoke(registry, key);
+            Boolean usesEntity = contextual.get(key);
+            if(usesEntity==null) {
+                usesEntity=block.getClass().getMethod(addCollision.getName(),addCollision.getParameterTypes()).getDeclaringClass()!=blockType;
+                contextual.put(key,usesEntity);
+            }
+            boolean dynamic=entity!=null&&usesEntity;
+            var cells = new ArrayList<Cell>(27);
+            if(!dynamic) {
+                for (int x=-1;x<=1;x++) for (int y=-1;y<=1;y++) for (int z=-1;z<=1;z++) {
+                    byte[] tile = view.tileData(x,y,z);
+                    cells.add(new Cell(view.block(x,y,z), java.nio.ByteBuffer.wrap(tile == null ? new byte[0] : tile).asReadOnlyBuffer()));
+                }
+                Shapes known = cache.get(cells); if (known != null) return known;
+            }
             try (var scene = new LegacyBlockScene(services, view)) {
                 stateBounds.invoke(block, scene.world(), 0,0,0);
                 var old = new ArrayList<Object>();
                 Object query = makeBox.invoke(null, -8d,-8d,-8d,8d,8d,8d);
-                addCollision.invoke(block, scene.world(), 0,0,0,query,old,null);
+                Object collider=dynamic?LegacyEntityAccess.mirror(services.items(),scene.world(),entity,null):null;
+                addCollision.invoke(block, scene.world(), 0,0,0,query,old,collider);
                 var collisions = new ArrayList<Box>(); for (Object value : old) collisions.add(box(value));
                 stateBounds.invoke(block, scene.world(), 0,0,0);
                 // Player ray traces pass hitLiquids=false; a block refusing that is neither outlined nor breakable.
                 boolean targetable = (boolean) collideCheck.invoke(block, view.block(0,0,0).metadata(), false);
                 Object selected = targetable ? selection.invoke(block, scene.world(), 0,0,0) : null;
                 var result = new Shapes(collisions, selected == null ? List.of() : List.of(box(selected)), (boolean) replaceable.invoke(block, scene.world(), 0,0,0));
-                cache.put(List.copyOf(cells), result); return result;
+                // Player/sneaking/position decisions must never enter the shared entity-free shape cache.
+                if(!dynamic)cache.put(List.copyOf(cells), result); return result;
             } finally { blockType.getMethod("func_149683_g").invoke(block); }
         });
     }

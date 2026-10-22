@@ -65,8 +65,21 @@ public final class LegacyContainers {
         var type=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer");Object container=type.getField("field_147002_h").get(gui);
         List<?> slots=(List<?>)container.getClass().getField("field_75151_b").get(container);
         if(slots.size()!=values.size())throw new IllegalStateException("Container slot count changed");
-        for(int i=0;i<slots.size();i++)slots.get(i).getClass().getMethod("func_75215_d",loader.loadClass("net.minecraft.item.ItemStack"))
-                .invoke(slots.get(i),values.get(i).stack==null?null:services.items().materialize(values.get(i).stack));
+        // Like the old client's set-slot packets: only changed slots, through the container's own putStackInSlot hook.
+        var stackType=loader.loadClass("net.minecraft.item.ItemStack");
+        Method put=loader.loadClass("net.minecraft.inventory.Container").getMethod("func_75141_a",int.class,stackType);
+        Method read=loader.loadClass("net.minecraft.inventory.Slot").getMethod("func_75211_c"),equal=stackType.getMethod("func_77989_b",stackType,stackType);
+        for(int i=0;i<slots.size();i++) {
+            Object next=values.get(i).stack==null?null:services.items().materialize(values.get(i).stack);
+            if(!(Boolean)equal.invoke(null,read.invoke(slots.get(i)),next))put.invoke(container,i,next);
+        }
+    }
+    public List<int[]> positions(Object gui) throws Exception {
+        Object container=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer").getField("field_147002_h").get(gui);
+        var slotType=loader.loadClass("net.minecraft.inventory.Slot");Field x=slotType.getField("field_75223_e"),y=slotType.getField("field_75221_f");
+        var result=new ArrayList<int[]>();
+        for(Object slot:(List<?>)container.getClass().getField("field_75151_b").get(container))result.add(new int[]{x.getInt(slot),y.getInt(slot)});
+        return result;
     }
     public void position(Object gui,int left,int top) throws Exception { setGui(gui,"field_147003_i",left);setGui(gui,"field_147009_r",top); }
     private void setGui(Object target,String name,int value) throws Exception { Field field=loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer").getDeclaredField(name);field.setAccessible(true);field.setInt(target,value); }

@@ -31,6 +31,14 @@ public final class LegacyEntityHooks {
     }
     static void mirrored(Object entity) { MIRRORS.put(entity, Boolean.TRUE); }
     static boolean isMirror(Object entity) { return MIRRORS.containsKey(entity); }
+    /** Inspection uses the real host's NBT; Unsafe query mirrors do not own full potion/AI/attribute state. */
+    public static boolean inspect(Object entity,Object tag) throws Exception {
+        if(isMirror(entity)) {
+            var host=host(entity);byte[] data=host==null?null:host.nativeEntityData(access(entity).idOf(entity));
+            if(data==null)return false;LegacyHostTileData.copy(data,tag);return true;
+        }
+        return (boolean)access(entity).entity.getMethod("func_70039_c",entity.getClass().getClassLoader().loadClass("net.minecraft.nbt.NBTTagCompound")).invoke(entity,tag);
+    }
     public static void sheared(Object entity,boolean value) throws ReflectiveOperationException {
         var loader=entity.getClass().getClassLoader();Object watcher=loader.loadClass("net.minecraft.entity.Entity").getMethod("func_70096_w").invoke(entity);
         byte flags=(byte)watcher.getClass().getMethod("func_75683_a",int.class).invoke(watcher,16);

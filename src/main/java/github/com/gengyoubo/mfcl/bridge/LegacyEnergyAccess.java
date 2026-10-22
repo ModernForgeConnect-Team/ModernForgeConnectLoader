@@ -95,6 +95,7 @@ public final class LegacyEnergyAccess {
                     "(L"+api+";Ljava/lang/Object;"+(transfer?"IZ":"")+")"+(method.equals("canConnectEnergy")?"Z":"I"),false);
             code.visitInsn(Opcodes.IRETURN);code.visitMaxs(0,0);code.visitEnd();
         }
+        LegacyHostTileData.writer(writer);
         var tick=writer.visitMethod(Opcodes.ACC_PUBLIC,"canUpdate","()Z",null,null);tick.visitCode();tick.visitInsn(Opcodes.ICONST_0);tick.visitInsn(Opcodes.IRETURN);tick.visitMaxs(1,1);tick.visitEnd();
         writer.visitEnd();byte[] bytes=writer.toByteArray();
         return (Class<?>)services.loader().getClass().getMethod("defineLegacyClass",String.class,byte[].class,int.class,int.class).invoke(services.loader(),name,bytes,0,bytes.length);

@@ -83,7 +83,10 @@ public final class ClientContainerBridge {
         if(value.isEmpty())return null;
         var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
         if(content!=null){var old=content.renderSnapshot(value);if(old!=null)return old;}
-        if(value.hasTag())return null; // unmapped host NBT items are simply not mirrored, never fatal
+        if(value.hasTag()) {
+            // Damaged/enchanted vanilla items use the server's exact conversion; unmapped host NBT is simply not mirrored, never fatal.
+            try{return content==null?null:content.gameplayStack(value);}catch(Exception unmapped){return null;}
+        }
         if(reverse==null){reverse=new HashMap<>();for(var stack:services.items().catalog()){var modern=ModernItemMapping.renderStack(stack);if(!modern.isEmpty()&&!modern.hasTag())reverse.putIfAbsent(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(),stack);}}
         var old=reverse.get(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(value.getItem()).toString());
         if(old==null)return null; // an unknown host item leaves its mirror slot empty instead of failing the container
@@ -94,6 +97,7 @@ public final class ClientContainerBridge {
         bound.tooltipReady=false;bound.graphics=event.getGuiGraphics();
         try(var frame=LegacyGuiGraphics.begin(event.getScreen().width,event.getScreen().height,event.getMouseX(),event.getMouseY(),keys())) {
             services.items().inLegacy(()->deviceAction(event.getScreen(),()->{if(event.getScreen() instanceof AbstractContainerScreen<?> container)services.containers().carried(snapshot(container.getMenu().getCarried()));bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());return null;}));bound.commands=frame.commands();
+            followSlots(event.getScreen(),bound);
             bound.tooltipReady=frame.hasTooltip();
         } catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI drawing failed",failure);}
     }
@@ -122,6 +126,7 @@ public final class ClientContainerBridge {
         if(Minecraft.getInstance().level==null&&bindings.isEmpty()){origins.clear();reverse=null;return;}
         var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return;
         if(screen instanceof AbstractContainerScreen<?> container)try {
+            followSlots(screen,bound);
             var slots=new ArrayList<LegacyContainers.Slot>();
             for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,null));
             if(!services.containers().sameLayout(bound.gui,slots))bind(container);
@@ -157,6 +162,30 @@ public final class ClientContainerBridge {
             for(var slot:screen.getMenu().slots)if(x>=screen.getGuiLeft()+slot.x&&x<screen.getGuiLeft()+slot.x+16&&y>=screen.getGuiTop()+slot.y&&y<screen.getGuiTop()+slot.y+16)return false;
             return x>=screen.getGuiLeft()&&x<screen.getGuiLeft()+screen.getXSize()&&y>=screen.getGuiTop()&&y<screen.getGuiTop()+screen.getYSize();
         });
+    }
+    /** Device slots belong to the original GUI's layout, which may move them while drawing (e.g. sorted, scrolled cabinets). */
+    private void followSlots(Screen screen,Bound bound) throws Exception {
+        if(screen instanceof LegacyDeviceScreen device)device.getMenu().moveSlots(services.containers().positions(bound.gui));
+    }
+    /** The wheel reaches GUIs that read it themselves through LWJGL's event wheel in handleMouseInput. */
+    public boolean deviceScroll(LegacyDeviceScreen screen,int x,int y,double delta) {
+        if(delta==0||!readsMouseInput(screen.originalGui()))return false;
+        return dispatch(screen,x,y,b->{LegacyGuiGraphics.wheel(delta>0?120:-120);b.session.mouseInput();return true;});
+    }
+    public void deviceDrag(LegacyDeviceScreen screen,int x,int y,int button) {
+        dispatch(screen,x,y,b->{b.session.mouseDragged(x,y,button);return false;});
+    }
+    private boolean readsMouseInput(Object gui) {
+        try {
+            var container=services.loader().loadClass("net.minecraft.client.gui.inventory.GuiContainer");
+            for(Class<?> type=gui.getClass();type!=null&&type!=container;type=type.getSuperclass())
+                for(var method:type.getDeclaredMethods())if(method.getName().equals("func_146274_d")&&method.getParameterCount()==0)return true;
+            return false;
+        }catch(ClassNotFoundException failure){throw new IllegalStateException(failure);}
+    }
+    public static void receiveCounts(int window,int[] counts) {
+        var player=Minecraft.getInstance().player;
+        if(player!=null&&player.containerMenu instanceof github.com.gengyoubo.mfcl.content.LegacyDeviceMenu menu&&menu.containerId==window)menu.receiveCounts(counts);
     }
     private void transition(Screen parent,Object requested) {
         if(requested==null){Minecraft.getInstance().setScreen(null);return;}

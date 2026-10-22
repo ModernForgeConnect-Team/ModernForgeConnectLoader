@@ -173,6 +173,13 @@ public final class LevelWorldBridge {
                 check();var pos=new net.minecraft.world.level.ChunkPos(x,z);
                 content.afterCommit(level,()->{if(force)level.getChunkSource().addRegionTicket(LEGACY_TICKET,pos,2,id,true);else level.getChunkSource().removeRegionTicket(LEGACY_TICKET,pos,2,id,true);});
             }
+            @Override public byte[] nativeEntityData(java.util.UUID id){
+                check();var entity=level.getEntity(id);if(entity==null)return null;
+                var tag=new net.minecraft.nbt.CompoundTag();if(!entity.save(tag))return null;
+                try(var output=new java.io.ByteArrayOutputStream()) {
+                    net.minecraft.nbt.NbtIo.writeCompressed(tag,output);return output.toByteArray();
+                }catch(java.io.IOException failure){throw new IllegalStateException("Cannot snapshot native entity",failure);}
+            }
             @Override public String entityData(java.util.UUID id){
                 check();var entity=level.getEntity(id);
                 if(!(entity instanceof net.minecraft.world.entity.Mob mob)||entity.isPassenger()||entity.isVehicle()||mob.getTarget()!=null)return null;
@@ -318,6 +325,13 @@ public final class LevelWorldBridge {
             @Override public boolean originalBlockRayTrace() { check(); return true; }
             @Override public java.util.List<int[]> legacyTiles(int chunkX, int chunkZ) {
                 check(); return LevelWorldBridge.legacyTiles(level, chunkX, chunkZ);
+            }
+            @Override public byte[] nativeTileData(int x,int y,int z) {
+                check();var pos=new BlockPos(x,y,z);if(!level.hasChunkAt(pos))return null;
+                var tile=level.getBlockEntity(pos);if(tile==null||tile.isRemoved()||tile instanceof LegacyBlockEntity)return null;
+                try(var output=new java.io.ByteArrayOutputStream()) {
+                    net.minecraft.nbt.NbtIo.writeCompressed(tile.saveWithFullMetadata(),output);return output.toByteArray();
+                }catch(java.io.IOException failure){throw new IllegalStateException("Cannot snapshot native block entity",failure);}
             }
             @Override public Object tileEntity(int x, int y, int z) {
                 check();var pos=new BlockPos(x,y,z);if(!level.hasChunkAt(pos))return null;

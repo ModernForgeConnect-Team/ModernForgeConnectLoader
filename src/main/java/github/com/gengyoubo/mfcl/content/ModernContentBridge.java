@@ -625,6 +625,10 @@ public final class ModernContentBridge {
             try{return interactLegacyEntity(stack,player,target,net.minecraft.world.InteractionHand.MAIN_HAND,true);}
             catch(Exception failure){LogUtils.getLogger().error("MFCL original weapon callback failed for {}",entry.key(),failure);return false;}
         }
+        @Override public boolean onLeftClickEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,net.minecraft.world.entity.Entity target) {
+            try{return interactLegacyEntity(stack,player,target,net.minecraft.world.InteractionHand.MAIN_HAND,2);}
+            catch(Exception failure){LogUtils.getLogger().error("MFCL original left-click callback failed for {}",entry.key(),failure);return true;}
+        }
         @Override public void inventoryTick(ItemStack stack,Level level,net.minecraft.world.entity.Entity entity,int slot,boolean selected) {
             if(level.isClientSide||!(entity instanceof net.minecraft.world.entity.player.Player player)||slot<0||slot>=36)return;
             try {
@@ -758,14 +762,17 @@ public final class ModernContentBridge {
         }catch(Exception failure){LogUtils.getLogger().error("MFCL original mining callback failed at {}",pos,failure);return false;}
     }
     private boolean interactLegacyEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,LivingEntity target,net.minecraft.world.InteractionHand hand,boolean hit) throws Exception {
+        return interactLegacyEntity(stack,player,target,hand,hit?1:0);
+    }
+    private boolean interactLegacyEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,net.minecraft.world.entity.Entity target,net.minecraft.world.InteractionHand hand,int action) throws Exception {
         var world=services.worlds().bound(player.level());var source=placer(player);var held=snapshot(stack);var before=hostInventory(player);
         if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
         itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
         Object actor=exposeLegacyInventory(player,world,before,held);
         LegacyItemUse.Result result;
-        try{result=logicTransaction(player.level(),target.blockPosition(),()->LegacyItemDrops.capture(this,player,()->itemUse.interact(world,source,held,target.getUUID(),hit)),true);}
+        try{result=logicTransaction(player.level(),target.blockPosition(),()->LegacyItemDrops.capture(this,player,()->action==2?itemUse.leftClick(world,source,held,target.getUUID()):itemUse.interact(world,source,held,target.getUUID(),action==1)),true);}
         catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
-        collectLegacyInventory(player,actor,before,hand);
+        if(!player.level().isClientSide)collectLegacyInventory(player,actor,before,hand);
         if(player instanceof net.minecraft.server.level.ServerPlayer server){
             result.messages().forEach(packet->ScanSyncChannel.sendToPlayer(server,packet));result.feedback().forEach(message->server.displayClientMessage(Component.literal(message),false));
             server.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
@@ -946,9 +953,20 @@ public final class ModernContentBridge {
         private boolean useFluidContainer(Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, Direction side) {
             var held = player.getItemInHand(hand);
             if (held.isEmpty() || !held.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent()) return false;
-            if (!(level.getBlockEntity(pos) instanceof LegacyBlockEntity tile)
-                    || !tile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.FLUID_HANDLER,side).isPresent()) return false;
-            try { return net.minecraftforge.fluids.FluidUtil.interactWithFluidHandler(player,hand,level,pos,side); }
+            if (!(level.getBlockEntity(pos) instanceof LegacyBlockEntity tile)) return false;
+            var handler = tile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.FLUID_HANDLER,side).orElse(null);
+            if (handler == null) return false;
+            try {
+                // Forge's generic creative exchange discards the filled container. Use vanilla bucket pickup
+                // semantics instead: keep the empty bucket and give the player a filled bucket if needed.
+                if (player.getAbilities().instabuild && held.is(net.minecraft.world.item.Items.BUCKET)) {
+                    var filled = net.minecraftforge.fluids.FluidUtil.tryFillContainer(held,handler,Integer.MAX_VALUE,player,true);
+                    if (!filled.isSuccess()) return false;
+                    player.setItemInHand(hand,net.minecraft.world.item.ItemUtils.createFilledResult(held,player,filled.getResult()));
+                    return true;
+                }
+                return net.minecraftforge.fluids.FluidUtil.interactWithFluidHandler(player,hand,handler);
+            }
             catch (Exception failure) { LogUtils.getLogger().error("MFCL fluid container exchange failed for {} at {}",entry.key(),pos,failure); return false; }
         }
         @Override public boolean triggerEvent(BlockState state, Level level, BlockPos pos, int event, int data) {
@@ -964,15 +982,16 @@ public final class ModernContentBridge {
             }
         }
         @Override public void entityInside(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.Entity entity) {
-            // Original onEntityCollidedWithBlock: the crucible dissolves dropped items here (attemptSmelt).
-            if (level.isClientSide || !(entity instanceof net.minecraft.world.entity.item.ItemEntity drop) || drop.isRemoved()) return;
+            // Original onEntityCollidedWithBlock handles living hazards as well as item-consuming devices.
+            if (level.isClientSide || entity.isRemoved()) return;
             try {
                 if (!services.logic().collides(entry.key())) return;
-                var snapshot = HostEntityQueries.snapshot(level, drop);
+                var snapshot = HostEntityQueries.snapshot(level, entity);
                 if (snapshot == null) return;
                 var result = logicTransaction(level, pos, () -> services.logic().collide(entry.key(), services.worlds().bound(level), pos.getX(), pos.getY(), pos.getZ(), snapshot), true);
-                if (result.removed()) drop.discard();
-                else if (!sameLegacy(result.stack(), snapshot.item())) drop.setItem(gameplayStack(result.stack()));
+                if (result.removed()) entity.discard();
+                else if (entity instanceof net.minecraft.world.entity.item.ItemEntity drop && !sameLegacy(result.stack(), snapshot.item()))
+                    drop.setItem(gameplayStack(result.stack()));
                 if (level.getBlockEntity(pos) instanceof LegacyBlockEntity tile) tile.captureChanges(false);
             } catch (Exception | LinkageError failure) {
                 if (collisionFailures.add(entry.key())) {
@@ -989,15 +1008,20 @@ public final class ModernContentBridge {
             return entry.renderType() < 0 && blockRendering.hasTileRenderer(entry.key(), state.getValue(METADATA)) ? RenderShape.INVISIBLE : RenderShape.MODEL;
         }
         @Override public net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, net.minecraft.world.phys.shapes.CollisionContext context) {
-            return shape(state, level, pos, false);
+            return shape(state, level, pos, false, context);
         }
         @Override public net.minecraft.world.phys.shapes.VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, net.minecraft.world.phys.shapes.CollisionContext context) {
-            return shape(state, level, pos, true);
+            return shape(state, level, pos, true, context);
         }
-        private net.minecraft.world.phys.shapes.VoxelShape shape(BlockState state, BlockGetter level, BlockPos pos, boolean collision) {
+        private net.minecraft.world.phys.shapes.VoxelShape shape(BlockState state, BlockGetter level, BlockPos pos, boolean collision,net.minecraft.world.phys.shapes.CollisionContext context) {
             if (!canPlace(entry, state.getValue(METADATA))) return net.minecraft.world.phys.shapes.Shapes.block();
             try {
-                var original = blockShapes.shapes(entry.key(), renderView(level, pos, state));
+                HostWorldAccess.Entity collider=null;
+                if(collision&&context instanceof net.minecraft.world.phys.shapes.EntityCollisionContext entities&&entities.getEntity()!=null) {
+                    var entity=entities.getEntity();collider=HostEntityQueries.snapshot(entity.level(),entity);
+                    if(collider!=null)collider=collider.relativeTo(pos.getX(),pos.getY(),pos.getZ());
+                }
+                var original = blockShapes.shapes(entry.key(), renderView(level, pos, state),collider);
                 var boxes = collision ? original.collision() : original.outline();
                 var result = net.minecraft.world.phys.shapes.Shapes.empty();
                 for (var box : boxes) if (box.maxX() > box.minX() && box.maxY() > box.minY() && box.maxZ() > box.minZ())
@@ -1221,7 +1245,7 @@ public final class ModernContentBridge {
     }
     private static BlockBehaviour.Properties properties(LegacyContent.Block entry) {
         var properties = BlockBehaviour.Properties.of().strength(entry.hardness(), entry.resistance()).lightLevel(state -> entry.light());
-        if (!entry.opaque()) properties.noOcclusion();
+        if (!entry.opaque()) properties.noOcclusion().isSuffocating((state,level,pos)->false).isViewBlocking((state,level,pos)->false);
         return properties;
     }
 }

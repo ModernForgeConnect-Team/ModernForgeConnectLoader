@@ -535,7 +535,8 @@ public final class LegacyClientData {
     }
     public synchronized <T> T inLegacy(Callable<T> work) throws Exception {
         Thread thread = Thread.currentThread(); ClassLoader before = thread.getContextClassLoader();
+        ClassLoader previousDomain = LegacyWorldGraphics.enterLegacy(loader);
         try { thread.setContextClassLoader(loader); return work.call(); }
-        finally { thread.setContextClassLoader(before); }
+        finally { LegacyWorldGraphics.leaveLegacy(previousDomain); thread.setContextClassLoader(before); }
     }
 }

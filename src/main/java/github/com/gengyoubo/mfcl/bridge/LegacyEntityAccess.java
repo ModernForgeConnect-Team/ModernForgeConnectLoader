@@ -68,6 +68,19 @@ final class LegacyEntityAccess {
                 abilitiesType.getField("field_75102_a").setBoolean(abilities,snapshot.abilities().invulnerable());
             }
             playerType.getField("field_71075_bZ").set(entity,abilities);
+            var clientPlayer=loader.loadClass("net.minecraft.client.entity.EntityPlayerSP");
+            if(clientPlayer.isInstance(entity)) {
+                // Client isSneaking reads MovementInput rather than Entity's watched flags.
+                var inputType=loader.loadClass("net.minecraft.util.MovementInput");Object input=inputType.getConstructor().newInstance();
+                inputType.getField("field_78899_d").setBoolean(input,snapshot.sneaking());
+                clientPlayer.getField("field_71158_b").set(entity,input);
+            }
+        }
+        if(snapshot.health()!=null&&loader.loadClass("net.minecraft.entity.EntityLivingBase").isInstance(entity)) {
+            // Hazard callbacks choose lethal/nonlethal branches from getHealth. Do not leave the constructor
+            // substitute of 1 HP, and avoid setHealth's access to attributes absent from an Unsafe mirror.
+            Object watcher=base.getMethod("func_70096_w").invoke(entity);
+            watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,6,snapshot.health());
         }
         if(loader.loadClass("net.minecraft.entity.EntityAgeable").isInstance(entity)) {
             var watched=base.getDeclaredField("field_70180_af");watched.setAccessible(true);Object watcher=watched.get(entity);

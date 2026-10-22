@@ -58,7 +58,7 @@ public final class LegacyBlockLogic {
             finally {LegacyWorlds.clearEntityQueries(world);}
         });
     }
-    /** What an original onEntityCollidedWithBlock left of a dropped item: removed, or its (possibly shrunk) stack. */
+    /** Original removal flag, plus the possibly shrunk stack for a dropped item (null for other entities). */
     public record Collision(boolean removed, LegacyClientData.Stack stack) {}
     private final java.util.Map<String,Boolean> collides = new java.util.concurrent.ConcurrentHashMap<>();
     /** Whether the original block overrides onEntityCollidedWithBlock (crucible, cactus-like hazards...). */
@@ -69,14 +69,19 @@ public final class LegacyBlockLogic {
                 services.loader().loadClass("net.minecraft.entity.Entity")).getDeclaringClass() != blockType);
         collides.put(key, value); return value;
     }
-    /** Runs the original onEntityCollidedWithBlock for a dropped item mirrored from the host. */
-    public Collision collide(String key, Object world, int x, int y, int z, HostWorldAccess.Entity item) throws Exception {
+    /** Runs original collision logic against a host entity mirror; damage/effects use the authoritative host hooks. */
+    public Collision collide(String key, Object world, int x, int y, int z, HostWorldAccess.Entity snapshot) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader(); Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
-            Object entity = LegacyEntityAccess.mirror(services.items(), world, item, null);
+            Object entity = LegacyEntityAccess.mirror(services.items(), world, snapshot, null);
             blockType.getMethod("func_149670_a", worldType, int.class, int.class, int.class, entityType).invoke(block(key), world, x, y, z, entity);
+            var motion=LegacyEntityAccess.motion(loader,entity,snapshot.id());
+            if(motion.x()!=snapshot.motionX()||motion.y()!=snapshot.motionY()||motion.z()!=snapshot.motionZ()||motion.fallDistance()!=snapshot.fallDistance()||motion.love()!=snapshot.love())
+                LegacyWorlds.hostOrNull(world).applyMotion(motion);
+            boolean removed=entityType.getField("field_70128_L").getBoolean(entity);
+            if(!loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity))return new Collision(removed,null);
             Object stack = entity.getClass().getMethod("func_92059_d").invoke(entity);
-            boolean removed = entityType.getField("field_70128_L").getBoolean(entity) || stack == null
+            removed = removed || stack == null
                     || loader.loadClass("net.minecraft.item.ItemStack").getField("field_77994_a").getInt(stack) <= 0;
             return new Collision(removed, removed ? null : services.items().snapshot(stack));
         });

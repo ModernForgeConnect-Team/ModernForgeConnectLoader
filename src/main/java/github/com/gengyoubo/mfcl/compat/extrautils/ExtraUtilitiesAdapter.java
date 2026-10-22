@@ -11,7 +11,8 @@ public final class ExtraUtilitiesAdapter implements LegacyModAdapter {
         LegacyModAdapter.registerBytecodeAdapters(loader,"github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPortalAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPipeAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesTextAdapter",
-                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesNetworkAdapter");
+                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesNetworkAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesScannerAdapter");
     }
     public Map<String,Object> initialize(LegacyServices services) throws Exception {
         String config="com.rwtema.extrautils.ExtraUtils";

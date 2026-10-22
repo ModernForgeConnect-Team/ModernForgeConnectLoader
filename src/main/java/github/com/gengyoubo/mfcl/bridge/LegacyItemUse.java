@@ -76,14 +76,21 @@ public final class LegacyItemUse {
         });
     }
     public Result interact(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target,boolean hit) throws Exception {
+        return interact(world,placer,held,target,hit?1:0);
+    }
+    public Result leftClick(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target) throws Exception {
+        return interact(world,placer,held,target,2);
+    }
+    private Result interact(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target,int action) throws Exception {
         return services.items().inLegacy(()->{
             try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture();var menus=LegacyDeviceContainers.captureItem(services)){
                 var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var living=loader.loadClass("net.minecraft.entity.EntityLivingBase");
-                Object actor=actor(world,placer,held),victim=LegacyWorlds.entity(world,target);if(!living.isInstance(victim))return new Result(false,0,null);
+                Object actor=actor(world,placer,held),victim=LegacyWorlds.entity(world,target);if(victim==null||(action!=2&&!living.isInstance(victim)))return new Result(false,0,null);
                 Object stack=services.items().materialize(held);bindHeld(actor,stack);
                 Object item=stackType.getMethod("func_77973_b").invoke(stack);
-                boolean used=(boolean)loader.loadClass("net.minecraft.item.Item").getMethod(hit?"func_77644_a":"func_111207_a",stackType,hit?living:loader.loadClass("net.minecraft.entity.player.EntityPlayer"),living)
-                        .invoke(item,stack,hit?victim:actor,hit?actor:victim);
+                boolean used=action==2?(boolean)loader.loadClass("net.minecraft.item.Item").getMethod("onLeftClickEntity",stackType,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),loader.loadClass("net.minecraft.entity.Entity")).invoke(item,stack,actor,victim)
+                        :(boolean)loader.loadClass("net.minecraft.item.Item").getMethod(action==1?"func_77644_a":"func_111207_a",stackType,action==1?living:loader.loadClass("net.minecraft.entity.player.EntityPlayer"),living)
+                        .invoke(item,stack,action==1?victim:actor,action==1?actor:victim);
                 LegacyPlayerAttributes.push(actor);
                 return new Result(used||menus.opened()!=null,0,null,packets.messages(),chat.messages(),menus.opened());
             }
@@ -437,8 +444,10 @@ public final class LegacyItemUse {
         LegacyPlayerArmor.apply(services,actor,placer.id(),client);
         Class<?> sp=services.loader().loadClass("net.minecraft.client.entity.EntityPlayerSP");
         if(sp.isInstance(actor)) {
+            // A real client player always has MovementInput; original GUIs read it too (filing cabinet sorting).
             Object movement=sp.getField("field_71158_b").get(actor);
-            if(movement!=null)movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
+            if(movement==null){movement=services.loader().loadClass("net.minecraft.util.MovementInput").getConstructor().newInstance();sp.getField("field_71158_b").set(actor,movement);}
+            movement.getClass().getField("field_78899_d").setBoolean(movement,placer.sneaking());
             for(String name:new String[]{"field_71155_g","field_71164_i"})sp.getField(name).setFloat(actor,placer.pitch());
             for(String name:new String[]{"field_71154_f","field_71163_h"})sp.getField(name).setFloat(actor,placer.yaw());
         }

@@ -24,7 +24,7 @@ public final class HostEntityQueries {
         if (!(entity instanceof Player) && ModernContentBridge.active() != null) {
             String represented = ModernContentBridge.active().hostRepresentations().entityClass(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
             // Vanilla animals resolve to their old class (EntityCow...) so EntityAnimal queries such as the lamp of fertility find them.
-            if (represented == null && entity instanceof net.minecraft.world.entity.animal.Animal && net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getNamespace().equals("minecraft")) {
+            if (represented == null && entity instanceof LivingEntity && net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getNamespace().equals("minecraft")) {
                 ModernContentBridge.active().hostRepresentations().entity(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
                 represented = ModernContentBridge.active().hostRepresentations().entityClass(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
             }
@@ -41,7 +41,8 @@ public final class HostEntityQueries {
         var motion=entity.getDeltaMovement();
         return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():entity.hasCustomName()?entity.getCustomName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable(),entity.getId(),item,
                 entity instanceof AgeableMob ageable?ageable.getAge():0,entity instanceof net.minecraft.world.entity.animal.Animal animal?animal.getInLoveTime():0,
-                entity instanceof Player player?new HostWorldAccess.Abilities(player.getAbilities().instabuild,player.getAbilities().invulnerable):null);
+                entity instanceof Player player?new HostWorldAccess.Abilities(player.getAbilities().instabuild,player.getAbilities().invulnerable):null,
+                entity instanceof LivingEntity living?living.getHealth():null);
     }
     public static void apply(Level level,HostWorldAccess.Motion motion) {
         if(!(level instanceof net.minecraft.server.level.ServerLevel server))return;

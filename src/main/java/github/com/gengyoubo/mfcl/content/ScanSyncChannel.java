@@ -21,7 +21,9 @@ public final class ScanSyncChannel {
     public record MerchantEntry(int entityId, net.minecraft.network.chat.Component name, java.util.List<net.minecraft.world.item.ItemStack> results) {}
     public record MerchantList(net.minecraft.core.BlockPos origin, java.util.List<MerchantEntry> merchants) {}
     public record MerchantPick(net.minecraft.core.BlockPos origin, int entityId) {}
-    private static final String VERSION = "7";
+    /** Original device slot counts beyond the one-byte vanilla menu protocol; zero means the vanilla count is exact. */
+    public record SlotCounts(int window, int[] counts) {}
+    private static final String VERSION = "8";
     private static SimpleChannel channel;
     private ScanSyncChannel() { }
     @SuppressWarnings("removal")
@@ -59,7 +61,24 @@ public final class ScanSyncChannel {
                 buffer->new MerchantPick(buffer.readBlockPos(),buffer.readVarInt()),
                 (message,context)->{context.get().enqueueWork(()->{var player=context.get().getSender();if(player!=null)RemoteMerchants.pick(player,message);});context.get().setPacketHandled(true);},
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        message(guard, 6, SlotCounts.class,
+                (message,buffer)->{
+                    int[] counts=message.counts();buffer.writeVarInt(message.window());buffer.writeVarInt(counts.length);
+                    buffer.writeVarInt((int)java.util.Arrays.stream(counts).filter(count->count!=0).count());
+                    for(int index=0;index<counts.length;index++)if(counts[index]!=0){buffer.writeVarInt(index);buffer.writeVarInt(counts[index]);}
+                },
+                buffer->{
+                    int window=buffer.readVarInt(),size=buffer.readVarInt();
+                    if(size<0||size>LegacyDeviceMenu.MAX_SLOTS)throw new IllegalArgumentException("Invalid legacy menu size "+size);
+                    int[] counts=new int[size];int entries=buffer.readVarInt();
+                    if(entries<0||entries>size)throw new IllegalArgumentException("Invalid legacy slot count list "+entries);
+                    for(int entry=0;entry<entries;entry++){int index=buffer.readVarInt();if(index<0||index>=size)throw new IllegalArgumentException("Invalid legacy slot "+index);counts[index]=buffer.readVarInt();}
+                    return new SlotCounts(window,counts);
+                },
+                (message,context)->{context.get().enqueueWork(()->net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->github.com.gengyoubo.mfcl.client.ClientContainerBridge.receiveCounts(message.window(),message.counts())));context.get().setPacketHandled(true);},
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
     }
+    static void sendSlotCounts(ServerPlayer player,int window,int[] counts){channel.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(()->player),new SlotCounts(window,counts));}
     static void sendMerchants(ServerPlayer player, MerchantList list){channel.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(()->player),list);}
     public static void pickMerchant(MerchantPick pick){channel.sendToServer(pick);}
     /** Every index and Java type is checked before Forge's codec can silently replace an earlier registration. */

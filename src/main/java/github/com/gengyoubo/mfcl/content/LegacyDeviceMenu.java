@@ -21,6 +21,13 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private final LegacyDeviceContainers.Open original;
     private final LegacyDeviceContainers.Descriptor descriptor;
     private final SimpleContainer contents;
+    /** Largest original container the menu protocol accepts (Extra Utilities filing cabinets use 1728 + 36). */
+    public static final int MAX_SLOTS=4096;
+    private static final java.lang.reflect.Field SLOT_X=net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField(Slot.class,"f_40220_"),
+            SLOT_Y=net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField(Slot.class,"f_40221_");
+    // Vanilla menu packets carry one-byte counts; original slots may hold more (filing cabinets store up to 1728).
+    private final int[] counts;
+    private int[] sentCounts,clientCounts;
     private boolean failed;
     private boolean opening=true;
     private final List<LegacyPackets.Message> initialPackets=new ArrayList<>();
@@ -39,6 +46,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             menu.opening=false;
             menu.initialPackets.forEach(packet->ScanSyncChannel.sendToPlayer(player,packet));
             menu.initialPackets.clear();
+            menu.sendCounts(true);
         }
         com.mojang.logging.LogUtils.getLogger().debug("MFCL opened native device menu {} at {}",player.containerMenu.containerId,request.descriptor());
     }
@@ -46,7 +54,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         com.mojang.logging.LogUtils.getLogger().debug("MFCL received native device menu {}",id);
         try {
         String mod=buffer.readUtf(128);int gui=buffer.readVarInt();var pos=buffer.readBlockPos();boolean chest=buffer.readBoolean(),item=buffer.readBoolean();int count=buffer.readVarInt();
-        if(count<0||count>512)throw new IllegalArgumentException("Invalid legacy menu size "+count);
+        if(count<0||count>MAX_SLOTS)throw new IllegalArgumentException("Invalid legacy menu size "+count);
         var positions=new ArrayList<int[]>();for(int index=0;index<count;index++)positions.add(new int[]{buffer.readInt(),buffer.readInt()});
         return new LegacyDeviceMenu(id,inventory,ModernContentBridge.active(),null,new LegacyDeviceContainers.Descriptor(mod,gui,pos.getX(),pos.getY(),pos.getZ(),chest,item),positions);
         }catch(RuntimeException failure){com.mojang.logging.LogUtils.getLogger().error("Cannot decode original device menu",failure);throw failure;}
@@ -63,7 +71,35 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     }
     private LegacyDeviceMenu(int id,Inventory inventory,ModernContentBridge content,LegacyDeviceContainers.Open original,LegacyDeviceContainers.Descriptor descriptor,List<int[]> positions) {
         super(content.deviceMenuType(),id);this.content=content;this.inventory=inventory;this.original=original;this.descriptor=descriptor;contents=new SimpleContainer(positions.size());
-        for(int index=0;index<positions.size();index++){var p=positions.get(index);addSlot(new Slot(contents,index,p[0],p[1]));}
+        counts=new int[positions.size()];sentCounts=new int[positions.size()];
+        for(int index=0;index<positions.size();index++){var p=positions.get(index);addSlot(new MirrorSlot(index,p[0],p[1]));}
+    }
+    /** Client mirror slot: hidden while the original GUI parks it off-screen, and shows the original count beyond the byte protocol. */
+    private final class MirrorSlot extends Slot {
+        MirrorSlot(int index,int x,int y){super(contents,index,x,y);}
+        @Override public ItemStack getItem() {
+            ItemStack stack=super.getItem();int[] real=clientCounts;int limit=contents.getMaxStackSize();
+            // Only stacks at the clamp (or raised from it earlier) can stand for a larger original count.
+            if(real!=null&&!stack.isEmpty()&&stack.getCount()>=limit){int count=Math.max(real[getContainerSlot()],limit);if(stack.getCount()!=count)stack.setCount(count);}
+            return stack;
+        }
+        @Override public boolean isActive(){return x!=Integer.MIN_VALUE&&y!=Integer.MIN_VALUE;}
+    }
+    /** Original GUIs may reposition slots while drawing (sorted or scrolled views); native hit-testing follows them. */
+    public void moveSlots(List<int[]> positions) throws IllegalAccessException {
+        if(positions.size()!=slots.size())return;
+        for(int index=0;index<positions.size();index++) {
+            var slot=slots.get(index);var p=positions.get(index);
+            if(slot.x!=p[0])SLOT_X.setInt(slot,p[0]);
+            if(slot.y!=p[1])SLOT_Y.setInt(slot,p[1]);
+        }
+    }
+    public void receiveCounts(int[] values){if(original==null&&values.length==slots.size())clientCounts=values.clone();}
+    private void sendCounts(boolean force) {
+        if(original==null||!(inventory.player instanceof ServerPlayer server))return;
+        boolean any=false;for(int value:counts)any|=value!=0;
+        if(force?!any:Arrays.equals(counts,sentCounts))return;
+        sentCounts=counts.clone();ScanSyncChannel.sendSlotCounts(server,containerId,sentCounts);
     }
     private ItemStack modern(Object stack) throws Exception {return stack==null?ItemStack.EMPTY:content.gameplayStack(content.services().items().snapshot(stack));}
     private Object old(ItemStack stack) throws Exception {return stack.isEmpty()?null:content.services().items().materialize(content.gameplayStack(stack));}
@@ -72,7 +108,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         var next=new ArrayList<ItemStack>();
         for(Object slot:LegacyDeviceContainers.slots(original.container()))next.add(modern(slot.getClass().getMethod("func_75211_c").invoke(slot)));
         if(next.size()!=slots.size())throw new IllegalStateException("Original device changed its slot layout");
-        for(int index=0;index<next.size();index++)contents.setItem(index,next.get(index));
+        for(int index=0;index<next.size();index++){int count=next.get(index).getCount();counts[index]=count>contents.getMaxStackSize()?count:0;contents.setItem(index,next.get(index));}
     }
     private void positionActor(Player player) throws Exception {
         var entity=content.services().loader().loadClass("net.minecraft.entity.Entity");
@@ -112,6 +148,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             playerContext(()->{original.container().getClass().getMethod("func_75142_b").invoke(original.container());refresh();return null;});
         }catch(Exception failure){throw new IllegalStateException("Cannot synchronize original container",failure);}
         super.broadcastChanges();
+        sendCounts(false);
     }
     @Override public boolean stillValid(Player player) {
         if(original==null)return true;

@@ -55,6 +55,7 @@ public final class LegacyInventoryPeers {
         delegate(writer, peer, bridge, "func_70295_k_", "()V", "open");
         delegate(writer, peer, bridge, "func_70305_f", "()V", "flush");
         delegate(writer, peer, bridge, "func_94041_b", "(I" + STACK + ")Z", "valid");
+        LegacyHostTileData.writer(writer);
         var tick = writer.visitMethod(Opcodes.ACC_PUBLIC, "canUpdate", "()Z", null, null); tick.visitCode();
         tick.visitInsn(Opcodes.ICONST_0); tick.visitInsn(Opcodes.IRETURN); tick.visitMaxs(1, 1); tick.visitEnd();
         writer.visitEnd(); byte[] bytes = writer.toByteArray();

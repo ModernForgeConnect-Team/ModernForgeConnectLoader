@@ -9,10 +9,11 @@ import java.util.*;
 final class LegacySpriteTextures {
     record Texture(byte[] png,String metadata) {}
     static void event(ClassLoader loader,Object atlas,String phase) throws Exception {
-        Class<?> event=loader.loadClass("net.minecraftforge.client.event.TextureStitchEvent$"+phase);
-        Object value=event.getConstructor(loader.loadClass("net.minecraft.client.renderer.texture.TextureMap")).newInstance(atlas);
-        Object bus=loader.loadClass("net.minecraftforge.common.MinecraftForge").getField("EVENT_BUS").get(null);
-        bus.getClass().getMethod("post",loader.loadClass("cpw.mods.fml.common.eventhandler.Event")).invoke(bus,value);
+        // Forge's post hook also binds vanilla fluid icons. Posting only the event leaves water/lava
+        // without icons, so original fluid-dependent renderers cannot derive their texture colors.
+        loader.loadClass("net.minecraftforge.client.ForgeHooksClient")
+                .getMethod("onTextureStitched"+phase,loader.loadClass("net.minecraft.client.renderer.texture.TextureMap"))
+                .invoke(null,atlas);
     }
     static Map<String,Texture> load(ClassLoader loader,Object manager,Map<?,?> entries) throws Exception {
         Class<?> sprite=loader.loadClass("net.minecraft.client.renderer.texture.TextureAtlasSprite");

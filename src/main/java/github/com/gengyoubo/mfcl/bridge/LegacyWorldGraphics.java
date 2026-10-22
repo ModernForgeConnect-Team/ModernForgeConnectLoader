@@ -18,21 +18,36 @@ import java.util.List;
 public final class LegacyWorldGraphics {
     public record Text(String text,int x,int y,int color,boolean shadow,double[] matrix) {public Text {matrix=matrix.clone();}}
     private static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
+    // Installed only while LegacyClientData.inLegacy holds the runtime's shared monitor.
+    private static final ThreadLocal<ClassLoader> LEGACY_DOMAIN = new ThreadLocal<>();
     private LegacyWorldGraphics() { }
 
     public static Frame begin() {
         if (CURRENT.get() != null) throw new IllegalStateException("Nested legacy world capture");
-        idleTessellator();
+        ClassLoader loader = LEGACY_DOMAIN.get();
+        if (loader != null) idleTessellator(loader);
         Frame frame = new Frame(); CURRENT.set(frame); return frame;
+    }
+    static ClassLoader enterLegacy(ClassLoader loader) {
+        ClassLoader previous = LEGACY_DOMAIN.get();
+        LEGACY_DOMAIN.set(loader);
+        // GUI captures can begin before acquiring the runtime monitor. Recover only after acquiring it,
+        // and never on nested calls from a renderer that is still building its current batch.
+        if (previous == null && active()) idleTessellator(loader);
+        return previous;
+    }
+    static void leaveLegacy(ClassLoader previous) {
+        if (previous == null) LEGACY_DOMAIN.remove();
+        else LEGACY_DOMAIN.set(previous);
     }
     /**
      * An original renderer that threw between startDrawing and draw leaves the shared old Tessellator "drawing", and
-     * every later capture would fail with "Already tesselating!". No capture is open here, so its vertices are stale.
-     * GUI frames begin before the old context loader is installed, so the attached legacy loader is tried as well.
+     * every later capture would fail with "Already tesselating!". The caller holds the runtime monitor and has not
+     * started the next original renderer, so these vertices are stale. A GUI capture outside that monitor must never
+     * reset the singleton: it may belong to a chunk renderer running on another thread.
      */
-    private static void idleTessellator() {
-        Class<?> type = oldTessellator(Thread.currentThread().getContextClassLoader());
-        if (type == null) type = oldTessellator(LegacyDiagnostics.legacyLoader());
+    private static void idleTessellator(ClassLoader loader) {
+        Class<?> type = oldTessellator(loader);
         if (type == null) return; // not inside the old client domain
         try {
             Object instance = type.getField("field_78398_a").get(null);

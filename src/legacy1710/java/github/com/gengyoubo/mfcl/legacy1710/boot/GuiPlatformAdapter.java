@@ -70,6 +70,12 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             else if (name.endsWith("Mouse") && method.equals("isButtonDown")) { m.instructions.add(new VarInsnNode(Opcodes.ILOAD,0));call(m,"button","(I)Z"); }
             else if (name.endsWith("Mouse") && method.equals("getX")) call(m,"mouseX","()I");
             else if (name.endsWith("Mouse") && method.equals("getY")) call(m,"mouseY","()I");
+            // handleMouseInput sees one synthetic wheel event: host clicks/releases arrive through their own handlers.
+            else if (name.endsWith("Mouse") && method.equals("getEventDWheel")) call(m,"eventWheel","()I");
+            else if (name.endsWith("Mouse") && method.equals("getEventX")) call(m,"mouseX","()I");
+            else if (name.endsWith("Mouse") && method.equals("getEventY")) call(m,"mouseY","()I");
+            else if (name.endsWith("Mouse") && method.equals("getEventButton")) m.instructions.add(new InsnNode(Opcodes.ICONST_M1));
+            else if (name.endsWith("Mouse") && method.equals("getEventButtonState")) m.instructions.add(new InsnNode(Opcodes.ICONST_0));
             else if (method.equals("isCreated")) m.instructions.add(new InsnNode(Opcodes.ICONST_1));
             else if (name.endsWith("Keyboard") && (method.equals("getKeyName") || method.equals("getKeyIndex"))) { keyNames(node,m);continue; }
             else if (method.equals("getDWheel") || method.equals("next") || method.equals("isButtonDown")) m.instructions.add(new InsnNode(Opcodes.ICONST_0));

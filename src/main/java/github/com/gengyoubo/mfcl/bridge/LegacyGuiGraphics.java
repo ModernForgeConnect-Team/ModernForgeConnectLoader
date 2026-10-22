@@ -32,6 +32,7 @@ public final class LegacyGuiGraphics {
         private final LegacyWorldGraphics.Frame geometry=LegacyWorldGraphics.active()?null:LegacyWorldGraphics.begin();
         private Object requestedScreen;
         private boolean screenRequested, clickSound, tooltip;
+        private int wheel;
         private Frame(int width, int height, int x, int y, Set<Integer> keys) {
             this.width = width; this.height = height; mouseX = x; mouseY = y; this.keys = Set.copyOf(keys);
         }
@@ -105,6 +106,9 @@ public final class LegacyGuiGraphics {
         } catch(Exception failure){throw new IllegalArgumentException("Cannot play legacy sound",failure);}
     }
     public static int mouseX() { return frame().mouseX; }
+    /** Host wheel movement delivered to the old GUI's handleMouseInput; LWJGL's event wheel reads it once. */
+    public static void wheel(int delta) { frame().wheel = delta; }
+    public static int eventWheel() { Frame f = CURRENT.get(); if (f == null) return 0; int delta = f.wheel; f.wheel = 0; return delta; }
     public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }
     public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy rendering backend does not support " + name); }
 }

@@ -40,6 +40,8 @@ public final class LegacyScreens {
         }
         public void mousePressed(int x, int y, int button) throws Exception { invokeProtected("func_73864_a", new Class<?>[]{int.class, int.class, int.class}, x, y, button); }
         public void mouseReleased(int x,int y,int button) throws Exception { invokeProtected("func_146286_b",new Class<?>[]{int.class,int.class,int.class},x,y,button); }
+        public void mouseDragged(int x,int y,int button) throws Exception { invokeProtected("func_146273_a",new Class<?>[]{int.class,int.class,int.class,long.class},x,y,button,0L); }
+        public void mouseInput() throws Exception { check();screen.getClass().getMethod("func_146274_d").invoke(screen); }
         public void keyPressed(char character, int legacyKey) throws Exception { invokeProtected("func_73869_a", new Class<?>[]{char.class, int.class}, character, legacyKey); }
         private void invokeProtected(String name, Class<?>[] signature, Object... values) throws Exception {
             check(); Method method = loader.loadClass("net.minecraft.client.gui.GuiScreen").getDeclaredMethod(name, signature); method.setAccessible(true); method.invoke(screen, values);
