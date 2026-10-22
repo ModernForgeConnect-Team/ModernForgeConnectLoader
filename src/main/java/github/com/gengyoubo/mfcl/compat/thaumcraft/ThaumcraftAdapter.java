@@ -28,18 +28,11 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
             services.biomes().register(biome[0],generation.getField(biome[1]).get(null),biome[2]==null?0:config.getField(biome[2]).getInt(null));
         ThaumcraftOuterLands.install(services);
         LegacyPackets.allowServer(loader,ThaumcraftDevicePackets::prepare);
-        services.playerState().register(new LegacyPlayerState.Hooks() {
-            @Override public String id() { return "thaumcraft4:knowledge"; }
-            @Override public AutoCloseable enter(Object world) throws Exception { return ThaumcraftKnowledge.server(loader, world); }
-            @Override public void initialize(Object player) throws Exception { ThaumcraftKnowledge.initialize(loader, player); }
-            @Override public void save(Object player, Object nbt) throws Exception { ThaumcraftKnowledge.nbt(loader, player, nbt, true); }
-            @Override public void load(Object player, Object nbt) throws Exception { ThaumcraftKnowledge.nbt(loader, player, nbt, false); }
-            @Override public void synchronize(Object player) throws Exception { ThaumcraftScanner.synchronize(loader, player); }
-        });
+        services.playerState().register(new ThaumcraftKnowledge(loader));
         services.scanners().register(new ThaumcraftScanner(loader));
         ThaumcraftCrossbow.install(services);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(ThaumcraftResearchCommand::register);
-        return Map.of("status", "READY", "playerStateHooks", "thaumcraft4:knowledge", "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
+        return Map.of("status", "READY", "playerStateHooks", ThaumcraftKnowledge.ID, "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {
         ThaumcraftWandControls.install(services);

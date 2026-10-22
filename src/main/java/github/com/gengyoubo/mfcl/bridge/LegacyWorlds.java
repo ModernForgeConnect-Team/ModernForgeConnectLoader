@@ -131,6 +131,14 @@ public final class LegacyWorlds implements AutoCloseable {
         default void saving(Object world, int dimension) throws Exception {}
         default void tick(Object world, boolean start) throws Exception {}
         default void unloaded(Object world) throws Exception {}
+        interface WorldData { void run(Object world) throws Exception; }
+        /** Mod data an old mod loads and saves with the overworld (WorldEvent.Load/Save on dimension 0), such as global maze or network files. */
+        static Lifecycle overworldData(WorldData load, WorldData save) {
+            return new Lifecycle() {
+                @Override public void loaded(Object world, int dimension) throws Exception { if (dimension == 0) load.run(world); }
+                @Override public void saving(Object world, int dimension) throws Exception { if (dimension == 0) save.run(world); }
+            };
+        }
     }
     private final List<Lifecycle> lifecycles = new java.util.concurrent.CopyOnWriteArrayList<>();
     public void lifecycle(Lifecycle hooks) { lifecycles.add(Objects.requireNonNull(hooks)); }

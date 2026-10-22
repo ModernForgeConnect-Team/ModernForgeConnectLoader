@@ -189,6 +189,21 @@ public final class ModernContentBridge {
         } catch (RuntimeException failure) { throw failure; }
         catch (Exception failure) { throw new IllegalStateException("Legacy player transaction failed", failure); }
     }
+    public interface ActorAction { void run(Object actor) throws Exception; }
+    /**
+     * Runs an original per-player callback (an old event handler or lifecycle hook) with the player's actor in its bound
+     * world, inside the player state scope. Unlike {@link #withApiPlayer} it neither restores nor persists player data.
+     * Returns false while the player's level has no bound legacy world.
+     */
+    public boolean withServerActor(net.minecraft.server.level.ServerPlayer player, ActorAction action) throws Exception {
+        Object world = services.worlds().findBound(player.serverLevel());
+        if (world == null) return false;
+        services.items().inLegacy(() -> {
+            try (var state = services.playerState().enter(world)) { action.run(itemUse.clientActor(world, placer(player), null)); }
+            return null;
+        });
+        return true;
+    }
     private void playerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
         byte[] data = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);

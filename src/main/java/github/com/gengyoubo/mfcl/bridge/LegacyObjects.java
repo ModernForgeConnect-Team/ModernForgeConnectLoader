@@ -27,6 +27,11 @@ public final class LegacyObjects {
     public static Object heldStack(Object player) throws Exception {
         return player.getClass().getClassLoader().loadClass("net.minecraft.entity.player.EntityPlayer").getMethod("func_70694_bm").invoke(player);
     }
+    /** The block's registry key ("Mod:name") in the old block registry. */
+    public static String blockKey(Object block) throws Exception {
+        Object registry=block.getClass().getClassLoader().loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
+        return (String)registry.getClass().getMethod("func_148750_c",Object.class).invoke(registry,block);
+    }
     /** The stack's item, or null for an empty slot. */
     public static Object item(Object stack) throws Exception {
         return stack==null?null:stack.getClass().getClassLoader().loadClass("net.minecraft.item.ItemStack").getMethod("func_77973_b").invoke(stack);

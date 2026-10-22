@@ -13,6 +13,27 @@ public final class LegacyPlayerState {
         /** Sends the adapter's player state to that player's client (login, after a server-side change). */
         default void synchronize(Object player) throws Exception { }
     }
+    /**
+     * Old mods keep per-player state (research, known aspects...) in one shared object, such as a proxy field. An
+     * integrated client and server would share it, so for the scope of {@link Hooks#enter} each server world gets its own
+     * instance; client worlds keep the original. Instances are dropped with their world.
+     */
+    public static final class ServerScoped {
+        public interface Source { Object get() throws Exception; }
+        private final Map<Object, Object> perWorld = new WeakHashMap<>();
+        private final Source owner, factory;
+        private final java.lang.reflect.Field field;
+        /** {@code owner} is read on every entry, since old mods may replace it (a proxy) after registration. */
+        public ServerScoped(Source owner, java.lang.reflect.Field field, Source factory) { this.owner = owner; this.field = field; this.factory = factory; }
+        public synchronized AutoCloseable enter(Object world) throws Exception {
+            var worldType = world.getClass().getClassLoader().loadClass("net.minecraft.world.World");
+            if (worldType.getField("field_72995_K").getBoolean(world)) return () -> { };
+            Object target = owner.get(), previous = field.get(target), scoped = perWorld.get(world);
+            if (scoped == null) perWorld.put(world, scoped = factory.get());
+            field.set(target, scoped);
+            return () -> field.set(target, previous);
+        }
+    }
     private final Map<String, Hooks> hooks = new LinkedHashMap<>();
     public synchronized AutoCloseable register(Hooks hook) {
         if (hooks.putIfAbsent(hook.id(), hook) != null) throw new IllegalArgumentException("Player state hook already registered: " + hook.id());

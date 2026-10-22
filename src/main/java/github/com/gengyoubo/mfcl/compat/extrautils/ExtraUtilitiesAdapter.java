@@ -13,17 +13,13 @@ public final class ExtraUtilitiesAdapter implements LegacyModAdapter {
                 "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesTextAdapter");
     }
     public Map<String,Object> initialize(LegacyServices services) throws Exception {
-        var config=services.loader().loadClass("com.rwtema.extrautils.ExtraUtils");
-        int dark=config.getField("underdarkDimID").getInt(null),millennium=config.getField("endoftimeDimID").getInt(null);
+        String config="com.rwtema.extrautils.ExtraUtils";
         var dimensions=new ArrayList<String>();
-        if(dark!=0){
-            services.dimensions().register("extrautils:deep_dark",dark,"minecraft:plains");
-            services.dimensions().terrain("extrautils:deep_dark");dimensions.add("extrautils:deep_dark");
-        }
-        if(millennium!=0){
-            services.dimensions().register("extrautils:last_millennium",millennium,"minecraft:plains");dimensions.add("extrautils:last_millennium");
-        }
-        ExtraUtilitiesTravel.install(services,dark,millennium);
+        var dark=services.dimensions().registerConfigured("extrautils:deep_dark",config,"underdarkDimID","minecraft:plains");
+        if(dark!=null){services.dimensions().terrain(dark.hostKey());dimensions.add(dark.hostKey());}
+        var millennium=services.dimensions().registerConfigured("extrautils:last_millennium",config,"endoftimeDimID","minecraft:plains");
+        if(millennium!=null)dimensions.add(millennium.hostKey());
+        ExtraUtilitiesTravel.install(services,dark==null?0:dark.legacyId(),millennium==null?0:millennium.legacyId());
         // Modern Forge transforms event classes through the current context loader. This callback starts in the
         // private 1.7.10 context, so install native listeners using the host loader before referring to event types.
         ClassLoader previous=Thread.currentThread().getContextClassLoader();

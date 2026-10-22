@@ -13,6 +13,20 @@ public final class LegacyTravel {
     public interface Placement { double[] place(Object world, Object teleporter, double x, double y, double z, float yaw); }
     private static final Map<String, Placement> PLACEMENTS = new ConcurrentHashMap<>();
     public static void placement(String teleporterClass, Placement placement) { PLACEMENTS.put(teleporterClass, placement); }
+    /** Where to stand beside the found portal block {x,y,z}; returns {x,y,z}. */
+    public interface PortalArrival { double[] beside(Object world, int[] portal) throws Exception; }
+    /**
+     * A teleporter whose placeInExistingPortal looks for the nearest portal block within {@code radius} columns: the host
+     * searches its own chunks instead of the original's per-block scan. Without a portal the position is kept.
+     */
+    public static void nearestPortal(String teleporterClass, String portalKey, int radius, PortalArrival arrival) {
+        placement(teleporterClass, (world, teleporter, x, y, z, yaw) -> {
+            int[] found = findBlock(world, portalKey, (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z), radius);
+            if (found == null) return null;
+            try { return arrival.beside(world, found); }
+            catch (Exception failure) { throw new IllegalStateException("Cannot place arrival beside " + portalKey, failure); }
+        });
+    }
     /** Host-side: the arrival position for a transfer in the bound destination world; unknown teleporters keep the position. */
     public static double[] place(Object world, Object teleporter, double x, double y, double z, float yaw) {
         var placement = teleporter == null ? null : PLACEMENTS.get(teleporter.getClass().getName());

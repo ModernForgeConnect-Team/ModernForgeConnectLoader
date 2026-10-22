@@ -1,5 +1,6 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
+import github.com.gengyoubo.mfcl.bridge.LegacyObjects;
 import github.com.gengyoubo.mfcl.bridge.LegacyServices;
 import github.com.gengyoubo.mfcl.bridge.LegacyTravel;
 import github.com.gengyoubo.mfcl.bridge.LegacyWorlds;
@@ -14,28 +15,20 @@ final class ThaumcraftOuterLands {
     private ThaumcraftOuterLands() {}
     static void install(LegacyServices services) throws Exception {
         var loader = services.loader();
-        int outer = loader.loadClass("thaumcraft.common.config.Config").getField("dimensionOuterId").getInt(null);
-        services.dimensions().register(HOST_KEY, outer, "thaumcraft:eldritch");
+        if (services.dimensions().registerConfigured(HOST_KEY, "thaumcraft.common.config.Config", "dimensionOuterId", "thaumcraft:eldritch") == null) return;
         Object portal = loader.loadClass("thaumcraft.common.config.ConfigBlocks").getField("blockEldritchPortal").get(null);
-        Object registry = loader.loadClass("net.minecraft.block.Block").getField("field_149771_c").get(null);
-        String portalKey = (String) registry.getClass().getMethod("func_148750_c", Object.class).invoke(registry, portal);
-        var random = loader.loadClass("net.minecraft.world.World").getField("field_73012_v");
+        var world = loader.loadClass("net.minecraft.world.World");
+        var random = world.getField("field_73012_v");
         // TeleporterThaumcraft.placeInExistingPortal: the nearest eldritch portal within 128 columns, arriving one block
-        // off it on both axes. The host searches its own chunks instead of 257x257x256 old getBlock calls.
-        LegacyTravel.placement("thaumcraft.common.lib.world.dim.TeleporterThaumcraft", (world, teleporter, x, y, z, yaw) -> {
-            int[] found = LegacyTravel.findBlock(world, portalKey, (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z), 128);
-            if (found == null) return null;
-            try {
-                Random rand = (Random) random.get(world);
-                return new double[]{found[0] + .5 + (rand.nextBoolean() ? 1 : -1), found[1], found[2] + .5 + (rand.nextBoolean() ? 1 : -1)};
-            } catch (IllegalAccessException failure) { throw new IllegalStateException(failure); }
+        // off it on both axes.
+        LegacyTravel.nearestPortal("thaumcraft.common.lib.world.dim.TeleporterThaumcraft", LegacyObjects.blockKey(portal), 128, (destination, found) -> {
+            Random rand = (Random) random.get(destination);
+            return new double[]{found[0] + .5 + (rand.nextBoolean() ? 1 : -1), found[1], found[2] + .5 + (rand.nextBoolean() ? 1 : -1)};
         });
         // EventHandlerWorld loads/saves labyrinth.dat with the overworld; the old WorldEvent is not posted in the host.
         var mazes = loader.loadClass("thaumcraft.common.lib.world.dim.MazeHandler");
-        var world = loader.loadClass("net.minecraft.world.World");
-        services.worlds().lifecycle(new LegacyWorlds.Lifecycle() {
-            @Override public void loaded(Object legacy, int dimension) throws Exception { if (dimension == 0) mazes.getMethod("loadMaze", world).invoke(null, legacy); }
-            @Override public void saving(Object legacy, int dimension) throws Exception { if (dimension == 0) mazes.getMethod("saveMaze", world).invoke(null, legacy); }
-        });
+        var load = mazes.getMethod("loadMaze", world);
+        var save = mazes.getMethod("saveMaze", world);
+        services.worlds().lifecycle(LegacyWorlds.Lifecycle.overworldData(legacy -> load.invoke(null, legacy), legacy -> save.invoke(null, legacy)));
     }
 }

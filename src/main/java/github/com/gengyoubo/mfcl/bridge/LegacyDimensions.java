@@ -27,6 +27,14 @@ public final class LegacyDimensions {
         var definition = new Definition(hostKey, legacyId, biome, provider(legacyId));
         definitions.put(hostKey, definition); return definition;
     }
+    /**
+     * Mirrors an old dimension whose id the mod reads from a static config field. Id 0 is the overworld, which old mods
+     * use to disable the dimension; nothing is registered and null is returned then.
+     */
+    public Definition registerConfigured(String hostKey, String configClass, String idField, String biome) throws Exception {
+        int legacyId = loader.loadClass(configClass).getField(idField).getInt(null);
+        return legacyId == 0 ? null : register(hostKey, legacyId, biome);
+    }
     private final Map<String, Integer> assigned = new HashMap<>(Map.of("minecraft:overworld", 0, "minecraft:the_nether", -1, "minecraft:the_end", 1));
     /**
      * Old dimension id of a host level: vanilla ids, the id an old mod registered for a mirrored dimension, otherwise

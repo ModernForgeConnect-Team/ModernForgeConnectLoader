@@ -1,29 +1,32 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
 import github.com.gengyoubo.mfcl.bridge.LegacyObjects;
+import github.com.gengyoubo.mfcl.bridge.LegacyPlayerState;
 import java.util.Map;
 
-/** Original TC player-load defaults, normally applied by its old player-data loading event. */
-public final class ThaumcraftKnowledge {
-    private static final Map<Object,Object> SERVER=new java.util.WeakHashMap<>();
+/**
+ * TC research rules on MFCL's generic player lifecycle: original player-load defaults (normally applied by its old
+ * player-data loading event), NBT save/load, and per-server-world knowledge maps.
+ */
+final class ThaumcraftKnowledge implements LegacyPlayerState.Hooks {
+    static final String ID = "thaumcraft4:knowledge";
     /** NBT section -> CommonProxy map that the original load*NBT methods add to. */
     private static final String[][] SECTIONS={{"THAUMCRAFT.RESEARCH","getCompletedResearch"},{"THAUMCRAFT.ASPECTS","getKnownAspects"},
             {"THAUMCRAFT.SCAN.OBJECTS","getScannedObjects"},{"THAUMCRAFT.SCAN.ENTITIES","getScannedEntities"},{"THAUMCRAFT.SCAN.PHENOMENA","getScannedPhenomena"}};
-    private ThaumcraftKnowledge() {}
+    private final ClassLoader loader;
+    private final LegacyPlayerState.ServerScoped server;
+    ThaumcraftKnowledge(ClassLoader loader) throws Exception {
+        this.loader=loader;
+        var knowledge=loader.loadClass("thaumcraft.common.lib.research.PlayerKnowledge").getConstructor();
+        server=new LegacyPlayerState.ServerScoped(()->ThaumcraftReflection.proxy(loader),loader.loadClass("thaumcraft.common.CommonProxy").getField("playerKnowledge"),knowledge::newInstance);
+    }
+    @Override public String id() { return ID; }
     /** Called inside the runtime lock: an integrated server must not share its research maps with the client. */
-    public static Scope server(ClassLoader loader,Object world) throws Exception {
-        if(!ThaumcraftReflection.present(loader)||loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world))return new Scope(null,null,null);
-        Object proxy=ThaumcraftReflection.proxy(loader);
-        var field=loader.loadClass("thaumcraft.common.CommonProxy").getField("playerKnowledge");Object previous=field.get(proxy);
-        Object knowledge=SERVER.get(world);
-        if(knowledge==null){knowledge=loader.loadClass("thaumcraft.common.lib.research.PlayerKnowledge").getConstructor().newInstance();SERVER.put(world,knowledge);}
-        field.set(proxy,knowledge);return new Scope(proxy,field,previous);
-    }
-    public record Scope(Object proxy,java.lang.reflect.Field field,Object previous) implements AutoCloseable {
-        @Override public void close() throws IllegalAccessException {if(field!=null)field.set(proxy,previous);}
-    }
-    public static void nbt(ClassLoader loader,Object player,Object nbt,boolean save) throws Exception {
-        if(!ThaumcraftReflection.present(loader))return;
+    @Override public AutoCloseable enter(Object world) throws Exception { return server.enter(world); }
+    @Override public void save(Object player,Object nbt) throws Exception { nbt(player,nbt,true); }
+    @Override public void load(Object player,Object nbt) throws Exception { nbt(player,nbt,false); }
+    @Override public void synchronize(Object player) throws Exception { ThaumcraftScanner.synchronize(loader,player); }
+    private void nbt(Object player,Object nbt,boolean save) throws Exception {
         // The original load*NBT methods only add entries. Writing saved data replaces the player's state, so a rolled-back
         // transaction must not keep scans or research it completed; sections absent from the NBT keep their current entries.
         if(!save) {
@@ -38,16 +41,12 @@ public final class ThaumcraftKnowledge {
         for(String section:new String[]{"Research","Aspect","Scanned"})manager.getMethod((save?"save":"load")+section+"NBT",nbtType,playerType).invoke(null,nbt,player);
         // saveResearchNBT omits auto-unlocked entries; TC re-adds them on every world join, so a load must restore them
         // too, or the book reports the first real entries (FOCUSFIRE, NITOR, RESEARCHER1...) as missing prerequisites.
-        if(!save)autoUnlock(loader,manager,LegacyObjects.playerName(player));
+        if(!save) {
+            var complete=manager.getMethod("completeResearchUnsaved",String.class,String.class);String name=LegacyObjects.playerName(player);
+            for(Object key:autoUnlocked())complete.invoke(null,name,key);
+        }
     }
-    private static void autoUnlock(ClassLoader loader,Class<?> manager,String name) throws Exception {
-        var complete=manager.getMethod("completeResearchUnsaved",String.class,String.class);
-        var categories=(Map<?,?>)loader.loadClass("thaumcraft.api.research.ResearchCategories").getField("researchCategories").get(null);
-        for(Object category:categories.values())for(Object research:((Map<?,?>)category.getClass().getField("research").get(category)).values())
-            if((boolean)research.getClass().getMethod("isAutoUnlock").invoke(research))complete.invoke(null,name,research.getClass().getField("key").get(research));
-    }
-    public static void initialize(ClassLoader loader,Object player) throws Exception {
-        if(!ThaumcraftReflection.present(loader))return;
+    @Override public void initialize(Object player) throws Exception {
         Class<?> playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         Object proxy=ThaumcraftReflection.proxy(loader);
         var known=(Map<?,?>)proxy.getClass().getMethod("getKnownAspects").invoke(proxy);
@@ -55,8 +54,13 @@ public final class ThaumcraftKnowledge {
         if(!known.containsKey(LegacyObjects.playerName(player)))managerType.getMethod("loadPlayerData",playerType,java.io.File.class,java.io.File.class,boolean.class).invoke(null,player,null,null,false);
         Object manager=proxy.getClass().getMethod("getResearchManager").invoke(proxy);
         var complete=managerType.getMethod("completeResearch",playerType,String.class);
+        for(Object key:autoUnlocked())complete.invoke(manager,player,key);
+    }
+    private java.util.List<Object> autoUnlocked() throws Exception {
+        var keys=new java.util.ArrayList<Object>();
         var categories=(Map<?,?>)loader.loadClass("thaumcraft.api.research.ResearchCategories").getField("researchCategories").get(null);
         for(Object category:categories.values())for(Object research:((Map<?,?>)category.getClass().getField("research").get(category)).values())
-            if((boolean)research.getClass().getMethod("isAutoUnlock").invoke(research))complete.invoke(manager,player,research.getClass().getField("key").get(research));
+            if((boolean)research.getClass().getMethod("isAutoUnlock").invoke(research))keys.add(research.getClass().getField("key").get(research));
+        return keys;
     }
 }
