@@ -19,7 +19,9 @@ public final class LegacyContent {
     public record Pull(int ticks, List<String> icons) {
         public Pull { icons = List.copyOf(icons); }
     }
-    public record Item(String key, String blockKey, int stackLimit, int maxDamage, boolean creative, List<Variant> variants, Armor armor, List<Pull> pulls) {
+    /** full3D/rodRotation: original Item.isFull3D and shouldRotateAroundWhenRendering (held upright like a tool or a rod). */
+    public record Item(String key, String blockKey, int stackLimit, int maxDamage, boolean creative, List<Variant> variants, Armor armor, List<Pull> pulls,
+                       boolean full3D, boolean rodRotation) {
         public Item { variants = List.copyOf(variants); pulls = List.copyOf(pulls); }
     }
     public record Block(String key, float hardness, float resistance, int light, boolean opaque,
@@ -304,7 +306,13 @@ public final class LegacyContent {
             boolean creative = Arrays.stream((Object[]) itemType.getMethod("getCreativeTabs").invoke(item)).anyMatch(Objects::nonNull);
             Armor armor = armorType.isInstance(item) ? armor(loader, item, stackType.getConstructor(itemType, int.class, int.class).newInstance(item, 1, 0)) : null;
             List<Pull> pulls = linkedBlock == null ? pulls(loader, item, stackType.getConstructor(itemType, int.class, int.class).newInstance(item, 1, 0)) : List.of();
-            itemValues.add(new Item(key, linkedBlock, Math.max(1, Math.min(64, limit)), damage, creative, variants, armor, pulls));
+            boolean full3D = false, rodRotation = false;
+            try {
+                // Both are client-only in 1.7.10; a dedicated server has no held-item models to choose.
+                full3D = (boolean) itemType.getMethod("func_77662_d").invoke(item);
+                rodRotation = full3D && (boolean) itemType.getMethod("func_77629_n_").invoke(item);
+            } catch (ReflectiveOperationException clientOnly) { }
+            itemValues.add(new Item(key, linkedBlock, Math.max(1, Math.min(64, limit)), damage, creative, variants, armor, pulls, full3D, rodRotation));
         }
         blockValues.sort(Comparator.comparing(Block::key)); itemValues.sort(Comparator.comparing(Item::key));
         return new Declarations(List.copyOf(itemValues), List.copyOf(blockValues), tabValues);

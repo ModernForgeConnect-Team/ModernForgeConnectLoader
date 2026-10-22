@@ -199,6 +199,21 @@ public final class LegacyItemUse {
             inventoryUpdates.put(snapshot.key(),updates);return updates;
         });
     }
+    /** What vanilla combat and enchanting need to know: original ItemSword, ItemTool tool classes, getItemEnchantability. */
+    public record Equipment(boolean sword,boolean tool,Set<String> toolClasses,int enchantability){}
+    private final Map<String,Equipment> equipment=new HashMap<>();
+    public Equipment equipment(LegacyClientData.Stack snapshot) throws Exception {
+        return services.items().inLegacy(()->{
+            var known=equipment.get(snapshot.key());if(known!=null)return known;
+            var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var itemType=loader.loadClass("net.minecraft.item.Item");
+            Object stack=services.items().materialize(snapshot);Object item=stackType.getMethod("func_77973_b").invoke(stack);
+            boolean sword=loader.loadClass("net.minecraft.item.ItemSword").isInstance(item),tool=loader.loadClass("net.minecraft.item.ItemTool").isInstance(item);
+            var classes=new HashSet<String>();
+            if(tool)for(Object name:(Set<?>)itemType.getMethod("getToolClasses",stackType).invoke(item,stack))classes.add((String)name);
+            var result=new Equipment(sword,tool,Set.copyOf(classes),(int)itemType.getMethod("func_77619_b").invoke(item));
+            equipment.put(snapshot.key(),result);return result;
+        });
+    }
     /** Executes onUpdate on the actual inventory stack, including passive wand-rod charging. */
     public List<LegacyPackets.Message> inventoryTick(Object world,LegacyTiles.Placer placer,int slot,int ticks,boolean selected) throws Exception {
         return services.items().inLegacy(()->{try(var state=services.playerState().enter(world);var outgoing=LegacyPackets.capture(placer.id())) {

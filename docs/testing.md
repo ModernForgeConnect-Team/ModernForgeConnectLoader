@@ -106,6 +106,8 @@ The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client co
 
 `-PmfclServerSmokeTest=gameplay` instead runs the door, hellbat, loot and elemental-arrow regressions once and writes `gameplay-smoke.json`. Use a disposable game directory: it creates and clears test entities and blocks. See the [gameplay fix record](gameplay-fixes-2026-10-21.md) for the isolated command and coverage.
 
+`-PmfclServerSmokeTest=melee` checks original TC4 swords and tools against a vanilla iron sword: the original attack modifier, two native attacks with Sharpness V, sweeping (swords only), which sword/digger enchantments apply and what the table rolls, and that host enchantments survive the original hit callbacks. It writes `server-1.7.10-smoke-melee.json`; use a disposable game directory.
+
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
 
 Extra Utilities input and focused regression/graphical commands are recorded in [the compatibility fix record](extrautilities-startup.md). The original-JAR regression uses `-PextrautilitiesJar=<original-file>` with `-PlegacySupportDir=<support-root>` and skips explicitly when either input is missing.

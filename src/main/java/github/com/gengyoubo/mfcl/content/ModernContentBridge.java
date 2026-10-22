@@ -30,6 +30,8 @@ import java.util.*;
 public final class ModernContentBridge {
     public static final IntegerProperty METADATA = IntegerProperty.create("legacy_meta", 0, 15);
     public static final String STACK_TAG = "mfcl_legacy";
+    /** Host enchanting/anvil tags: native code applies them, original callbacks never see them and must not drop them. */
+    private static final Set<String> HOST_OWNED_TAGS = Set.of("Enchantments", "RepairCost", "display");
     private static ModernContentBridge active;
     private final LegacyServices services;
     private final LegacyContent declarations;
@@ -433,7 +435,7 @@ public final class ModernContentBridge {
     public LegacyClientData.Stack snapshot(ItemStack stack) {
         var item = reverseItems.get(stack.getItem()); if (item == null) return null;
         if (stack.hasTag()) for (String key : stack.getTag().getAllKeys())
-            if (!key.equals(STACK_TAG) && !key.equals("Damage")) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
+            if (!key.equals(STACK_TAG) && !key.equals("Damage") && !HOST_OWNED_TAGS.contains(key)) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
         CompoundTag tag = stack.getTagElement(STACK_TAG);
         return new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", tag == null ? "" : tag.getString("snbt"));
     }
@@ -597,7 +599,45 @@ public final class ModernContentBridge {
             var result=com.google.common.collect.HashMultimap.<net.minecraft.world.entity.ai.attributes.Attribute,net.minecraft.world.entity.ai.attributes.AttributeModifier>create();
             if(slot!=net.minecraft.world.entity.EquipmentSlot.MAINHAND)return result;
             try{for(var value:itemUse.itemAttributes(snapshot(stack))){var attribute=HostPlayerAttributes.type(value.name());if(attribute==null)continue;var m=value.modifier();result.put(attribute,new net.minecraft.world.entity.ai.attributes.AttributeModifier(m.id(),m.name(),m.amount(),net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.fromValue(m.operation())));}}
-            catch(Exception failure){throw new IllegalStateException("Cannot bridge original item attributes",failure);}return result;
+            catch(Exception failure){throw new IllegalStateException("Cannot bridge original item attributes",failure);}
+            // 1.7.10 had no attack cooldown; an original sword/tool swings at the speed of its host counterpart.
+            var kind=equipment(stack);
+            if(kind!=null)result.put(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED,new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                    BASE_ATTACK_SPEED_UUID,kind.sword()?"Weapon modifier":"Tool modifier",attackSpeed(kind),net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADDITION));
+            return result;
+        }
+        /** Original ItemSword/ItemTool, or null for every other original item and unmappable stacks. */
+        private LegacyItemUse.Equipment equipment(ItemStack stack){
+            try{var kind=itemUse.equipment(snapshot(stack));return kind.sword()||kind.tool()?kind:null;}catch(Exception unmapped){return null;}
+        }
+        private static double attackSpeed(LegacyItemUse.Equipment kind){
+            if(kind.sword())return -2.4;
+            return kind.toolClasses().contains("axe")||kind.toolClasses().contains("shovel")&&!kind.toolClasses().contains("pickaxe")?-3:-2.8;
+        }
+        @Override public boolean canPerformAction(ItemStack stack,net.minecraftforge.common.ToolAction action){
+            var kind=equipment(stack);if(kind==null)return false;
+            if(kind.sword())return net.minecraftforge.common.ToolActions.DEFAULT_SWORD_ACTIONS.contains(action);
+            return kind.toolClasses().contains("pickaxe")&&net.minecraftforge.common.ToolActions.DEFAULT_PICKAXE_ACTIONS.contains(action)
+                    ||kind.toolClasses().contains("axe")&&net.minecraftforge.common.ToolActions.DEFAULT_AXE_ACTIONS.contains(action)
+                    ||kind.toolClasses().contains("shovel")&&net.minecraftforge.common.ToolActions.DEFAULT_SHOVEL_ACTIONS.contains(action);
+        }
+        /** LivingEntity.canDisableShield only knows host AxeItem. */
+        @Override public boolean canDisableShield(ItemStack stack,ItemStack shield,LivingEntity entity,LivingEntity attacker){
+            var kind=equipment(stack);return kind!=null&&kind.toolClasses().contains("axe")||super.canDisableShield(stack,shield,entity,attacker);
+        }
+        /** A creative player's sword hits instead of breaking blocks, as with host swords. */
+        @Override public boolean canAttackBlock(BlockState state,Level level,BlockPos pos,net.minecraft.world.entity.player.Player player){
+            var kind=equipment(player.getMainHandItem());return kind==null||!kind.sword()||!player.isCreative();
+        }
+        @Override public int getEnchantmentValue(ItemStack stack){var kind=equipment(stack);return kind==null?0:kind.enchantability();}
+        /** Sword enchantments for ItemSword, digger ones for ItemTool (axes also take damage enchantments, as host axes do). */
+        @Override public boolean canApplyAtEnchantingTable(ItemStack stack,net.minecraft.world.item.enchantment.Enchantment enchantment){
+            if(super.canApplyAtEnchantingTable(stack,enchantment))return true;
+            var kind=equipment(stack);if(kind==null)return false;
+            var category=enchantment.category;
+            if(kind.sword())return category==net.minecraft.world.item.enchantment.EnchantmentCategory.WEAPON;
+            return category==net.minecraft.world.item.enchantment.EnchantmentCategory.DIGGER
+                    ||kind.toolClasses().contains("axe")&&enchantment instanceof net.minecraft.world.item.enchantment.DamageEnchantment;
         }
         @Override public float getDestroySpeed(ItemStack stack,BlockState state){
             try{var block=legacyBlock(state);return block==null?1:itemUse.destroySpeed(snapshot(stack),block.legacyKey());}catch(Exception failure){return 1;}
@@ -643,7 +683,12 @@ public final class ModernContentBridge {
         @Override public InteractionResult useOn(UseOnContext context) {
             // A held scanner has no block-use action. PASS lets Minecraft invoke its held-use callback.
             if(services.scanners().forItem(entry.key()).isPresent())return InteractionResult.PASS;
-            return useLegacyItem(context);
+            var result=useLegacyItem(context);if(result!=InteractionResult.PASS)return result;
+            // Original axes/shovels have no use-on action of their own; the host one strips, scrapes, waxes off and flattens.
+            var kind=equipment(context.getItemInHand());
+            if(kind!=null&&kind.toolClasses().contains("axe"))return Items.IRON_AXE.useOn(context);
+            if(kind!=null&&kind.toolClasses().contains("shovel"))return Items.IRON_SHOVEL.useOn(context);
+            return result;
         }
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
             ItemStack stack = player.getItemInHand(hand);
@@ -810,12 +855,25 @@ public final class ModernContentBridge {
                 var updated=after.get(slot)==null?ItemStack.EMPTY:gameplayStack(after.get(slot));
                 var current=hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected?player.getOffhandItem():inventory.getItem(slot);
                 // Keep the live use-item reference while NBT/vis changes, so a held action can continue next tick.
-                if(!current.isEmpty()&&!updated.isEmpty()&&current.getItem()==updated.getItem()) {current.setCount(updated.getCount());current.setTag(updated.getTag()==null?null:updated.getTag().copy());}
+                if(!current.isEmpty()&&!updated.isEmpty()&&current.getItem()==updated.getItem()) {
+                    keepHostTags(current,updated);
+                    // Original wear ignores host Unbreaking; replay it through the host so the enchantment applies.
+                    int wear=current.isDamageableItem()&&current.getEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.UNBREAKING)>0?updated.getDamageValue()-current.getDamageValue():0;
+                    if(wear>0)updated.setDamageValue(current.getDamageValue());
+                    current.setCount(updated.getCount());current.setTag(updated.getTag()==null?null:updated.getTag().copy());
+                    if(wear>0)current.hurt(wear,player.getRandom(),player instanceof net.minecraft.server.level.ServerPlayer server?server:null);
+                }
                 else if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
             }
             catch (Exception unmapped) { }
         }
         inventory.setChanged();
+    }
+    /** Re-attaches the host-owned tags of a stack an original callback rewrote, while it is still the same item. */
+    private static ItemStack keepHostTags(ItemStack current, ItemStack updated) {
+        var kept = current.getTag(); if (kept == null || updated.isEmpty() || current.getItem() != updated.getItem()) return updated;
+        for (String key : HOST_OWNED_TAGS) if (kept.contains(key)) updated.getOrCreateTag().put(key, kept.get(key).copy());
+        return updated;
     }
     static boolean sameLegacy(LegacyClientData.Stack left, LegacyClientData.Stack right) {
         if (left == null || right == null) return left == right;
@@ -1166,13 +1224,13 @@ public final class ModernContentBridge {
             if (level.isClientSide) return result.used() ? InteractionResult.SUCCESS : InteractionResult.PASS;
             for (int slot = 0; slot < result.inventory().size() && slot < 36; slot++) {
                 if (slot == selected || sameLegacy(before.get(slot), result.inventory().get(slot))) continue; // The held stack is applied below.
-                try { player.getInventory().setItem(slot, result.inventory().get(slot) == null ? ItemStack.EMPTY : gameplayStack(result.inventory().get(slot))); }
+                try { player.getInventory().setItem(slot, result.inventory().get(slot) == null ? ItemStack.EMPTY : keepHostTags(player.getInventory().getItem(slot), gameplayStack(result.inventory().get(slot)))); }
                 catch (Exception unmapped) { LogUtils.getLogger().warn("MFCL cannot map original inventory change in slot {}: {}", slot, result.inventory().get(slot), unmapped); }
             }
             if (!sameLegacy(held,result.stack())) {
                 if (result.stack() == null) { if (first || !player.getAbilities().instabuild) stack.setCount(0); }
                 else {
-                    var updated = gameplayStack(result.stack());
+                    var updated = keepHostTags(stack, gameplayStack(result.stack()));
                     if (!first && player.getAbilities().instabuild) updated.setCount(stack.getCount());
                     if (ItemStack.isSameItemSameTags(stack,updated)) stack.setCount(updated.getCount());
                     else { stack.setCount(0); player.setItemInHand(context.getHand(),updated); }

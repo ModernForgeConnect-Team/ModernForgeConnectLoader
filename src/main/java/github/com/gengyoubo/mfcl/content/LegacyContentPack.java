@@ -151,7 +151,9 @@ public final class LegacyContentPack {
         }
         var layers = new LinkedHashMap<String, String>();
         for (int pass = 0; pass < variant.layers().size(); pass++) layers.put("layer" + pass, texture(variant.layers().get(pass).icon(), "items"));
-        return new LinkedHashMap<>(Map.of("parent", "minecraft:item/generated", "textures", layers));
+        // Original full-3D items (swords, tools, wands) are held upright, as host handheld items are.
+        String parent = !item.full3D() ? "minecraft:item/generated" : item.rodRotation() ? "minecraft:item/handheld_rod" : "minecraft:item/handheld";
+        return new LinkedHashMap<>(Map.of("parent", parent, "textures", layers));
     }
     private Map<String,Object> cuboidModel(LegacyContent.Block block,int meta,LegacyBlockRendering.Cuboid bounds) throws Exception {
         String[] names={"down","up","north","south","west","east"};
