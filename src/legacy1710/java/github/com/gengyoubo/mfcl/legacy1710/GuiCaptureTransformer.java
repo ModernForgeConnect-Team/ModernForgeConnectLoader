@@ -14,7 +14,7 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("net.minecraft.client.entity.EntityPlayerSP") || name.equals("net.minecraft.client.entity.EntityClientPlayerMP")
                 || name.equals("net.minecraft.entity.player.EntityPlayerMP") || name.equals("net.minecraft.network.NetHandlerPlayServer")
                 || name.equals("net.minecraft.tileentity.MobSpawnerBaseLogic")
-                || name.equals("net.minecraft.client.gui.GuiButton")
+                || name.equals("net.minecraft.client.gui.GuiButton") || name.equals("net.minecraft.client.gui.GuiNewChat")
                 || name.equals("net.minecraft.client.gui.inventory.GuiContainer")
                 || name.equals("net.minecraft.client.multiplayer.PlayerControllerMP")
                 || name.equals("cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper")
@@ -24,6 +24,26 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("cpw.mods.fml.common.eventhandler.EventBus"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if (name.equals("net.minecraft.entity.player.EntityPlayerMP") && m.name.equals("func_71112_a") && m.desc.equals("(Lnet/minecraft/inventory/Container;II)V")) {
+                InsnList progress = new InsnList(); LabelNode original = new LabelNode();
+                progress.add(new VarInsnNode(Opcodes.ALOAD,0)); progress.add(new VarInsnNode(Opcodes.ALOAD,1));
+                progress.add(new VarInsnNode(Opcodes.ILOAD,2)); progress.add(new VarInsnNode(Opcodes.ILOAD,3));
+                progress.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyContainerProgress","send","(Ljava/lang/Object;Ljava/lang/Object;II)Z",false));
+                progress.add(new JumpInsnNode(Opcodes.IFEQ,original)); progress.add(new InsnNode(Opcodes.RETURN));
+                progress.add(original); progress.add(new FrameNode(Opcodes.F_SAME,0,null,0,null)); m.instructions.insert(progress); continue;
+            }
+            if (name.equals("net.minecraft.client.gui.GuiNewChat") && m.name.equals("func_146242_c") && m.desc.equals("(I)V")) {
+                m.instructions.clear(); m.tryCatchBlocks.clear(); if (m.localVariables != null) m.localVariables.clear();
+                m.instructions.add(new VarInsnNode(Opcodes.ALOAD,0)); m.instructions.add(new VarInsnNode(Opcodes.ILOAD,1));
+                m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyClientChat","delete","(Ljava/lang/Object;I)V",false));
+                m.instructions.add(new InsnNode(Opcodes.RETURN)); continue;
+            }
+            if (name.equals("net.minecraft.client.gui.GuiNewChat") && m.name.equals("func_146234_a") && m.desc.equals("(Lnet/minecraft/util/IChatComponent;I)V")) {
+                m.instructions.clear(); m.tryCatchBlocks.clear(); if (m.localVariables != null) m.localVariables.clear();
+                m.instructions.add(new VarInsnNode(Opcodes.ALOAD,1)); m.instructions.add(new VarInsnNode(Opcodes.ILOAD,2));
+                m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyClientChat","message","(Ljava/lang/Object;I)V",false));
+                m.instructions.add(new InsnNode(Opcodes.RETURN)); continue;
+            }
             if(name.equals("net.minecraft.entity.player.EntityPlayerMP")&&m.name.equals("func_71016_p")&&m.desc.equals("()V")) {
                 InsnList sync=new InsnList();sync.add(new VarInsnNode(Opcodes.ALOAD,0));
                 sync.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyPlayerFlight","send","(Ljava/lang/Object;)V",false));m.instructions.insert(sync);

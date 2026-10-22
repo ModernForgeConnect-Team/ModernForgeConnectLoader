@@ -10,6 +10,7 @@ public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
         ClientLegacyAudio.install(bridge.services());
+        ClientLegacyChat.install(bridge.services());
         ExtraUtilitiesWings.install(bridge,bus);
         if(Boolean.getBoolean("mfcl.test.generator"))GeneratorHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.mekanismEnergy"))MekanismEnergyHostSmokeProbe.install(bridge);

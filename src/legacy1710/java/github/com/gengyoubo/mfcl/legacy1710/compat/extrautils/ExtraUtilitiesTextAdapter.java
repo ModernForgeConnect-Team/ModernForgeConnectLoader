@@ -165,6 +165,14 @@ public final class ExtraUtilitiesTextAdapter extends LiteralTranslationAdapter {
     }
     @Override protected boolean extraTarget(String name) { return name.equals(CONTAINER); }
     @Override protected MethodVisitor extend(final String name, final String method, MethodVisitor visitor) {
+        if (name.equals(XU + "tileentity.enderconstructor.DynamicContainerEnderConstructor$WidgetEFText") && method.equals("getConstructedText")) {
+            // XU serializes the working flag as Byte, then mistakenly checks Boolean before casting it to Byte.
+            return new MethodVisitor(Opcodes.ASM5, visitor) {
+                @Override public void visitTypeInsn(int opcode, String type) {
+                    super.visitTypeInsn(opcode, opcode == Opcodes.INSTANCEOF && type.equals("java/lang/Boolean") ? "java/lang/Byte" : type);
+                }
+            };
+        }
         if (!name.equals(CONTAINER) || !method.equals("<init>")) return visitor;
         return new MethodVisitor(Opcodes.ASM5, visitor) {
             private boolean generatorSuffix;

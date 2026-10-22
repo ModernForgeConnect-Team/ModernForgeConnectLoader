@@ -186,6 +186,7 @@ public final class LegacyPackets {
     }
     public static void receiveClient(LegacyServices services, Message message) throws Exception {
         services.items().inLegacy(()->{
+            if(LegacyContainerProgress.receive(services,message))return null;
             if(LegacyEmbeddedPackets.receive(services,message))return null;
             var loader=services.loader();
             var receiver=clientReceiver(loader,message.channel());
