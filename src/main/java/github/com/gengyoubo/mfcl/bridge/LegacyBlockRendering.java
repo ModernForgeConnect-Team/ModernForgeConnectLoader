@@ -103,6 +103,8 @@ public final class LegacyBlockRendering {
         }
     }
     public boolean supports(String key, int metadata) { return supported.getOrDefault(key, Set.of()).contains(metadata); }
+    /** Any placed form renders; the item's own metadata need not be one (vines: meta 0 has no attachment side). */
+    public boolean supportsAny(String key) { return !supported.getOrDefault(key, Set.of()).isEmpty(); }
     public Cuboid cuboid(String key,int metadata){return cuboids.getOrDefault(key+"@"+metadata,Cuboid.FULL);}
     public Cuboid inventoryCuboid(String key,int metadata){return inventoryCuboids.getOrDefault(key+"@"+metadata,Cuboid.FULL);}
     private void captureCuboids(String key) {

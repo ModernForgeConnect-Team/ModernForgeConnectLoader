@@ -28,7 +28,8 @@ public final class HostStackMapping {
             Map.entry("record_far", "music_disc_far"), Map.entry("record_mall", "music_disc_mall"),
             Map.entry("record_mellohi", "music_disc_mellohi"), Map.entry("record_stal", "music_disc_stal"),
             Map.entry("record_strad", "music_disc_strad"), Map.entry("record_ward", "music_disc_ward"),
-            Map.entry("record_11", "music_disc_11"), Map.entry("record_wait", "music_disc_wait"));
+            Map.entry("record_11", "music_disc_11"), Map.entry("record_wait", "music_disc_wait"),
+            Map.entry("lit_pumpkin", "jack_o_lantern"));
     private HostStackMapping() {}
     public static ItemStack renderStack(LegacyClientData.Stack old) {
         String key = old.key(); int meta = old.metadata();

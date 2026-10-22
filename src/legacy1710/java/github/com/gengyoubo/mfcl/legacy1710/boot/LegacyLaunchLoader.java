@@ -39,6 +39,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ModernJavaTransformer");
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
+        registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.ForgeChunkManagerAdapter");
     }
     private final List<LegacyBytecodeAdapter> bytecodeAdapters = new ArrayList<LegacyBytecodeAdapter>();
     public void registerBytecodeAdapter(String name) throws Exception {

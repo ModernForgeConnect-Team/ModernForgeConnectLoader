@@ -153,6 +153,10 @@ public final class ModernContentBridge {
     public static boolean canPlace(LegacyContent.Block entry, int metadata) {
         return entry.renderType() == 0 || active != null && active.blockRendering.supports(entry.key(), metadata);
     }
+    /** Item-side gate: placement metadata is only known once the original callback picks it from the clicked face. */
+    static boolean canPlaceSomeForm(LegacyContent.Block entry) {
+        return entry.renderType() == 0 || active != null && active.blockRendering.supportsAny(entry.key());
+    }
     public static final String LEGACY_ENTITY_DATA = "mfcl_legacy_entity";
     /** Generic public-API transaction; addon-specific research rules remain outside MFCL. */
     public <T> T withApiPlayer(net.minecraft.server.level.ServerPlayer player, java.util.function.Function<Object,T> operation) {
@@ -681,6 +685,30 @@ public final class ModernContentBridge {
                 if(!result.using())player.stopUsingItem();
             } catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy using tick failed for {}", entry.key(), failure); }
         }
+        @Override public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity living) {
+            // The server owns the outcome (effects, remaining bottle); the client receives it through inventory sync.
+            if (level.isClientSide || !(living instanceof net.minecraft.world.entity.player.Player player)) return stack;
+            try {
+                var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
+                itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
+                var hand=player.getUsedItemHand();var before = hostInventory(player);
+                if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
+                Object actor = exposeLegacyInventory(player, world, before, held);
+                LegacyItemUse.Finished result;
+                try { result = logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.finish(world,source,held)),true); }
+                catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
+                collectLegacyInventory(player,actor,before,hand);
+                if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                    result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
+                    result.feedback().forEach(message->serverPlayer.displayClientMessage(Component.literal(message),false));
+                    serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
+                }
+                return player.getItemInHand(hand);
+            } catch (Exception failure) {
+                LogUtils.getLogger().error("MFCL legacy item completion failed for {}", entry.key(), failure);
+                return stack;
+            }
+        }
         @Override public void releaseUsing(ItemStack stack, Level level, LivingEntity living, int timeLeft) {
             if (!(living instanceof net.minecraft.world.entity.player.Player player)) return;
             try {
@@ -789,7 +817,8 @@ public final class ModernContentBridge {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
         }
         @Override public InteractionResult useOn(UseOnContext context) {
-            if (!ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry, metadata(context.getItemInHand()))) {
+            // The placed metadata is checked where it is known: modernBlock on the original write, getPlacementState below.
+            if (!ModernContentBridge.canPlaceSomeForm(((MirroredBlock) getBlock()).entry)) {
                 if (context.getPlayer() != null && context.getLevel().isClientSide) context.getPlayer().displayClientMessage(Component.translatable("mfcl.content.special_block_pending"), true);
                 return InteractionResult.FAIL;
             }
@@ -799,7 +828,7 @@ public final class ModernContentBridge {
             return useLegacyItem(context);
         }
         @Override public InteractionResult place(BlockPlaceContext context) {
-            if (!ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry, metadata(context.getItemInHand()))) return InteractionResult.FAIL;
+            if (!ModernContentBridge.canPlaceSomeForm(((MirroredBlock) getBlock()).entry)) return InteractionResult.FAIL;
             BlockPos position = context.getClickedPos(); var before = context.getLevel().getBlockState(position);
             try { return super.place(context); }
             catch (Exception failure) {
@@ -818,6 +847,8 @@ public final class ModernContentBridge {
                 meta = blockShapes.placement(entry.blockKey(), services.worlds().bound(context.getLevel()), position.getX(),position.getY(),position.getZ(),
                         context.getClickedFace().get3DDataValue(), (float)hit.x, (float)hit.y, (float)hit.z, meta);
             } catch (Exception error) { throw new IllegalStateException("Cannot evaluate original placement metadata for " + entry.key(), error); }
+            // A null state makes BlockItem.place refuse cleanly; only the server has computed the real metadata.
+            if (!context.getLevel().isClientSide && !ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry, meta & 15)) return null;
             return state.setValue(METADATA, meta & 15);
         }
     }

@@ -56,6 +56,7 @@ final class LegacyEntityAccess {
                 profile.set(entity,loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(snapshot.id(),snapshot.name()));
                 LegacyPlayerFood.initialize(entity);
             }
+            forgeConstruct(loader,entity,world);
         }
         // Age and breeding state are what old animal logic (lamp of fertility) checks before setInLove.
         Class<?> playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
@@ -90,6 +91,19 @@ final class LegacyEntityAccess {
         }
         LegacyEntityHooks.mirrored(entity);
         return entity;
+    }
+    /** Forge's Entity constructor part that Unsafe allocation skips: the extended-properties map plus the
+     * EntityConstructing event, so mods find their registered properties (getExtendedProperties) on mirrors. */
+    static void forgeConstruct(ClassLoader loader,Object entity,Object world) throws Exception {
+        var base=loader.loadClass("net.minecraft.entity.Entity");
+        var field=base.getDeclaredField("extendedProperties");field.setAccessible(true);
+        if(field.get(entity)!=null)return;
+        var properties=new HashMap<Object,Object>();field.set(entity,properties);
+        Object bus=loader.loadClass("net.minecraftforge.common.MinecraftForge").getField("EVENT_BUS").get(null);
+        Class<?> event=loader.loadClass("net.minecraftforge.event.entity.EntityEvent$EntityConstructing");
+        bus.getClass().getMethod("post",loader.loadClass("cpw.mods.fml.common.eventhandler.Event")).invoke(bus,event.getConstructor(base).newInstance(entity));
+        var init=loader.loadClass("net.minecraftforge.common.IExtendedEntityProperties").getMethod("init",base,loader.loadClass("net.minecraft.world.World"));
+        for(Object value:List.copyOf(properties.values()))init.invoke(value,entity,world);
     }
     private static void initializeDataWatcher(Class<?> type,Object entity) throws ReflectiveOperationException {
         for(Class<?> current=type;current!=null;current=current.getSuperclass()) {

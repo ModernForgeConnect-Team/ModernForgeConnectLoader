@@ -56,6 +56,10 @@ public final class LegacyCraftingRecipes {
      * Keep that exact requirement in the projected ingredient; an ordinary metadata-zero item must not match it. */
     private static ItemStack recipeStack(LegacyClientData.Stack old) throws Exception {
         var content=bridge();ItemStack mapped=content.mapStack(old);
+        // Old potion subtypes live in metadata; the host form carries the effects as NBT instead.
+        // A potion with a mod-only effect has no host form; drop just that alternative (wildcards list every subtype).
+        if(mapped.isEmpty()&&old.key().equals("minecraft:potion"))
+            try{return LegacyVanillaStacks.toHost(content.services(),old);}catch(UnsupportedOperationException unmapped){return ItemStack.EMPTY;}
         if(!mapped.isEmpty()||old.metadata()<=0||old.metadata()==32767||!old.key().startsWith("minecraft:")||!old.tag().isEmpty())return mapped;
         Object item=content.services().items().legacyItem(old.key());
         Class<?> type=content.services().loader().loadClass("net.minecraft.item.Item");

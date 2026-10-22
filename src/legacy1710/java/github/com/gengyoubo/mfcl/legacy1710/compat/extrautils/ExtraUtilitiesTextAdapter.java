@@ -17,29 +17,18 @@ public final class ExtraUtilitiesTextAdapter implements LegacyBytecodeAdapter {
         keys.put(entry, key);
     }
     static {
-        key("TileEntityGenerator", "getBlurb PowerLevel:
-", "gui.extrautils.generator.power_level");
-        key("TileEntityGenerator", "getBlurb 
-Time Remaining:
-", "gui.extrautils.generator.time_remaining");
+        key("TileEntityGenerator", "getBlurb PowerLevel:\n", "gui.extrautils.generator.power_level");
+        key("TileEntityGenerator", "getBlurb \nTime Remaining:\n", "gui.extrautils.generator.time_remaining");
         key("TileEntityGenerator", "getCoolDownString s", "gui.extrautils.generator.unit.seconds");
         key("TileEntityGenerator", "getCoolDownString m", "gui.extrautils.generator.unit.minutes");
         key("TileEntityGenerator", "getCoolDownString h", "gui.extrautils.generator.unit.hours");
         key("TileEntityGenerator", "getCoolDownString d", "gui.extrautils.generator.unit.days");
-        key("TileEntityGeneratorSimpleSolar", "getBlurb PowerLevel:
-", "gui.extrautils.generator.power_level");
-        key("TileEntityGeneratorSolar", "getBlurb PowerLevel:
-", "gui.extrautils.generator.power_level");
+        key("TileEntityGeneratorSimpleSolar", "getBlurb PowerLevel:\n", "gui.extrautils.generator.power_level");
+        key("TileEntityGeneratorSolar", "getBlurb PowerLevel:\n", "gui.extrautils.generator.power_level");
         key("TileEntityGeneratorSolar", "getBlurb Transmitting: Deactivate redstone signal to resume charging", "gui.extrautils.generator.solar.transmitting");
-        key("TileEntityGeneratorSolar", "getBlurb Time Remaining until transmittion starts:
-", "gui.extrautils.generator.solar.transmit_delay");
-        key("TileEntityGeneratorSolar", "getBlurb 
-
-
-Charging: Apply redstone signal to transmit energy", "gui.extrautils.generator.solar.charging");
-        key("TileEntityGeneratorSolar", "getBlurb 
-
-Charging: Apply redstone signal to transmit energy", "gui.extrautils.generator.solar.charging");
+        key("TileEntityGeneratorSolar", "getBlurb Time Remaining until transmittion starts:\n", "gui.extrautils.generator.solar.transmit_delay");
+        key("TileEntityGeneratorSolar", "getBlurb \n\n\nCharging: Apply redstone signal to transmit energy", "gui.extrautils.generator.solar.charging");
+        key("TileEntityGeneratorSolar", "getBlurb \n\nCharging: Apply redstone signal to transmit energy", "gui.extrautils.generator.solar.charging");
         key("BlockGenerator", "addInformation Power Multiplier: x", "tooltip.extrautils.generator.multiplier");
     }
     private static final String CONTAINER = GENERATORS + "DynamicContainerGenerator";

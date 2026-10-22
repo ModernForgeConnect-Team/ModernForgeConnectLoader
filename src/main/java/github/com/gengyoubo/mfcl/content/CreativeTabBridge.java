@@ -58,11 +58,13 @@ public final class CreativeTabBridge {
             if (!tab.scroll()) builder.noScrollBar();
             if (tab.searchBar()) builder.withSearchBar(tab.searchWidth());
             // Forge's "tabsBefore" are predecessors of this tab, not tabs to place this one before.
-            builder.withTabsBefore(previous,CreativeModeTabs.OP_BLOCKS.location());
+            // Never name a Forge default tab (hotbar/search/op/inventory): putEdge would pull it into the sorted
+            // pages, where it sorts by name ahead of redstone and pushes spawn eggs onto page two.
+            builder.withTabsBefore(previous);
             var modern = builder.build(); registry.register(id, modern); customTabs.put(tab.key(), modern); previous = id;
         }
         if (!fallback.isEmpty()) registry.register(ResourceLocation.tryParse("mfcl:unclassified_1_7_10"), CreativeModeTab.builder()
-                .withTabsBefore(previous,CreativeModeTabs.OP_BLOCKS.location())
+                .withTabsBefore(previous)
                 .title(Component.translatable("itemGroup.mfcl.unclassified_1_7_10")).icon(() -> icon(fallback.get(0)))
                 .displayItems((parameters, output) -> { for (var tab : fallback) stacks(tab).forEach(output::accept); }).build());
     }

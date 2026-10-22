@@ -67,6 +67,8 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
         // Entity.moveEntity uses World's reusable collision list, even in a façade allocated without its constructor.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72998_d", new ArrayList<>());
+        // loadedEntityList: packet handlers (Witchery entity-size sync...) scan it for an id; host entities are not listed here.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_72996_f", new ArrayList<>());
         // Some mods explicitly register active tiles here instead of returning canUpdate=true.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_147482_g", new ArrayList<>());
         // theProfiler: Entity.onEntityUpdate and other original update loops open profiler sections unconditionally.
@@ -81,6 +83,15 @@ public final class LegacyWorlds implements AutoCloseable {
         Object info = loader.loadClass("net.minecraft.world.storage.WorldInfo").getConstructor(loader.loadClass("net.minecraft.nbt.NBTTagCompound")).newInstance(infoData);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72986_A", info);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_96442_D", loader.loadClass("net.minecraft.scoreboard.Scoreboard").getConstructor().newInstance());
+        // getEntityTracker: setItemInUse(eat) and similar old code broadcast animations through it. With no tracked entries
+        // those broadcasts are no-ops; the host tracks and animates the real entities itself.
+        if (!host.clientSide()) {
+            Class<?> trackerType = loader.loadClass("net.minecraft.entity.EntityTracker"); Object tracker = allocate(trackerType);
+            set(trackerType, tracker, "field_72795_a", world);
+            set(trackerType, tracker, "field_72793_b", new HashSet<>());
+            set(trackerType, tracker, "field_72794_c", loader.loadClass("net.minecraft.util.IntHashMap").getConstructor().newInstance());
+            set(loader.loadClass("net.minecraft.world.WorldServer"), world, "field_73062_L", tracker);
+        }
         if (host.legacySaveDirectory() != null) storage(world, host.legacySaveDirectory(), dimension);
         set(providerType, provider, "field_76574_g", dimension);
         set(providerType, provider, "field_76579_a", world);
@@ -290,6 +301,8 @@ public final class LegacyWorlds implements AutoCloseable {
     public static int metadata(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).metadata(); }
     public static boolean metadata(Object world, int x, int y, int z, int metadata, int flags) {
         var host = binding(world).host; var old = host.block(x, y, z);
+        // 1.7.10 stored metadata on air invisibly (orphan door halves write to the missing half); the host has no such state.
+        if (old.legacyKey().equals("minecraft:air")) return false;
         return host.setBlock(x, y, z, new HostWorldAccess.Block(old.legacyKey(), metadata), flags);
     }
     public static Object rayTrace(Object world, Object start, Object end, boolean stopOnLiquid, boolean ignoreBlockWithoutBoundingBox, boolean returnLastUncollidableBlock) {

@@ -133,6 +133,7 @@ public final class LegacyTiles {
         var bbox = entity.getDeclaredField("field_70121_D"); bbox.setAccessible(true); bbox.set(actor, box);
         entity.getField("field_70130_N").setFloat(actor, 0.6f); entity.getField("field_70131_O").setFloat(actor, 1.8f);
         var potions = loader.loadClass("net.minecraft.entity.EntityLivingBase").getDeclaredField("field_70713_bf"); potions.setAccessible(true); potions.set(actor,new HashMap<>());
+        LegacyEntityAccess.forgeConstruct(loader,actor,world);
         Object container=loader.loadClass("net.minecraft.inventory.ContainerPlayer").getConstructor(loader.loadClass("net.minecraft.entity.player.InventoryPlayer"),boolean.class,player).newInstance(inventory,false,actor);
         player.getField("field_71069_bz").set(actor,container);
         player.getField("field_71070_bA").set(actor,container);

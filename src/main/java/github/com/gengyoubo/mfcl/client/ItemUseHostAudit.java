@@ -47,7 +47,8 @@ final class ItemUseHostAudit {
             }else if(stage==1&&mc.player!=null&&mc.level!=null&&mc.screen==null){
                 pending=mc.getSingleplayerServer().submit(()->{var p=player(mc);anchor=p.blockPosition().offset(0,2,0);return true;});stage=2;
             }else if(stage==2&&(pending==null||pending.isDone())){
-                if(index>=cases.size()){stage=3;return;}
+                // The scenario stages below use ExtraUtilities fixtures; without it the per-item survey is the whole audit.
+                if(index>=cases.size()){stage=cases.stream().anyMatch(c->c.key().startsWith("ExtraUtilities:"))?3:98;return;}
                 Case item=cases.get(index++);
                 pending=mc.getSingleplayerServer().submit(()->{audit(player(mc),item);save(mc);return true;});
             }else if(stage==3){
@@ -127,6 +128,8 @@ final class ItemUseHostAudit {
             }else if(stage==18&&screenshotSaved.get()&&++frames>3){
                 report.put("goldenWingScreenshot","screenshots/mfcl-golden-wings.png");
                 report.put("status",rows.stream().anyMatch(row->String.valueOf(row.get("status")).equals("FAIL"))?"FAILURES_FOUND":"COMPLETED");finish(mc,null);
+            }else if(stage==98){
+                report.put("status",rows.stream().anyMatch(row->String.valueOf(row.get("status")).equals("FAIL"))?"FAILURES_FOUND":"COMPLETED");finish(mc,null);
             }
         }catch(Throwable failure){finish(mc,failure);}
     }
@@ -181,7 +184,7 @@ final class ItemUseHostAudit {
     private void audit(ServerPlayer player,Case item) {
         var row=new LinkedHashMap<String,Object>();row.put("key",item.key());row.put("metadata",item.meta());row.put("block",item.block());
         var actions=new LinkedHashMap<String,Object>();row.put("actions",actions);
-        row.put("additionalScenarios",List.of(item.entity()?"entity interaction requires target-specific scenario":"",item.weapon()?"weapon hit requires combat scenario":"",item.finish()?"completion needs held-use scenario":"").stream().filter(s->!s.isEmpty()).toList());
+        row.put("additionalScenarios",List.of(item.entity()?"entity interaction requires target-specific scenario":"",item.weapon()?"weapon hit requires combat scenario":"").stream().filter(s->!s.isEmpty()).toList());
         com.mojang.logging.LogUtils.getLogger().info("MFCL_ITEM_AUDIT_CASE {}@{}",item.key(),item.meta());
         try {
             if(item.air()) {
@@ -194,12 +197,26 @@ final class ItemUseHostAudit {
                 var result=player.gameMode.useItemOn(player,player.serverLevel(),player.getMainHandItem(),InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(target),Direction.UP,target,false));
                 actions.put("stone",result.toString());if(result==InteractionResult.FAIL)row.put("status","FAIL");
             }
+            if(item.block()) {
+                // Side attachment (vines, ladders, wall blocks) is decided by the clicked face, not the item metadata.
+                fixture(player,item);var target=anchor.offset(1,0,0);player.serverLevel().setBlockAndUpdate(target,net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+                var result=player.gameMode.useItemOn(player,player.serverLevel(),player.getMainHandItem(),InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(target).add(.5,0,0),Direction.EAST,target,false));
+                var placed=player.serverLevel().getBlockState(target.east());
+                actions.put("side",result+(placed.isAir()?"":":"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(placed.getBlock())+"@"+(placed.hasProperty(ModernContentBridge.METADATA)?placed.getValue(ModernContentBridge.METADATA):"-")));
+                if(result==InteractionResult.FAIL)row.put("status","FAIL");
+            }
             if(item.tick()) {
                 fixture(player,item);var services=content.services();Object world=services.worlds().bound(player.serverLevel());
                 var source=new LegacyTiles.Placer(player.getUUID(),player.getGameProfile().getName(),player.getX(),player.getY(),player.getZ(),0,0,true,false);
                 Object actor=content.itemUse().clientActor(world,source,null);
                 var inventory=new ArrayList<LegacyClientData.Stack>(Collections.nCopies(36,null));inventory.set(0,new LegacyClientData.Stack(item.key(),item.meta(),1,"",""));services.playerInventory().write(actor,inventory);
                 content.itemUse().inventoryTick(world,source,0,player.tickCount,true);actions.put("inventory","CALLBACK_RETURNED");
+            }
+            if(item.finish()) {
+                // Completion of a held use (drink/eat); the original onEaten decides what remains in hand.
+                fixture(player,item);var before=player.getMainHandItem().copy();
+                var after=player.getMainHandItem().getItem().finishUsingItem(player.getMainHandItem(),player.serverLevel(),player);
+                actions.put("finish",after.isEmpty()?"CONSUMED":ItemStack.matches(before,after)?"UNCHANGED":"CHANGED:"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(after.getItem()));
             }
             row.putIfAbsent("status",actions.isEmpty()?"NO_DIRECT_USE":"CALLBACKS_RETURNED");
         }catch(Throwable failure){while(failure.getCause()!=null)failure=failure.getCause();row.put("status","FAIL");row.put("failure",failure.toString());}

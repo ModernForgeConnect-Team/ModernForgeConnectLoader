@@ -29,7 +29,8 @@ final class RecipeItemHostSmokeProbe {
             if(System.nanoTime()>deadline)throw new IllegalStateException("Recipe item acceptance timed out at "+stage);
             if(stage==0&&mc.screen instanceof TitleScreen&&mc.getOverlay()==null){
                 var sorted=net.minecraftforge.common.CreativeModeTabRegistry.getSortedCreativeModeTabs();
-                int previous=Math.max(sorted.indexOf(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.get(net.minecraft.world.item.CreativeModeTabs.SPAWN_EGGS)),sorted.indexOf(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.get(net.minecraft.world.item.CreativeModeTabs.OP_BLOCKS)));
+                int previous=sorted.indexOf(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.get(net.minecraft.world.item.CreativeModeTabs.SPAWN_EGGS));
+                if(previous!=9||sorted.contains(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.get(net.minecraft.world.item.CreativeModeTabs.OP_BLOCKS)))throw new IllegalStateException("Vanilla creative tabs no longer fill page one: spawn eggs at "+previous);
                 for(var tab:content.declarations().tabs())if(!tab.builtin()){
                     int position=sorted.indexOf(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.get(github.com.gengyoubo.mfcl.content.CreativeTabBridge.id(tab)));
                     if(position<=previous)throw new IllegalStateException("Legacy creative tab precedes vanilla/predecessor: "+tab.key());previous=position;

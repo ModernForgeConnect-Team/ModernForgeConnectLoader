@@ -256,6 +256,35 @@ public final class LegacyItemUse {
             }
         });
     }
+    public record Finished(List<LegacyPackets.Message> messages,List<String> feedback) {}
+    /** Old onEaten: the held-use timer ran out. The returned stack replaces the held one (empty bottle, bowl, nothing). */
+    public Finished finish(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot) throws Exception {
+        return services.items().inLegacy(() -> {
+            try(var state=services.playerState().enter(world)) {
+            var loader = services.loader();
+            Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
+            Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
+            Class<?> playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer");
+            Class<?> worldType = loader.loadClass("net.minecraft.world.World");
+            Object stack = services.items().materialize(snapshot);
+            Object item = stackType.getMethod("func_77973_b").invoke(stack);
+            Object player = actor(world, placer, snapshot);
+            Object inventory=playerType.getField("field_71071_by").get(player);
+            int selected=inventory.getClass().getField("field_70461_c").getInt(inventory);
+            inventory.getClass().getMethod("func_70299_a",int.class,stackType).invoke(inventory,selected,stack);
+            Object returned;List<LegacyPackets.Message> messages;List<String> feedback;
+            try(var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture()) {
+                returned = itemType.getMethod("func_77654_b", stackType, worldType, playerType).invoke(item, stack, world, player);
+                LegacyPlayerAttributes.push(player);
+                messages=packets.messages();feedback=chat.messages();
+            }
+            if(returned!=null&&stackType.getField("field_77994_a").getInt(returned)<=0)returned=null;
+            // EntityPlayer.onItemUseFinish always stores the result in the current slot (null once used up).
+            inventory.getClass().getMethod("func_70299_a",int.class,stackType).invoke(inventory,selected,returned);
+            return new Finished(messages,feedback);
+            }
+        });
+    }
     /** Outcome of an old ArrowNockEvent/ArrowLooseEvent: whether a mod took over the shot and whether it wore the bow. */
     public record BowEvent(boolean canceled, boolean bowDamaged) {}
     /**

@@ -10,28 +10,13 @@ public final class ExtraUtilitiesPortalAdapter implements LegacyBytecodeAdapter 
         return name.equals("com.rwtema.extrautils.block.BlockPortal") || name.equals("com.rwtema.extrautils.particle.ParticleHelperClient")
                 || name.equals("com.rwtema.extrautils.worldgen.endoftime.TeleporterEndOfTime")
                 || name.equals("com.rwtema.extrautils.item.ItemGlove")||name.equals("com.rwtema.extrautils.item.ItemSoul")
-                || name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")||name.equals("com.rwtema.extrautils.item.ItemPrecisionShears")
-                || name.equals("net.minecraftforge.common.ForgeChunkManager");
+                || name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")||name.equals("com.rwtema.extrautils.item.ItemPrecisionShears");
     }
     public byte[] adapt(String name, byte[] bytes) {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM5, writer) {
             @Override public MethodVisitor visitMethod(int access, String method, String descriptor, String signature, String[] exceptions) {
                 return new MethodVisitor(Opcodes.ASM5, super.visitMethod(access, method, descriptor, signature, exceptions)) {
-                    @Override public void visitCode(){
-                        super.visitCode();
-                        if(name.equals("net.minecraftforge.common.ForgeChunkManager")&&(method.equals("requestTicket")||method.equals("requestPlayerTicket")||method.equals("ticketCountAvailableFor")&&descriptor.contains("Lnet/minecraft/world/World;"))){
-                            super.visitVarInsn(Opcodes.ALOAD,method.equals("requestPlayerTicket")?2:1);
-                            super.visitMethodInsn(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyChunkTickets","ensure","(Ljava/lang/Object;)V",false);
-                        }
-                    }
-                    @Override public void visitInsn(int opcode){
-                        if(opcode==Opcodes.RETURN&&name.equals("net.minecraftforge.common.ForgeChunkManager")&&(method.equals("releaseTicket")||method.equals("forceChunk")||method.equals("unforceChunk")||method.equals("reorderChunk"))){
-                            super.visitVarInsn(Opcodes.ALOAD,0);super.visitInsn(method.equals("releaseTicket")?Opcodes.ICONST_1:Opcodes.ICONST_0);
-                            super.visitMethodInsn(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyChunkTickets","update","(Ljava/lang/Object;Z)V",false);
-                        }
-                        super.visitInsn(opcode);
-                    }
                     @Override public void visitMethodInsn(int opcode, String owner, String called, String desc, boolean itf) {
                         if(name.equals("com.rwtema.extrautils.item.ItemGoldenLasso")&&called.equals("func_98035_c"))
                             replace("github/com/gengyoubo/mfcl/bridge/LegacyEntityCapture","write","(Ljava/lang/Object;Ljava/lang/Object;)Z",null);

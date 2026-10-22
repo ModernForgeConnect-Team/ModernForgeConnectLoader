@@ -13,11 +13,13 @@ import java.util.*;
 /** Explicit vanilla state flattening, including the decorations used by original portal arrival rooms. */
 public final class HostBlockMapping {
     private final Map<Block,HostWorldAccess.Block> blocks=new IdentityHashMap<>();
+    /** Exact inverse of the item-variant table (web -> cobweb, wool@3 -> light_blue_wool); aliases below are read-only. */
+    private final Map<HostWorldAccess.Block,Block> variants=new HashMap<>();
     public HostBlockMapping(Set<String> oldKeys) {
         // Reuse the explicit old item variant table rather than maintaining a second list of wood/color names.
         for(int meta=0;meta<16;meta++)for(String key:oldKeys)if(key.startsWith("minecraft:")) {
             var stack=HostStackMapping.renderStack(new LegacyClientData.Stack(key,meta,1,"",""));
-            if(stack.getItem() instanceof BlockItem item)blocks.putIfAbsent(item.getBlock(),new HostWorldAccess.Block(key,meta));
+            if(stack.getItem() instanceof BlockItem item){var old=new HostWorldAccess.Block(key,meta);blocks.putIfAbsent(item.getBlock(),old);variants.putIfAbsent(old,item.getBlock());}
         }
         // Blocks without an item (air, fluids, crops...) can retain their registry identity.
         // Do not alias reused names: old snow is modern snow_block; old stone_stairs is cobblestone_stairs.
@@ -94,7 +96,8 @@ public final class HostBlockMapping {
                 return state.getBlock() instanceof SlabBlock?state.setValue(BlockStateProperties.SLAB_TYPE,(meta&8)!=0?SlabType.TOP:SlabType.BOTTOM):state;
             }
         }
-        return null;
+        var renamed=variants.get(new HostWorldAccess.Block(key,meta));
+        return renamed==null?null:renamed.defaultBlockState();
     }
     private static int horizontal(BlockState state) {
         return switch(state.getValue(BlockStateProperties.HORIZONTAL_FACING)){case SOUTH->0;case WEST->1;case NORTH->2;default->3;};
