@@ -39,6 +39,7 @@ minecraft {
             if (project.hasProperty('mfclTooltipSmokeTest')) property 'mfcl.test.tooltip', 'true'
             if (project.hasProperty('mfclDeviceSmokeTest')) property 'mfcl.test.device', 'true'
             if (project.hasProperty('mfclGeneratorSmokeTest')) property 'mfcl.test.generator', 'true'
+            if (project.hasProperty('mfclMekanismEnergySmokeTest')) property 'mfcl.test.mekanismEnergy', 'true'
             if (project.hasProperty('mfclDeepDarkSmokeTest')) property 'mfcl.test.deepDark', 'true'
             if (project.hasProperty('mfclItemAudit')) property 'mfcl.test.itemAudit', 'true'
             if (project.hasProperty('mfclRecipeItemSmokeTest')) property 'mfcl.test.recipeItems', 'true'
@@ -141,6 +142,10 @@ tasks.register('prepareLegacyRuntime', JavaExec) {
 }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    if (project.hasProperty('mekanismTestVersion')) {
+        repositories.maven { url 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+        runtimeOnly fg.deobf("maven.modrinth:mekanism:${project.property('mekanismTestVersion')}")
+    }
     runtimeOnly fg.deobf("curse.maven:jei-238222:9205046")
     implementation 'org.ow2.asm:asm:9.7.1'
     implementation 'org.apache.maven:maven-artifact:3.8.5'

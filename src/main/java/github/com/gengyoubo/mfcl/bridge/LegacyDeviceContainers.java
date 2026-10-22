@@ -65,11 +65,18 @@ public final class LegacyDeviceContainers {
     public static boolean openGui(Object player,Object mod,int id,Object world,int x,int y,int z) throws Exception {
         var capture=CURRENT.get();if(capture==null)return false;
         var loader=capture.services.loader();
-        if(loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world))return true;
+        boolean client=loader.loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world);
         Object common=loader.loadClass("cpw.mods.fml.common.FMLCommonHandler").getMethod("instance").invoke(null);
         Object owner=common.getClass().getMethod("findContainerFor",Object.class).invoke(common,mod);
         if(owner==null)throw new IllegalArgumentException("No original mod owns the GUI request");
         var ownerType=loader.loadClass("cpw.mods.fml.common.ModContainer");
+        if(client) {
+            Object screen=registry(loader).getClass().getMethod("getLocalGuiContainer",ownerType,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),int.class,loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class)
+                    .invoke(registry(loader),owner,player,id,world,x,y,z);
+            // Portable containers open through the authoritative server menu. Client-only books have no container.
+            if(screen!=null&&!loader.loadClass("net.minecraft.client.gui.inventory.GuiContainer").isInstance(screen))LegacyGuiGraphics.showScreen(screen);
+            return true;
+        }
         Object container=registry(loader).getClass().getMethod("getRemoteGuiContainer",ownerType,loader.loadClass("net.minecraft.entity.player.EntityPlayerMP"),int.class,loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class)
                 .invoke(registry(loader),owner,player,id,world,x,y,z);
         if(container!=null)capture.opened=new Open(new Descriptor((String)ownerType.getMethod("getModId").invoke(owner),id,x,y,z,false,capture.item),container,player);
