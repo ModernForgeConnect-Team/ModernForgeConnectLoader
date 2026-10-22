@@ -1002,6 +1002,15 @@ public final class ModernContentBridge {
         for (var item : declarations.items()) if (key.equals(item.blockKey())) return stack(item.key(), metadata, 1, "");
         return ItemStack.EMPTY;
     }
+    /** Read-only FE sides (bit per RF side) for render/shape views; the model needs connections, never transfers. */
+    private record EnergyConnections(int receive, int extract) implements HostEnergyAccess {
+        public boolean canReceive(int side) { return (receive >> side & 1) != 0; }
+        public boolean canExtract(int side) { return (extract >> side & 1) != 0; }
+        public int stored(int side) { return 0; }
+        public int capacity(int side) { return 0; }
+        public int receive(int side, int amount, boolean simulate) { return 0; }
+        public int extract(int side, int amount, boolean simulate) { return 0; }
+    }
     public LegacyBlockRendering.View renderView(BlockGetter level, BlockPos origin) {
         return renderView(level, origin, level.getBlockState(origin));
     }
@@ -1024,6 +1033,23 @@ public final class ModernContentBridge {
             public byte[] tileData(int x, int y, int z) {
                 if (x == 0 && y == 0 && z == 0 && level.getBlockState(origin).getBlock() != center.getBlock()) return null;
                 return level.getBlockEntity(origin.offset(x,y,z)) instanceof LegacyBlockEntity tile ? tile.renderData() : null;
+            }
+            // Same neighbour tiles as the live old worlds: original tiles, and native FE tiles as RF endpoints.
+            public boolean legacyTile(int x, int y, int z) {
+                if (x == 0 && y == 0 && z == 0 && level.getBlockState(origin).getBlock() != center.getBlock()) return true;
+                return level.getBlockEntity(origin.offset(x,y,z)) instanceof LegacyBlockEntity;
+            }
+            public HostEnergyAccess energy(int x, int y, int z) {
+                var tile = level.getBlockEntity(origin.offset(x,y,z));
+                if (tile == null || tile.isRemoved() || tile instanceof LegacyBlockEntity) return null;
+                int receive = 0, extract = 0;
+                for (int side = 0; side <= 6; side++) {
+                    var energy = tile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ENERGY, side == 6 ? null : Direction.from3DDataValue(side)).orElse(null);
+                    if (energy == null) continue;
+                    if (energy.canReceive()) receive |= 1 << side;
+                    if (energy.canExtract()) extract |= 1 << side;
+                }
+                return receive == 0 && extract == 0 ? null : new EnergyConnections(receive, extract);
             }
             public long time() { return level instanceof Level world ? world.getGameTime() : 0; }
         };

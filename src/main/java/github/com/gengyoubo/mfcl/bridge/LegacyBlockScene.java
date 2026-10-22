@@ -30,6 +30,11 @@ public final class LegacyBlockScene implements AutoCloseable {
         var position = List.of(x,y,z);
         if (tiles.containsKey(position)) return tiles.get(position);
         try {
+            if (!view.legacyTile(x,y,z)) {
+                var energy = view.energy(x,y,z);
+                Object tile = energy == null ? null : services.energy().hostTile(world, x,y,z, energy);
+                tiles.put(position, tile); return tile;
+            }
             var cell = view.block(x,y,z);
             Object tile = services.tiles().create(cell.legacyKey(), cell.metadata(), world, x,y,z);
             if (tile != null) {

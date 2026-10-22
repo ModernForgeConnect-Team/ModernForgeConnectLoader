@@ -7,6 +7,7 @@ import java.util.*;
 final class ExtraUtilitiesEnergyProbe {
     static void verify(LegacyServices services) throws Exception {
         pipeHeights(services);
+        solar(services);
         var loader=services.loader();var tiles=new HashMap<Integer,Object>();
         Object identity=new Object();Object world=services.worlds().bind(identity,new HostWorldAccess(){
             public String dimensionKey(){return "mfcl:rf";}public int legacyDimensionId(){return 0;}public boolean clientSide(){return false;}
@@ -51,6 +52,33 @@ final class ExtraUtilitiesEnergyProbe {
             if((int)receive.invoke(peer,west,10,false)!=0||energy.connected(peer,4))throw new AssertionError("Expired FE peer remained usable");
             services.worlds().unbind(identity);
             if(energy.extract(generator,5,10,false)!=0)throw new AssertionError("Unloaded RF world remained usable");
+        }finally{services.worlds().unbind(identity);}
+    }
+    private static void solar(LegacyServices services)throws Exception{
+        long[] clock={6000,0};boolean[] powered={false};var tiles=new HashMap<Integer,Object>();Object identity=new Object();
+        Object world=services.worlds().bind(identity,new HostWorldAccess(){
+            public String dimensionKey(){return "mfcl:solar";}public int legacyDimensionId(){return 0;}public boolean clientSide(){return false;}
+            public long gameTime(){return clock[1];}public long dayTime(){return clock[0];}public void setDayTime(long time){clock[0]=time;}
+            public Block block(int x,int y,int z){return new Block(x==0?"ExtraUtilities:generator":"minecraft:air",x==0?7:0);}
+            public boolean setBlock(int x,int y,int z,Block block,int flags){return false;}
+            public boolean powered(int x,int y,int z){return powered[0];}
+            public Object tileEntity(int x,int y,int z){return y==64&&z==0?tiles.get(x):null;}
+            public void blockUpdated(int x,int y,int z){}public void markTileDirty(int x,int y,int z,Object tile){}
+        });
+        try{
+            Object solar=services.tiles().create("ExtraUtilities:generator",7,world,0,64,0);tiles.put(0,solar);
+            var gen=solar.getClass().getMethod("genLevel");
+            double noon=((Number)gen.invoke(solar)).doubleValue();clock[0]=18000;
+            double night=((Number)gen.invoke(solar)).doubleValue();
+            if(noon!=40||night!=0)throw new AssertionError("Solar must follow host sun: noon="+noon+", midnight="+night);
+            clock[0]=6000;var endpoint=new Endpoint();tiles.put(1,services.energy().hostTile(world,1,64,0,endpoint));
+            for(int tick=0;tick<30;tick++){clock[1]++;services.logic().tick(solar);}
+            int charged=services.energy().stored(solar,5);
+            if(charged<=0||endpoint.stored!=0||services.energy().extract(solar,5,100,true)!=0)throw new AssertionError("Charging solar leaked energy or failed to charge");
+            powered[0]=true;
+            for(int tick=0;tick<240;tick++){clock[1]++;services.logic().tick(solar);}
+            if(endpoint.stored<=0||services.energy().stored(solar,5)+endpoint.stored!=charged)throw new AssertionError("Powered solar did not finish its charge cycle and transfer conserved energy");
+            System.out.println("MFCL_XU_SOLAR_PASS: host noon/midnight, charging blocks extraction, redstone releases after cooldown, RF conserved");
         }finally{services.worlds().unbind(identity);}
     }
     private static void pipeHeights(LegacyServices services)throws Exception{

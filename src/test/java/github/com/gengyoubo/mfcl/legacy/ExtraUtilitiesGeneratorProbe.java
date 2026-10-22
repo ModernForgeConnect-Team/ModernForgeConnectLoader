@@ -83,6 +83,7 @@ public final class ExtraUtilitiesGeneratorProbe {
             window.setInt(clientContainer,8);
             for(var packet:initial)LegacyPackets.receiveClient(services,packet);
             assertEnergy(loader,clientContainer,energy+123);
+            ExtraUtilitiesPipeModelProbe.verify(services);
             ExtraUtilitiesEnergyProbe.verify(services);
             ExtraUtilitiesPortalProbe.verify(services);
             ExtraUtilitiesItemProbe.verify(services,serverWorld);

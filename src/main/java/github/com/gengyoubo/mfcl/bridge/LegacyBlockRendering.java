@@ -10,6 +10,10 @@ public final class LegacyBlockRendering {
         default byte[] tileData(int x, int y, int z) { return null; }
         default long time() { return 0; }
         default String biome(int x,int z) { return "minecraft:plains"; }
+        /** False when the host position has no original tile, so old neighbour lookups see what the live world shows them. */
+        default boolean legacyTile(int x, int y, int z) { return true; }
+        /** FE connections of a host tile without an original counterpart; null when it has none. */
+        default HostEnergyAccess energy(int x, int y, int z) { return null; }
     }
     public record Layer(int pass, List<LegacyVertexStream.Primitive> geometry) {
         public Layer { geometry = List.copyOf(geometry); }
