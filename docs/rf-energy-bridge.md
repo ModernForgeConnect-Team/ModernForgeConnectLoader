@@ -42,3 +42,5 @@
 同时修复启动预览扫描：`LegacyTiles.create` 先检查原方块的 `hasTileEntity(metadata)`，避免对 Extra Utilities 发电机未定义的 metadata 调用工厂并触发 `BlockGenerator.tiles[metadata] == null`。原始模组回归覆盖所有这些空槽。
 
 构建产物：`build/rf-bridge/libs/mfcl-0.2.8.jar`。
+
+2026-10-22 增加真实 Mekanism 10.4.16.80 能量单元验收，修复 Extra Utilities 管道查询的旧高度限制。负高度下，发电机直连、经能量节点、经节点和传输管道三条路径均实际传输 10000 FE 并守恒；详见[手册与 Mekanism RF 回归修复](book-and-mekanism-rf.md)。

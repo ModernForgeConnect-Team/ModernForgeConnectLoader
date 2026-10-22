@@ -6,6 +6,7 @@ import java.util.*;
 /** Real CoFH interfaces and generator/node algorithms, including generated typed FE neighbor views. */
 final class ExtraUtilitiesEnergyProbe {
     static void verify(LegacyServices services) throws Exception {
+        pipeHeights(services);
         var loader=services.loader();var tiles=new HashMap<Integer,Object>();
         Object identity=new Object();Object world=services.worlds().bind(identity,new HostWorldAccess(){
             public String dimensionKey(){return "mfcl:rf";}public int legacyDimensionId(){return 0;}public boolean clientSide(){return false;}
@@ -50,6 +51,26 @@ final class ExtraUtilitiesEnergyProbe {
             if((int)receive.invoke(peer,west,10,false)!=0||energy.connected(peer,4))throw new AssertionError("Expired FE peer remained usable");
             services.worlds().unbind(identity);
             if(energy.extract(generator,5,10,false)!=0)throw new AssertionError("Unloaded RF world remained usable");
+        }finally{services.worlds().unbind(identity);}
+    }
+    private static void pipeHeights(LegacyServices services)throws Exception{
+        var tiles=new HashMap<Integer,Object>();Object identity=new Object();
+        Object world=services.worlds().bind(identity,new HostWorldAccess(){
+            public String dimensionKey(){return "mfcl:pipe-heights";}public int legacyDimensionId(){return 0;}public boolean clientSide(){return false;}
+            public long gameTime(){return 0;}public long dayTime(){return 0;}public void setDayTime(long time){}
+            public Block block(int x,int y,int z){return new Block("ExtraUtilities:extractor_base",12);}public boolean setBlock(int x,int y,int z,Block block,int flags){return false;}
+            public Object tileEntity(int x,int y,int z){return tiles.get(y);}public boolean loaded(int x,int y,int z){return y>=-64&&y<320&&x==0&&z==0;}
+        });
+        try{
+            var loader=services.loader();var lookup=loader.loadClass("com.rwtema.extrautils.tileentity.transfernodes.TNHelper").getMethod("getPipe",loader.loadClass("net.minecraft.world.IBlockAccess"),int.class,int.class,int.class);
+            for(int y:new int[]{-64,-60,0,64,255,256,319}){
+                Object node=services.tiles().create("ExtraUtilities:extractor_base",12,world,0,y,0);tiles.put(y,node);
+                if(lookup.invoke(null,world,0,y,0)!=node)throw new AssertionError("Original pipe lookup rejected valid host height "+y);
+            }
+            tiles.put(-65,tiles.get(0));tiles.put(320,tiles.get(0));
+            if(lookup.invoke(null,world,0,-65,0)!=null||lookup.invoke(null,world,0,320,0)!=null||lookup.invoke(null,world,1,64,0)!=null)throw new AssertionError("Pipe lookup ignored host bounds or unloaded position");
+            if(LegacyWorlds.validPosition(new Object(),0,-1,0)||LegacyWorlds.validPosition(new Object(),0,256,0)||!LegacyWorlds.validPosition(new Object(),0,255,0))throw new AssertionError("Unbound old-world height policy changed");
+            System.out.println("MFCL_XU_PIPE_HEIGHTS_PASS: -64..319, old range retained, host bounds/loading respected");
         }finally{services.worlds().unbind(identity);}
     }
     private static final class Endpoint implements HostEnergyAccess {

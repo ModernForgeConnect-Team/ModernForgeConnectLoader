@@ -322,6 +322,10 @@ public final class LegacyWorlds implements AutoCloseable {
     public static boolean powered(Object world, int x, int y, int z) { return binding(world).host.powered(x,y,z); }
     public static int power(Object world, int x, int y, int z, int side) { return binding(world).host.power(x,y,z,side); }
     public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
+    /** Original library height guards use native bounds for bound worlds; unrelated old worlds retain 1.7 limits. */
+    public static boolean validPosition(Object world,int x,int y,int z) {
+        var host=hostOrNull(world);return host==null?y>=0&&y<256:host.loaded(x,y,z);
+    }
     public static List<Object> entities(Object world,Class<?> type,Object box) {return selectedEntities(world,type,box,null);}
     /** Old AI can retain a snapshot for many ticks; keep the target's position and removal state authoritative. */
     public static void refreshEntity(Object world,Object entity) throws Exception {

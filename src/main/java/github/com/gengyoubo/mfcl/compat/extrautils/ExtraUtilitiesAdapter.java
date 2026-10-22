@@ -8,7 +8,8 @@ public final class ExtraUtilitiesAdapter implements LegacyModAdapter {
     public String id(){return "extrautilities";}
     public boolean supports(Set<String> mods){return mods.contains("ExtraUtilities");}
     public void beforeBoot(ClassLoader loader) throws Exception {
-        LegacyModAdapter.registerBytecodeAdapters(loader,"github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPortalAdapter");
+        LegacyModAdapter.registerBytecodeAdapters(loader,"github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPortalAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.extrautils.ExtraUtilitiesPipeAdapter");
     }
     public Map<String,Object> initialize(LegacyServices services) throws Exception {
         var config=services.loader().loadClass("com.rwtema.extrautils.ExtraUtils");
