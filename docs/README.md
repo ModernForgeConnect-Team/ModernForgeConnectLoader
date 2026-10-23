@@ -29,6 +29,7 @@ Read each record's date, tested versions and stated limits. A historical experim
 | TC4 focus pouch / hover harness GUI, latency, storage and misplaced-armor safety | [Portable item fixes](focus-pouch-bridge.md) |
 | TC4 repair / haste registration, native enchantment NBT, original effects and world reload | [Enchantment bridge](enchantment-bridge.md) |
 | TC4 elemental sword, axe and pickaxe right-click effects | [Elemental tool fixes](elemental-tools.md) |
+| TC4 Arcane Bore native modded/netherite pickaxes and modern Tinkers broken tools | [Native tool bridge](arcane-bore-tools.md) |
 | TC4 bath salts in water and dropped-item expiration | [Lifetime and expiration bridge](dropped-item-fluids.md) |
 | Reported TC4 gameplay, leaf textures and coin regressions | [Fixes and verification scope, 2026-10-21](gameplay-fixes-2026-10-21.md), [original issue notes](issues/tc4-gameplay-observations.md) |
 

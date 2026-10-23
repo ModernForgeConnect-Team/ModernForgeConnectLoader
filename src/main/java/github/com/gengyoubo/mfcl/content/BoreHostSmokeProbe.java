@@ -59,7 +59,7 @@ final class BoreHostSmokeProbe {
                 Object restored = services.tiles().snapshotInstance(null, saved); services.tiles().load(restored, saved);
                 var reloaded = services.inventories().get(restored, 1);
                 check(content.gameplayStack(reloaded).serializeNBT().equals(nativeResult.serializeNBT()), "originalTileSaveReloadPreservesTool");
-                boreType.getMethod("func_70299_a", int.class, type).invoke(bore, 1, new Object[]{null});
+                boreType.getMethod("func_70299_a", int.class, type).invoke(bore, 1, (Object)null);
                 var playerSlots = new ArrayList<LegacyClientData.Stack>(Collections.nCopies(36, null));
                 playerSlots.set(9, content.gameplayStack(new ItemStack(Items.NETHERITE_PICKAXE)));
                 services.playerInventory().write(actor, playerSlots);

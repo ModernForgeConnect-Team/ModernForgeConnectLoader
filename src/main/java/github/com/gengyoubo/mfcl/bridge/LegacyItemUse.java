@@ -92,14 +92,22 @@ public final class LegacyItemUse {
     public Result leftClick(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target) throws Exception {
         return interact(world,placer,held,target,2);
     }
+    /** Hosted entities need the old entity callback first, then the held item's living-target fallback. */
+    public Result interactHosted(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target) throws Exception {
+        return interact(world,placer,held,target,3);
+    }
     private Result interact(Object world,LegacyTiles.Placer placer,LegacyClientData.Stack held,UUID target,int action) throws Exception {
         return services.items().inLegacy(()->{
             try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture();var menus=LegacyDeviceContainers.captureItem(services)){
                 var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var living=loader.loadClass("net.minecraft.entity.EntityLivingBase");
-                Object actor=actor(world,placer,held),victim=LegacyWorlds.entity(world,target);if(victim==null||(action!=2&&!living.isInstance(victim)))return new Result(false,0,null);
-                Object stack=services.items().materialize(held);bindHeld(actor,stack);
-                Object item=stackType.getMethod("func_77973_b").invoke(stack);
-                boolean used=action==2?(boolean)loader.loadClass("net.minecraft.item.Item").getMethod("onLeftClickEntity",stackType,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),loader.loadClass("net.minecraft.entity.Entity")).invoke(item,stack,actor,victim)
+                Object actor=actor(world,placer,held),victim=LegacyWorlds.entity(world,target);if(victim==null||((action==0||action==1)&&!living.isInstance(victim)))return new Result(false,0,null);
+                Object stack=held==null?null:services.items().materialize(held);bindHeld(actor,stack);
+                Object item=stack==null?null:stackType.getMethod("func_77973_b").invoke(stack);
+                boolean used;
+                if(action==3) {
+                    used=(boolean)loader.loadClass("net.minecraft.entity.Entity").getMethod("func_130002_c",loader.loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(victim,actor);
+                    if(!used&&item!=null&&living.isInstance(victim))used=(boolean)loader.loadClass("net.minecraft.item.Item").getMethod("func_111207_a",stackType,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),living).invoke(item,stack,actor,victim);
+                } else used=action==2?(boolean)loader.loadClass("net.minecraft.item.Item").getMethod("onLeftClickEntity",stackType,loader.loadClass("net.minecraft.entity.player.EntityPlayer"),loader.loadClass("net.minecraft.entity.Entity")).invoke(item,stack,actor,victim)
                         :(boolean)loader.loadClass("net.minecraft.item.Item").getMethod(action==1?"func_77644_a":"func_111207_a",stackType,action==1?living:loader.loadClass("net.minecraft.entity.player.EntityPlayer"),living)
                         .invoke(item,stack,action==1?victim:actor,action==1?actor:victim);
                 LegacyPlayerAttributes.push(actor);

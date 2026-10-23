@@ -8,8 +8,11 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.*;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import net.minecraftforge.network.NetworkHooks;
@@ -108,6 +111,24 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     @Override public EntityDimensions getDimensions(Pose pose) { return EntityDimensions.scalable(width, height); }
     @Override public boolean isPickable() { return collidable && !isRemoved(); }
     @Override public boolean isPushable() { return false; }
+    /** The host envelope is not a LivingEntity, so Minecraft never calls Item.interactLivingEntity for it. */
+    @Override public InteractionResult interact(Player player,InteractionHand hand) {
+        var content=ModernContentBridge.active();
+        if(content==null||failed||isRemoved())return InteractionResult.PASS;
+        if(level().isClientSide)return InteractionResult.SUCCESS;
+        try {
+            if(!ensureServerLegacy(content,(ServerLevel)level()))return InteractionResult.PASS;
+            boolean used=content.interactHostedEntity(player,this,hand);
+            var state=hosting(content).state(legacy);apply(state,false);
+            byte[] changes=hosting(content).watcher(legacy,false);
+            if(changes!=null)entityData.set(WATCHER,wrap(changes));
+            if(state.dead())discard();
+            return used?InteractionResult.CONSUME:InteractionResult.PASS;
+        } catch(Exception | LinkageError failure) {
+            LogUtils.getLogger().error("MFCL original right-click interaction failed for {}",legacyType,failure);
+            return InteractionResult.FAIL;
+        }
+    }
     @Override public boolean hurt(DamageSource source, float amount) {
         if (level().isClientSide || legacy == null || isInvulnerableTo(source)) return false;
         var content = ModernContentBridge.active(); if (content == null) return false;

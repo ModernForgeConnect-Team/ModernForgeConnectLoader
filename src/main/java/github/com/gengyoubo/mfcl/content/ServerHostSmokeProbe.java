@@ -45,6 +45,7 @@ public final class ServerHostSmokeProbe {
         if (phase.equals("bow")) { BowHostSmokeProbe.install(bridge); return; }
         if (phase.equals("melee")) { MeleeHostSmokeProbe.install(bridge); return; }
         if (phase.equals("bore")) { BoreHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("golem")) { GolemHostSmokeProbe.install(bridge); return; }
         if (phase.equals("crossbow")) { CrossbowHostSmokeProbe.install(bridge); return; }
         if (!phase.equals("write") && !phase.equals("verify")) throw new IllegalArgumentException("mfcl.test.server must be write or verify: " + phase);
         MinecraftForge.EVENT_BUS.addListener(new ServerHostSmokeProbe(bridge, phase.equals("write"))::tick);

@@ -868,13 +868,16 @@ public final class ModernContentBridge {
     private boolean interactLegacyEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,LivingEntity target,net.minecraft.world.InteractionHand hand,boolean hit) throws Exception {
         return interactLegacyEntity(stack,player,target,hand,hit?1:0);
     }
+    boolean interactHostedEntity(net.minecraft.world.entity.player.Player player,LegacyHostedEntity target,net.minecraft.world.InteractionHand hand) throws Exception {
+        return interactLegacyEntity(player.getItemInHand(hand),player,target,hand,3);
+    }
     private boolean interactLegacyEntity(ItemStack stack,net.minecraft.world.entity.player.Player player,net.minecraft.world.entity.Entity target,net.minecraft.world.InteractionHand hand,int action) throws Exception {
-        var world=services.worlds().bound(player.level());var source=placer(player);var held=snapshot(stack);var before=hostInventory(player);
+        var world=services.worlds().bound(player.level());var source=placer(player);var held=action==3?toLegacy(stack):snapshot(stack);var before=hostInventory(player);
         if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
         itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
         Object actor=exposeLegacyInventory(player,world,before,held);
         LegacyItemUse.Result result;
-        try{result=logicTransaction(player.level(),target.blockPosition(),()->LegacyItemDrops.capture(this,player,()->action==2?itemUse.leftClick(world,source,held,target.getUUID()):itemUse.interact(world,source,held,target.getUUID(),action==1)),true);}
+        try{result=logicTransaction(player.level(),target.blockPosition(),()->LegacyItemDrops.capture(this,player,()->action==3?itemUse.interactHosted(world,source,held,target.getUUID()):action==2?itemUse.leftClick(world,source,held,target.getUUID()):itemUse.interact(world,source,held,target.getUUID(),action==1)),true);}
         catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
         if(!player.level().isClientSide)collectLegacyInventory(player,actor,before,hand);
         if(player instanceof net.minecraft.server.level.ServerPlayer server){

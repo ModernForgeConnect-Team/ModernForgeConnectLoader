@@ -31,6 +31,7 @@ final class EnchantmentHostSmokeProbe {
     private String world;
     private EnchantmentHostSmokeProbe(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){MinecraftForge.EVENT_BUS.addListener(new EnchantmentHostSmokeProbe(content)::tick);}
+    @SuppressWarnings("removal")
     private void tick(TickEvent.ClientTickEvent event){
         if(event.phase!=TickEvent.Phase.END||stage==99)return;var mc=Minecraft.getInstance();
         try {
