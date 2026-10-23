@@ -540,11 +540,17 @@ public final class ModernContentBridge {
     }
     /**
      * Original ItemArmor as a real host ArmorItem, so equipping, the worn layer, durability loss and armor enchanting
-     * all follow vanilla rules. Old right-click equipping would only reach the old actor, so it is not called.
+     * follow vanilla rules. Subclasses that replace old right-click equipping retain their original callback/GUI.
      */
     private class MirroredArmorItem extends net.minecraft.world.item.ArmorItem {
         final LegacyContent.Item entry;
         MirroredArmorItem(Properties properties, LegacyContent.Item entry) { super(new LegacyArmorMaterial(entry), armorType(entry), properties); this.entry = entry; }
+        @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level,net.minecraft.world.entity.player.Player player,net.minecraft.world.InteractionHand hand) {
+            try {
+                if(itemUse.customArmorUse(snapshot(player.getItemInHand(hand))))return useLegacyHeldItem(level,player,hand,entry.key());
+            }catch(Exception failure){LogUtils.getLogger().error("Cannot inspect original armor use for {}",entry.key(),failure);return net.minecraft.world.InteractionResultHolder.fail(player.getItemInHand(hand));}
+            return super.use(level,player,hand);
+        }
         @Override public boolean isValidRepairItem(ItemStack target, ItemStack repair) { return legacyRepairable(target, repair); }
         @Override public void inventoryTick(ItemStack stack, Level level, net.minecraft.world.entity.Entity entity, int slot, boolean selected) {
             // Inventory.tick also visits armor slots; only the stack actually worn gets the original onArmorTick.
@@ -713,35 +719,7 @@ public final class ModernContentBridge {
             return result;
         }
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
-            ItemStack stack = player.getItemInHand(hand);
-            try {
-                var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
-                if(!level.isClientSide)itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
-                var before = hostInventory(player);
-                if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
-                Object actor = exposeLegacyInventory(player, world, before, held);
-                LegacyItemUse.Result result;
-                try {
-                    result = level.isClientSide
-                            ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(world,source,held))
-                            : logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.rightClick(world,source,held)),true);
-                } catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
-                if(!level.isClientSide)collectLegacyInventory(player,actor,before,hand);
-                if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-                    result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
-                    result.feedback().forEach(message->serverPlayer.displayClientMessage(Component.literal(message),false));
-                    serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
-                    if(result.device()!=null)LegacyDeviceMenu.open(serverPlayer,ModernContentBridge.this,result.device());
-                }
-                ItemStack updated=player.getItemInHand(hand);
-                if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(updated);
-                if (result.useDuration() > 0) player.startUsingItem(hand);
-                if (result.prompt() != null && level.isClientSide) player.displayClientMessage(Component.literal(result.prompt()), true);
-                return net.minecraft.world.InteractionResultHolder.consume(updated);
-            } catch (Exception failure) {
-                LogUtils.getLogger().error("MFCL legacy item use failed for {}", entry.key(), failure);
-                return net.minecraft.world.InteractionResultHolder.fail(stack);
-            }
+            return useLegacyHeldItem(level,player,hand,entry.key());
         }
         @Override public int getUseDuration(ItemStack stack) {
             try { return itemUse.useDuration(snapshot(stack)); }
@@ -814,6 +792,37 @@ public final class ModernContentBridge {
         }
         @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
             consumer.accept(customRenderer(() -> entry == null ? null : entry.key()));
+        }
+    }
+    private net.minecraft.world.InteractionResultHolder<ItemStack> useLegacyHeldItem(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand,String key) {
+        ItemStack stack = player.getItemInHand(hand);
+        try {
+            var world = services.worlds().bound(level); var source = placer(player); var held = snapshot(stack);
+            if(!level.isClientSide)itemUse.loadPersisted(world,source,player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA));
+            var before = hostInventory(player);
+            if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
+            Object actor = exposeLegacyInventory(player, world, before, held);
+            LegacyItemUse.Result result;
+            try {
+                result = level.isClientSide
+                        ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(world,source,held))
+                        : logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(this,player,()->itemUse.rightClick(world,source,held)),true);
+            } catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
+            if(!level.isClientSide)collectLegacyInventory(player,actor,before,hand);
+            if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                result.messages().forEach(message->ScanSyncChannel.sendToPlayer(serverPlayer,message));
+                result.feedback().forEach(message->serverPlayer.displayClientMessage(Component.literal(message),false));
+                serverPlayer.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
+                if(result.device()!=null)LegacyDeviceMenu.open(serverPlayer,this,result.device());
+            }
+            ItemStack updated=player.getItemInHand(hand);
+            if (!result.used()) return net.minecraft.world.InteractionResultHolder.pass(updated);
+            if (result.useDuration() > 0) player.startUsingItem(hand);
+            if (result.prompt() != null && level.isClientSide) player.displayClientMessage(Component.literal(result.prompt()), true);
+            return net.minecraft.world.InteractionResultHolder.consume(updated);
+        } catch (Exception failure) {
+            LogUtils.getLogger().error("MFCL legacy item use failed for {}", key, failure);
+            return net.minecraft.world.InteractionResultHolder.fail(stack);
         }
     }
     private final Set<String> itemTickFailures=java.util.concurrent.ConcurrentHashMap.newKeySet();

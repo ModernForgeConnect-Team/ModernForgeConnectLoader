@@ -14,6 +14,9 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDamageSourceAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPrimalArrowAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDoorAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftFocusPouchAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftHoverHarnessContainerAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftHoverHarnessAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter");
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
@@ -27,6 +30,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
                 {"thaumcraft:eerie","biomeEerie",null},{"thaumcraft:eldritch","biomeEldritchLands",null}})
             services.biomes().register(biome[0],generation.getField(biome[1]).get(null),biome[2]==null?0:config.getField(biome[2]).getInt(null));
         ThaumcraftOuterLands.install(services);
+        LegacyDeviceContainers.registerPredictedContainer(loader,"thaumcraft.common.container.ContainerFocusPouch");
+        LegacyDeviceContainers.registerPredictedContainer(loader,"thaumcraft.common.container.ContainerHoverHarness");
         LegacyPackets.allowServer(loader,ThaumcraftDevicePackets::prepare);
         services.playerState().register(new ThaumcraftKnowledge(loader));
         services.scanners().register(new ThaumcraftScanner(loader));

@@ -24,9 +24,12 @@ public final class LegacyPlayerInventory {
     public void write(Object player, List<LegacyClientData.Stack> main) throws Exception {
         services.items().inLegacy(() -> {
             Object[] slots = (Object[]) mainField.get(inventoryField.get(player));
+            var stackType = services.loader().loadClass("net.minecraft.item.ItemStack");
             for (int index = 0; index < slots.length; index++) {
                 LegacyClientData.Stack value = index < main.size() ? main.get(index) : null;
-                slots[index] = value == null ? null : services.items().materialize(value);
+                Object next = value == null ? null : services.items().materialize(value);
+                // Portable containers retain the stack they opened. Replacing an equal stack detaches their storage.
+                if (!same(stackType, slots[index], next)) slots[index] = next;
             }
             return null;
         });

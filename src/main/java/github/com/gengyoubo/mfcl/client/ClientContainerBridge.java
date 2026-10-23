@@ -74,7 +74,7 @@ public final class ClientContainerBridge {
             Object gui=screen instanceof LegacyDeviceScreen device?device.originalGui():services.containers().create(screen.width,screen.height,screen.getGuiLeft(),screen.getGuiTop(),screen.getXSize(),screen.getYSize(),slots);
             var session=services.screens().open(gui,screen.width,screen.height);
             services.containers().position(gui,screen.getGuiLeft(),screen.getGuiTop());
-            services.containers().update(gui,slots);
+            if(!(screen instanceof LegacyDeviceScreen device)||device.getMenu().receivedContents())services.containers().update(gui,slots);
             bindings.put(screen,new Bound(gui,session));
             origins.put(gui,screen);
         } catch(Exception failure){LogUtils.getLogger().error("MFCL legacy container initialization failed",failure);}
@@ -132,7 +132,7 @@ public final class ClientContainerBridge {
             if(!services.containers().sameLayout(bound.gui,slots))bind(container);
         }catch(Exception failure){bound.failure=failure;LogUtils.getLogger().error("MFCL legacy container layout refresh failed",failure);return;}
         dispatch(screen,0,0,b->{
-            if(screen instanceof AbstractContainerScreen<?> container){var slots=new ArrayList<LegacyContainers.Slot>();for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));services.containers().update(b.gui,slots);}
+            if(screen instanceof AbstractContainerScreen<?> container&&(!(screen instanceof LegacyDeviceScreen device)||device.getMenu().receivedContents())){var slots=new ArrayList<LegacyContainers.Slot>();for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));services.containers().update(b.gui,slots);}
             b.session.tick();return false;
         });
     }

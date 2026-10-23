@@ -25,13 +25,14 @@ public final class LegacyDeviceScreen extends AbstractContainerScreen<LegacyDevi
                     if(!inventory.getItem(slot).isEmpty())try{stack=content.gameplayStack(inventory.getItem(slot));}catch(Exception unmapped){}
                     stacks.add(stack);
                 }
-                services.playerInventory().write(actor,stacks);services.playerInventory().select(actor,inventory.selected);
+                services.playerInventory().write(actor,stacks);services.playerInventory().select(actor,menu.descriptor().itemSlot()>=0?menu.descriptor().itemSlot():inventory.selected);
                 Object gui=LegacyDeviceContainers.clientGui(services,menu.descriptor(),actor,world);
                 if(gui==null)throw new IllegalStateException("Original GUI handler returned no client screen");
                 var guiType=services.loader().loadClass("net.minecraft.client.gui.inventory.GuiContainer");
                 Object container=guiType.getField("field_147002_h").get(gui);
                 container.getClass().getField("field_75152_c").setInt(container,menu.containerId);
                 services.loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71070_bA").set(actor,container);
+                menu.bindPrediction(gui,actor);
                 var width=guiType.getDeclaredField("field_146999_f");width.setAccessible(true);imageWidth=width.getInt(gui);
                 var height=guiType.getDeclaredField("field_147000_g");height.setAccessible(true);imageHeight=height.getInt(gui);
                 return gui;

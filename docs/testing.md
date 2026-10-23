@@ -89,6 +89,7 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclLogicSmokeTest` | Supported native/legacy block and inventory logic | Consult the logic [acceptance record](runtime-logic-progress.json) |
 | `mfclCraftingSmokeTest` | Standard workbench recipes, native output consumption, JEI projection and reload | `crafting-smoke.json` |
 | `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence, note insertion/place/erase/sync, native reveal/learning and lifter motion | `device-smoke.json` |
+| `mfclFocusPouchSmokeTest` | TC4 pouch/harness original GUIs, click prediction during simulated server stalls, authoritative storage, shift transfers, item restrictions, replacement/close/cursor conservation, harness model guards and head-slot equipment across real save/relogin | `focus-pouch-smoke.json` |
 | `mfclGeneratorSmokeTest` | Original Extra Utilities generator, GUI/coal clicks/sound, and bidirectional RF/FE capability transfers with side/rate/simulation, conservation, rollback, persistence and invalidation checks | `generator-smoke.json` |
 | `mfclTooltipSmokeTest` | Actual JEI single/batch item rendering followed by tooltip depth verification | `jei-tooltip-smoke.json` |
 | `mfclContentSmokeTest` | Reference content registration, rendering, placement and persistence | `content-1.7.10-smoke.json` |

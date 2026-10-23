@@ -157,6 +157,24 @@ AutoCloseable registration = runtime.mappings().register(
 
 适配器通过 MLA / 现有命名转换器产生和读取引用，不接触内部 raw 对象。空返回值表示没有对应表示。注册不允许覆盖已有键，关闭注册句柄可移除本次转换器。列表通过 `supported()` 查询；缺失转换器、错误宿主类型或错误运行时引用会明确失败。
 
+## 预览场景（`LegacyFeatures.SCENES`，仅客户端）
+
+`runtime.scenes().create()` 返回一个私有的离线旧版世界，用来在配方查看器、提示框、手册里画原版方块。场景不属于任何宿主或旧维度：不 tick、不存档、不进服务端；所有成员只能在客户端线程调用，用完 `close()`。
+
+```java
+LegacyScene scene = runtime.scenes().create();
+scene.setBlock(0, 0, 0, "Thaumcraft:blockMetalDevice", 0);
+// 让原版代码在场景里运行，例如多方块成型；期间 World.isRemote 为 false，音效 / 粒子 / 数据包被丢弃。
+scene.withWorld(world -> { wandManager.formInfusionAltar(world, x, y, z); return null; });
+// 每帧：当前 PoseStack 下 1 单位 = 1 格，满亮度。
+scene.render(poseStack, bufferSource, partialTick, yaw, pitch);
+```
+
+- `setBlock` 精确放置，不触发放置回调和邻居更新；方块在该 metadata 有 TileEntity 时同时创建新的原版 TileEntity。
+- 静态方块几何用原版方块渲染器按场景内邻居捕获，场景改变后才重建；TESR 每帧捕获，`yaw` / `pitch` 决定朝向相机的原版效果（节点等）。渲染后旧版视角全局状态交还当前宿主世界。
+- `minecraft` 命名空间的方块用宿主模型绘制；流体不绘制。
+- 单个方块或 TileEntity 渲染失败时跳过，在场景改变前只记录一次 `SCENE_RENDER` 诊断。
+
 ## 诊断和验收
 
 运行 `/mfclapi`（权限等级 2）查看 API 版本、实际旧 mod ID、支持的转换器、旧注册表数量和最近 5 条 API 故障。`runtime.diagnostics()` 保留最近 64 条结构化故障；`LegacyAccessException.code()` 区分 `MLA_BIND`、`MLA_INVOKE`、`REGISTRY`、`STACK_IMPORT`、`STACK_EXPORT`、`MAPPING_IMPORT`、`MAPPING_EXPORT`。原始异常作为 cause 保留以便定位调用路径。

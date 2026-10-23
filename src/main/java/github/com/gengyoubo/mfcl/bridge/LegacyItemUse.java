@@ -22,6 +22,17 @@ public final class LegacyItemUse {
     // The same UUID exists on both the integrated server and the client; keep their actors apart.
     private final Map<String, Object> actors = new HashMap<>();
     private final Map<String,Boolean> inventoryUpdates = new HashMap<>();
+    private final Map<String,Boolean> customArmorUses = new HashMap<>();
+    /** An armor subclass may deliberately replace right-click equip with a portable GUI. */
+    public boolean customArmorUse(LegacyClientData.Stack held) throws Exception {
+        return services.items().inLegacy(()->{
+            Boolean known=customArmorUses.get(held.key());if(known!=null)return known;
+            var loader=services.loader();var stack=loader.loadClass("net.minecraft.item.ItemStack");
+            Object item=stack.getMethod("func_77973_b").invoke(services.items().materialize(held));
+            boolean custom=item.getClass().getMethod("func_77659_a",stack,loader.loadClass("net.minecraft.world.World"),loader.loadClass("net.minecraft.entity.player.EntityPlayer")).getDeclaringClass()!=loader.loadClass("net.minecraft.item.ItemArmor");
+            customArmorUses.put(held.key(),custom);return custom;
+        });
+    }
     public LegacyItemUse(LegacyServices services) { this.services = services; }
     public record ItemAttribute(String name,HostWorldAccess.Modifier modifier){}
     public List<ItemAttribute> itemAttributes(LegacyClientData.Stack held) throws Exception {

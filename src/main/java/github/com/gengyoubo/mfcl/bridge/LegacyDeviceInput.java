@@ -9,6 +9,15 @@ public final class LegacyDeviceInput implements AutoCloseable {
     private final LegacyDeviceInput previous;
     public LegacyDeviceInput(){previous=CURRENT.get();CURRENT.set(this);}
     public static boolean active(){return CURRENT.get()!=null;}
+    /** A connection-less old client closes the host menu through its native protocol. */
+    public static boolean closeContainer() {
+        if(!active())return false;
+        var mc=net.minecraft.client.Minecraft.getInstance();
+        if(mc.player==null||!(mc.player.containerMenu instanceof github.com.gengyoubo.mfcl.content.LegacyDeviceMenu))return false;
+        var menu=mc.player.containerMenu;
+        mc.tell(()->{if(mc.player!=null&&mc.player.containerMenu==menu)mc.player.closeContainer();});
+        return true;
+    }
     public static boolean send(Object wrapper,Object packet) throws Exception {
         var scope=CURRENT.get();if(scope==null)return false;
         scope.packets.add(LegacyPackets.encode(wrapper,packet,"SERVER"));return true;

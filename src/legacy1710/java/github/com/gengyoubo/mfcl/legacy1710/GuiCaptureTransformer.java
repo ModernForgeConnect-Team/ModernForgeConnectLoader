@@ -24,6 +24,12 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 || name.equals("cpw.mods.fml.common.eventhandler.EventBus"))) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node,0);
         for (MethodNode m : node.methods) {
+            if(name.equals("net.minecraft.client.entity.EntityClientPlayerMP")&&m.name.equals("func_71053_j")&&m.desc.equals("()V")) {
+                InsnList close=new InsnList();LabelNode original=new LabelNode();
+                close.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/bridge/LegacyDeviceInput","closeContainer","()Z",false));
+                close.add(new JumpInsnNode(Opcodes.IFEQ,original));close.add(new InsnNode(Opcodes.RETURN));
+                close.add(original);close.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(close);continue;
+            }
             if (name.equals("net.minecraft.entity.player.EntityPlayerMP") && m.name.equals("func_71112_a") && m.desc.equals("(Lnet/minecraft/inventory/Container;II)V")) {
                 InsnList progress = new InsnList(); LabelNode original = new LabelNode();
                 progress.add(new VarInsnNode(Opcodes.ALOAD,0)); progress.add(new VarInsnNode(Opcodes.ALOAD,1));

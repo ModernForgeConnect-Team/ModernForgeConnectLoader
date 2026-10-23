@@ -4,8 +4,9 @@ import java.util.*;
 
 /** Captures original FML/vanilla container requests without entering the old network stack. */
 public final class LegacyDeviceContainers {
-    public record Descriptor(String mod,int id,int x,int y,int z,boolean inventory,boolean item) {
+    public record Descriptor(String mod,int id,int x,int y,int z,boolean inventory,boolean item,int itemSlot) {
         public Descriptor(String mod,int id,int x,int y,int z,boolean inventory){this(mod,id,x,y,z,inventory,false);}
+        public Descriptor(String mod,int id,int x,int y,int z,boolean inventory,boolean item){this(mod,id,x,y,z,inventory,item,-1);}
     }
     public record Open(Descriptor descriptor,Object container,Object player) {}
     private static final ThreadLocal<Capture> CURRENT=new ThreadLocal<>();
@@ -14,6 +15,14 @@ public final class LegacyDeviceContainers {
         Object screen(Object player,Object source) throws Exception;
     }
     private static final Map<ClassLoader,Map<String,GuiProvider>> PROVIDERS=new WeakHashMap<>();
+    private static final Map<ClassLoader,Set<String>> PREDICTED=new WeakHashMap<>();
+    /** Opt in only containers whose ordinary client slot-click logic is safe to preview and reconcile. */
+    public static synchronized void registerPredictedContainer(ClassLoader loader,String type) {
+        PREDICTED.computeIfAbsent(loader,ignored->new HashSet<>()).add(type);
+    }
+    public static synchronized boolean predicts(Object container) {
+        return PREDICTED.getOrDefault(container.getClass().getClassLoader(),Set.of()).contains(container.getClass().getName());
+    }
     public static synchronized void registerProvider(ClassLoader loader,String id,GuiProvider provider) {
         PROVIDERS.computeIfAbsent(loader,ignored->new HashMap<>()).put(id,provider);
     }
@@ -79,7 +88,9 @@ public final class LegacyDeviceContainers {
         }
         Object container=registry(loader).getClass().getMethod("getRemoteGuiContainer",ownerType,loader.loadClass("net.minecraft.entity.player.EntityPlayerMP"),int.class,loader.loadClass("net.minecraft.world.World"),int.class,int.class,int.class)
                 .invoke(registry(loader),owner,player,id,world,x,y,z);
-        if(container!=null)capture.opened=new Open(new Descriptor((String)ownerType.getMethod("getModId").invoke(owner),id,x,y,z,false,capture.item),container,player);
+        Object inventory=loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
+        int itemSlot=capture.item?inventory.getClass().getField("field_70461_c").getInt(inventory):-1;
+        if(container!=null)capture.opened=new Open(new Descriptor((String)ownerType.getMethod("getModId").invoke(owner),id,x,y,z,false,capture.item,itemSlot),container,player);
         return true;
     }
     public static boolean openInventory(Object player,Object inventory) throws Exception {
