@@ -52,6 +52,7 @@ public final class ClientContentBridge {
         if (Boolean.getBoolean("mfcl.test.elementalTools")) ElementalToolsHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.enchantments")) EnchantmentHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.focusPouch")) FocusPouchHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.droppedItemFluid")) DroppedItemFluidHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.fireFocus")) FireFocusHostProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.wandAudit")) WandHostAuditProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.multiblock")) MultiblockHostProbe.install(bridge);

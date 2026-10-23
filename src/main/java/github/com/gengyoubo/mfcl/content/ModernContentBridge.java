@@ -38,6 +38,7 @@ public final class ModernContentBridge {
     private final LegacyBlockRendering blockRendering;
     private final LegacyBlockShapes blockShapes;
     private final LegacyItemUse itemUse;
+    private HostDroppedItems droppedItems;
     private final LegacyCrafting crafting;
     private final LegacyOreDictionary oreDictionary;
     private final Set<String> legacyBlockKeys;
@@ -113,6 +114,7 @@ public final class ModernContentBridge {
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             LevelWorldBridge.install(bridge);
+            bridge.droppedItems = new HostDroppedItems(bridge);
             LegacyCommands.install(bridge);
             bridge.players = new HostPlayers(bridge);
             LogUtils.getLogger().info("MFCL content barrier: {} blocks, {} items declared before modern registration", bridge.declarations.blocks().size(), bridge.declarations.items().size());
@@ -558,6 +560,7 @@ public final class ModernContentBridge {
     private class MirroredArmorItem extends net.minecraft.world.item.ArmorItem {
         final LegacyContent.Item entry;
         MirroredArmorItem(Properties properties, LegacyContent.Item entry) { super(new LegacyArmorMaterial(entry), armorType(entry), properties); this.entry = entry; }
+        @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level,net.minecraft.world.entity.player.Player player,net.minecraft.world.InteractionHand hand) {
             try {
                 if(itemUse.customArmorUse(snapshot(player.getItemInHand(hand))))return useLegacyHeldItem(level,player,hand,entry.key());
@@ -632,6 +635,7 @@ public final class ModernContentBridge {
     private final class MirroredItem extends Item {
         private final LegacyContent.Item entry;
         MirroredItem(Properties properties, LegacyContent.Item entry) { super(properties); this.entry = entry; }
+        @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
@@ -944,6 +948,7 @@ public final class ModernContentBridge {
     private final class MirroredBlockItem extends BlockItem {
         private final LegacyContent.Item entry;
         MirroredBlockItem(MirroredBlock block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
+        @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
         @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) { tooltip(entry, stack, lines); }
