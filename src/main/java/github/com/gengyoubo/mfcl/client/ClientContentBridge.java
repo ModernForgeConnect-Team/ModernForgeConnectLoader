@@ -14,6 +14,7 @@ public final class ClientContentBridge {
         ExtraUtilitiesWings.install(bridge,bus);
         if(Boolean.getBoolean("mfcl.test.generator"))GeneratorHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.filing"))FilingCabinetHostSmokeProbe.install(bridge);
+        if(Boolean.getBoolean("mfcl.test.guiSync"))GuiInventorySyncHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.mekanismEnergy"))MekanismEnergyHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.deepDark"))DeepDarkHostSmokeProbe.install(bridge);
         if(Boolean.getBoolean("mfcl.test.itemAudit"))ItemUseHostAudit.install(bridge);

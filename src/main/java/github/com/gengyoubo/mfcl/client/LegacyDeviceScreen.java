@@ -32,7 +32,7 @@ public final class LegacyDeviceScreen extends AbstractContainerScreen<LegacyDevi
                 Object container=guiType.getField("field_147002_h").get(gui);
                 container.getClass().getField("field_75152_c").setInt(container,menu.containerId);
                 services.loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71070_bA").set(actor,container);
-                menu.bindPrediction(gui,actor);
+                menu.bindClientContainer(gui,actor);
                 var width=guiType.getDeclaredField("field_146999_f");width.setAccessible(true);imageWidth=width.getInt(gui);
                 var height=guiType.getDeclaredField("field_147000_g");height.setAccessible(true);imageHeight=height.getInt(gui);
                 return gui;

@@ -32,7 +32,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private boolean opening=true;
     private boolean receivedContents;
     private Object predictedGui,predictedPlayer;
-    private int[] predictedInventorySlots;
+    private int[] playerInventorySlots;
     public boolean receivedContents(){return original!=null||receivedContents;}
     @Override public void initializeContents(int state,List<ItemStack> stacks,ItemStack carried) {
         super.initializeContents(state,stacks,carried);receivedContents=true;
@@ -42,19 +42,24 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         super.setItem(slot,state,stack);reconcileInventory(slot,stack);
     }
     private void reconcileInventory(int slot,ItemStack stack) {
-        if(original==null&&predictedInventorySlots!=null&&slot>=0&&slot<predictedInventorySlots.length&&predictedInventorySlots[slot]>=0)
-            inventory.setItem(predictedInventorySlots[slot],stack.copy());
+        if(original==null&&playerInventorySlots!=null&&slot>=0&&slot<playerInventorySlots.length&&playerInventorySlots[slot]>=0)
+            inventory.setItem(playerInventorySlots[slot],stack.copy());
     }
-    public void bindPrediction(Object gui,Object player) throws Exception {
+    public void bindClientContainer(Object gui,Object player) throws Exception {
         Object container=content.services().loader().loadClass("net.minecraft.client.gui.inventory.GuiContainer").getField("field_147002_h").get(gui);
+        // Every original GUI needs authoritative player-slot reconciliation, even without local click prediction.
+        Object oldInventory=content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
+        var slots=LegacyDeviceContainers.slots(container);playerInventorySlots=new int[slots.size()];Arrays.fill(playerInventorySlots,-1);
+        for(int index=0;index<slots.size();index++){
+            Object slot=slots.get(index);
+            if(slot.getClass().getField("field_75224_c").get(slot)==oldInventory){
+                int playerSlot=(int)slot.getClass().getMethod("getSlotIndex").invoke(slot);
+                if(playerSlot>=0&&playerSlot<inventory.getContainerSize())playerInventorySlots[index]=playerSlot;
+            }
+        }
+        if(receivedContents)for(int index=0;index<this.slots.size();index++)reconcileInventory(index,this.slots.get(index).getItem());
         if(LegacyDeviceContainers.predicts(container)){
             predictedGui=gui;predictedPlayer=player;
-            Object oldInventory=content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
-            var slots=LegacyDeviceContainers.slots(container);predictedInventorySlots=new int[slots.size()];Arrays.fill(predictedInventorySlots,-1);
-            for(int index=0;index<slots.size();index++){
-                Object slot=slots.get(index);
-                if(slot.getClass().getField("field_75224_c").get(slot)==oldInventory)predictedInventorySlots[index]=(int)slot.getClass().getMethod("getSlotIndex").invoke(slot);
-            }
         }
     }
     private final List<LegacyPackets.Message> initialPackets=new ArrayList<>();
@@ -289,14 +294,20 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private record PacketResult(byte[] data,List<LegacyPackets.Message> messages) {}
     @Override public void removed(Player player) {
         if(original!=null&&!failed)try {
+            var before=content.hostInventory(player);
             importInventory();
             var returned=playerContext(()->content.logicTransaction(player.level(),origin(),()->originalAction(()->{
                 oldInventory().getClass().getMethod("func_70437_b",content.services().loader().loadClass("net.minecraft.item.ItemStack")).invoke(oldInventory(),new Object[]{null});
                 original.container().getClass().getMethod("func_75134_a",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player());
-                return content.services().playerInventory().read(original.player()).stream().map(content::gameplayStack).toList();
+                return content.services().playerInventory().read(original.player());
             }),true));
-            for(int index=0;index<returned.size();index++)inventory.setItem(index,returned.get(index));
+            // Unmapped native stacks were exposed as null; an unchanged null must not erase the real host slot.
+            for(int index=0;index<returned.size()&&index<before.size();index++)if(!ModernContentBridge.sameLegacy(before.get(index),returned.get(index)))
+                inventory.setItem(index,ModernContentBridge.keepHostTags(inventory.getItem(index),content.gameplayStack(returned.get(index))));
         }catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL original container close failed",failure);}
         super.removed(player);
+        // A click's unwindowed carried-stack packet can arrive after the client has already closed this menu.
+        // Follow it with the complete final inventory and empty cursor, even when inventoryMenu's cache is unchanged.
+        if(original!=null&&player instanceof ServerPlayer server)server.inventoryMenu.sendAllDataToRemote();
     }
 }
