@@ -18,6 +18,7 @@ public final class LegacyServices {
     private final LegacyEnergyAccess energy;
     private final LegacyFluidAccess fluids;
     private final LegacyPlayerInventory playerInventory;
+    private final LegacyEnchantments enchantments;
     private final LegacyPlayerState playerState = new LegacyPlayerState();
     private final LegacyDynamicItems dynamicItems = new LegacyDynamicItems();
     private final LegacyHeldScanners scanners = new LegacyHeldScanners();
@@ -41,6 +42,7 @@ public final class LegacyServices {
         this.energy = new LegacyEnergyAccess(this);
         this.fluids = new LegacyFluidAccess(this);
         this.playerInventory = new LegacyPlayerInventory(this);
+        this.enchantments = new LegacyEnchantments(this);
         this.entityHosting = new LegacyEntityHosting(this);
     }
     public Path gameDirectory() { return gameDirectory; }
@@ -58,6 +60,7 @@ public final class LegacyServices {
     public LegacyEnergyAccess energy() { return energy; }
     public LegacyFluidAccess fluids() { return fluids; }
     public LegacyPlayerInventory playerInventory() { return playerInventory; }
+    public LegacyEnchantments enchantments() { return enchantments; }
     public LegacyPlayerState playerState() { return playerState; }
     public LegacyDynamicItems dynamicItems() { return dynamicItems; }
     public LegacyHeldScanners scanners() { return scanners; }

@@ -184,6 +184,7 @@ public final class LegacyWorldGraphics {
         f.check();
         if (cap == 3042) return f.state.blend();
         if (cap == 2884) return f.state.cull();
+        if (cap == 2929) return f.state.depthTest();
         if (cap >= 3168 && cap <= 3171) return f.generated[cap-3168];
         throw new UnsupportedOperationException("Unsupported legacy GL capability query: " + cap);
     }
@@ -191,15 +192,15 @@ public final class LegacyWorldGraphics {
         if (cap == 2929) LegacyGuiGraphics.depthTest(enabled);
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
         if (cap >= 3168 && cap <= 3171) f.generated[cap-3168] = enabled;
-        f.state = new LegacyVertexStream.RenderState(cap == 3042 ? enabled : s.blend(), s.sourceBlend(), s.destinationBlend(), s.depthWrite(), cap == 2884 ? enabled : s.cull());
+        f.state = new LegacyVertexStream.RenderState(cap == 3042 ? enabled : s.blend(), s.sourceBlend(), s.destinationBlend(), s.depthWrite(), cap == 2884 ? enabled : s.cull(),cap == 2929 ? enabled : s.depthTest());
     }
     public static void glBlendFunc(int source, int destination) {
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
-        f.state = new LegacyVertexStream.RenderState(s.blend(), source, destination, s.depthWrite(), s.cull());
+        f.state = new LegacyVertexStream.RenderState(s.blend(), source, destination, s.depthWrite(), s.cull(),s.depthTest());
     }
     public static void glDepthMask(boolean enabled) {
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
-        f.state = new LegacyVertexStream.RenderState(s.blend(), s.sourceBlend(), s.destinationBlend(), enabled, s.cull());
+        f.state = new LegacyVertexStream.RenderState(s.blend(), s.sourceBlend(), s.destinationBlend(), enabled, s.cull(),s.depthTest());
     }
     public static void glPushAttrib(int mask) { LegacyGuiGraphics.pushDepthAttributes(mask);Frame f = frame(); if (f != null) { f.check(); f.attributes.push(f.state); } }
     public static void glPopAttrib() { LegacyGuiGraphics.popDepthAttributes();Frame f = frame(); if (f != null) { f.check(); f.state = f.attributes.pop(); } }

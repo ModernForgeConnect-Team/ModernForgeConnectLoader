@@ -184,11 +184,13 @@ public final class LegacyItemUse {
             playerType.getMethod("func_71008_a",stackType,int.class).invoke(player,stack,remaining);
             var scanner = services.scanners().forItem(snapshot.key()).orElse(null);
             Object request;List<LegacyPackets.Message> outgoing;
+            LegacyWorlds.beginEntityQueries(world);
             try(var packets=LegacyPackets.captureScan(placer.id(),scanner==null?packet->false:scanner::completion)) {
                 itemType.getMethod("onUsingTick", stackType, playerType, int.class).invoke(item, stack, player, remaining);
+                LegacyWorlds.commitEntityMotion(world);
                 request=packets.scanRequest();
                 outgoing=packets.messages();
-            }
+            }finally{LegacyWorlds.clearEntityQueries(world);}
             if (remaining <= 6) LogUtils.getLogger().info("MFCL legacy use tick {}@{}: remaining={}, target={}",
                     snapshot.key(), snapshot.metadata(), remaining, prompt(snapshot.key(), item));
             // Only the original successful completion branch emits this packet; clearing startScan also happens on cancellation.

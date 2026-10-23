@@ -38,6 +38,11 @@ final class LegacyItemTooltips {
             });
             var warnings=event.getToolTip().stream().filter(line->line.getContents() instanceof TranslatableContents translated&&translated.getKey().startsWith("mfcl.content.")).toList();
             event.getToolTip().clear();lines.forEach(line->event.getToolTip().add(Component.literal(line)));event.getToolTip().addAll(warnings);
+            // Enchantments added after 1.7.10 have no numeric identity for the original tooltip to print.
+            net.minecraft.world.item.enchantment.EnchantmentHelper.getEnchantments(event.getItemStack()).forEach((enchantment,level)->{
+                var id=net.minecraft.core.registries.BuiltInRegistries.ENCHANTMENT.getKey(enchantment);
+                if(id!=null&&services.enchantments().id(id.toString())==null)event.getToolTip().add(enchantment.getFullname(level));
+            });
             if(event.getFlags().isAdvanced())event.getToolTip().add(Component.literal("1.7.10 · "+source.key()+" @ "+source.metadata()).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
         }catch(Exception failure){if(failures.add(event.getItemStack().getItem().toString()))com.mojang.logging.LogUtils.getLogger().warn("Cannot evaluate original item tooltip",failure);}
     }

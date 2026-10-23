@@ -27,6 +27,8 @@ Read each record's date, tested versions and stated limits. A historical experim
 | Thaumometer | [Scanning, authority and persistence](thaumometer-bridge.md), [acceptance record](thaumometer-progress.json) |
 | TC4 wand crafting, charging and focus support | [Function audit](wand-functions-audit.md), [runtime and native-menu evidence](wand-functions-audit.json) |
 | TC4 focus pouch / hover harness GUI, latency, storage and misplaced-armor safety | [Portable item fixes](focus-pouch-bridge.md) |
+| TC4 repair / haste registration, native enchantment NBT, original effects and world reload | [Enchantment bridge](enchantment-bridge.md) |
+| TC4 elemental sword, axe and pickaxe right-click effects | [Elemental tool fixes](elemental-tools.md) |
 | Reported TC4 gameplay, leaf textures and coin regressions | [Fixes and verification scope, 2026-10-21](gameplay-fixes-2026-10-21.md), [original issue notes](issues/tc4-gameplay-observations.md) |
 
 ## Rendering, placement, sound and networking

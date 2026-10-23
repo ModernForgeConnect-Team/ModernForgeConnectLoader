@@ -8,6 +8,8 @@ The original `GuiFocusPouch` checks its opening hotbar slot while drawing. Nativ
 
 Client container binding now retains the prepared player inventory until `initializeContents` receives the authoritative snapshot. Original close requests also use the native menu close protocol. Portable GUI descriptors carry the server's opening hotbar slot so a subsequent selection change does not redefine which slot the GUI belongs to.
 
+The MFCL network protocol advances from 8 to 9 for this descriptor change; update both client and server together.
+
 ## Latency and persistence changes
 
 MFCL previously performed no client prediction for original container clicks: the displayed cursor/slots waited for a server reply on every operation. The TC4 adapter now explicitly opts its focus pouch and hover harness into prediction using the original client container's slot-click code. Native menu packets still run the original server container and reconcile both the menu and corresponding player inventory slots. Other original containers retain their existing behavior unless an adapter opts them in.

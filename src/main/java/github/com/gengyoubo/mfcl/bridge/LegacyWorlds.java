@@ -374,7 +374,7 @@ public final class LegacyWorlds implements AutoCloseable {
     private static Object mirrored(Binding binding,Object world,HostWorldAccess.Entity snapshot) throws Exception {
         // A host entity that hosts an old entity is that old entity; it must not be replaced by a snapshot.
         Object hosted=binding.host.hostedLegacyEntity(snapshot.id());
-        if(hosted!=null)return hosted;
+        if(hosted!=null){if(binding.motionCapture){binding.queried.putIfAbsent(snapshot.id(),hosted);binding.snapshots.putIfAbsent(snapshot.id(),snapshot);}return hosted;}
         Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
         if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
         return entity;
@@ -403,18 +403,27 @@ public final class LegacyWorlds implements AutoCloseable {
         } catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot forward original explosion",failure);}
     }
     public static List<Object> selectedEntities(Object world,Class<?> type,Object box,Object selector) {
+        return selectedEntities(world,type,box,selector,null);
+    }
+    private static List<Object> selectedEntities(Object world,Class<?> type,Object box,Object selector,UUID excluded) {
         var binding=binding(world);
         try {
             var aabb=binding.loader.loadClass("net.minecraft.util.AxisAlignedBB");
             var snapshots=binding.host.entities(aabb.getField("field_72340_a").getDouble(box),aabb.getField("field_72338_b").getDouble(box),aabb.getField("field_72339_c").getDouble(box),aabb.getField("field_72336_d").getDouble(box),aabb.getField("field_72337_e").getDouble(box),aabb.getField("field_72334_f").getDouble(box));
             var result=new ArrayList<Object>();
             for(var snapshot:snapshots) {
+                // Exclusion must precede mirroring: resolving the active player's actor refreshes its body and
+                // would erase changes already made by the callback issuing this query (e.g. TC4 sword lift).
+                if(snapshot.id().equals(excluded))continue;
+                Object hosted=binding.host.hostedLegacyEntity(snapshot.id());
+                if(hosted!=null?!type.isInstance(hosted):!type.isAssignableFrom(binding.loader.loadClass(snapshot.legacyClass())))continue;
                 Object entity=mirrored(binding,world,snapshot);
                 if(type.isInstance(entity)&&(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",binding.loader.loadClass("net.minecraft.entity.Entity")).invoke(selector,entity)))result.add(entity);
             }
             var entityType=binding.loader.loadClass("net.minecraft.entity.Entity");
             for(Object pending:LegacyDeviceContainers.pendingDrops()){
                 if(!type.isInstance(pending)||entityType.getField("field_70170_p").get(pending)!=world||entityType.getField("field_70128_L").getBoolean(pending))continue;
+                if(excluded!=null&&excluded.equals(entityType.getMethod("func_110124_au").invoke(pending)))continue;
                 Object bounds=entityType.getField("field_70121_D").get(pending);
                 if(!(boolean)aabb.getMethod("func_72326_a",aabb).invoke(box,bounds))continue;
                 if(selector==null||(boolean)binding.loader.loadClass("net.minecraft.command.IEntitySelector").getMethod("func_82704_a",entityType).invoke(selector,pending))result.add(pending);
@@ -426,8 +435,8 @@ public final class LegacyWorlds implements AutoCloseable {
         var binding=binding(world);
         try {
             var entity=binding.loader.loadClass("net.minecraft.entity.Entity");
-            Object id=excluded==null?null:entity.getMethod("func_110124_au").invoke(excluded);
-            var result=entities(world,entity,box);if(id!=null)result.removeIf(value->{try{return id.equals(entity.getMethod("func_110124_au").invoke(value));}catch(Exception failure){throw new IllegalStateException(failure);}});return result;
+            UUID id=excluded==null?null:(UUID)entity.getMethod("func_110124_au").invoke(excluded);
+            return selectedEntities(world,entity,box,null,id);
         }catch(Exception failure){throw new IllegalStateException(failure);}
     }
     public static void beginEntityQueries(Object world){clearEntityQueries(world);binding(world).motionCapture=true;}

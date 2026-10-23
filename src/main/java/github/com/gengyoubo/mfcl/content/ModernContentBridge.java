@@ -30,7 +30,7 @@ import java.util.*;
 public final class ModernContentBridge {
     public static final IntegerProperty METADATA = IntegerProperty.create("legacy_meta", 0, 15);
     public static final String STACK_TAG = "mfcl_legacy";
-    /** Host enchanting/anvil tags: native code applies them, original callbacks never see them and must not drop them. */
+    /** Native-only enchantments and presentation survive original callbacks; mapped enchantments synchronize both ways. */
     private static final Set<String> HOST_OWNED_TAGS = Set.of("Enchantments", "RepairCost", "display");
     private static ModernContentBridge active;
     private final LegacyServices services;
@@ -49,6 +49,7 @@ public final class ModernContentBridge {
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final Map<Item, LegacyContent.Item> reverseItems = new IdentityHashMap<>();
     private final LegacyContentPack pack;
+    private final LegacyEnchantmentBridge enchantments;
     private final CreativeTabBridge creative;
     private boolean blocksRegistered, itemsRegistered;
     private Map<Item,LegacyClientData.Stack> vanillaStacks;
@@ -60,6 +61,7 @@ public final class ModernContentBridge {
 
     private ModernContentBridge(LegacyServices services) throws Exception {
         this.services = services;
+        this.enchantments = new LegacyEnchantmentBridge(this);
         try (var context = new LegacyInventoryContext(services)) {
             declarations = new LegacyContent(services.items());
             blockShapes = new LegacyBlockShapes(services);
@@ -130,6 +132,7 @@ public final class ModernContentBridge {
     public LegacyBlockShapes blockShapes() { return blockShapes; }
     public LegacyServices services() { return services; }
     public LegacyItemUse itemUse() {return itemUse;}
+    public LegacyEnchantmentBridge enchantments() {return enchantments;}
     public LegacyCrafting crafting() {return crafting;}
     public LegacyContentPack pack() { return pack; }
     public CreativeTabBridge creative() { return creative; }
@@ -237,6 +240,7 @@ public final class ModernContentBridge {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
         byte[] data = player.getPersistentData().getByteArray(LEGACY_ENTITY_DATA);
         try {
+            for(int slot=0;slot<player.getInventory().getContainerSize();slot++)enchantments.migrate(player.getInventory().getItem(slot));
             itemUse.loadPersisted(services.worlds().bound(player.serverLevel()), placer(player), data);
             itemUse.sync(services.worlds().bound(player.serverLevel()),placer(player)).forEach(message->ScanSyncChannel.sendToPlayer(player,message));
         } catch (Exception failure) {
@@ -354,6 +358,7 @@ public final class ModernContentBridge {
         LegacyRegistryIds.remap(event.getMappings(Registries.BLOCK,"mfcl"),blocks);
     }
     private void register(RegisterEvent event) {
+        enchantments.register(event);
         event.register(Registries.BIOME_SOURCE,registry->registry.register(ResourceLocation.parse("mfcl:thaumcraft_biomes"),github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftBiomeSource.CODEC));
         event.register(Registries.BLOCK, registry -> {
             if (blocksRegistered) throw new IllegalStateException("Legacy block registration repeated");
@@ -403,7 +408,7 @@ public final class ModernContentBridge {
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
         if (stack.isEmpty()) return null;
-        var vanillaLoot=LegacyVanillaStacks.toLegacy(stack);if(vanillaLoot!=null)return vanillaLoot;
+        var vanillaLoot=LegacyVanillaStacks.toLegacy(services,stack);if(vanillaLoot!=null)return vanillaLoot;
         var represented = hostRepresentations.stack(stack);
         if (represented != null) return represented;
         if (reverseItems.containsKey(stack.getItem())) return snapshot(stack);
@@ -448,6 +453,8 @@ public final class ModernContentBridge {
             if (!item.canBeDepleted()) legacy.putInt("metadata", metadata);
             if (tag != null && !tag.isEmpty()) legacy.putString("snbt", tag);
         }
+        try {enchantments.importOld(stack,new LegacyClientData.Stack(key,metadata,count,"",tag==null?"":tag));}
+        catch(Exception failure){throw new IllegalStateException("Cannot expose original enchantments for "+key,failure);}
         return stack;
     }
     public static int metadata(ItemStack stack) {
@@ -459,14 +466,20 @@ public final class ModernContentBridge {
         if (stack.hasTag()) for (String key : stack.getTag().getAllKeys())
             if (!key.equals(STACK_TAG) && !key.equals("Damage") && !HOST_OWNED_TAGS.contains(key)) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
         CompoundTag tag = stack.getTagElement(STACK_TAG);
-        return new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", tag == null ? "" : tag.getString("snbt"));
+        var original=new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", tag == null ? "" : tag.getString("snbt"));
+        try{return enchantments.exportNative(stack,original);}catch(Exception failure){throw new IllegalStateException("Cannot map native enchantments",failure);}
+    }
+    LegacyClientData.Stack storedSnapshot(ItemStack stack) {
+        var item=reverseItems.get(stack.getItem());if(item==null)return null;
+        var stored=stack.getTagElement(STACK_TAG);
+        return new LegacyClientData.Stack(item.key(),metadata(stack),stack.getCount(),"",stored==null?"":stored.getString("snbt"));
     }
     /** Read-only view for old renderers/tooltips. Host-only tags must not prevent drawing an item. */
     public LegacyClientData.Stack renderSnapshot(ItemStack stack) throws Exception {
         var item = reverseItems.get(stack.getItem()); if (item == null) return null;
         CompoundTag stored = stack.getTagElement(STACK_TAG);
         String snbt = stored == null ? "" : stored.getString("snbt");
-        var original = new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", snbt);
+        var original = enchantments.exportNative(stack,new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", snbt));
         CompoundTag host = stack.getTag(); if (host == null) return original;
         CompoundTag display = host.getCompound("display");
         Integer cost = host.contains("RepairCost", 3) ? host.getInt("RepairCost") : null;
@@ -745,6 +758,7 @@ public final class ModernContentBridge {
                 Object actor=exposeLegacyInventory(player,world,before,held);
                 var result=level.isClientSide?itemUse.usingTickResult(world,source,held,remaining)
                         :logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.usingTickResult(world,source,held,remaining)),true);
+                LegacyPlayerBody.push(actor);
                 if(!level.isClientSide)collectLegacyInventory(player,actor,before,hand);
                 if(result.scan()!=null&&level.isClientSide)ScanSyncChannel.sendToServer(result.scan(),"@");
                 if(player instanceof net.minecraft.server.level.ServerPlayer server){
@@ -905,9 +919,10 @@ public final class ModernContentBridge {
         catch (Exception unmapped) { }
     }
     /** Re-attaches the host-owned tags of a stack an original callback rewrote, while it is still the same item. */
-    static ItemStack keepHostTags(ItemStack current, ItemStack updated) {
+    public static ItemStack keepHostTags(ItemStack current, ItemStack updated) {
         var kept = current.getTag(); if (kept == null || updated.isEmpty() || current.getItem() != updated.getItem()) return updated;
-        for (String key : HOST_OWNED_TAGS) if (kept.contains(key)) updated.getOrCreateTag().put(key, kept.get(key).copy());
+        for (String key : HOST_OWNED_TAGS) if (!key.equals("Enchantments")&&kept.contains(key)) updated.getOrCreateTag().put(key, kept.get(key).copy());
+        if(active!=null)active.enchantments.keepNative(current,updated);
         return updated;
     }
     static boolean sameLegacy(LegacyClientData.Stack left, LegacyClientData.Stack right) {

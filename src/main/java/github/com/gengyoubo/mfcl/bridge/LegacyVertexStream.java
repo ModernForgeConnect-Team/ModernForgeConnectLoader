@@ -5,7 +5,8 @@ import java.util.List;
 /** Pure legacy geometry and matrix math. No host OpenGL type or context is ever entered. */
 public final class LegacyVertexStream {
     public record Vertex(double x, double y, double z, float u, float v, float nx, float ny, float nz, int argb) {}
-    public record RenderState(boolean blend, int sourceBlend, int destinationBlend, boolean depthWrite, boolean cull) {
+    public record RenderState(boolean blend, int sourceBlend, int destinationBlend, boolean depthWrite, boolean cull, boolean depthTest) {
+        public RenderState(boolean blend,int sourceBlend,int destinationBlend,boolean depthWrite,boolean cull){this(blend,sourceBlend,destinationBlend,depthWrite,cull,true);}
         public static final RenderState OPAQUE = new RenderState(false, 770, 771, true, false);
     }
     public record Primitive(int mode, String texture, List<Vertex> vertices, RenderState state) {

@@ -522,6 +522,15 @@ public final class LegacyClientData {
             return snapshot(stack);
         });
     }
+    /** Replaces a stack's tag using the shared binary NBT format (old indexed SNBT is not modern SNBT). */
+    public Stack withTag(Stack source,byte[] compressed) throws Exception {
+        return inLegacy(()->{
+            Object stack=materialize(source);
+            Object tag=loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_74796_a",java.io.InputStream.class)
+                    .invoke(null,new java.io.ByteArrayInputStream(compressed));
+            stackType.getField("field_77990_d").set(stack,tag);return snapshot(stack);
+        });
+    }
     public synchronized Stack snapshot(Object value) throws Exception {
         Object item = itemOfStack.invoke(value);
         Object nbt = stackType.getField("field_77990_d").get(value);

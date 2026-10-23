@@ -56,6 +56,10 @@ final class HoverHarnessHostAcceptance {
             }
             case 10 -> {if(mc.getSingleplayerServer()!=null)return false;mc.createWorldOpenFlows().loadLevel(mc.screen,world);}
             case 11 -> {
+                // The disposable TC4 world uses experimental registries; accept only this known reload prompt.
+                if(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen confirm&&confirm.getTitle().getString().equals(net.minecraft.network.chat.Component.translatable("selectWorld.backupQuestion.experimental").getString())) {
+                    for(var child:confirm.children())if(child instanceof net.minecraft.client.gui.components.Button button&&button.active&&button.getMessage().equals(net.minecraft.network.chat.CommonComponents.GUI_PROCEED)){button.onPress();return false;}
+                }
                 if(mc.player==null||mc.screen!=null)return false;
                 require(fuel(mc.player.getItemBySlot(EquipmentSlot.HEAD))==64,"Hat equipment or fuel did not survive login");modelGuards(mc);
                 proof.put("harnessHatSurvivesWorldReloadAndLogin",true);

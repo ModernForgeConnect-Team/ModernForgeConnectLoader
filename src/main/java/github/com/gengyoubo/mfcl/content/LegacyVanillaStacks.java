@@ -10,12 +10,6 @@ import java.util.*;
 /** Explicit old vanilla loot NBT conversion. The source tag also preserves old-only enchantment data for round trips. */
 final class LegacyVanillaStacks {
     private static final String SOURCE="mfcl_legacy_vanilla";
-    private static final Map<Integer,String> ENCHANTMENTS=Map.ofEntries(
-            Map.entry(0,"protection"),Map.entry(1,"fire_protection"),Map.entry(2,"feather_falling"),Map.entry(3,"blast_protection"),
-            Map.entry(4,"projectile_protection"),Map.entry(5,"respiration"),Map.entry(6,"aqua_affinity"),Map.entry(7,"thorns"),
-            Map.entry(16,"sharpness"),Map.entry(17,"smite"),Map.entry(18,"bane_of_arthropods"),Map.entry(19,"knockback"),Map.entry(20,"fire_aspect"),Map.entry(21,"looting"),
-            Map.entry(32,"efficiency"),Map.entry(33,"silk_touch"),Map.entry(34,"unbreaking"),Map.entry(35,"fortune"),
-            Map.entry(48,"power"),Map.entry(49,"punch"),Map.entry(50,"flame"),Map.entry(51,"infinity"),Map.entry(61,"luck_of_the_sea"),Map.entry(62,"lure"));
     private LegacyVanillaStacks() {}
     static ItemStack toHost(LegacyServices services,LegacyClientData.Stack old) {
         if(!old.key().startsWith("minecraft:")||(old.tag().isEmpty()&&!old.key().equals("minecraft:potion")))return ItemStack.EMPTY;
@@ -26,7 +20,7 @@ final class LegacyVanillaStacks {
             if(result.isEmpty())return result;
             for(String name:tag.getAllKeys()) {
                 switch(name) {
-                    case "ench","StoredEnchantments" -> result.getOrCreateTag().put(name.equals("ench")?"Enchantments":name,enchantments(tag.getList(name,Tag.TAG_COMPOUND),true));
+                    case "ench","StoredEnchantments" -> result.getOrCreateTag().put(name.equals("ench")?"Enchantments":name,enchantments(services,tag.getList(name,Tag.TAG_COMPOUND),true));
                     case "RepairCost","Unbreakable","HideFlags" -> result.getOrCreateTag().put(name,tag.get(name).copy());
                     case "display" -> {
                         var display=tag.getCompound(name).copy();
@@ -57,25 +51,30 @@ final class LegacyVanillaStacks {
                 result.getOrCreateTag().put("CustomPotionEffects",effects);
             }
             var source=new CompoundTag();source.putString("key",old.key());source.putInt("metadata",old.metadata());source.put("tag",tag.copy());
+            source.putBoolean("enchantments_mapped",true);
             result.getOrCreateTag().put(SOURCE,source);
             return result;
         }catch(RuntimeException failure){throw failure;}
         catch(Exception failure){throw new IllegalStateException("Cannot convert original vanilla loot: "+old.key(),failure);}
     }
-    static LegacyClientData.Stack toLegacy(ItemStack stack) throws Exception {
-        var root=stack.getTag();if(root==null||!root.contains(SOURCE,Tag.TAG_COMPOUND))return null;
-        var source=root.getCompound(SOURCE);String key=source.getString("key");
+    static LegacyClientData.Stack toLegacy(LegacyServices services,ItemStack stack) throws Exception {
+        migrate(services,stack);
+        var root=stack.getTag();if(root==null)return null;
+        boolean original=root.contains(SOURCE,Tag.TAG_COMPOUND);
+        if(!original&&(!net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("minecraft")||!root.contains("Enchantments")&&!root.contains("StoredEnchantments")))return null;
+        if(!original)for(String name:root.getAllKeys())if(!Set.of("Damage","Enchantments","StoredEnchantments","RepairCost","Unbreakable","HideFlags","display").contains(name))throw new UnsupportedOperationException("Unmapped enchanted host NBT: "+name);
+        var source=original?root.getCompound(SOURCE):new CompoundTag();String key=original?source.getString("key"):net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         if(!key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid original loot identity: "+key);
         var tag=source.getCompound("tag").copy();
         // Native enchanting/repairing can change supported enchantments after the item was awarded.
         for(String name:List.of("ench","StoredEnchantments")) {
             String modern=name.equals("ench")?"Enchantments":name;
             var pending=new LinkedHashMap<Short,CompoundTag>();
-            for(Tag entry:enchantments(root.getList(modern,Tag.TAG_COMPOUND),false))pending.put(((CompoundTag)entry).getShort("id"),(CompoundTag)entry);
+            for(Tag entry:enchantments(services,root.getList(modern,Tag.TAG_COMPOUND),false))pending.put(((CompoundTag)entry).getShort("id"),(CompoundTag)entry);
             var list=new ListTag();
             for(Tag entry:tag.getList(name,Tag.TAG_COMPOUND)) {
                 short id=((CompoundTag)entry).getShort("id");
-                if(!ENCHANTMENTS.containsKey((int)id))list.add(entry.copy());
+                if(services.enchantments().name(id)==null)list.add(entry.copy());
                 else if(pending.containsKey(id))list.add(pending.remove(id));
             }
             pending.values().forEach(list::add);
@@ -96,9 +95,11 @@ final class LegacyVanillaStacks {
             }
             tag.put("display",display);
         }else tag.remove("display");
-        return new LegacyClientData.Stack(key,stack.isDamageableItem()?stack.getDamageValue():source.getInt("metadata"),stack.getCount(),stack.getHoverName().getString(),tag.isEmpty()?"":tag.toString());
+        var old=new LegacyClientData.Stack(key,stack.isDamageableItem()?stack.getDamageValue():source.getInt("metadata"),stack.getCount(),stack.getHoverName().getString(),"");
+        if(tag.isEmpty())return old;
+        var bytes=new java.io.ByteArrayOutputStream();NbtIo.writeCompressed(tag,bytes);return services.items().withTag(old,bytes.toByteArray());
     }
-    private static CompoundTag originalTag(LegacyServices services,LegacyClientData.Stack old) throws Exception {
+    static CompoundTag originalTag(LegacyServices services,LegacyClientData.Stack old) throws Exception {
         if(old.tag().isEmpty())return new CompoundTag();
         // Old list SNBT includes indexes (e.g. [0:{id:1s}]); binary NBT has the same tag types in both versions.
         byte[] bytes=services.items().inLegacy(()->{
@@ -110,18 +111,32 @@ final class LegacyVanillaStacks {
         });
         return NbtIo.readCompressed(new java.io.ByteArrayInputStream(bytes));
     }
-    private static ListTag enchantments(ListTag input,boolean modern) {
+    static void migrate(LegacyServices services,ItemStack stack) {
+        var source=stack.getTagElement(SOURCE);if(source==null||source.getBoolean("enchantments_mapped"))return;
+        for(String name:List.of("ench","StoredEnchantments")) {
+            var added=new ListTag();
+            for(Tag value:source.getCompound("tag").getList(name,Tag.TAG_COMPOUND))
+                if(!LegacyEnchantments.VANILLA.containsKey((int)((CompoundTag)value).getShort("id")))added.add(value.copy());
+            var merged=new LinkedHashMap<String,Tag>();
+            for(Tag value:enchantments(services,added,true))merged.put(((CompoundTag)value).getString("id"),value);
+            String modern=name.equals("ench")?"Enchantments":name;
+            for(Tag value:stack.getOrCreateTag().getList(modern,Tag.TAG_COMPOUND))merged.put(((CompoundTag)value).getString("id"),value.copy());
+            var list=new ListTag();merged.values().forEach(list::add);if(!list.isEmpty())stack.getOrCreateTag().put(modern,list);
+        }
+        source.putBoolean("enchantments_mapped",true);
+    }
+    static ListTag enchantments(LegacyServices services,ListTag input,boolean modern) {
         var output=new ListTag();
         for(Tag value:input) {
             var entry=(CompoundTag)value;var mapped=new CompoundTag();
             if(modern) {
-                int id=entry.getShort("id");String name=ENCHANTMENTS.get(id);
+                int id=entry.getShort("id");String name=services.enchantments().name(id);
                 if(name==null){LegacyDiagnostics.missingMapping("enchantment "+id,"old-only enchantment retained in original loot NBT");continue;}
-                mapped.putString("id","minecraft:"+name);
+                mapped.putString("id",LegacyRegistryIds.id(name).toString());
             }else {
-                String id=entry.getString("id");var found=ENCHANTMENTS.entrySet().stream().filter(e->id.equals("minecraft:"+e.getValue())).findFirst();
-                if(found.isEmpty())throw new UnsupportedOperationException("Host enchantment has no old mapping: "+id);
-                mapped.putShort("id",found.get().getKey().shortValue());
+                String id=entry.getString("id");Integer found=services.enchantments().id(id);
+                if(found==null)continue; // native-only enchantments stay host-owned during original callbacks
+                mapped.putShort("id",found.shortValue());
             }
             mapped.putShort("lvl",entry.getShort("lvl"));output.add(mapped);
         }

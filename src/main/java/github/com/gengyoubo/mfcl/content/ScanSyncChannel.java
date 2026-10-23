@@ -23,7 +23,8 @@ public final class ScanSyncChannel {
     public record MerchantPick(net.minecraft.core.BlockPos origin, int entityId) {}
     /** Original device slot counts beyond the one-byte vanilla menu protocol; zero means the vanilla count is exact. */
     public record SlotCounts(int window, int[] counts) {}
-    private static final String VERSION = "8";
+    // Portable menu opening now includes its authoritative hotbar slot; reject peers using the old descriptor.
+    private static final String VERSION = "9";
     private static SimpleChannel channel;
     private ScanSyncChannel() { }
     @SuppressWarnings("removal")

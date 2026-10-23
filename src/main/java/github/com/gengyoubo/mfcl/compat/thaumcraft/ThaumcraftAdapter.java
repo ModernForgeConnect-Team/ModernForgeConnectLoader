@@ -25,6 +25,10 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         var loader = services.loader();
         var generation=loader.loadClass("thaumcraft.common.lib.world.ThaumcraftWorldGenerator");
         var config=loader.loadClass("thaumcraft.common.config.Config");
+        services.enchantments().register("thaumcraft:repair",config.getField("enchRepair").get(null));
+        services.enchantments().register("thaumcraft:haste",config.getField("enchHaste").get(null));
+        ThaumcraftEnchantments.install(services);
+        ThaumcraftElementalTools.install(services);
         // {host id, ThaumcraftWorldGenerator field, Config weight field (null: never generated in the overworld)}
         for(String[] biome:new String[][]{{"thaumcraft:magical_forest","biomeMagicalForest","biomeMagicalForestWeight"},{"thaumcraft:tainted_land","biomeTaint","biomeTaintWeight"},
                 {"thaumcraft:eerie","biomeEerie",null},{"thaumcraft:eldritch","biomeEldritchLands",null}})
@@ -44,6 +48,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         ThaumcraftDynamicItems.install(services);
         ThaumcraftGoggles.install(services);
         ThaumcraftParticles.install(services);
+        ThaumcraftProspecting.install(services);
         try {services.items().inLegacy(()->{initializeNotifications();return null;});}
         catch(Exception failure){throw new IllegalStateException("Cannot initialize original TC4 GUI notifications",failure);}
     }

@@ -78,6 +78,10 @@ public final class HostPlayers implements LegacyEquipment, LegacyEvents {
         bus.addListener(this::loggedOut); bus.addListener(this::changedDimension); bus.addListener(this::serverTick);
     }
     public void diagnostics(Diagnostics value) { diagnostics = Objects.requireNonNull(value); }
+    /** Adapter-owned player effects use the same scoped inventory/equipment transaction as forwarded events. */
+    public void callback(Player player,ModernContentBridge.ActorAction action)throws Exception {
+        session(player,(world,actor)->{action.run(actor);return null;});
+    }
     public boolean baubles() { return LegacyPlayerArmor.baubles(services.loader()); }
 
     // ---- LegacyEquipment

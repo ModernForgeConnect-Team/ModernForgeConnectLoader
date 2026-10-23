@@ -21,7 +21,7 @@ public abstract class LegacyRenderTypes extends RenderType {
             var setup = CompositeState.builder().setShaderState(RENDERTYPE_ENTITY_TRANSLUCENT_SHADER)
                     .setTextureState(new TextureStateShard(texture, false, false)).setTransparencyState(transparency)
                     .setCullState(state.cull() ? CULL : NO_CULL).setLightmapState(LIGHTMAP).setOverlayState(OVERLAY)
-                    .setWriteMaskState(new WriteMaskStateShard(true, state.depthWrite())).setDepthTestState(LEQUAL_DEPTH_TEST)
+                    .setWriteMaskState(new WriteMaskStateShard(true, state.depthWrite())).setDepthTestState(state.depthTest()?LEQUAL_DEPTH_TEST:NO_DEPTH_TEST)
                     .createCompositeState(true);
             return create("mfcl_legacy_tile", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 65536, false, state.blend(), setup);
         });
