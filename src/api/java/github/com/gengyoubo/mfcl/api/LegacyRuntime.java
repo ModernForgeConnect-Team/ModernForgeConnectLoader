@@ -72,6 +72,10 @@ public interface LegacyRuntime {
     default LegacyValues values() {
         throw new UnsupportedOperationException("This MFCL build does not provide legacy value access");
     }
+    /** {@link LegacyFeatures#SCENES}. */
+    default LegacyScenes scenes() {
+        throw new UnsupportedOperationException("This MFCL build does not provide preview scenes");
+    }
     /** Bounded failure history; values contain no legacy objects. */
     List<Diagnostic> diagnostics();
 }

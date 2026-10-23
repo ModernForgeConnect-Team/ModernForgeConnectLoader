@@ -64,6 +64,7 @@ public final class LegacyBlockRendering {
             Set<Integer> metas = new TreeSet<>();
             for (var item : content.items()) if (declaration.key().equals(item.blockKey()))
                 for (var variant : item.variants()) metas.add(variant.metadata());
+            Set<Integer> catalog = Set.copyOf(metas);
             // Placement callbacks encode facing, upper halves and axes in metadata absent from the item catalog.
             if (!metas.isEmpty()) for (int meta = 0; meta < 16; meta++) metas.add(meta);
             for (int meta : metas) {
@@ -85,7 +86,10 @@ public final class LegacyBlockRendering {
                         try { layers = capture(declaration.key(), meta, view); }
                         catch (Exception failure) { if (!hasTile) throw failure; layers = List.of(); }
                         boolean invisibleTechnical=declaration.renderType()==-1&&content.items().stream().filter(item->declaration.key().equals(item.blockKey())).noneMatch(LegacyContent.Item::creative);
-                        if (layers.isEmpty() && !hasTile && !invisibleTechnical) return null;
+                        // Only original code places metadata no item carries. One that renders nothing is a structure part
+                        // drawn by a neighbour's TESR (TC4 infusion pillar and thaumatorium tops), not a missing model.
+                        boolean invisiblePart=!catalog.contains(meta);
+                        if (layers.isEmpty() && !hasTile && !invisibleTechnical && !invisiblePart) return null;
                         for (var layer : layers) for (var primitive : layer.geometry()) {
                             if (primitive.mode() != LegacyVertexStream.GL_QUADS || primitive.vertices().size() % 4 != 0) return null;
                             if (!data.iconLayout().containsKey(primitive.texture()) || primitive.texture().startsWith("MISSING_ICON_")) return null;

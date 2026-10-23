@@ -79,6 +79,27 @@ public final class LegacyBlockEntity extends BlockEntity {
         catch (Exception error) { throw new IllegalStateException("Cannot save original TileEntity " + key(), error); }
         tag.putString("mfcl_legacy_block", key()); tag.putByteArray("mfcl_legacy_nbt", saved);
     }
+    private Object boundsOwner; private long boundsTime; private net.minecraft.world.phys.AABB bounds;
+    /**
+     * Host culling uses this box; the default is the cell's own collision box. Old TESRs that draw across several
+     * cells (TC4 research table, infusion pillars) declare their extent here, so the model must not vanish with its anchor.
+     */
+    @Override public net.minecraft.world.phys.AABB getRenderBoundingBox() {
+        if (level == null || !level.isClientSide || isRemoved()) return super.getRenderBoundingBox();
+        var cell = content.legacyBlock(getBlockState()); var rendering = content.blockRendering();
+        if (rendering == null || !rendering.hasTileRenderer(cell.legacyKey(), cell.metadata())) return super.getRenderBoundingBox();
+        try {
+            Object tile = legacyOrNull();
+            if (tile == null) return super.getRenderBoundingBox();
+            // Some tiles grow their box with state (stacked jars, active altars); refresh about once a second.
+            if (tile != boundsOwner || bounds == null || level.getGameTime() - boundsTime >= 20) {
+                double[] old = content.services().tiles().renderBounds(tile);
+                bounds = old == null ? INFINITE_EXTENT_AABB : new net.minecraft.world.phys.AABB(old[0], old[1], old[2], old[3], old[4], old[5]);
+                boundsOwner = tile; boundsTime = level.getGameTime();
+            }
+            return bounds;
+        } catch (Exception | LinkageError failure) { return super.getRenderBoundingBox(); }
+    }
     @Override public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
     public void synchronize() {

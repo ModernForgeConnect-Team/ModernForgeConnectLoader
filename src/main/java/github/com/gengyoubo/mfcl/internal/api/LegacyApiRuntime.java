@@ -91,6 +91,13 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         if (equipment == null) throw new UnsupportedOperationException("Equipment sources are unavailable");
         return equipment;
     }
+    private LegacyScenes scenes;
+    public void installScenes(LegacyScenes value) { this.scenes = Objects.requireNonNull(value); }
+    @Override public LegacyScenes scenes() {
+        checkOpen();
+        if (scenes == null) throw new UnsupportedOperationException("Preview scenes are unavailable");
+        return scenes;
+    }
     private LegacyEvents events;
     public void installEvents(LegacyEvents value) { this.events = Objects.requireNonNull(value); }
     @Override public LegacyEvents events() {
@@ -149,7 +156,7 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         if (diagnostics.size() == 64) diagnostics.removeFirst();
         diagnostics.addLast(new Diagnostic(code, operation, failure.getClass().getName() + ": " + failure.getMessage()));
     }
-    <T> T call(String code, String operation, Callable<T> work) {
+    public <T> T call(String code, String operation, Callable<T> work) {
         try { return scope.call(() -> { checkOpen(); return work.call(); }); }
         catch (VirtualMachineError | ThreadDeath fatal) { throw fatal; }
         catch (Throwable failure) {

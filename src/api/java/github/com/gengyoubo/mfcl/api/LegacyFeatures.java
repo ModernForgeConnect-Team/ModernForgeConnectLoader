@@ -52,4 +52,6 @@ public final class LegacyFeatures {
     public static final String MLA_INSTANCE = "mla.instance";
     /** {@link LegacyRedirects}, registered through {@link github.com.gengyoubo.mfcl.api.spi.LegacyRedirectProvider}. */
     public static final String REDIRECTS = "redirects";
+    /** {@link LegacyRuntime#scenes()}; only on a physical client. */
+    public static final String SCENES = "scenes";
 }

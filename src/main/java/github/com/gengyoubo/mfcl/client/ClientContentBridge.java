@@ -51,6 +51,7 @@ public final class ClientContentBridge {
         });
         if (Boolean.getBoolean("mfcl.test.fireFocus")) FireFocusHostProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.wandAudit")) WandHostAuditProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.multiblock")) MultiblockHostProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.biomes")) BiomeHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.device")) DeviceHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.tooltip")) TooltipHostSmokeProbe.install(bridge);

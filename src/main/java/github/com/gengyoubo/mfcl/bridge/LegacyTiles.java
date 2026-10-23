@@ -44,6 +44,16 @@ public final class LegacyTiles {
         tileType.getField("field_145847_g").setInt(tile, metadata); tileType.getField("field_145854_h").set(tile, block(key));
         if(validate)tileType.getMethod("func_145829_t").invoke(tile);
     }
+    /** The original client getRenderBoundingBox in world coordinates; null for INFINITE_EXTENT_AABB. */
+    public double[] renderBounds(Object tile) throws Exception {
+        return services.items().inLegacy(() -> {
+            Object box = tileType.getMethod("getRenderBoundingBox").invoke(tile);
+            if (box == null || box == tileType.getField("INFINITE_EXTENT_AABB").get(null)) return null;
+            Class<?> type = box.getClass(); double[] bounds = new double[6]; int i = 0;
+            for (String name : new String[]{"field_72340_a","field_72338_b","field_72339_c","field_72336_d","field_72337_e","field_72334_f"}) bounds[i++] = type.getField(name).getDouble(box);
+            return bounds;
+        });
+    }
     public byte[] save(Object tile) throws Exception {
         return services.items().inLegacy(() -> {
             Object nbt = nbtType.getConstructor().newInstance(); tileType.getMethod("func_145841_b", nbtType).invoke(tile, nbt);
