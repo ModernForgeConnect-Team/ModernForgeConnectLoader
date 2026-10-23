@@ -51,6 +51,7 @@ public final class ModernContentBridge {
     private final Map<Item, LegacyContent.Item> reverseItems = new IdentityHashMap<>();
     private final LegacyContentPack pack;
     private final LegacyEnchantmentBridge enchantments;
+    private final HostToolStacks hostTools;
     private final CreativeTabBridge creative;
     private boolean blocksRegistered, itemsRegistered;
     private Map<Item,LegacyClientData.Stack> vanillaStacks;
@@ -100,6 +101,7 @@ public final class ModernContentBridge {
         oreDictionary.tag(services,variantsByItem);
         for(var tag:services.hostItemTags().entrySet())pack.itemTag(tag.getKey(),tag.getValue().stream().filter(key->declarations.items().stream().anyMatch(item->item.key().equals(key))).map(key->id(key).toString()).toList());
         creative = new CreativeTabBridge(this);
+        hostTools = new HostToolStacks(services);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
         try {
@@ -406,10 +408,14 @@ public final class ModernContentBridge {
         });
     }
     public ItemStack mapStack(LegacyClientData.Stack old) {
+        if (old.key().equals(LegacyHostTools.PICKAXE)) return gameplayStack(old);
         return items.containsKey(old.key()) ? stack(old.key(), old.metadata(), old.count(), old.tag()) : HostStackMapping.renderStack(old);
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
         if (stack.isEmpty()) return null;
+        if (!reverseItems.containsKey(stack.getItem())) {
+            var tool = hostTools.toLegacy(stack); if (tool != null) return tool;
+        }
         var vanillaLoot=LegacyVanillaStacks.toLegacy(services,stack);if(vanillaLoot!=null)return vanillaLoot;
         var represented = hostRepresentations.stack(stack);
         if (represented != null) return represented;
@@ -435,6 +441,10 @@ public final class ModernContentBridge {
     }
     public ItemStack gameplayStack(LegacyClientData.Stack stack) {
         if (stack == null || stack.count() <= 0) return ItemStack.EMPTY;
+        if (stack.key().equals(LegacyHostTools.PICKAXE)) {
+            try { return hostTools.toHost(stack); }
+            catch (Exception failure) { throw new IllegalStateException("Cannot restore native pickaxe", failure); }
+        }
         var vanillaLoot=LegacyVanillaStacks.toHost(services,stack);if(!vanillaLoot.isEmpty())return vanillaLoot;
         var represented = hostRepresentations.stack(stack);
         if (!represented.isEmpty()) return represented;

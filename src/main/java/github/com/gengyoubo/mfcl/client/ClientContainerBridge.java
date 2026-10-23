@@ -83,10 +83,9 @@ public final class ClientContainerBridge {
         if(value.isEmpty())return null;
         var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
         if(content!=null){var old=content.renderSnapshot(value);if(old!=null)return old;}
-        if(value.hasTag()) {
-            // Damaged/enchanted vanilla items use the server's exact conversion; unmapped host NBT is simply not mirrored, never fatal.
-            try{return content==null?null:content.gameplayStack(value);}catch(Exception unmapped){return null;}
-        }
+        // Native tool proxies also cover pristine, untagged tools absent from the old creative catalog.
+        if(content!=null)try{return content.gameplayStack(value);}catch(Exception unmapped){ /* Try display-only catalog entries below. */ }
+        if(value.hasTag())return null; // An unmapped tag must not be replaced with an untagged display-only entry.
         if(reverse==null){reverse=new HashMap<>();for(var stack:services.items().catalog()){var modern=ModernItemMapping.renderStack(stack);if(!modern.isEmpty()&&!modern.hasTag())reverse.putIfAbsent(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(),stack);}}
         var old=reverse.get(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(value.getItem()).toString());
         if(old==null)return null; // an unknown host item leaves its mirror slot empty instead of failing the container

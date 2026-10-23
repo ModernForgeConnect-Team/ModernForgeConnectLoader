@@ -231,7 +231,7 @@ public final class LegacyClientData {
         }
         return Map.copyOf(names);
     }
-    public void close() throws java.io.IOException { LegacyHostRegistry.close(loader); if (resourceContext != null) resourceContext.close(); }
+    public void close() throws java.io.IOException { LegacyHostTools.close(loader); LegacyHostRegistry.close(loader); if (resourceContext != null) resourceContext.close(); }
     public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
     public String displayName(Stack value) throws Exception {
         return inLegacy(()->(String)stackType.getMethod("func_82833_r").invoke(materialize(value)));

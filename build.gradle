@@ -148,6 +148,11 @@ tasks.register('prepareLegacyRuntime', JavaExec) {
 }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    if (project.hasProperty('tinkersTestVersion')) {
+        repositories.maven { url 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+        runtimeOnly fg.deobf("maven.modrinth:mantle:${providers.gradleProperty('mantleTestVersion').getOrElse('1.11.117')}")
+        runtimeOnly fg.deobf("maven.modrinth:tinkers-construct:${project.property('tinkersTestVersion')}")
+    }
     if (project.hasProperty('mekanismTestVersion')) {
         repositories.maven { url 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
         runtimeOnly fg.deobf("maven.modrinth:mekanism:${project.property('mekanismTestVersion')}")
