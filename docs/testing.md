@@ -115,6 +115,8 @@ The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client co
 
 `-PmfclServerSmokeTest=bore` checks native pickaxes in the original TC4 bore, including native wear/enchantments, NBT save/load, transfers and modern Tinkers break/stop/repair. Optional `-PtinkersTestVersion` enables real Tinkers/Mantle inputs. See [Arcane Bore tools](arcane-bore-tools.md) for the command and `bore-smoke.json` coverage.
 
+`-PmfclServerSmokeTest=compat` checks the shared portable-container policy, packet-target validation, native class-loader scopes and registered crossbow factories without TC4 installed. It uses a disposable Extra Utilities game and writes `compat-bridge-smoke.json`. See [compatibility generalization](compat-generalization.md) for the command, boundaries and reference-mod regressions.
+
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
 
 Extra Utilities input and focused regression/graphical commands are recorded in [the compatibility fix record](extrautilities-startup.md). The original-JAR regression uses `-PextrautilitiesJar=<original-file>` with `-PlegacySupportDir=<support-root>` and skips explicitly when either input is missing.

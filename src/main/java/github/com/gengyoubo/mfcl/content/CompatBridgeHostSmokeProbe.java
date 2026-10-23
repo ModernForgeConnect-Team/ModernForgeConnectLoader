@@ -3,7 +3,6 @@ package github.com.gengyoubo.mfcl.content;
 import github.com.gengyoubo.mfcl.bridge.*;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.*;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayerFactory;
@@ -56,7 +55,7 @@ final class CompatBridgeHostSmokeProbe {
                 rejects(()->LegacyPacketTargets.requireDevice(packet,target,"Other",21,"px","py","pz","Fixture"),"wrongDeviceRejected");
                 Object opening=services.items().materialize(content.gameplayStack(new ItemStack(Items.STICK,1)));
                 Object diamond=services.items().materialize(content.gameplayStack(new ItemStack(Items.DIAMOND,1)));
-                proof.put("portablePolicy",services.loader().loadClass("github.com.gengyoubo.mfcl.legacy1710.boot.PortableContainerProbe").getMethod("run",Object.class,Object.class,Object.class,Object.class).invoke(null,world,actor,opening,diamond));
+                proof.put("portablePolicy",services.loader().loadClass("github.com.gengyoubo.mfcl.legacy1710.probe.PortableContainerProbe").getMethod("run",Object.class,Object.class,Object.class,Object.class).invoke(null,world,actor,opening,diamond));
                 return null;
             });
             var created=new AtomicInteger();

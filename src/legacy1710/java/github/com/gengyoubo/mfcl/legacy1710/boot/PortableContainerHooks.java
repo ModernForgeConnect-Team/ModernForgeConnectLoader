@@ -31,7 +31,8 @@ public final class PortableContainerHooks {
         int index=policy.openingContainerSlot(container);List<?> slots=slots(container);
         if(index<0||index>=slots.size())return -1;
         Object slot=slots.get(index);
-        return slot.getClass().getField("field_75224_c").get(slot)==inventory(player)?(int)slot.getClass().getMethod("getSlotIndex").invoke(slot):-1;
+        Class<?> slotType=container.getClass().getClassLoader().loadClass("net.minecraft.inventory.Slot");
+        return slotType.getField("field_75224_c").get(slot)==inventory(player)?(int)slotType.getMethod("getSlotIndex").invoke(slot):-1;
     }
     public static boolean clickAllowed(Object container,int slot,int button,int mode,Object player)throws Exception {
         Policy policy=policy(container);
@@ -42,12 +43,12 @@ public final class PortableContainerHooks {
         Object target=slots.get(slot),sourceInventory=inventory(player);
         Object source=((Object[])sourceInventory.getClass().getField("field_70462_a").get(sourceInventory))[button];
         if(source==null)return true;
-        Class<?> stack=container.getClass().getClassLoader().loadClass("net.minecraft.item.ItemStack");
+        ClassLoader loader=container.getClass().getClassLoader();Class<?> stack=loader.loadClass("net.minecraft.item.ItemStack"),slotType=loader.loadClass("net.minecraft.inventory.Slot");
         // Some original containers bypass these checks in their number-key branch.
-        if(!(boolean)target.getClass().getMethod("func_75214_a",stack).invoke(target,source))return false;
-        Object targetInventory=target.getClass().getField("field_75224_c").get(target);
-        int index=(int)target.getClass().getMethod("getSlotIndex").invoke(target);
-        return (boolean)container.getClass().getClassLoader().loadClass("net.minecraft.inventory.IInventory").getMethod("func_94041_b",int.class,stack).invoke(targetInventory,index,source);
+        if(!(boolean)slotType.getMethod("func_75214_a",stack).invoke(target,source))return false;
+        Object targetInventory=slotType.getField("field_75224_c").get(target);
+        int index=(int)slotType.getMethod("getSlotIndex").invoke(target);
+        return (boolean)loader.loadClass("net.minecraft.inventory.IInventory").getMethod("func_94041_b",int.class,stack).invoke(targetInventory,index,source);
     }
     public static boolean valid(Object container,Object player)throws Exception {
         Policy policy=policy(container);int index=openingInventorySlot(container,player,policy);

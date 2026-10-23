@@ -9,6 +9,7 @@ Read each record's date, tested versions and stated limits. A historical experim
 | Topic | Documentation |
 | --- | --- |
 | Runtime ownership, isolation, registration and object contracts | [Runtime design](runtime-design.md) |
+| Shared compatibility mechanisms and the remaining per-mod declarations | [Compatibility generalization](compat-generalization.md) |
 | Java/Forge versions, private inputs, test preparation and isolated outputs | [Test environment and reproducibility](testing.md) |
 | Developer API, MLA, lifecycle, conversions and TC4 adapter boundaries | [Developer API / MLA](developer-api.md) |
 | API and adapter regression results | [Developer API acceptance record](developer-api-progress.json) |

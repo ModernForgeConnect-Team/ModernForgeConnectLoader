@@ -1,6 +1,5 @@
 package github.com.gengyoubo.mfcl.legacy1710.boot;
 
-import github.com.gengyoubo.mfcl.legacy1710.boot.*;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
@@ -25,7 +24,7 @@ public abstract class PortableContainerAdapter implements LegacyBytecodeAdapter 
                 }
                 patched++;
             }else if(BytecodePatches.matches(method,"func_75144_a","(IIILnet/minecraft/entity/player/EntityPlayer;)Lnet/minecraft/item/ItemStack;")) {
-                // Preserve the opening stack and validate number-key fuel swaps on either side.
+                // Preserve the opening stack and validate number-key swaps on either side.
                 LabelNode original=new LabelNode();InsnList guard=new InsnList();
                 guard.add(new VarInsnNode(Opcodes.ALOAD,0));for(int index=1;index<=3;index++)guard.add(new VarInsnNode(Opcodes.ILOAD,index));guard.add(new VarInsnNode(Opcodes.ALOAD,4));
                 guard.add(new MethodInsnNode(Opcodes.INVOKESTATIC,BRIDGE,"clickAllowed","(Ljava/lang/Object;IIILjava/lang/Object;)Z",false));guard.add(new JumpInsnNode(Opcodes.IFNE,original));
@@ -43,7 +42,7 @@ public abstract class PortableContainerAdapter implements LegacyBytecodeAdapter 
                 method.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,BRIDGE,"valid","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));
                 method.instructions.add(new InsnNode(Opcodes.IRETURN));patched++;
             }else if(authoritativeSlots&&BytecodePatches.matches(method,"func_75141_a","(ILnet/minecraft/item/ItemStack;)V")) {
-                // Incoming server state includes nulls and ordinary player items; fuel rules belong to user clicks.
+                // Incoming server state includes nulls and player items; restrictions belong to user clicks.
                 clear(method);method.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));method.instructions.add(new VarInsnNode(Opcodes.ILOAD,1));method.instructions.add(new VarInsnNode(Opcodes.ALOAD,2));
                 method.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,"net/minecraft/inventory/Container",method.name,method.desc,false));method.instructions.add(new InsnNode(Opcodes.RETURN));
             }

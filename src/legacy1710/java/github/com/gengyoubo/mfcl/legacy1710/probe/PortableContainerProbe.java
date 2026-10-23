@@ -1,5 +1,6 @@
-package github.com.gengyoubo.mfcl.legacy1710.boot;
+package github.com.gengyoubo.mfcl.legacy1710.probe;
 
+import github.com.gengyoubo.mfcl.legacy1710.boot.PortableContainerHooks;
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -31,12 +32,12 @@ public final class PortableContainerProbe {
             fixture.contents=(Object[])Array.newInstance(stack,2);fixture.contents[0]=stack.getMethod("func_77946_l").invoke(payload);
             Class<?> inv=loader.loadClass("net.minecraft.inventory.IInventory"),slot=loader.loadClass("net.minecraft.inventory.Slot");
             fixture.field_75151_b.add(slot.getConstructor(inv,int.class,int.class,int.class).newInstance(inventory,3,8,20));
-            Object fuel=loader.loadClass("net.minecraft.inventory.InventoryBasic").getConstructor(String.class,boolean.class,int.class).newInstance("Fixture",true,1);
-            fixture.field_75151_b.add(loader.loadClass("net.minecraft.inventory.SlotFurnaceFuel").getConstructor(inv,int.class,int.class,int.class).newInstance(fuel,0,8,40));
+            Object output=loader.loadClass("net.minecraft.inventory.InventoryBasic").getConstructor(String.class,boolean.class,int.class).newInstance("Fixture",true,1);
+            fixture.field_75151_b.add(loader.loadClass("net.minecraft.inventory.SlotFurnace").getConstructor(loader.loadClass("net.minecraft.entity.player.EntityPlayer"),inv,int.class,int.class,int.class).newInstance(player,output,0,8,40));
             fixture.mfcl$portableContents=PortableContainerHooks.remember(fixture);
             check(PortableContainerHooks.valid(fixture,player),"Fixture opening slot did not resolve");
             check(!PortableContainerHooks.clickAllowed(fixture,0,0,0,player)&&!PortableContainerHooks.clickAllowed(fixture,1,3,2,player),"Opening item was movable");
-            check(!PortableContainerHooks.clickAllowed(fixture,1,4,2,player),"Number-key swap bypassed slot fuel restriction");
+            check(!PortableContainerHooks.clickAllowed(fixture,1,4,2,player),"Number-key swap bypassed output-slot restriction");
             check(PortableContainerHooks.clickAllowed(fixture,1,5,2,player),"Empty number-key source was rejected");proof.put("derivedSlotAndOriginalRestrictions",true);
             PortableContainerHooks.save(fixture);check(fixture.writes==0,"Unchanged contents were written");
             stack.getField("field_77994_a").setInt(fixture.contents[0],2);PortableContainerHooks.save(fixture);
