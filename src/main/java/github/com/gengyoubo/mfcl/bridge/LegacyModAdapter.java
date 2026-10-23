@@ -10,6 +10,13 @@ public interface LegacyModAdapter {
     default void beforeBoot(ClassLoader legacyLoader) throws Exception {}
     Map<String, Object> initialize(LegacyServices services) throws Exception;
     default void installClient() {}
+    @FunctionalInterface interface HostAction { void run() throws Exception; }
+    /** Native Forge event classes need the host context loader even when initialization starts in old code. */
+    static void withHostContext(HostAction action) throws Exception {
+        var thread=Thread.currentThread();var previous=thread.getContextClassLoader();
+        try{thread.setContextClassLoader(LegacyModAdapter.class.getClassLoader());action.run();}
+        finally{thread.setContextClassLoader(previous);}
+    }
     /** For {@link #beforeBoot}: the legacy loader applies these legacy-side class transformers by name. */
     static void registerBytecodeAdapters(ClassLoader legacyLoader, String... adapters) throws Exception {
         var register = legacyLoader.getClass().getMethod("registerBytecodeAdapter", String.class);

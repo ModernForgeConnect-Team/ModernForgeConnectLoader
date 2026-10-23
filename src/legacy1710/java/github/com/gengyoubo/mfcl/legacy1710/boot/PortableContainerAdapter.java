@@ -1,14 +1,17 @@
-package github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft;
+package github.com.gengyoubo.mfcl.legacy1710.boot;
 
 import github.com.gengyoubo.mfcl.legacy1710.boot.*;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
-/** Keeps TC4's original slot rules/layout; commits changed contents before the host collects the click result. */
-public abstract class ThaumcraftPortableContainerAdapter implements LegacyBytecodeAdapter {
+/** Original portable-container lifecycle; adapters supply storage semantics through a policy. */
+public abstract class PortableContainerAdapter implements LegacyBytecodeAdapter {
     private final String OWNER;
-    protected ThaumcraftPortableContainerAdapter(String owner){OWNER=owner;}
-    private static final String BRIDGE="github/com/gengyoubo/mfcl/legacy1710/compat/thaumcraft/ThaumcraftPortableContainerHooks";
+    private final boolean authoritativeSlots;
+    protected PortableContainerAdapter(String owner,PortableContainerHooks.Policy policy,boolean authoritativeSlots){
+        OWNER=owner;this.authoritativeSlots=authoritativeSlots;PortableContainerHooks.register(owner.replace('/','.'),policy);
+    }
+    private static final String BRIDGE="github/com/gengyoubo/mfcl/legacy1710/boot/PortableContainerHooks";
     public boolean targets(String name){return name.equals(OWNER.replace('/','.'));}
     public byte[] adapt(String name,byte[] bytes) {
         ClassNode node=BytecodePatches.read(bytes);int patched=0;
@@ -39,13 +42,13 @@ public abstract class ThaumcraftPortableContainerAdapter implements LegacyByteco
                 clear(method);method.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));method.instructions.add(new VarInsnNode(Opcodes.ALOAD,1));
                 method.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,BRIDGE,"valid","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));
                 method.instructions.add(new InsnNode(Opcodes.IRETURN));patched++;
-            }else if(OWNER.endsWith("ContainerHoverHarness")&&BytecodePatches.matches(method,"func_75141_a","(ILnet/minecraft/item/ItemStack;)V")) {
+            }else if(authoritativeSlots&&BytecodePatches.matches(method,"func_75141_a","(ILnet/minecraft/item/ItemStack;)V")) {
                 // Incoming server state includes nulls and ordinary player items; fuel rules belong to user clicks.
                 clear(method);method.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));method.instructions.add(new VarInsnNode(Opcodes.ILOAD,1));method.instructions.add(new VarInsnNode(Opcodes.ALOAD,2));
                 method.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,"net/minecraft/inventory/Container",method.name,method.desc,false));method.instructions.add(new InsnNode(Opcodes.RETURN));
             }
         }
-        if(patched!=4)throw new IllegalStateException("Unsupported TC4 portable container layout: "+name+" ("+patched+")");
+        if(patched!=4)throw new IllegalStateException("Unsupported portable container layout: "+name+" ("+patched+")");
         return BytecodePatches.write(node);
     }
     private static InsnList save(){InsnList code=new InsnList();code.add(new VarInsnNode(Opcodes.ALOAD,0));code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,BRIDGE,"save","(Ljava/lang/Object;)V",false));return code;}

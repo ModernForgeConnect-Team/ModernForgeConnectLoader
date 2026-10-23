@@ -29,9 +29,7 @@ final class ThaumcraftEnchantments {
     static void install(LegacyServices services)throws Exception {
         var bridge=new ThaumcraftEnchantments(services);
         // Forge transforms modern event parents through the context loader; adapter initialization uses the old loader.
-        var thread=Thread.currentThread();var previous=thread.getContextClassLoader();
-        try{thread.setContextClassLoader(ThaumcraftEnchantments.class.getClassLoader());net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::tick);}
-        finally{thread.setContextClassLoader(previous);}
+        LegacyModAdapter.withHostContext(()->net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::tick));
     }
     private void tick(TickEvent.PlayerTickEvent event){
         if(event.phase!=TickEvent.Phase.END)return;var player=event.player;var content=ModernContentBridge.active();if(content==null||content.services()!=services||!content.registered())return;

@@ -24,6 +24,7 @@ public final class LegacyServices {
     private final LegacyHeldScanners scanners = new LegacyHeldScanners();
     private final LegacyDimensions dimensions;
     private final LegacyEntityHosting entityHosting;
+    private final LegacyCrossbowAmmo crossbowAmmo=new LegacyCrossbowAmmo(key->tagItem("minecraft:arrows",key));
     public LegacyServices(Path gameDirectory, ClassLoader loader) throws Exception {
         this(gameDirectory, loader, new LegacyClientData(loader));
     }
@@ -65,6 +66,7 @@ public final class LegacyServices {
     public LegacyDynamicItems dynamicItems() { return dynamicItems; }
     public LegacyHeldScanners scanners() { return scanners; }
     public LegacyEntityHosting entityHosting() { return entityHosting; }
+    public LegacyCrossbowAmmo crossbowAmmo() { return crossbowAmmo; }
     private final java.util.Map<String, java.util.Set<String>> hostItemTags = new java.util.LinkedHashMap<>();
     /** Puts an original item into a host item tag (e.g. minecraft:arrows), for host behavior the original game never had. */
     public synchronized void tagItem(String hostTag, String legacyKey) { hostItemTags.computeIfAbsent(hostTag, ignored -> new java.util.LinkedHashSet<>()).add(legacyKey); }

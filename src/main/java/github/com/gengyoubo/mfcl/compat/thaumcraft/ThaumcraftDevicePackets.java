@@ -23,7 +23,7 @@ final class ThaumcraftDevicePackets {
         var loader=player.getClass().getClassLoader();
         Object held=LegacyObjects.heldStack(player),item=LegacyObjects.item(held);
         if(item==null||!loader.loadClass("thaumcraft.common.items.wands.ItemWandCasting").isInstance(item))throw new IllegalArgumentException("Wand control requires a held wand");
-        ThaumcraftReflection.bindPlayer(packet,player,"Wand control");
+        LegacyPacketTargets.bindPlayer(packet,player,"dim","playerid","Wand control");
         if(focusChange) {
             if((boolean)item.getClass().getMethod("isSceptre",loader.loadClass("net.minecraft.item.ItemStack")).invoke(item,held))throw new IllegalArgumentException("Sceptres cannot equip foci");
             String focus=(String)declared(packet,"focus");
@@ -44,17 +44,15 @@ final class ThaumcraftDevicePackets {
     private static void validateBookCompletion(Object packet,Object player) throws Exception {
         int type=declaredField(packet,"type").getByte(packet);
         if(type!=0&&type!=1)throw new IllegalArgumentException("Unsupported research completion kind");
-        if(!LegacyObjects.playerName(player).equals(declared(packet,"username")))throw new IllegalArgumentException("Research completion targets another player");
-        ThaumcraftReflection.requireSameDimension(packet,player,"Research completion");
+        LegacyPacketTargets.requirePlayerName(packet,player,"username","Research completion");
+        LegacyPacketTargets.requireDimension(packet,player,"dim","Research completion");
         String key=(String)declared(packet,"key");
         var research=player.getClass().getClassLoader().loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class);
         if(key==null||research.invoke(null,key)==null)throw new IllegalArgumentException("Research completion targets unknown research");
     }
     private static Object target(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
-        if(device==null||!device.mod().equals("Thaumcraft")||device.id()!=10||device.inventory())throw new IllegalArgumentException("Research action requires the open research table");
-        if(declaredField(packet,"x").getInt(packet)!=device.x()||declaredField(packet,"y").getInt(packet)!=device.y()||declaredField(packet,"z").getInt(packet)!=device.z())
-            throw new IllegalArgumentException("Research action targets another table");
-        ThaumcraftReflection.bindPlayer(packet,player,"Research action");
+        LegacyPacketTargets.requireDevice(packet,device,"Thaumcraft",10,"x","y","z","Research action");
+        LegacyPacketTargets.bindPlayer(packet,player,"dim","playerid","Research action");
         Object world=LegacyObjects.world(player);
         Object tile=world.getClass().getClassLoader().loadClass("net.minecraft.world.World").getMethod("func_147438_o",int.class,int.class,int.class).invoke(world,device.x(),device.y(),device.z());
         if(tile==null||!tile.getClass().getName().equals("thaumcraft.common.tiles.TileResearchTable"))throw new IllegalArgumentException("Research table no longer exists");

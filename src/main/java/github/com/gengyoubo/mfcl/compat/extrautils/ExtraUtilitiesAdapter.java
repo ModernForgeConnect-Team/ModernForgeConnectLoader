@@ -24,12 +24,10 @@ public final class ExtraUtilitiesAdapter implements LegacyModAdapter {
         ExtraUtilitiesTravel.install(services,dark==null?0:dark.legacyId(),millennium==null?0:millennium.legacyId());
         // Modern Forge transforms event classes through the current context loader. This callback starts in the
         // private 1.7.10 context, so install native listeners using the host loader before referring to event types.
-        ClassLoader previous=Thread.currentThread().getContextClassLoader();
-        try {
-            Thread.currentThread().setContextClassLoader(ExtraUtilitiesAdapter.class.getClassLoader());
+        LegacyModAdapter.withHostContext(()->{
             ExtraUtilitiesFlight.install(services);
             ExtraUtilitiesTradingPost.install(services);
-        }finally{Thread.currentThread().setContextClassLoader(previous);}
+        });
         return Map.of("status","READY","dimensions",dimensions);
     }
 }
