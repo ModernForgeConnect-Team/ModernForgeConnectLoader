@@ -46,6 +46,9 @@ public final class ServerHostSmokeProbe {
         if (phase.equals("melee")) { MeleeHostSmokeProbe.install(bridge); return; }
         if (phase.equals("bore")) { BoreHostSmokeProbe.install(bridge); return; }
         if (phase.equals("golem")) { GolemHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("golem-audit")) { GolemWorkAudit.install(bridge); return; }
+        if (phase.equals("golem-jobs")) { GolemJobAudit.install(bridge); return; }
+        if (phase.equals("golem-reload")) { GolemJobAudit.installReload(bridge); return; }
         if (phase.equals("compat")) { CompatBridgeHostSmokeProbe.install(bridge); return; }
         if (phase.equals("crossbow")) { CrossbowHostSmokeProbe.install(bridge); return; }
         if (!phase.equals("write") && !phase.equals("verify")) throw new IllegalArgumentException("mfcl.test.server must be write or verify: " + phase);

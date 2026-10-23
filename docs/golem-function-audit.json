@@ -1,0 +1,906 @@
+{
+  "date": "2026-10-23",
+  "mfclVersion": "0.2.10-dev1",
+  "minecraft": "1.20.1",
+  "forge": "47.4.28",
+  "java": "17.0.17+10",
+  "inputs": [
+    {
+      "file": "Thaumcraft-1.7.10-4.2.3.5.jar",
+      "sha256": "3DBA9786966974701578A658D1BB369BF35BDF5F363079F5AC9C4910A39113BE"
+    },
+    {
+      "file": "Baubles-1.7.10-1.0.1.10.jar",
+      "sha256": "05AE8F11B8F9012EBEBBF179227B010829739C6284E30DA5DD3DB220EE682F8A"
+    }
+  ],
+  "counts": {
+    "materials": 8,
+    "advancedVariants": 2,
+    "functionalCores": 12,
+    "matrixCases": 208,
+    "basicTaskPass": 7,
+    "taskFault": 4,
+    "partiallyObserved": 1
+  },
+  "materials": [
+    "STRAW",
+    "WOOD",
+    "TALLOW",
+    "CLAY",
+    "FLESH",
+    "STONE",
+    "IRON",
+    "THAUMIUM"
+  ],
+  "matrixByCore": [
+    {
+      "core": -1,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 0,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 0,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 1,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 2,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 3,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 4,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 5,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 6,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 7,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 0,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 8,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 0,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 9,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 10,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    },
+    {
+      "core": 11,
+      "combinations": 16,
+      "spawned": 16,
+      "bound": 16,
+      "survived": 16,
+      "coreConsumedExactlyOnce": 16,
+      "schedulerAdvanced": 16
+    }
+  ],
+  "basicTaskChecks": {
+    "fill": true,
+    "empty": true,
+    "guard": true,
+    "liquid": true,
+    "essentia": true,
+    "butcher": true,
+    "sorting": true
+  },
+  "taskVerdicts": [
+    "basic-task-pass",
+    "basic-task-pass",
+    "fault-item-duplication",
+    "fault-mature-native-crop-not-recognized",
+    "basic-task-pass",
+    "basic-task-pass",
+    "basic-task-pass",
+    "fault-fake-player-initialization",
+    "fault-fake-player-initialization",
+    "basic-task-pass",
+    "basic-task-pass",
+    "partial-bobber-only"
+  ],
+  "naturalTasks": {
+    "jobs": [
+      {
+        "core": 0,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 0,
+        "alive": true,
+        "position": [
+          128.69988959963692,
+          99.875,
+          128.46314291583172
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 16,
+        "markedDiamonds": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIHomePlace",
+          "AIHomeDrop",
+          "AIFillTake",
+          "AIFillGoto",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 1,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 1,
+        "alive": true,
+        "position": [
+          160.52370516105734,
+          99.875,
+          128.490799451866
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 16,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIEmptyPlace",
+          "AIEmptyDrop",
+          "AIEmptyGoto",
+          "AIHomeTake",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 2,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 2,
+        "alive": true,
+        "position": [
+          194.92013440515012,
+          100.0,
+          128.15070997857973
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 60,
+        "markedDiamonds": 0,
+        "targetRemoved": false,
+        "dropCount": 4,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIHomePlace",
+          "AIItemPickup",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 3,
+        "initialRipeCrops": 49,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 3,
+        "alive": true,
+        "position": [
+          224.5,
+          99.875,
+          128.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "ripeCropsRemaining": 49,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHarvestCrops",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 4,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 4,
+        "alive": true,
+        "position": [
+          128.62594914827892,
+          99.875,
+          160.45572915718125
+        ],
+        "actionSeen": true,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "targetRemoved": true,
+        "targetHealth": 0.0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIGolemAttackOnCollide",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 5,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 5,
+        "alive": true,
+        "position": [
+          160.696388743987,
+          99.85000002384186,
+          160.46097484715887
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "crucibleWater": 1000,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AILiquidEmpty",
+          "AILiquidGather",
+          "AILiquidGoto",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 6,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 6,
+        "alive": true,
+        "position": [
+          192.6365221094219,
+          100.0,
+          160.47389844689758
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "jarEssentia": 16,
+        "alembicEssentia": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIEssentiaEmpty",
+          "AIEssentiaGather",
+          "AIEssentiaGoto",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 7,
+        "installConsumedAction": false,
+        "coreItemCountAfter": 2,
+        "installedCore": 7,
+        "alive": true,
+        "position": [
+          224.5,
+          99.875,
+          160.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHarvestLogs",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 8,
+        "installConsumedAction": false,
+        "coreItemCountAfter": 2,
+        "installedCore": 8,
+        "alive": true,
+        "position": [
+          128.5,
+          99.875,
+          192.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIUseItem",
+          "AIHomeTake",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 9,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 9,
+        "alive": true,
+        "position": [
+          160.6814166183856,
+          99.875,
+          192.4348447248823
+        ],
+        "actionSeen": true,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "targetRemoved": true,
+        "targetHealth": 0.0,
+        "cowsRemaining": 2,
+        "cowHealthTotal": 20.0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIGolemAttackOnCollide",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 10,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 10,
+        "alive": true,
+        "position": [
+          192.53478303752587,
+          99.875,
+          192.48927405902506
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 17,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AISortingPlace",
+          "AISortingGoto",
+          "AIHomeTakeSorting",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 11,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 11,
+        "alive": true,
+        "position": [
+          224.5,
+          99.875,
+          192.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "bobberSeen": true,
+        "nearbyDrops": [],
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIFish",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      }
+    ],
+    "material": "WOOD",
+    "advanced": false,
+    "observedServerTicks": 1200,
+    "status": "COMPLETE"
+  },
+  "naturalTaskReloadHasRegisteredPlayer": false,
+  "matrixReport": "build/golem-audit-game/logs/mfcl/golem-work-audit.json",
+  "naturalTaskReport": "build/golem-jobs-confirm-game/logs/mfcl/golem-job-audit.json",
+  "onlineReloadReport": "build/golem-reload-game/logs/mfcl/golem-reload-audit.json",
+  "productionFixesIncluded": false,
+  "status": "COMPLETE_WITH_KNOWN_FAILURES",
+  "onlineReload": {
+    "jobs": [
+      {
+        "core": 0,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 0,
+        "alive": true,
+        "position": [
+          128.5,
+          99.875,
+          128.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 16,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIHomePlace",
+          "AIHomeDrop",
+          "AIFillTake",
+          "AIFillGoto",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 1,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 1,
+        "alive": true,
+        "position": [
+          160.5,
+          99.875,
+          128.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 16,
+        "markedDiamonds": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIEmptyPlace",
+          "AIEmptyDrop",
+          "AIEmptyGoto",
+          "AIHomeTake",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 2,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 2,
+        "alive": true,
+        "position": [
+          192.5,
+          99.875,
+          128.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "targetRemoved": false,
+        "dropCount": 4,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AIHomePlace",
+          "AIItemPickup",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 3,
+        "initialRipeCrops": 49,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 3,
+        "alive": true,
+        "position": [
+          224.5,
+          99.875,
+          128.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "ripeCropsRemaining": 49,
+        "legacyCropBlock": "net.minecraft.block.Block",
+        "legacyCropMetadata": 0,
+        "legacyCropRecognizedAsGrown": false,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHarvestCrops",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 4,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 4,
+        "alive": true,
+        "position": [
+          129.45796015838576,
+          100.0,
+          160.70883159044607
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "targetRemoved": false,
+        "targetHealth": 20.0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIGolemAttackOnCollide",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 5,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 5,
+        "alive": true,
+        "position": [
+          160.5,
+          99.3125,
+          160.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "crucibleWater": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AILiquidEmpty",
+          "AILiquidGather",
+          "AILiquidGoto",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 6,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 6,
+        "alive": true,
+        "position": [
+          192.5,
+          100.0,
+          160.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "jarEssentia": 0,
+        "alembicEssentia": 12,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 4,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIEssentiaEmpty",
+          "AIEssentiaGather",
+          "AIEssentiaGoto",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 7,
+        "installConsumedAction": false,
+        "coreItemCountAfter": 2,
+        "installedCore": 7,
+        "alive": true,
+        "position": [
+          224.5,
+          99.875,
+          160.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": false
+      },
+      {
+        "core": 8,
+        "installConsumedAction": false,
+        "coreItemCountAfter": 2,
+        "installedCore": 8,
+        "alive": true,
+        "position": [
+          128.5,
+          99.875,
+          192.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": false
+      },
+      {
+        "core": 9,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 9,
+        "alive": true,
+        "position": [
+          161.478115389521,
+          100.0,
+          192.68373359193504
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "targetRemoved": false,
+        "targetHealth": 10.0,
+        "cowsRemaining": 3,
+        "cowHealthTotal": 30.0,
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIGolemAttackOnCollide",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 10,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 10,
+        "alive": true,
+        "position": [
+          192.5,
+          99.875,
+          192.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 12,
+        "markedDiamonds": 1,
+        "carried": "Stack[key=minecraft:diamond, metadata=0, count=4, name=Diamond, tag=]",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIHomeReplace",
+          "AISortingPlace",
+          "AISortingGoto",
+          "AIHomeTakeSorting",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      },
+      {
+        "core": 11,
+        "installConsumedAction": true,
+        "coreItemCountAfter": 1,
+        "installedCore": 11,
+        "alive": true,
+        "position": [
+          224.5,
+          99.875,
+          192.5
+        ],
+        "actionSeen": false,
+        "homeDiamonds": 0,
+        "markedDiamonds": 0,
+        "bobberSeen": true,
+        "nearbyDrops": [],
+        "carried": "empty",
+        "fluidCarried": "null",
+        "essentiaCarried": 0,
+        "reloadAlive": true,
+        "reloadedTasks": [
+          "AIAvoidCreeperSwell",
+          "AIFish",
+          "AIOpenDoor",
+          "AIReturnHome",
+          "EntityAIWatchClosest",
+          "EntityAILookIdle"
+        ]
+      }
+    ],
+    "material": "WOOD",
+    "advanced": false,
+    "reloadWithPlayer": true,
+    "observedServerTicks": 10,
+    "status": "COMPLETE"
+  },
+  "onlineReloadFailures": [
+    7,
+    8
+  ]
+}

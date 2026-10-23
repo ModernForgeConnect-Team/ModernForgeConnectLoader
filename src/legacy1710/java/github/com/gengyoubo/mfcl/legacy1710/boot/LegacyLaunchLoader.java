@@ -40,6 +40,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer");
         registerTransformer(REDIRECTS);
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
+        registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.DisplayPlatformAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.ForgeChunkManagerAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.FakePlayerAdapter");
     }

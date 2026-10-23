@@ -9,6 +9,7 @@ import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL30C;
+import org.lwjgl.glfw.GLFW;
 
 import java.lang.invoke.MethodType;
 import java.lang.reflect.InvocationTargetException;
@@ -35,6 +36,21 @@ public final class ClientOpenGlBackend implements LegacyOpenGl.Backend {
         return render(() -> dispatch(operation, arguments));
     }
     @Override public void bootstrapComplete() { bootstrapping = false; }
+
+    @Override public LegacyOpenGl.DisplayState displayState() throws Exception {
+        return render(() -> {
+            if (closed) return LegacyOpenGl.DisplayState.UNAVAILABLE;
+            var window = Minecraft.getInstance().getWindow();
+            long handle = window.getWindow();
+            if (handle == 0) return LegacyOpenGl.DisplayState.UNAVAILABLE;
+            return new LegacyOpenGl.DisplayState(window.getWidth(), window.getHeight(), window.getX(), window.getY(), true,
+                    GLFW.glfwGetWindowAttrib(handle, GLFW.GLFW_FOCUSED) == GLFW.GLFW_TRUE,
+                    GLFW.glfwGetWindowAttrib(handle, GLFW.GLFW_VISIBLE) == GLFW.GLFW_TRUE
+                            && GLFW.glfwGetWindowAttrib(handle, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_FALSE,
+                    window.isFullscreen(), GLFW.glfwWindowShouldClose(handle),
+                    GLFW.glfwGetWindowAttrib(handle, GLFW.GLFW_RESIZABLE) == GLFW.GLFW_TRUE);
+        });
+    }
 
     private <T> T render(Callable<T> work) throws Exception {
         if (RenderSystem.isOnRenderThread()) return work.call();

@@ -5,8 +5,14 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** JDK-only boundary from each private LWJGL class identity to its host rendering service. */
 public final class LegacyOpenGl {
+    /** Pixel dimensions, not scaled GUI dimensions. No native window handles cross the bridge. */
+    public record DisplayState(int width, int height, int x, int y, boolean created, boolean active,
+                               boolean visible, boolean fullscreen, boolean closeRequested, boolean resizable) {
+        public static final DisplayState UNAVAILABLE = new DisplayState(0, 0, 0, 0, false, false, false, false, false, false);
+    }
     public interface Backend extends AutoCloseable {
         Object call(String operation, Object[] arguments) throws Exception;
+        default DisplayState displayState() throws Exception { return DisplayState.UNAVAILABLE; }
         default void bootstrapComplete() { }
         default Map<String, Object> statistics() { return Map.of(); }
         default Map<String, Object> verify(Class<?> gl11, Class<?> gl20) throws Exception {
@@ -59,6 +65,13 @@ public final class LegacyOpenGl {
         if (!BACKENDS.get(owner).compareAndSet(null, backend)) throw new IllegalStateException("Legacy GL domain already has a backend");
     }
     public static void detach(Class<?> owner) { BACKENDS.remove(owner); }
+    public static DisplayState displayState(Class<?> owner) {
+        Backend backend = BACKENDS.get(owner).get();
+        if (backend == null) return DisplayState.UNAVAILABLE;
+        try { return java.util.Objects.requireNonNull(backend.displayState()); }
+        catch (RuntimeException failure) { throw failure; }
+        catch (Exception failure) { throw new IllegalStateException("Cannot query the host display", failure); }
+    }
     public static Object invoke(Class<?> owner, String operation, Object[] arguments) {
         // Frame-local queries remain part of GUI capture, rather than exposing the host's matrices.
         if (operation.equals("glGetInteger(I)I")) {

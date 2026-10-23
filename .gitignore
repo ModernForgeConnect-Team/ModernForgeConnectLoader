@@ -26,6 +26,9 @@ logs
 forge*changelog.txt
 /src/generated/
 /CompatMods/
-/src/test/
+/src/test/*
+!/src/test/java/
+/src/test/java/*
+!/src/test/java/LegacyDisplayAdapterTest.java
 /.claude/
 /tools/
