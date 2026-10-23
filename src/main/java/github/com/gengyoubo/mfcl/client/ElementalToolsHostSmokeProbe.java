@@ -111,6 +111,9 @@ final class ElementalToolsHostSmokeProbe {
         });
         var geometry=ThaumcraftProspecting.capture(services,0,end-2500);check(!geometry.isEmpty(),"Prospecting overlay generated no geometry");
         check(geometry.stream().allMatch(p->!p.state().depthTest()&&!p.state().depthWrite()),"Ore markers would be hidden by surrounding stone");
+        var held=mc.player.getMainHandItem();
+        try{mc.player.setItemInHand(InteractionHand.MAIN_HAND,new ItemStack(Items.NETHERITE_SWORD));check(!ThaumcraftProspecting.capture(services,0,end-2500).isEmpty(),"Switching to a modern-only item hid the active scan");}
+        finally{mc.player.setItemInHand(InteractionHand.MAIN_HAND,held);}
         check(ThaumcraftProspecting.capture(services,0,end+1).isEmpty(),"Expired prospecting overlay remained visible");
         proof.put("originalProspectingOreGeometryThroughWallsAndExpiry",Map.of("primitives",geometry.size(),"ore",ore.toShortString()));
     }
