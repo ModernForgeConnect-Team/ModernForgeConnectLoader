@@ -50,7 +50,8 @@ public final class LegacyPlayerInventory {
     private final Map<Object, Exposed> exposed = new com.google.common.collect.MapMaker().weakKeys().makeMap();
     /**
      * Like {@link #write}, for a persistent actor exposed every tick: slots whose host stack and old object are
-     * unchanged since the last exposure are kept, so only real changes are materialized.
+     * unchanged since the last exposure are kept without materializing. Otherwise, equal stacks still retain
+     * their identity, including when another inventory import has already applied the host's changes.
      */
     public void expose(Object player, List<LegacyClientData.Stack> main) throws Exception {
         services.items().inLegacy(() -> {
@@ -60,7 +61,11 @@ public final class LegacyPlayerInventory {
             for (int index = 0; index < slots.length; index++) {
                 LegacyClientData.Stack value = index < main.size() ? main.get(index) : null;
                 boolean kept = prior != null && sameValue(prior.host[index], value) && slots[index] == prior.objects[index] && same(stackType, slots[index], prior.copies[index]);
-                if (!kept) slots[index] = value == null ? null : services.items().materialize(value);
+                if (!kept) {
+                    Object next = value == null ? null : services.items().materialize(value);
+                    // A menu may still own this object even when the last exposure's tracking is stale.
+                    if (!same(stackType, slots[index], next)) slots[index] = next;
+                }
                 state.host[index] = value; state.objects[index] = slots[index];
                 state.copies[index] = slots[index] == null ? null : services.items().copyLegacyStack(slots[index]);
             }

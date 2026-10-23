@@ -74,6 +74,7 @@ final class FocusPouchHostSmokeProbe {
                     Object held=((Object[])inventory.getClass().getField("field_70462_a").get(inventory))[0];
                     for(int index=0;index<10;index++)menu.broadcastChanges();
                     require(held==((Object[])inventory.getClass().getField("field_70462_a").get(inventory))[0],"Idle inventory sync detached pouch");
+                    verifyInventoryExposure(actor);
                     proof.put("committedBeforeCloseAndIdentityRetained",true);
                 });
             }else if(stage==6) {
@@ -131,6 +132,47 @@ final class FocusPouchHostSmokeProbe {
         }catch(Throwable failure){finish(mc,failure);}
     }
     private static void require(boolean value,String message){if(!value)throw new IllegalStateException(message);}
+    /** Exercise stale exposure baselines against a temporary inventory, without touching the open pouch. */
+    private void verifyInventoryExposure(Object actor)throws Exception {
+        var services=content.services();
+        services.items().inLegacy(()->{
+            Object inventory=actor.getClass().getField("field_71071_by").get(actor);
+            var main=inventory.getClass().getField("field_70462_a");Object[] original=(Object[])main.get(inventory);
+            Object[] slots=original.clone();
+            for(int index=0;index<slots.length;index++)if(slots[index]!=null)slots[index]=services.items().copyLegacyStack(slots[index]);
+            main.set(inventory,slots);
+            try {
+                var mirror=new github.com.gengyoubo.mfcl.bridge.LegacyPlayerInventory(services);
+                var host=mirror.read(actor);Object pouch=slots[0];
+                mirror.expose(actor,host);
+                require(slots[0]==pouch,"First exposure replaced an equal pouch");
+                slots[0]=services.items().copyLegacyStack(pouch);pouch=slots[0];
+                mirror.expose(actor,host);
+                require(slots[0]==pouch&&mirror.changes(actor).isEmpty(),"Equal replacement did not refresh exposure tracking");
+                // Another import has applied a new host value since the previous exposure.
+                var count=pouch.getClass().getField("field_77994_a");count.setInt(pouch,2);
+                host=mirror.read(actor);mirror.expose(actor,host);
+                require(slots[0]==pouch&&mirror.changes(actor).isEmpty(),"Converged in-place change detached pouch or left a stale baseline");
+                count.setInt(pouch,3);
+                var changes=mirror.changes(actor);
+                require(changes.size()==1&&changes.get(0).count()==3&&mirror.changes(actor).isEmpty(),"In-place change was lost or reported twice");
+                // Real count, metadata, NBT and removal changes must still replace the old slot.
+                var value=host.get(0);
+                var replacements=List.of(
+                        value,
+                        new github.com.gengyoubo.mfcl.bridge.LegacyClientData.Stack(value.key(),value.metadata()+1,value.count(),value.name(),value.tag()),
+                        new github.com.gengyoubo.mfcl.bridge.LegacyClientData.Stack(value.key(),value.metadata()+1,value.count(),value.name(),"{mfclExposure:1}"));
+                for(var replacement:replacements){
+                    Object before=slots[0];host=new ArrayList<>(host);host.set(0,replacement);mirror.expose(actor,host);
+                    require(slots[0]!=before&&mirror.changes(actor).isEmpty(),"Real host change was ignored or echoed back");
+                }
+                host.set(0,null);mirror.expose(actor,host);
+                require(slots[0]==null&&mirror.changes(actor).isEmpty(),"Host removal was ignored or echoed back");
+                proof.put("inventoryExposureIdentityAndChangeTracking",true);
+            }finally{main.set(inventory,original);}
+            return null;
+        });
+    }
     private static void click(Minecraft mc,int slot,int button,ClickType type){mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,button,type,mc.player);}
     @FunctionalInterface private interface ServerStep{void run(ServerPlayer player)throws Exception;}
     private void server(Minecraft mc,ServerStep action){pending=mc.getSingleplayerServer().submit(()->{try{action.run(mc.getSingleplayerServer().getPlayerList().getPlayers().get(0));}catch(Exception failure){throw new IllegalStateException(failure);}});}

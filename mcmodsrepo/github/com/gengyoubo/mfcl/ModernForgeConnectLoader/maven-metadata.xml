@@ -3,8 +3,8 @@
   <groupId>github.com.gengyoubo.mfcl</groupId>
   <artifactId>ModernForgeConnectLoader</artifactId>
   <versioning>
-    <latest>0.2.9-dev4</latest>
-    <release>0.2.9-dev4</release>
+    <latest>0.2.9-dev5</latest>
+    <release>0.2.9-dev5</release>
     <versions>
       <version>0.1.1</version>
       <version>0.1.2</version>
@@ -22,7 +22,8 @@
       <version>0.2.9-dev2</version>
       <version>0.2.9-dev3</version>
       <version>0.2.9-dev4</version>
+      <version>0.2.9-dev5</version>
     </versions>
-    <lastUpdated>20261023082233</lastUpdated>
+    <lastUpdated>20261023090039</lastUpdated>
   </versioning>
 </metadata>
