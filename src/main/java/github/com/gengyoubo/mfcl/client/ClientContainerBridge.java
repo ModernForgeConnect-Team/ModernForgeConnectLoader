@@ -83,8 +83,8 @@ public final class ClientContainerBridge {
         if(value.isEmpty())return null;
         var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
         if(content!=null){var old=content.renderSnapshot(value);if(old!=null)return old;}
-        // Native tool proxies also cover pristine, untagged tools absent from the old creative catalog.
-        if(content!=null)try{return content.gameplayStack(value);}catch(Exception unmapped){ /* Try display-only catalog entries below. */ }
+        // Use the same lossless inventory transport for original rendering and click prediction.
+        if(content!=null)return content.containerStack(value);
         if(value.hasTag())return null; // An unmapped tag must not be replaced with an untagged display-only entry.
         if(reverse==null){reverse=new HashMap<>();for(var stack:services.items().catalog()){var modern=ModernItemMapping.renderStack(stack);if(!modern.isEmpty()&&!modern.hasTag())reverse.putIfAbsent(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modern.getItem()).toString(),stack);}}
         var old=reverse.get(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(value.getItem()).toString());

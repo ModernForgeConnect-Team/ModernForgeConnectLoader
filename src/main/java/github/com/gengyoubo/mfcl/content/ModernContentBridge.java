@@ -52,6 +52,7 @@ public final class ModernContentBridge {
     private final LegacyContentPack pack;
     private final LegacyEnchantmentBridge enchantments;
     private final HostToolStacks hostTools;
+    private final HostInventoryStacks hostInventoryStacks;
     private final CreativeTabBridge creative;
     private boolean blocksRegistered, itemsRegistered;
     private Map<Item,LegacyClientData.Stack> vanillaStacks;
@@ -102,6 +103,7 @@ public final class ModernContentBridge {
         for(var tag:services.hostItemTags().entrySet())pack.itemTag(tag.getKey(),tag.getValue().stream().filter(key->declarations.items().stream().anyMatch(item->item.key().equals(key))).map(key->id(key).toString()).toList());
         creative = new CreativeTabBridge(this);
         hostTools = new HostToolStacks(services);
+        hostInventoryStacks = new HostInventoryStacks(services);
     }
     public static ModernContentBridge install(LegacyServices services, IEventBus bus) {
         try {
@@ -409,7 +411,7 @@ public final class ModernContentBridge {
         });
     }
     public ItemStack mapStack(LegacyClientData.Stack old) {
-        if (old.key().equals(LegacyHostTools.PICKAXE)) return gameplayStack(old);
+        if (old.key().equals(LegacyHostTools.PICKAXE) || old.key().equals(LegacyHostStacks.ITEM)) return gameplayStack(old);
         return items.containsKey(old.key()) ? stack(old.key(), old.metadata(), old.count(), old.tag()) : HostStackMapping.renderStack(old);
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
@@ -442,6 +444,10 @@ public final class ModernContentBridge {
     }
     public ItemStack gameplayStack(LegacyClientData.Stack stack) {
         if (stack == null || stack.count() <= 0) return ItemStack.EMPTY;
+        if (stack.key().equals(LegacyHostStacks.ITEM)) {
+            try { return hostInventoryStacks.toHost(stack); }
+            catch (Exception failure) { throw new IllegalStateException("Cannot restore native inventory stack", failure); }
+        }
         if (stack.key().equals(LegacyHostTools.PICKAXE)) {
             try { return hostTools.toHost(stack); }
             catch (Exception failure) { throw new IllegalStateException("Cannot restore native pickaxe", failure); }
@@ -892,14 +898,21 @@ public final class ModernContentBridge {
         return new LegacyTiles.Placer(player.getUUID(), player.getName().getString(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(),
                 player.getAbilities().instabuild, player.isShiftKeyDown());
     }
-    /** The host main inventory as old stacks; unmappable host items become empty slots old logic can ignore. */
+    /** The host main inventory as old stacks, preserving occupied native-only slots. */
     List<LegacyClientData.Stack> hostInventory(net.minecraft.world.entity.player.Player player) {
         var inventory = player.getInventory(); var result = new ArrayList<LegacyClientData.Stack>(36);
         for (int slot = 0; slot < 36; slot++) { var stack = inventory.getItem(slot); result.add(stack.isEmpty() ? null : toLegacy(stack)); }
         return result;
     }
     LegacyClientData.Stack toLegacy(ItemStack stack) {
-        try { return gameplayStack(stack); } catch (Exception unmapped) { return null; }
+        try { return containerStack(stack); }
+        catch (Exception failure) { throw new IllegalStateException("Cannot expose native inventory stack", failure); }
+    }
+    /** Inventory transport is lossless even when an item has no old gameplay implementation. */
+    public LegacyClientData.Stack containerStack(ItemStack stack) throws Exception {
+        if (stack.isEmpty()) return null;
+        try { return gameplayStack(stack); }
+        catch (Exception unmapped) { return hostInventoryStacks.toLegacy(stack); }
     }
     private Object exposeLegacyInventory(net.minecraft.world.entity.player.Player player, Object world, List<LegacyClientData.Stack> contents, LegacyClientData.Stack held) throws Exception {
         var actor = itemUse.clientActor(world, placer(player), held);

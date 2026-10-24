@@ -135,7 +135,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         sentCounts=counts.clone();ScanSyncChannel.sendSlotCounts(server,containerId,sentCounts);
     }
     private ItemStack modern(Object stack) throws Exception {return stack==null?ItemStack.EMPTY:content.gameplayStack(content.services().items().snapshot(stack));}
-    private Object old(ItemStack stack) throws Exception {return stack.isEmpty()?null:content.services().items().materialize(content.gameplayStack(stack));}
+    private Object old(ItemStack stack) throws Exception {return stack.isEmpty()?null:content.services().items().materialize(content.containerStack(stack));}
     private Object oldInventory() throws Exception {return content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(original.player());}
     private void refresh() throws Exception {
         refresh(original.container());
@@ -199,7 +199,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         int mode=switch(type){case PICKUP->0;case QUICK_MOVE->1;case SWAP->2;case CLONE->3;case THROW->4;case QUICK_CRAFT->5;case PICKUP_ALL->6;};
         try {
             var services=content.services();var loader=services.loader();var stackType=loader.loadClass("net.minecraft.item.ItemStack");var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
-            // Unmapped host items are hidden from the old container and kept unless the original logic changed their slot.
+            // Every occupied host slot remains occupied in the original click logic.
             var before=new ArrayList<LegacyClientData.Stack>();for(int index=0;index<40;index++)before.add(content.toLegacy(inventory.getItem(index)));
             services.playerInventory().write(original.player(),before);services.playerInventory().select(original.player(),inventory.selected);
             oldInventory().getClass().getMethod("func_70437_b",stackType).invoke(oldInventory(),old(getCarried()));
@@ -301,7 +301,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
                 original.container().getClass().getMethod("func_75134_a",content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer")).invoke(original.container(),original.player());
                 return content.services().playerInventory().read(original.player());
             }),true));
-            // Unmapped native stacks were exposed as null; an unchanged null must not erase the real host slot.
+            // Apply only original changes, retaining untouched live host stacks.
             for(int index=0;index<returned.size()&&index<before.size();index++)if(!ModernContentBridge.sameLegacy(before.get(index),returned.get(index)))
                 inventory.setItem(index,ModernContentBridge.keepHostTags(inventory.getItem(index),content.gameplayStack(returned.get(index))));
         }catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("MFCL original container close failed",failure);}

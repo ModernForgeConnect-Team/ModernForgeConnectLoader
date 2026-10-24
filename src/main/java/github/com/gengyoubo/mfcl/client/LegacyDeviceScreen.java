@@ -21,9 +21,7 @@ public final class LegacyDeviceScreen extends AbstractContainerScreen<LegacyDevi
                 Object actor=content.itemUse().clientActor(world,new LegacyTiles.Placer(mc.player.getUUID(),mc.player.getName().getString(),mc.player.getX(),mc.player.getY(),mc.player.getZ(),mc.player.getYRot(),mc.player.getXRot(),mc.player.getAbilities().instabuild,mc.player.isShiftKeyDown()),null);
                 var stacks=new java.util.ArrayList<LegacyClientData.Stack>();
                 for(int slot=0;slot<36;slot++){
-                    LegacyClientData.Stack stack=null;
-                    if(!inventory.getItem(slot).isEmpty())try{stack=content.gameplayStack(inventory.getItem(slot));}catch(Exception unmapped){}
-                    stacks.add(stack);
+                    stacks.add(content.containerStack(inventory.getItem(slot)));
                 }
                 services.playerInventory().write(actor,stacks);services.playerInventory().select(actor,menu.descriptor().itemSlot()>=0?menu.descriptor().itemSlot():inventory.selected);
                 Object gui=LegacyDeviceContainers.clientGui(services,menu.descriptor(),actor,world);

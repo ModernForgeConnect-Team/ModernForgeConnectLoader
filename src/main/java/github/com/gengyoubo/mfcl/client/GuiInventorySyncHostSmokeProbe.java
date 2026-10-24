@@ -48,6 +48,9 @@ final class GuiInventorySyncHostSmokeProbe {
     }
     private static int inventorySlot(Minecraft mc,int slot) { return mc.player.containerMenu.slots.size()-9+(slot<9?slot:slot-36); }
     private static void click(Minecraft mc,int slot,int button,ClickType type) { mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,button,type,mc.player); }
+    private static void requireNative(ItemStack stack,int count,String message) {
+        require(stack.is(Items.NETHERITE_INGOT)&&stack.getCount()==count&&stack.hasTag()&&"preserve".equals(stack.getTag().getString("GuiSyncSentinel")),message);
+    }
     private boolean opened(Minecraft mc) {
         if(!(mc.screen instanceof LegacyDeviceScreen screen)||!screen.getMenu().receivedContents())return false;
         require(screen.originalGui().getClass().getSimpleName().equals("GuiTransferNode"),"Wrong original GUI");return true;
@@ -58,7 +61,12 @@ final class GuiInventorySyncHostSmokeProbe {
             server(mc,player->{
                 player.getInventory().clearContent();player.getInventory().selected=0;
                 player.getInventory().setItem(1,new ItemStack(Items.STICK,17));player.getInventory().setItem(2,new ItemStack(Items.DIAMOND,3));
-                if(sentinel){var stack=new ItemStack(Items.NETHERITE_INGOT,7);stack.getOrCreateTag().putString("GuiSyncSentinel","preserve");player.getInventory().setItem(12,stack);}
+                if(sentinel){
+                    var stack=new ItemStack(Items.NETHERITE_INGOT,7);stack.getOrCreateTag().putString("GuiSyncSentinel","preserve");player.getInventory().setItem(12,stack);
+                    var sword=new ItemStack(Items.NETHERITE_SWORD);sword.setDamageValue(987);sword.getOrCreateTag().putString("GuiSyncSentinel","sword");player.getInventory().setItem(14,sword);
+                    player.getInventory().setItem(15,new ItemStack(Items.HONEY_BOTTLE,16));
+                    player.getInventory().setItem(16,new ItemStack(Items.COPPER_INGOT,5));
+                }
                 player.inventoryMenu.broadcastChanges();
             });return true;
         });
@@ -130,6 +138,56 @@ final class GuiInventorySyncHostSmokeProbe {
             require(mc.player.getInventory().getItem(12).is(Items.NETHERITE_INGOT)&&mc.player.getInventory().getItem(12).getCount()==7&&"preserve".equals(mc.player.getInventory().getItem(12).getTag().getString("GuiSyncSentinel")),"Close erased native-only inventory stack");
             proof.put("nativeOnlyStackPreserved",true);return true;
         });
+        // Exercise the reported energy-node path as well as the item-node path using actual packets.
+        for(int metadata:new int[]{0,12}) {
+            String prefix=metadata==12?"energyNode":"itemNode";
+            steps.add(mc->{server(mc,player->player.serverLevel().setBlockAndUpdate(node,content.blocks().get("ExtraUtilities:extractor_base").defaultBlockState().setValue(ModernContentBridge.METADATA,metadata)));return true;});
+            resetAndOpen(true);
+            steps.add(mc->{
+                requireNative(mc.player.containerMenu.getSlot(inventorySlot(mc,12)).getItem(),7,prefix+": native stack hidden while open");
+                requireNative(mc.player.getInventory().getItem(12),7,prefix+": native inventory erased on open");
+                var sword=mc.player.containerMenu.getSlot(inventorySlot(mc,14)).getItem();
+                require(sword.is(Items.NETHERITE_SWORD)&&sword.getDamageValue()==987&&"sword".equals(sword.getTag().getString("GuiSyncSentinel")),prefix+": damaged native tool hidden or changed");
+                require(mc.player.containerMenu.getSlot(inventorySlot(mc,15)).getItem().getCount()==16,prefix+": 16-stack item hidden");
+                require(mc.player.containerMenu.getSlot(inventorySlot(mc,16)).getItem().is(Items.COPPER_INGOT),prefix+": untagged native item hidden");
+                proof.put(prefix+"NativeItemsVisible",true);click(mc,inventorySlot(mc,1),0,ClickType.PICKUP);return true;
+            });
+            steps.add(mc->{click(mc,inventorySlot(mc,12),0,ClickType.PICKUP);return true;});
+            steps.add(mc->{
+                requireNative(mc.player.containerMenu.getCarried(),7,prefix+": placing into occupied native slot destroyed the original item");
+                require(mc.player.getInventory().getItem(12).is(Items.STICK),prefix+": replacement not synchronized");
+                click(mc,inventorySlot(mc,4),0,ClickType.PICKUP);return true;
+            });
+            steps.add(mc->{requireNative(mc.player.getInventory().getItem(4),7,prefix+": native cursor placement lost data");mc.screen.onClose();return true;});
+            verifyClosed(prefix+"OccupiedSlotSwap");
+            resetAndOpen(true);
+            steps.add(mc->{click(mc,inventorySlot(mc,12),1,ClickType.PICKUP);return true;});
+            steps.add(mc->{requireNative(mc.player.containerMenu.getCarried(),4,prefix+": split pickup failed");click(mc,inventorySlot(mc,13),0,ClickType.PICKUP);return true;});
+            steps.add(mc->{click(mc,inventorySlot(mc,12),0,ClickType.PICKUP);return true;});
+            steps.add(mc->{click(mc,inventorySlot(mc,13),0,ClickType.PICKUP);return true;});
+            steps.add(mc->{requireNative(mc.player.getInventory().getItem(13),7,prefix+": split stacks did not merge");require(mc.player.containerMenu.getCarried().isEmpty(),prefix+": unexpected cursor after merge");mc.screen.onClose();return true;});
+            verifyClosed(prefix+"NativeSplitMerge");
+            resetAndOpen(true);
+            steps.add(mc->{click(mc,inventorySlot(mc,12),2,ClickType.SWAP);return true;});
+            steps.add(mc->{requireNative(mc.player.getInventory().getItem(2),7,prefix+": number-key swap lost native item");require(mc.player.getInventory().getItem(12).is(Items.DIAMOND),prefix+": number-key swap lost diamond");mc.screen.onClose();return true;});
+            verifyClosed(prefix+"NativeHotbarSwap");
+            resetAndOpen(true);
+            steps.add(mc->{
+                server(mc,player->{try {
+                    for(int slot:new int[]{12,14,15,16}) {
+                        var old=content.containerStack(player.getInventory().getItem(slot));
+                        require(content.services().items().stackLimit(old)==player.getInventory().getItem(slot).getMaxStackSize(),prefix+": proxy stack limit mismatch at "+slot);
+                        require(ItemStack.matches(player.getInventory().getItem(slot),content.gameplayStack(old)),prefix+": serialization changed native data at "+slot);
+                    }
+                }catch(Exception failure){throw new IllegalStateException(failure);}});return true;
+            });
+            steps.add(mc->{
+                pending=mc.getSingleplayerServer().submit(()->{try{Thread.sleep(600);}catch(InterruptedException error){Thread.currentThread().interrupt();throw new IllegalStateException(error);}});
+                click(mc,inventorySlot(mc,12),0,ClickType.PICKUP);mc.screen.onClose();return true;
+            });
+            verifyClosed(prefix+"NativeDelayedClose");
+            steps.add(mc->{require(mc.player.getInventory().countItem(Items.NETHERITE_INGOT)==7,prefix+": delayed close lost/duplicated native items");return true;});
+        }
     }
     private void finish(Minecraft mc,Throwable failure) {
         done=true;
