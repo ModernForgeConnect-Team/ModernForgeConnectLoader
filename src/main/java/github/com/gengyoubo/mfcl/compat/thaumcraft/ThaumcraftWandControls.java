@@ -39,8 +39,12 @@ final class ThaumcraftWandControls {
         var key=LegacyKeyMappings.find(binding);return key!=null&&key.matches(event.getKey(),event.getScanCode());
     }
     static void open(LegacyServices services) throws Exception {
-        var mc=Minecraft.getInstance();var choices=services.items().inLegacy(()->{
-            var result=new TreeMap<String,Object>();var content=ModernContentBridge.active();
+        var mc=Minecraft.getInstance();var content=ModernContentBridge.active();
+        if(!services.items().inLegacy(()->ThaumcraftWandFocus.supportsFocus(services.loader(),services.items().materialize(content.gameplayStack(mc.player.getMainHandItem()))))){
+            mc.player.displayClientMessage(Component.translatable("mfcl.wand.focus.sceptre"),true);return;
+        }
+        var choices=services.items().inLegacy(()->{
+            var result=new TreeMap<String,Object>();
             for(int i=0;i<36;i++){
                 var host=mc.player.getInventory().getItem(i);if(host.isEmpty())continue;
                 try{ThaumcraftWandFocus.add(services.loader(),services.items().materialize(content.gameplayStack(host)),result);}catch(UnsupportedOperationException unmapped){}

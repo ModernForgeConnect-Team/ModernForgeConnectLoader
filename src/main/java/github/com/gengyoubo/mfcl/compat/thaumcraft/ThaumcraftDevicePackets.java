@@ -25,7 +25,7 @@ final class ThaumcraftDevicePackets {
         if(item==null||!loader.loadClass("thaumcraft.common.items.wands.ItemWandCasting").isInstance(item))throw new IllegalArgumentException("Wand control requires a held wand");
         LegacyPacketTargets.bindPlayer(packet,player,"dim","playerid","Wand control");
         if(focusChange) {
-            if((boolean)item.getClass().getMethod("isSceptre",loader.loadClass("net.minecraft.item.ItemStack")).invoke(item,held))throw new IllegalArgumentException("Sceptres cannot equip foci");
+            if(!ThaumcraftWandFocus.supportsFocus(loader,held))throw new IllegalArgumentException("Sceptres cannot equip foci");
             String focus=(String)declared(packet,"focus");
             if(focus==null||focus.length()>256||!focus.equals("REMOVE")&&!ThaumcraftWandFocus.available(loader,player).containsKey(focus))throw new IllegalArgumentException("Focus is not in the player's inventory");
         }else if(declaredField(packet,"key").getByte(packet)!=1)throw new IllegalArgumentException("Unsupported wand key");

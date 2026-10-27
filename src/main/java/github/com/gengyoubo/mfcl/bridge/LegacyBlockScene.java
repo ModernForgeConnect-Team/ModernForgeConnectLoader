@@ -40,7 +40,7 @@ public final class LegacyBlockScene implements AutoCloseable {
             if (tile != null) {
                 byte[] bytes = view.tileData(x,y,z);
                 if (bytes != null && bytes.length != 0) {
-                    services.tiles().load(tile, bytes);
+                    services.tiles().loadInScene(tile, bytes, x,y,z);
                     services.tiles().attach(tile, cell.legacyKey(), cell.metadata(), world, x,y,z);
                 }
             }

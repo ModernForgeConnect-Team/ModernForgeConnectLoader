@@ -61,10 +61,21 @@ public final class LegacyTiles {
         });
     }
     public void load(Object tile, byte[] bytes) throws Exception {
+        load(tile,bytes,null);
+    }
+    /** Rebase the snapshot before readFromNBT, whose inventory callbacks may already query the world. */
+    public void loadInScene(Object tile, byte[] bytes, int x, int y, int z) throws Exception {
+        load(tile,bytes,new int[]{x,y,z});
+    }
+    private void load(Object tile, byte[] bytes, int[] position) throws Exception {
         services.items().inLegacy(() -> {
             Class<?> tracker = loader.loadClass("net.minecraft.nbt.NBTSizeTracker");
             Object nbt = loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_152457_a", byte[].class, tracker)
                     .invoke(null, bytes, tracker.getConstructor(long.class).newInstance(8L * 1024 * 1024));
+            if(position!=null) {
+                var setInt=nbtType.getMethod("func_74768_a",String.class,int.class);
+                setInt.invoke(nbt,"x",position[0]);setInt.invoke(nbt,"y",position[1]);setInt.invoke(nbt,"z",position[2]);
+            }
             tileType.getMethod("func_145839_a", nbtType).invoke(tile, nbt); return null;
         });
     }

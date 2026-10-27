@@ -23,6 +23,7 @@ final class WandHostAuditProbe {
     private int stage;
     private int frames;
     private String focusItemKey;
+    private String focusFixture="wand";
     private CompletableFuture<?> pending;
     private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(4);
     private WandHostAuditProbe(ModernContentBridge content){this.content=content;}
@@ -42,29 +43,53 @@ final class WandHostAuditProbe {
             }else if(stage==3&&++frames>8){pending=server(mc,()->{verifyFocus(mc,true);return true;});stage=4;frames=0;
             }else if(stage==4&&pending.isDone()&&++frames>8&&mc.screen==null){pending.join();selectFocus(mc,true);stage=5;frames=0;
             }else if(stage==5&&++frames>8){pending=server(mc,()->{verifyFocus(mc,false);return true;});stage=6;
-            }else if(stage==6&&pending.isDone()){pending.join();report.put("status","PASS");finish(mc);}
+            }else if(stage==6&&pending.isDone()){
+                pending.join();pending=server(mc,()->{verifyPreviewScene();prepareFocus(mc,"sceptre");return true;});stage=7;frames=0;
+            }else if(stage==7&&pending.isDone()&&++frames>12&&mc.screen==null){
+                pending.join();pressFocusKey(mc);check(mc.screen==null,"Sceptre opened the focus selector");stage=8;frames=0;
+            }else if(stage==8&&++frames>8){
+                pending=server(mc,()->{verifyFocus(mc,false);report.put("sceptreSelectorBlockedWithoutInventoryChanges",true);prepareFocus(mc,"staff");return true;});stage=9;frames=0;
+            }else if(stage==9&&pending.isDone()&&++frames>12&&mc.screen==null){
+                pending.join();selectFocus(mc,false);stage=10;frames=0;
+            }else if(stage==10&&++frames>8){pending=server(mc,()->{verifyFocus(mc,true);return true;});stage=11;frames=0;
+            }else if(stage==11&&pending.isDone()&&++frames>8&&mc.screen==null){pending.join();selectFocus(mc,true);stage=12;frames=0;
+            }else if(stage==12&&++frames>8){pending=server(mc,()->{verifyFocus(mc,false);return true;});stage=13;
+            }else if(stage==13&&pending.isDone()){pending.join();report.put("status","PASS");finish(mc);}
         }catch(Throwable failure){report.put("status","FAIL");report.put("failure",failure.toString());try{finish(mc);}catch(Exception write){throw new IllegalStateException(write);}}
     }
     private <T> CompletableFuture<T> server(Minecraft mc,java.util.concurrent.Callable<T> action){return mc.getSingleplayerServer().submit(()->{try{return action.call();}catch(Exception failure){throw new IllegalStateException(failure);}});}
     private void check(boolean condition,String message){if(!condition)throw new IllegalStateException(message);}
-    private void selectFocus(Minecraft mc,boolean remove){
+    private void pressFocusKey(Minecraft mc){
         var key=com.mojang.blaze3d.platform.InputConstants.getKey(org.lwjgl.glfw.GLFW.GLFW_KEY_F,0);
         net.minecraft.client.KeyMapping.click(key);
         MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.InputEvent.Key(org.lwjgl.glfw.GLFW.GLFW_KEY_F,0,org.lwjgl.glfw.GLFW.GLFW_PRESS,0));
-        check(mc.screen!=null&&mc.screen.getClass().getSimpleName().equals("Selector"),"F did not open the focus selector");
         check(!mc.options.keySwapOffhand.consumeClick(),"F also queued an offhand swap while holding a wand");
+    }
+    private void selectFocus(Minecraft mc,boolean remove){
+        pressFocusKey(mc);
+        check(mc.screen!=null&&mc.screen.getClass().getSimpleName().equals("Selector"),"F did not open the focus selector");
         var buttons=mc.screen.children().stream().filter(child->child instanceof net.minecraft.client.gui.components.Button).map(child->(net.minecraft.client.gui.components.Button)child).toList();
         var button=remove?buttons.stream().filter(value->value.getMessage().getString().equals(net.minecraft.network.chat.Component.translatable("mfcl.wand.focus.remove").getString())).findFirst().orElseThrow():buttons.get(0);
         button.onPress();report.put("nativeFocusSelectorAndOffhandConflict",true);
     }
     private void prepareFocus(Minecraft mc)throws Exception{
+        prepareFocus(mc,"wand");
+    }
+    private void prepareFocus(Minecraft mc,String kind)throws Exception{
+        focusFixture=kind;
         var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);player.closeContainer();player.getInventory().clearContent();
         var services=content.services();var loader=services.loader();
         var focus=services.items().inLegacy(()->{for(var candidate:services.items().catalog()){
             Object old=services.items().materialize(candidate),item=loader.loadClass("net.minecraft.item.ItemStack").getMethod("func_77973_b").invoke(old);
             if(loader.loadClass("thaumcraft.api.wands.ItemFocusBasic").isInstance(item))return candidate;
         }throw new IllegalStateException("No focus fixture");});
-        focusItemKey=focus.key();player.getInventory().selected=0;player.setItemInHand(InteractionHand.MAIN_HAND,content.stack("Thaumcraft:WandCasting",0,1,"{rod:\"wood\",cap:\"iron\"}"));
+        String tag=switch(kind){case "sceptre"->"{rod:\"silverwood\",cap:\"thaumium\",sceptre:1b}";case "staff"->"{rod:\"silverwood_staff\",cap:\"thaumium\"}";default->"{rod:\"wood\",cap:\"iron\"}";};
+        focusItemKey=focus.key();player.getInventory().selected=0;player.setItemInHand(InteractionHand.MAIN_HAND,content.stack("Thaumcraft:WandCasting",0,1,tag));
+        services.items().inLegacy(()->{
+            Object old=services.items().materialize(content.gameplayStack(player.getMainHandItem()));var stackType=loader.loadClass("net.minecraft.item.ItemStack");Object wand=stackType.getMethod("func_77973_b").invoke(old);
+            check((boolean)wand.getClass().getMethod("isSceptre",stackType).invoke(wand,old)==kind.equals("sceptre"),"Invalid sceptre fixture");
+            check((boolean)wand.getClass().getMethod("isStaff",stackType).invoke(wand,old)==kind.equals("staff"),"Invalid staff fixture");return null;
+        });
         player.getInventory().setItem(1,content.stack(focus.key(),focus.metadata(),1,focus.tag()));player.inventoryMenu.broadcastChanges();
     }
     private void verifyFocus(Minecraft mc,boolean equipped)throws Exception{
@@ -75,6 +100,34 @@ final class WandHostAuditProbe {
         if(equipped)check(services.items().snapshot(focus).key().equals(focusItemKey),"Wrong focus equipped");
         check(player.getInventory().countItem(content.items().get(focusItemKey))==(equipped?0:1),"Focus was duplicated or lost");
         report.put(equipped?"nativeFocusEquippedViaPacket":"nativeFocusReturnedExactlyOnce",true);
+        report.put(focusFixture+(equipped?"FocusEquipped":"FocusInInventory"),true);
+    }
+    /** XU's inventory read calls markDirty after TileEntity restores the saved absolute coordinates. */
+    private void verifyPreviewScene()throws Exception{
+        if(!content.items().containsKey("ExtraUtilities:extractor_base")){report.put("previewTileCoordinates","SKIP: Extra Utilities not installed");return;}
+        var services=content.services();var loader=services.loader();
+        services.items().inLegacy(()->{
+            var cell=new HostWorldAccess.Block("ExtraUtilities:extractor_base",12);
+            try(var source=new LegacyBlockScene(services,(x,y,z)->cell)){
+                Object original=services.tiles().create(cell.legacyKey(),12,source.world(),-41,-60,-64);
+                byte[] saved=services.tiles().save(original),unchanged=saved.clone();
+                var view=new LegacyBlockRendering.View(){
+                    public HostWorldAccess.Block block(int x,int y,int z){check(Math.abs(x)<=1&&Math.abs(y)<=1&&Math.abs(z)<=1,"Preview used absolute snapshot coordinates: "+List.of(x,y,z));return x==0&&y==0&&z==0?cell:new HostWorldAccess.Block("minecraft:air",0);}
+                    public boolean legacyTile(int x,int y,int z){return x==0&&y==0&&z==0;}
+                    public byte[] tileData(int x,int y,int z){return legacyTile(x,y,z)?saved:null;}
+                };
+                try(var scene=new LegacyBlockScene(services,view)){
+                    Object tile=loader.loadClass("net.minecraft.world.World").getMethod("func_147438_o",int.class,int.class,int.class).invoke(scene.world(),0,0,0);
+                    var type=loader.loadClass("net.minecraft.tileentity.TileEntity");
+                    check(tile!=null&&type.getField("field_145851_c").getInt(tile)==0&&type.getField("field_145848_d").getInt(tile)==0&&type.getField("field_145849_e").getInt(tile)==0,"Preview tile was not rebased");
+                    check(Arrays.equals(saved,unchanged),"Preview modified the authoritative snapshot");
+                }
+                // The same bounded view must also survive the original contextual block renderer.
+                content.blockRendering().capture(cell.legacyKey(),12,view);
+                report.put("previewTileCoordinates","PASS");
+            }
+            return null;
+        });
     }
     private void verifyNode(Minecraft mc)throws Exception{
         var services=content.services();var loader=services.loader();var level=mc.getSingleplayerServer().overworld();var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);

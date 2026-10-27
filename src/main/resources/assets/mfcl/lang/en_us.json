@@ -15,6 +15,7 @@
   "mfcl.mods.total_loaded": "%s mods loaded (%s: %s, %s: %s)",
   "mfcl.wand.focus.title": "Select wand focus",
   "mfcl.wand.focus.remove": "Remove focus",
+  "mfcl.wand.focus.sceptre": "Sceptres cannot equip foci. Use a wand or staff.",
   "mfcl.trading_post.title": "Trading Post",
   "mfcl.trading_post.none": "No villagers found in range",
   "mfcl.trading_post.gone": "Villager can no longer be found",

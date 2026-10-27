@@ -86,6 +86,7 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclScannerSmokeTest` | TC4 held block/drop scans, real rewards/audio, cancellation/repeat/prerequisites, drop metadata and entity-ID validation, unmapped drops, persistence and dynamic lens/target coverage | `scanner-smoke.json` |
 | `mfclBiomeSmokeTest` | TC4 dynamic biome registry/colors, normal-world natural biome chunks, original biome mutation, native sync, negative coordinates/neighbors and save reload | `biome-smoke.json` |
 | `mfclBookSmokeTest` | Original Thaumonomicon GUI and interaction | Consult the book [acceptance record](thaumonomicon-progress.json) |
+| `mfclWandAudit` | Native wand crafting/charging, wand and staff focus equip/remove, sceptre selector rejection without inventory changes; with Extra Utilities installed, rebasing a negative-coordinate transfer-node snapshot before NBT inventory callbacks and contextual rendering | `wand-host-audit.json` |
 | `mfclLogicSmokeTest` | Supported native/legacy block and inventory logic | Consult the logic [acceptance record](runtime-logic-progress.json) |
 | `mfclCraftingSmokeTest` | Standard workbench recipes, native output consumption, JEI projection and reload | `crafting-smoke.json` |
 | `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence, note insertion/place/erase/sync, native reveal/learning and lifter motion | `device-smoke.json` |

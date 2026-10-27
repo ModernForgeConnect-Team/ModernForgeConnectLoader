@@ -5,6 +5,13 @@ import java.util.*;
 /** Original sorting keys, including foci inside inventory pouches; the server never accepts client item data. */
 public final class ThaumcraftWandFocus {
     private ThaumcraftWandFocus() {}
+    /** Use TC4's NBT-aware predicate: sceptres share the wand item ID with wands and staves. */
+    public static boolean supportsFocus(ClassLoader loader,Object stack) throws Exception {
+        var stackType=loader.loadClass("net.minecraft.item.ItemStack");
+        Object item=present(stackType,stack);
+        return loader.loadClass("thaumcraft.common.items.wands.ItemWandCasting").isInstance(item)
+                && !(boolean)item.getClass().getMethod("isSceptre",stackType).invoke(item,stack);
+    }
     public static Map<String,Object> available(ClassLoader loader,Object player) throws Exception {
         Object inventory=loader.loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
         var result=new TreeMap<String,Object>();

@@ -15,6 +15,7 @@
   "mfcl.mods.total_loaded": "%s 个 Mod 已加载（%s：%s，%s：%s）",
   "mfcl.wand.focus.title": "选择法杖杖端",
   "mfcl.wand.focus.remove": "卸下杖端",
+  "mfcl.wand.focus.sceptre": "权杖无法安装法杖核心，请使用普通法杖或法杖长杖。",
   "mfcl.trading_post.title": "贸易站",
   "mfcl.trading_post.none": "范围内没有村民",
   "mfcl.trading_post.gone": "找不到该村民了",
