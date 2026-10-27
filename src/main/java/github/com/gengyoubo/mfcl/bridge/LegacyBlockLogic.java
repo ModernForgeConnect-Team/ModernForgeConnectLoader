@@ -71,7 +71,7 @@ public final class LegacyBlockLogic {
     }
     /** Runs original collision logic against a host entity mirror; damage/effects use the authoritative host hooks. */
     public Collision collide(String key, Object world, int x, int y, int z, HostWorldAccess.Entity snapshot) throws Exception {
-        return services.items().inLegacy(() -> {
+        return services.items().inLegacy(() -> {try(var state=services.playerState().enter(world)) {
             var loader = services.loader(); Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");
             Object entity = LegacyEntityAccess.mirror(services.items(), world, snapshot, null);
             blockType.getMethod("func_149670_a", worldType, int.class, int.class, int.class, entityType).invoke(block(key), world, x, y, z, entity);
@@ -84,7 +84,7 @@ public final class LegacyBlockLogic {
             removed = removed || stack == null
                     || loader.loadClass("net.minecraft.item.ItemStack").getField("field_77994_a").getInt(stack) <= 0;
             return new Collision(removed, removed ? null : services.items().snapshot(stack));
-        });
+        }});
     }
     /** Original Block.randomDisplayTick on the client world. */
     public void displayTick(String key, Object world, int x, int y, int z, long seed) throws Exception {

@@ -287,9 +287,9 @@ public final class LegacyItemUse {
             services.playerState().synchronize(actor(world,placer,null));return packets.messages();
         }});
     }
-    public void release(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
-        services.items().inLegacy(() -> {
-            try(var state=services.playerState().enter(world)) {
+    public Finished release(Object world, LegacyTiles.Placer placer, LegacyClientData.Stack snapshot, int remaining) throws Exception {
+        return services.items().inLegacy(() -> {
+            try(var state=services.playerState().enter(world);var packets=LegacyPackets.capture(placer.id());var chat=new LegacyBlockLogic.ChatCapture()) {
             var loader = services.loader();
             Class<?> stackType = loader.loadClass("net.minecraft.item.ItemStack");
             Class<?> itemType = loader.loadClass("net.minecraft.item.Item");
@@ -300,7 +300,8 @@ public final class LegacyItemUse {
             Object player = actor(world, placer, snapshot);
             bindHeld(player,stack);
             itemType.getMethod("func_77615_a", stackType, worldType, playerType, int.class).invoke(item, stack, world, player, remaining);
-            return null;
+            LegacyPlayerBody.push(player);LegacyPlayerAttributes.push(player);
+            return new Finished(packets.messages(),chat.messages());
             }
         });
     }

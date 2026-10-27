@@ -825,9 +825,16 @@ public final class ModernContentBridge {
                 var hand=player.getUsedItemHand();var before = hostInventory(player);
                 if(hand==net.minecraft.world.InteractionHand.OFF_HAND)before.set(player.getInventory().selected,held);
                 Object actor = exposeLegacyInventory(player, world, before, held);
-                if(level.isClientSide)itemUse.release(world,source,held,timeLeft);
-                else logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->{itemUse.release(world,source,held,timeLeft);return null;}),true);
-                if (!level.isClientSide) collectLegacyInventory(player, actor, before,hand);
+                var result=level.isClientSide?itemUse.release(world,source,held,timeLeft)
+                        :logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(ModernContentBridge.this,player,()->itemUse.release(world,source,held,timeLeft)),true);
+                if (!level.isClientSide) {
+                    collectLegacyInventory(player, actor, before,hand);
+                    if(player instanceof net.minecraft.server.level.ServerPlayer server){
+                        result.messages().forEach(message->ScanSyncChannel.sendToPlayer(server,message));
+                        result.feedback().forEach(message->server.displayClientMessage(Component.literal(message),false));
+                        server.getPersistentData().putByteArray(LEGACY_ENTITY_DATA,itemUse.savePersisted(world,source));
+                    }
+                }
             } catch (Exception failure) { LogUtils.getLogger().debug("MFCL legacy release failed for {}", entry.key(), failure); }
         }
         @Override public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {

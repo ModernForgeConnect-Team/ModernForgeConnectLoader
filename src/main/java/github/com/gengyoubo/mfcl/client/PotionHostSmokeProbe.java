@@ -58,6 +58,7 @@ final class PotionHostSmokeProbe {
                     }
                 }
                 proof.put("nativeClientEffectsNamesAndIcons",true);
+                new ThaumcraftPotionHostAcceptance(content,proof).verifyClient();
                 for(String name:List.of("deathgaze","unhunger","sunscorned"))mc.player.addEffect(new MobEffectInstance(effect(name),200,0));
                 mc.setScreen(new InventoryScreen(mc.player));
             }else if(stage==3){
@@ -83,6 +84,7 @@ final class PotionHostSmokeProbe {
                     player.removeEffect(effect("visexhaust"));
                     content.players().callback(player,actor->{check(!(boolean)actor.getClass().getMethod("func_82165_m",int.class).invoke(actor,content.services().potions().id("thaumcraft:visexhaust")),"Native removal was not reflected in the old actor");});
                     proof.put("saveReloadCurativesAndNativeRemoval",true);
+                    new ThaumcraftPotionHostAcceptance(content,proof).verifyReload(player);
                 });
             }else if(stage==7){proof.put("status","PASS");finish(mc);return;}
             stage++;frames=0;
@@ -139,6 +141,7 @@ final class PotionHostSmokeProbe {
         var potion=content.gameplayStack(new LegacyClientData.Stack("minecraft:potion",0,1,"","{CustomPotionEffects:[{Id:"+taint+"b,Duration:120,Amplifier:1b}]}"));
         check(net.minecraft.world.item.alchemy.PotionUtils.getMobEffects(potion).stream().anyMatch(effect->effect.getEffect()==effect("fluxtaint")),"Old custom potion item kept the wrong numeric effect ID");
         check(content.gameplayStack(potion).tag().contains("Id:"+taint+"b"),"Potion item did not round-trip to the original ID");proof.put("customPotionItemIdRoundTrip",true);
+        new ThaumcraftPotionHostAcceptance(content,proof).run(player);
         content.players().callback(player,actor->{
             Object effect=oldEffect.getConstructor(int.class,int.class,int.class,boolean.class).newInstance(services.potions().id("thaumcraft:visexhaust"),1200,0,false);
             ((List<?>)oldEffect.getMethod("getCurativeItems").invoke(effect)).clear();actor.getClass().getMethod("func_70690_d",oldEffect).invoke(actor,effect);

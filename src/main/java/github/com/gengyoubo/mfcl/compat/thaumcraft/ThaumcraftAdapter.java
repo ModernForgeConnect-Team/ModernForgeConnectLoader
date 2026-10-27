@@ -11,6 +11,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     @Override public void beforeBoot(ClassLoader loader) throws Exception {
         LegacyModAdapter.registerBytecodeAdapters(loader,
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftWarpAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDamageSourceAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPrimalArrowAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDoorAdapter",
@@ -53,6 +54,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         return Map.of("status", "READY", "playerStateHooks", ThaumcraftKnowledge.ID, "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {
+        try{ThaumcraftWarpVisuals.install(services);}catch(Exception failure){throw new IllegalStateException("Cannot install original warp feedback",failure);}
         ThaumcraftWandControls.install(services);
         ThaumcraftDynamicItems.install(services);
         ThaumcraftGoggles.install(services);

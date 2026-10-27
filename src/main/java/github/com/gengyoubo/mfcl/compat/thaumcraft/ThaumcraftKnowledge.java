@@ -39,6 +39,13 @@ final class ThaumcraftKnowledge implements LegacyPlayerState.Hooks {
         var manager=loader.loadClass("thaumcraft.common.lib.research.ResearchManager");
         Class<?> nbtType=loader.loadClass("net.minecraft.nbt.NBTTagCompound"),playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         for(String section:new String[]{"Research","Aspect","Scanned"})manager.getMethod((save?"save":"load")+section+"NBT",nbtType,playerType).invoke(null,nbt,player);
+        // TC4 saves these in savePlayerData, outside saveResearchNBT. MFCL persists the actor's entity NBT instead.
+        Object knowledge=ThaumcraftReflection.proxy(loader).getClass().getMethod("getPlayerKnowledge").invoke(ThaumcraftReflection.proxy(loader));
+        String playerName=LegacyObjects.playerName(player);
+        for(String[] warp:new String[][]{{"Thaumcraft.eldritch","WarpPerm"},{"Thaumcraft.eldritch.sticky","WarpSticky"},{"Thaumcraft.eldritch.temp","WarpTemp"},{"Thaumcraft.eldritch.counter","WarpCounter"}}) {
+            if(save)nbtType.getMethod("func_74768_a",String.class,int.class).invoke(nbt,warp[0],knowledge.getClass().getMethod("get"+warp[1],String.class).invoke(knowledge,playerName));
+            else if((boolean)nbtType.getMethod("func_74764_b",String.class).invoke(nbt,warp[0]))knowledge.getClass().getMethod("set"+warp[1],String.class,int.class).invoke(knowledge,playerName,nbtType.getMethod("func_74762_e",String.class).invoke(nbt,warp[0]));
+        }
         // saveResearchNBT omits auto-unlocked entries; TC re-adds them on every world join, so a load must restore them
         // too, or the book reports the first real entries (FOCUSFIRE, NITOR, RESEARCHER1...) as missing prerequisites.
         if(!save) {

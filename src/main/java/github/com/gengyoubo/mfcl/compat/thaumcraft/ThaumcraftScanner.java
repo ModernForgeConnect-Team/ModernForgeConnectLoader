@@ -64,5 +64,7 @@ final class ThaumcraftScanner implements LegacyHeldScanners.Scanner {
         var playerType = loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         for (String name : new String[]{"PacketSyncResearch", "PacketSyncAspects", "PacketSyncScannedItems", "PacketSyncScannedEntities", "PacketSyncScannedPhenomena"})
             send.invoke(wrapper, loader.loadClass("thaumcraft.common.lib.network.playerdata." + name).getConstructor(playerType).newInstance(player), player);
+        var warp=loader.loadClass("thaumcraft.common.lib.network.playerdata.PacketSyncWarp").getConstructor(playerType,byte.class);
+        for(byte kind=0;kind<3;kind++)send.invoke(wrapper,warp.newInstance(player,kind),player);
     }
 }
