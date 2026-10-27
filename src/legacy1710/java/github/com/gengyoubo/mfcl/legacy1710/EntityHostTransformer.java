@@ -14,7 +14,7 @@ public final class EntityHostTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null) return null;
         String constants = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a") && !constants.contains("func_70893_e")) return bytes;
+        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_70691_i") && !constants.contains("func_70618_n") && !constants.contains("func_82170_o") && !constants.contains("func_70674_bp") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a") && !constants.contains("func_70893_e")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
         boolean changed = false;
         for (MethodNode m : node.methods) {
@@ -49,6 +49,11 @@ public final class EntityHostTransformer implements IClassTransformer {
                 code.add(new VarInsnNode(Opcodes.ALOAD, 1));
                 code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, "effect", "(Ljava/lang/Object;Ljava/lang/Object;)V", false));
                 code.add(new InsnNode(Opcodes.RETURN));
+            } else if(m.name.equals("func_70691_i")&&m.desc.equals("(F)V")) {
+                code.add(new VarInsnNode(Opcodes.FLOAD,1));code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"heal","(Ljava/lang/Object;F)V",false));code.add(new InsnNode(Opcodes.RETURN));
+            } else if((m.name.equals("func_70618_n")||m.name.equals("func_82170_o"))&&m.desc.equals("(I)V")||m.name.equals("func_70674_bp")&&m.desc.equals("()V")) {
+                if(m.desc.equals("()V"))code.add(new InsnNode(Opcodes.ICONST_M1));else code.add(new VarInsnNode(Opcodes.ILOAD,1));
+                code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"removeEffect","(Ljava/lang/Object;I)V",false));code.add(new InsnNode(Opcodes.RETURN));
             } else if(m.name.equals("func_70893_e")&&m.desc.equals("(Z)V")){
                 code.add(new VarInsnNode(Opcodes.ILOAD,1));code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"sheared","(Ljava/lang/Object;Z)V",false));code.add(new InsnNode(Opcodes.RETURN));
             } else continue;

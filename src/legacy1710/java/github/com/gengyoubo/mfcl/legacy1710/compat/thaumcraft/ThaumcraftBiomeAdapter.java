@@ -18,6 +18,8 @@ public final class ThaumcraftBiomeAdapter implements LegacyBytecodeAdapter {
                 out.visitInsn(Opcodes.RETURN);out.visitMaxs(0,0);out.visitEnd();return null;
             }
         },0);
-        return writer.toByteArray();
+        // Adapted classes skip the normal transformer pipeline. Utils also expands the potion array through
+        // Field.modifiers, which requires the same modern-Java reflection bridge as unadapted legacy classes.
+        return new github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer().transform(name,name,writer.toByteArray());
     }
 }

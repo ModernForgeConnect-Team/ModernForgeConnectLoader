@@ -5,12 +5,15 @@ import java.util.*;
 
 /**
  * Player state original code reads and changes besides items: entity id, flight, walk/fly speed, fall distance, step
- * height, motion and vanilla potion effects (old ids 1..23; old mods' own potions stay on the persistent actor).
+ * height, motion and mapped potion effects. Native entities own durations and saved effect identities.
  * {@link #pull} copies the host player onto an actor when it is refreshed; {@link #push} returns only what original
  * code changed since then.
  */
 public final class LegacyPlayerBody {
-    public record Effect(int id, int duration, int amplifier, boolean ambient) {}
+    public record Effect(int id, int duration, int amplifier, boolean ambient, List<LegacyClientData.Stack> curatives) {
+        public Effect(int id,int duration,int amplifier,boolean ambient){this(id,duration,amplifier,ambient,null);}
+        public Effect{if(curatives!=null)curatives=List.copyOf(curatives);}
+    }
     public record State(int entityId, boolean allowFlying, boolean flying, float walkSpeed, float flySpeed, float fallDistance,
                         float stepHeight, double motionX, double motionY, double motionZ, Map<Integer, Effect> effects) {}
     public interface Host {
@@ -59,9 +62,11 @@ public final class LegacyPlayerBody {
         access.fallDistance.setFloat(actor, state.fallDistance()); access.stepHeight.setFloat(actor, state.stepHeight());
         access.motionX.setDouble(actor, state.motionX()); access.motionY.setDouble(actor, state.motionY()); access.motionZ.setDouble(actor, state.motionZ());
         Map<Object, Object> potions = potions(access, actor);
-        potions.keySet().removeIf(key -> key instanceof Integer potion && potion >= 1 && potion <= VANILLA_POTIONS);
-        for (var effect : state.effects().values())
-            potions.put(effect.id(), access.newEffect.newInstance(effect.id(), effect.duration(), effect.amplifier(), effect.ambient()));
+        potions.keySet().removeIf(key -> key instanceof Integer potion && LegacyPotions.mapped(actor.getClass().getClassLoader(),potion));
+        for (var effect : state.effects().values()) {
+            Object old=access.newEffect.newInstance(effect.id(), effect.duration(), effect.amplifier(), effect.ambient());
+            LegacyPotions.restoreCuratives(actor.getClass().getClassLoader(),old,effect.curatives());potions.put(effect.id(),old);
+        }
         PULLED.put(actor, new Pulled(id, client, read(access, actor, state.entityId())));
     }
 
@@ -79,7 +84,7 @@ public final class LegacyPlayerBody {
         var effects = new TreeMap<Integer, Effect>();
         for (Object value : potions(access, actor).values()) {
             int id = (int) access.potion.invoke(value);
-            if (id >= 1 && id <= VANILLA_POTIONS) effects.put(id, new Effect(id, (int) access.duration.invoke(value), (int) access.amplifier.invoke(value), (boolean) access.ambient.invoke(value)));
+            if (LegacyPotions.mapped(actor.getClass().getClassLoader(),id)) effects.put(id, new Effect(id, (int) access.duration.invoke(value), (int) access.amplifier.invoke(value), (boolean) access.ambient.invoke(value),LegacyPotions.curatives(actor.getClass().getClassLoader(),value)));
         }
         return new State(entityId, access.allowFlying.getBoolean(abilities), access.flying.getBoolean(abilities), access.walkSpeed.getFloat(abilities),
                 access.flySpeed.getFloat(abilities), access.fallDistance.getFloat(actor), access.stepHeight.getFloat(actor),

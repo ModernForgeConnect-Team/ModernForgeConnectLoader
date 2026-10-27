@@ -30,7 +30,7 @@ final class LegacyVanillaStacks {
                         }
                         result.getOrCreateTag().put(name,display);
                     }
-                    case "CustomPotionEffects" -> result.getOrCreateTag().put(name,tag.get(name).copy());
+                    case "CustomPotionEffects" -> result.getOrCreateTag().put(name,potionEffects(services,tag.getList(name,Tag.TAG_COMPOUND),true));
                     default -> throw new UnsupportedOperationException("Unmapped old vanilla loot NBT: "+old.key()+"."+name);
                 }
             }
@@ -42,11 +42,11 @@ final class LegacyVanillaStacks {
                     var output=new ListTag();if(list==null)return output;
                     for(Object effect:list) {
                         var type=loader.loadClass("net.minecraft.potion.PotionEffect");int id=(int)type.getMethod("func_76456_a").invoke(effect);
-                        if(id<1||id>23||MobEffect.byId(id)==null)throw new UnsupportedOperationException("Unmapped old potion effect: "+id);
+                        if(ModernContentBridge.active().potions().effect(id)==null)throw new UnsupportedOperationException("Unmapped old potion effect: "+id);
                         var entry=new CompoundTag();entry.putByte("Id",(byte)id);entry.putInt("Duration",(int)type.getMethod("func_76459_b").invoke(effect));
                         entry.putByte("Amplifier",((Integer)type.getMethod("func_76458_c").invoke(effect)).byteValue());output.add(entry);
                     }
-                    return output;
+                    return potionEffects(services,output,true);
                 });
                 result.getOrCreateTag().put("CustomPotionEffects",effects);
             }
@@ -66,6 +66,8 @@ final class LegacyVanillaStacks {
         var source=original?root.getCompound(SOURCE):new CompoundTag();String key=original?source.getString("key"):net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         if(!key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid original loot identity: "+key);
         var tag=source.getCompound("tag").copy();
+        if(root.contains("CustomPotionEffects"))tag.put("CustomPotionEffects",potionEffects(services,root.getList("CustomPotionEffects",Tag.TAG_COMPOUND),false));
+        else if(tag.contains("CustomPotionEffects"))tag.remove("CustomPotionEffects");
         // Native enchanting/repairing can change supported enchantments after the item was awarded.
         for(String name:List.of("ench","StoredEnchantments")) {
             String modern=name.equals("ench")?"Enchantments":name;
@@ -98,6 +100,21 @@ final class LegacyVanillaStacks {
         var old=new LegacyClientData.Stack(key,stack.isDamageableItem()?stack.getDamageValue():source.getInt("metadata"),stack.getCount(),stack.getHoverName().getString(),"");
         if(tag.isEmpty())return old;
         var bytes=new java.io.ByteArrayOutputStream();NbtIo.writeCompressed(tag,bytes);return services.items().withTag(old,bytes.toByteArray());
+    }
+    private static ListTag potionEffects(LegacyServices services,ListTag effects,boolean toHost) {
+        var result=new ListTag();var bridge=ModernContentBridge.active().potions();
+        for(Tag value:effects){
+            var tag=(CompoundTag)value;
+            if(toHost){
+                int id=tag.getInt("Id")&255;var effect=bridge.effect(id);
+                if(effect==null)throw new UnsupportedOperationException("Unmapped old potion effect: "+id);
+                result.add(new net.minecraft.world.effect.MobEffectInstance(effect,tag.getInt("Duration"),tag.getInt("Amplifier")&255,tag.getBoolean("Ambient"),!tag.contains("ShowParticles")||tag.getBoolean("ShowParticles")).save(new CompoundTag()));
+            }else{
+                var effect=net.minecraft.world.effect.MobEffectInstance.load(tag);Integer id=effect==null?null:bridge.oldId(effect.getEffect());
+                if(id==null)throw new UnsupportedOperationException("Unmapped native potion effect: "+tag);
+                var old=new CompoundTag();old.putByte("Id",id.byteValue());old.putInt("Duration",effect.getDuration());old.putByte("Amplifier",(byte)effect.getAmplifier());old.putBoolean("Ambient",effect.isAmbient());result.add(old);
+            }
+        }return result;
     }
     static CompoundTag originalTag(LegacyServices services,LegacyClientData.Stack old) throws Exception {
         if(old.tag().isEmpty())return new CompoundTag();

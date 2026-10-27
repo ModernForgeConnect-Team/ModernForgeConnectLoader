@@ -51,6 +51,7 @@ public final class ModernContentBridge {
     private final Map<Item, LegacyContent.Item> reverseItems = new IdentityHashMap<>();
     private final LegacyContentPack pack;
     private final LegacyEnchantmentBridge enchantments;
+    private final LegacyPotionBridge potions;
     private final HostToolStacks hostTools;
     private final HostInventoryStacks hostInventoryStacks;
     private final CreativeTabBridge creative;
@@ -65,6 +66,7 @@ public final class ModernContentBridge {
     private ModernContentBridge(LegacyServices services) throws Exception {
         this.services = services;
         this.enchantments = new LegacyEnchantmentBridge(this);
+        this.potions = new LegacyPotionBridge(this);
         try (var context = new LegacyInventoryContext(services)) {
             declarations = new LegacyContent(services.items());
             blockShapes = new LegacyBlockShapes(services);
@@ -81,6 +83,7 @@ public final class ModernContentBridge {
         LogUtils.getLogger().info("MFCL content: generating resource pack");
         net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: Generating legacy resource pack");
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
+        potions.generateIcons();
         LegacyBiomePack.generate(pack,services.biomes());
         LegacyDimensionPack.generate(pack,services.dimensions());
         var recipes = crafting.definitions();
@@ -140,6 +143,7 @@ public final class ModernContentBridge {
     public LegacyServices services() { return services; }
     public LegacyItemUse itemUse() {return itemUse;}
     public LegacyEnchantmentBridge enchantments() {return enchantments;}
+    public LegacyPotionBridge potions() {return potions;}
     public LegacyCrafting crafting() {return crafting;}
     public LegacyContentPack pack() { return pack; }
     public CreativeTabBridge creative() { return creative; }
@@ -366,6 +370,7 @@ public final class ModernContentBridge {
     }
     private void register(RegisterEvent event) {
         enchantments.register(event);
+        potions.register(event);
         event.register(Registries.BIOME_SOURCE,registry->registry.register(ResourceLocation.parse("mfcl:thaumcraft_biomes"),github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftBiomeSource.CODEC));
         event.register(Registries.BLOCK, registry -> {
             if (blocksRegistered) throw new IllegalStateException("Legacy block registration repeated");
@@ -628,9 +633,9 @@ public final class ModernContentBridge {
                 var change = new net.minecraft.world.phys.Vec3(after.motionX() - body.motionX(), after.motionY() - body.motionY(), after.motionZ() - body.motionZ());
                 if (change.lengthSqr() > 0) player.setDeltaMovement(player.getDeltaMovement().add(change));
             } else {
-                // Old potion IDs 1..23 are the vanilla effects; higher IDs belong to old mods and have no host identity.
+                // Resolve configurable original IDs through the native effect mapping.
                 for (var effect : result.effects()) {
-                    var type = effect.id() >= 1 && effect.id() <= 23 ? net.minecraft.world.effect.MobEffect.byId(effect.id()) : null;
+                    var type = potions.effect(effect.id());
                     if (type != null) player.addEffect(new net.minecraft.world.effect.MobEffectInstance(type, effect.duration(), effect.amplifier(), effect.ambient(), true));
                 }
                 if (result.stack() != null && stack.isDamageableItem() && result.stack().metadata() != stack.getDamageValue()) stack.setDamageValue(result.stack().metadata());

@@ -28,6 +28,14 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         var config=loader.loadClass("thaumcraft.common.config.Config");
         services.enchantments().register("thaumcraft:repair",config.getField("enchRepair").get(null));
         services.enchantments().register("thaumcraft:haste",config.getField("enchHaste").get(null));
+        for(String[] potion:new String[][]{{"fluxtaint","thaumcraft.api.potions.PotionFluxTaint"},{"visexhaust","thaumcraft.api.potions.PotionVisExhaust"},
+                {"blurredvision","thaumcraft.common.lib.potions.PotionBlurredVision"},{"deathgaze","thaumcraft.common.lib.potions.PotionDeathGaze"},
+                {"infvisexhaust","thaumcraft.common.lib.potions.PotionInfectiousVisExhaust"},{"sunscorned","thaumcraft.common.lib.potions.PotionSunScorned"},
+                {"thaumarhia","thaumcraft.common.lib.potions.PotionThaumarhia"},{"unhunger","thaumcraft.common.lib.potions.PotionUnnaturalHunger"},{"warpward","thaumcraft.common.lib.potions.PotionWarpWard"}})
+            services.potions().register("thaumcraft:"+potion[0],loader.loadClass(potion[1]).getField("instance").get(null),"thaumcraft:textures/misc/potions.png");
+        ThaumcraftPotionEvents.install(services);
+        for(String[] shader:new String[][]{{"deathgaze","desaturatetc"},{"blurredvision","blurtc"},{"unhunger","hunger"},{"sunscorned","sunscorned"}})
+            services.potions().registerScreenFilter("thaumcraft:"+shader[0],"minecraft:shaders/post/"+shader[1]+".json");
         ThaumcraftEnchantments.install(services);
         ThaumcraftElementalTools.install(services);
         // {host id, ThaumcraftWorldGenerator field, Config weight field (null: never generated in the overworld)}

@@ -102,6 +102,7 @@ final class LegacyEntityAccess {
             var sheep=LegacyWorlds.access(world).sheep(snapshot.id());
             if(sheep!=null){Object watcher=base.getMethod("func_70096_w").invoke(entity);watcher.getClass().getMethod("func_75692_b",int.class,Object.class).invoke(watcher,16,(byte)(sheep.color()|(sheep.sheared()?16:0)));}
         }
+        LegacyPotions.refresh(entity,world,snapshot.id());
         LegacyEntityHooks.mirrored(entity);
         return entity;
     }

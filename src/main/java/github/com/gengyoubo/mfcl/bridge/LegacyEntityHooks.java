@@ -86,8 +86,17 @@ public final class LegacyEntityHooks {
         try {
             var access = access(entity); var host = host(entity);
             if (host == null || effect == null) return;
-            host.addEffect(access.idOf(entity), (int) access.potion.invoke(effect), (int) access.duration.invoke(effect), (int) access.amplifier.invoke(effect), (boolean) access.ambient.invoke(effect));
+            effect=LegacyPotions.added(entity,effect);
+            host.addEffect(access.idOf(entity), new LegacyPlayerBody.Effect((int) access.potion.invoke(effect), (int) access.duration.invoke(effect), (int) access.amplifier.invoke(effect), (boolean) access.ambient.invoke(effect),LegacyPotions.curatives(entity.getClass().getClassLoader(),effect)));
         } catch (Throwable failure) { report("addPotionEffect", failure); }
+    }
+    public static void heal(Object entity,float amount) {
+        try{var host=host(entity);if(host!=null)host.heal(access(entity).idOf(entity),amount);}
+        catch(Throwable failure){report("heal",failure);}
+    }
+    public static void removeEffect(Object entity,int potion) {
+        try{LegacyPotions.removed(entity,potion);var host=host(entity);if(host!=null){if(potion<0)host.clearEffects(access(entity).idOf(entity));else host.removeEffect(access(entity).idOf(entity),potion);}}
+        catch(Throwable failure){report("removePotionEffect",failure);}
     }
     // Old callers cannot handle a bridge exception; a forwarding failure must not abort their logic.
     private static void report(String operation, Throwable failure) {

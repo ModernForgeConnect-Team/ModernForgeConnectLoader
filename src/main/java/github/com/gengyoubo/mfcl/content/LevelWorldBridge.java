@@ -261,10 +261,24 @@ public final class LevelWorldBridge {
             @Override public void addEffect(java.util.UUID id, int potion, int duration, int amplifier, boolean ambient) {
                 check();
                 if (!(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)) return;
-                // 1.7.10 potion ids 1-23 are the vanilla effects in the same order; mod potions have no host form.
-                var effect = potion >= 1 && potion <= 23 ? net.minecraft.world.effect.MobEffect.byId(potion) : null;
+                var effect = content.potions().effect(potion);
                 if (effect == null) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.missingMapping("potion " + potion, "original potion has no host effect"); return; }
                 content.afterCommit(level, () -> target.addEffect(new net.minecraft.world.effect.MobEffectInstance(effect, duration, amplifier, ambient, true)));
+            }
+            @Override public java.util.List<github.com.gengyoubo.mfcl.bridge.LegacyPlayerBody.Effect> effects(UUID id) {
+                check();return level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity entity?content.potions().snapshot(entity):java.util.List.of();
+            }
+            @Override public void addEffect(UUID id,github.com.gengyoubo.mfcl.bridge.LegacyPlayerBody.Effect state) {
+                check();if(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,()->content.potions().apply(target,state));
+            }
+            @Override public void heal(UUID id,float amount) {
+                check();if(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,()->target.heal(amount));
+            }
+            @Override public void removeEffect(UUID id,int potion) {
+                check();var type=content.potions().effect(potion);if(type!=null&&level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,()->target.removeEffect(type));
+            }
+            @Override public void clearEffects(UUID id) {
+                check();if(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,target::removeAllEffects);
             }
             @Override public long dayTime() { check(); return level.getDayTime(); }
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }

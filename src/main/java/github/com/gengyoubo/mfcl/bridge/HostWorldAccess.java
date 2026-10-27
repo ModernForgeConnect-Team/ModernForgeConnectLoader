@@ -93,6 +93,11 @@ public interface HostWorldAccess {
     default void ignite(java.util.UUID target, int seconds) { }
     /** Old addPotionEffect; {@code potion} is the 1.7.10 potion id. */
     default void addEffect(java.util.UUID target, int potion, int duration, int amplifier, boolean ambient) { }
+    default void addEffect(java.util.UUID target,LegacyPlayerBody.Effect effect) { addEffect(target,effect.id(),effect.duration(),effect.amplifier(),effect.ambient()); }
+    default java.util.List<LegacyPlayerBody.Effect> effects(java.util.UUID target) { return java.util.List.of(); }
+    default void heal(java.util.UUID target,float amount) { }
+    default void removeEffect(java.util.UUID target,int potion) { }
+    default void clearEffects(java.util.UUID target) { }
     default void swing(java.util.UUID entity) { }
     /** Server PvP and team friendly-fire rules for an old player's canAttackPlayer callback. */
     default boolean canAttackPlayer(java.util.UUID attacker,java.util.UUID target) { return false; }

@@ -24,6 +24,7 @@ public final class ClientContentBridge {
         LegacyScanNotifications.install(bridge);
         LegacyItemTooltips.install(bridge);
         LegacyEffects.install(bridge);
+        LegacyPotionPostEffects.install(bridge,bus);
         bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge));
             event.registerEntityRenderer(bridge.legacyEntityType(), context -> new LegacyHostedEntityRenderer(context, bridge));
@@ -50,7 +51,8 @@ public final class ClientContentBridge {
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.items().get(entry.key()));
         });
-        if (Boolean.getBoolean("mfcl.test.elementalTools")) ElementalToolsHostSmokeProbe.install(bridge);
+        if (Boolean.getBoolean("mfcl.test.potions")) PotionHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.elementalTools")) ElementalToolsHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.enchantments")) EnchantmentHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.focusPouch")) FocusPouchHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.droppedItemFluid")) DroppedItemFluidHostSmokeProbe.install(bridge);

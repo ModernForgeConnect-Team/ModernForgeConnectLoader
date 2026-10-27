@@ -32,6 +32,7 @@ minecraft {
             if (project.hasProperty('mfclContentSmokeTest')) property 'mfcl.test.content', 'true'
             if (project.hasProperty('mfclLogicSmokeTest')) property 'mfcl.test.logic', 'true'
             if (project.hasProperty('mfclWandAudit')) property 'mfcl.test.wandAudit', 'true'
+            if (project.hasProperty('mfclPotionSmokeTest')) property 'mfcl.test.potions', 'true'
             if (project.hasProperty('mfclMultiblockSmokeTest')) property 'mfcl.test.multiblock', 'true'
             if (project.hasProperty('mfclFireFocusSmokeTest')) property 'mfcl.test.fireFocus', 'true'
             if (project.hasProperty('mfclBookSmokeTest')) property 'mfcl.test.book', 'true'

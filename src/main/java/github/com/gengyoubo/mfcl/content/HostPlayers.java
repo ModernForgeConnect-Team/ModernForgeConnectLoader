@@ -327,11 +327,7 @@ public final class HostPlayers implements LegacyEquipment, LegacyEvents {
             if (player == null) return null;
             var abilities = player.getAbilities(); var motion = player.getDeltaMovement();
             var effects = new TreeMap<Integer, LegacyPlayerBody.Effect>();
-            for (var effect : player.getActiveEffects()) {
-                int potion = MobEffect.getId(effect.getEffect());
-                if (potion >= 1 && potion <= LegacyPlayerBody.VANILLA_POTIONS)
-                    effects.put(potion, new LegacyPlayerBody.Effect(potion, effect.getDuration(), effect.getAmplifier(), effect.isAmbient()));
-            }
+            for(var effect:content.potions().snapshot(player))effects.put(effect.id(),effect);
             return new LegacyPlayerBody.State(player.getId(), abilities.mayfly, abilities.flying, abilities.getWalkingSpeed(), abilities.getFlyingSpeed(),
                     player.fallDistance, player.getStepHeight() - STEP_OFFSET, motion.x, motion.y, motion.z, Collections.unmodifiableMap(effects));
         }
@@ -353,11 +349,10 @@ public final class HostPlayers implements LegacyEquipment, LegacyEvents {
             if (client) return; // effects are the server's
             for (var effect : after.effects().values()) {
                 if (effect.equals(before.effects().get(effect.id()))) continue;
-                var type = MobEffect.byId(effect.id());
-                if (type != null) player.addEffect(new MobEffectInstance(type, effect.duration(), effect.amplifier(), effect.ambient(), true));
+                content.potions().apply(player,effect);
             }
             for (var potion : before.effects().keySet()) if (!after.effects().containsKey(potion)) {
-                var type = MobEffect.byId(potion);
+                var type = content.potions().effect(potion);
                 if (type != null) player.removeEffect(type);
             }
         }

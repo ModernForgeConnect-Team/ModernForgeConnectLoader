@@ -103,6 +103,10 @@ public final class ClientWorldBridge {
                         var pos = result.getBlockPos();
                         return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
                     }
+                    @Override public java.util.List<LegacyPlayerBody.Effect> effects(java.util.UUID id){
+                        var player=next.getPlayerByUUID(id);var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
+                        return player==null||content==null?java.util.List.of():content.potions().snapshot(player);
+                    }
                     @Override public boolean originalBlockRayTrace() { return true; }
                     @Override public HostWorldAccess.Entity entity(java.util.UUID id){var player=next.getPlayerByUUID(id);return player==null?null:github.com.gengyoubo.mfcl.content.HostEntityQueries.snapshot(next,player);}
                     @Override public java.util.List<int[]> legacyTiles(int chunkX, int chunkZ) {
