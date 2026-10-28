@@ -73,4 +73,12 @@ public final class LegacyGeneration {
         Object world = services.worlds().findBound(hostIdentity);
         if (world != null) providers.remove(world);
     }
+    /** Native dimensions run only mod-registered world generators; vanilla terrain/population stay native. */
+    public void registered(Object hostIdentity,int chunkX,int chunkZ)throws Exception {
+        Object world=services.worlds().bound(hostIdentity);var loader=services.loader();
+        services.items().inLegacy(()->{try(var state=services.playerState().enter(world)){
+            var chunkProvider=loader.loadClass("net.minecraft.world.chunk.IChunkProvider");Object provider=loader.loadClass("net.minecraft.world.World").getMethod("func_72863_F").invoke(world);
+            loader.loadClass("cpw.mods.fml.common.registry.GameRegistry").getMethod("generateWorld",int.class,int.class,loader.loadClass("net.minecraft.world.World"),chunkProvider,chunkProvider).invoke(null,chunkX,chunkZ,world,provider,provider);return null;
+        }});
+    }
 }

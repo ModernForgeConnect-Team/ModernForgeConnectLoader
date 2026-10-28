@@ -7,6 +7,7 @@ import java.util.*;
 
 /** Maintains typed old World/WorldProvider objects, stable identity, direct fields and synchronous forwarding. */
 public final class LegacyWorlds implements AutoCloseable {
+    public static java.util.List<Object> serverWorlds(ClassLoader loader){synchronized(DISPATCH){return DISPATCH.values().stream().filter(binding->binding.loader==loader&&binding.owner==Thread.currentThread()&&!binding.host.clientSide()).map(binding->binding.world).toList();}}
     private static final Map<Object, Binding> DISPATCH = Collections.synchronizedMap(new IdentityHashMap<>());
     private final Map<Object, Binding> worlds = new IdentityHashMap<>();
     private final ClassLoader loader;
@@ -59,7 +60,7 @@ public final class LegacyWorlds implements AutoCloseable {
         boolean original = dimension != 0 && dimension != -1 && dimension != 1
                 && (boolean) loader.loadClass("net.minecraftforge.common.DimensionManager").getMethod("isDimensionRegistered", int.class).invoke(null, dimension);
         Object provider = original ? loader.loadClass("net.minecraftforge.common.DimensionManager").getMethod("createProviderFor", int.class).invoke(null, dimension)
-                : loader.loadClass("net.minecraft.world.WorldProviderSurface").getConstructor().newInstance();
+                : loader.loadClass(dimension==-1?"net.minecraft.world.WorldProviderHell":dimension==1?"net.minecraft.world.WorldProviderEnd":"net.minecraft.world.WorldProviderSurface").getConstructor().newInstance();
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73011_w", provider);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72995_K", host.clientSide());
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
@@ -108,6 +109,7 @@ public final class LegacyWorlds implements AutoCloseable {
         }
         if(!host.clientSide())dimensionWorlds().put(dimension,world);
         refreshDifficulty(binding);
+        set(loader.loadClass("net.minecraft.world.World"),world,"field_73020_y",LegacyChunkProvider.create(loader,world));
         return world;
         }catch(Exception | LinkageError failure){unbind(hostIdentity);throw failure;}
     }

@@ -1,6 +1,7 @@
 package github.com.gengyoubo.mfcl.bridge;
 
 import java.lang.reflect.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /** Real old TileEntity construction, lifecycle and binary NBT. The host owns positions and scheduling. */
@@ -110,6 +111,8 @@ public final class LegacyTiles {
         var tiles = RUNTIMES.get(world.getClass().getClassLoader());
         if (tiles == null) throw new IllegalStateException("No legacy runtime owns this world");
         UUID id = (UUID) profile.getClass().getMethod("getId").invoke(profile); String name = (String) profile.getClass().getMethod("getName").invoke(profile);
+        // TC4 and other old mods use name-only profiles. Give each one a stable identity before any host lookup.
+        if (id == null) id = UUID.nameUUIDFromBytes(("MFCL:FakePlayer:" + name).getBytes(StandardCharsets.UTF_8));
         var players = tiles.fakePlayers.computeIfAbsent(world, key -> Collections.synchronizedMap(new HashMap<>()));
         Object player = players.get(id);
         if (player == null) {
@@ -137,7 +140,7 @@ public final class LegacyTiles {
             Object access=manager.getConstructor(worldType).newInstance(world);manager.getField("field_73090_b").set(access,actor);
             var interaction=actorType.getField("field_71134_c");interaction.setAccessible(true);interaction.set(actor,access);
             var statistics=loader.loadClass("net.minecraft.entity.player.EntityPlayerMP").getDeclaredField("field_147103_bO");statistics.setAccessible(true);
-            statistics.set(actor,LegacyPlayerStatistics.create(loader,services.gameDirectory().resolve("mfcl/player-stats/"+placer.id()+".json").toFile()));
+            statistics.set(actor,LegacyPlayerStatistics.create(loader,services.gameDirectory().resolve("mfcl/player-stats/"+placer.id()+".json").toFile(),actor));
             // Effect/inventory updates sent to the actor's connection are dropped (it has none); the host syncs the real player.
             Class<?> handler=loader.loadClass("net.minecraft.network.NetHandlerPlayServer");
             Object connection=unsafe.getClass().getMethod("allocateInstance",Class.class).invoke(unsafe,handler);

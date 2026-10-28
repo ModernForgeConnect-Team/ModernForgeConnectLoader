@@ -37,9 +37,24 @@ final class GolemHostSmokeProbe {
             player.setPos(0.5,100,0.5);player.setOnGround(true);level.getChunkAt(new BlockPos(0,100,0));
             // Register the player so original callbacks can resolve its body and identity.
             level.addNewPlayer(player);
+            services.items().inLegacy(()->{
+                var profile=loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class);
+                var get=loader.loadClass("net.minecraftforge.common.util.FakePlayerFactory").getMethod("get",loader.loadClass("net.minecraft.world.WorldServer"),profile.getDeclaringClass());
+                Object a=get.invoke(null,world,profile.newInstance(null,"MFCL-Harvest"));
+                Object again=get.invoke(null,world,profile.newInstance(null,"MFCL-Harvest"));
+                Object b=get.invoke(null,world,profile.newInstance(null,"MFCL-Use"));
+                var identity=loader.loadClass("net.minecraft.entity.Entity").getMethod("func_110124_au");
+                UUID id=(UUID)identity.invoke(a);
+                check(id!=null,"nameOnlyFakePlayerHasUuid");
+                check(a==again,"nameOnlyFakePlayerCached");
+                check(a!=b&&!id.equals(identity.invoke(b)),"differentFakePlayerNamesIsolated");
+                var explicit=UUID.randomUUID();Object named=get.invoke(null,world,profile.newInstance(explicit,"MFCL-Explicit"));
+                check(explicit.equals(identity.invoke(named)),"explicitFakePlayerUuidPreserved");
+                return null;
+            });
             var type=loader.loadClass("thaumcraft.common.entities.golems.EntityGolemBase");
             var marker=loader.loadClass("thaumcraft.common.entities.golems.Marker");
-            for(int index=0;index<2;index++) {
+            for(int index=0;index<4;index++) {
                 final int n=index;
                 Object original=services.items().inLegacy(()->{
                     Object golem=type.getConstructor(loader.loadClass("net.minecraft.world.World")).newInstance(world);
@@ -73,10 +88,24 @@ final class GolemHostSmokeProbe {
             ItemStack persisted=ItemStack.of(player.getOffhandItem().save(new CompoundTag()));
             bound(persisted,first,0,"bellNbtRoundTrip");
             // Entity-owned interaction must run even when the item does not override itemInteractionForEntity.
-            player.setItemInHand(InteractionHand.MAIN_HAND,content.stack("Thaumcraft:ItemGolemCore",0,2,""));
-            check(player.interactOn(first,InteractionHand.MAIN_HAND).consumesAction(),"entityCoreInsertionConsumed");
-            check(services.items().inLegacy(()->(byte)type.getMethod("getCore").invoke(first.legacyOrNull()))==0,"entityCallbackInstalledCore");
-            check(player.getMainHandItem().getCount()==1,"coreConsumedOnce");
+            int[] cores={0,7,8};
+            for(int index=0;index<cores.length;index++) {
+                int core=cores[index];var target=spawned.get(index==0?0:index+1);
+                player.setItemInHand(InteractionHand.MAIN_HAND,content.stack("Thaumcraft:ItemGolemCore",core,2,""));
+                check(player.interactOn(target,InteractionHand.MAIN_HAND).consumesAction(),"entityCoreInsertionConsumed"+core);
+                check(services.items().inLegacy(()->(byte)type.getMethod("getCore").invoke(target.legacyOrNull()))==core,"entityCallbackInstalledCore"+core);
+                check(player.getMainHandItem().getCount()==1,"coreConsumedOnce"+core);
+                if(core==7||core==8) {
+                    String task=core==7?"AIHarvestLogs":"AIUseItem";
+                    check(hasTask(target.legacyOrNull(),task),"coreTaskRegistered"+core);
+                    var data=target.saveWithoutId(new CompoundTag());target.discard();
+                    var reloaded=new LegacyHostedEntity(content.legacyEntityType(),level);reloaded.load(data);reloaded.setUUID(UUID.randomUUID());
+                    check(level.addFreshEntity(reloaded),"spawnCoreReload"+core);spawned.add(reloaded);
+                    reloaded.tick();
+                    check(!reloaded.isRemoved()&&reloaded.legacyOrNull()!=null,"coreReloadWithPlayerAlive"+core);
+                    check(hasTask(reloaded.legacyOrNull(),task),"coreReloadTaskRegistered"+core);
+                }
+            }
             // A reload has no original instance until interact restores it; binding must use the new host entity ID.
             var saved=second.saveWithoutId(new CompoundTag());second.discard();
             var restored=new LegacyHostedEntity(content.legacyEntityType(),level);restored.load(saved);restored.setUUID(UUID.randomUUID());
@@ -101,6 +130,15 @@ final class GolemHostSmokeProbe {
             } catch(Exception failure) { throw new IllegalStateException(failure); }
             LogUtils.getLogger().info("MFCL_GOLEM_SMOKE_DONE: {}",proof);server.halt(false);
         }
+    }
+
+    private boolean hasTask(Object golem,String name) throws Exception {
+        return content.services().items().inLegacy(()->{
+            Object tasks=golem.getClass().getField("field_70714_bg").get(golem);
+            for(Object entry:(List<?>)tasks.getClass().getField("field_75782_a").get(tasks))
+                if(entry.getClass().getField("field_75733_a").get(entry).getClass().getSimpleName().equals(name))return true;
+            return false;
+        });
     }
 
     private void bound(ItemStack bell,LegacyHostedEntity target,int index,String name) throws Exception {

@@ -52,6 +52,9 @@ public final class ModernContentBridge {
     private final LegacyContentPack pack;
     private final LegacyEnchantmentBridge enchantments;
     private final LegacyPotionBridge potions;
+    private final LegacyAttributeBridge attributes;
+    private final LegacyStatisticsBridge statistics;
+    private final LegacyVillagerBridge villagers;
     private final HostToolStacks hostTools;
     private final HostInventoryStacks hostInventoryStacks;
     private final CreativeTabBridge creative;
@@ -65,6 +68,9 @@ public final class ModernContentBridge {
 
     private ModernContentBridge(LegacyServices services) throws Exception {
         this.services = services;
+        this.attributes = new LegacyAttributeBridge(services);
+        this.statistics = new LegacyStatisticsBridge(services);
+        this.villagers = new LegacyVillagerBridge(this);
         this.enchantments = new LegacyEnchantmentBridge(this);
         this.potions = new LegacyPotionBridge(this);
         try (var context = new LegacyInventoryContext(services)) {
@@ -83,6 +89,9 @@ public final class ModernContentBridge {
         LogUtils.getLogger().info("MFCL content: generating resource pack");
         net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: Generating legacy resource pack");
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
+        statistics.generate(pack);
+        villagers.generateSkins(pack);
+        LegacyChestLoot.generate(pack);
         potions.generateIcons();
         LegacyBiomePack.generate(pack,services.biomes());
         LegacyDimensionPack.generate(pack,services.dimensions());
@@ -120,10 +129,12 @@ public final class ModernContentBridge {
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::arrowLoose);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
+            bus.addListener(bridge.attributes::players);
             LevelWorldBridge.install(bridge);
             bridge.droppedItems = new HostDroppedItems(bridge);
             LegacyCommands.install(bridge);
             bridge.players = new HostPlayers(bridge);
+            new LegacySpawnBridge(bridge);
             HostCrossbowProjectiles.install(bridge);
             LogUtils.getLogger().info("MFCL content barrier: {} blocks, {} items declared before modern registration", bridge.declarations.blocks().size(), bridge.declarations.items().size());
             LogUtils.getLogger().info("MFCL legacy static models: {} items custom-rendered", bridge.declarations.customItems().size());
@@ -144,6 +155,9 @@ public final class ModernContentBridge {
     public LegacyItemUse itemUse() {return itemUse;}
     public LegacyEnchantmentBridge enchantments() {return enchantments;}
     public LegacyPotionBridge potions() {return potions;}
+    public LegacyAttributeBridge attributes() {return attributes;}
+    public LegacyStatisticsBridge statistics() {return statistics;}
+    public LegacyVillagerBridge villagers() {return villagers;}
     public LegacyCrafting crafting() {return crafting;}
     public LegacyContentPack pack() { return pack; }
     public CreativeTabBridge creative() { return creative; }
@@ -369,6 +383,10 @@ public final class ModernContentBridge {
         LegacyRegistryIds.remap(event.getMappings(Registries.BLOCK,"mfcl"),blocks);
     }
     private void register(RegisterEvent event) {
+        LegacyChestLoot.register(event);
+        attributes.register(event);
+        statistics.register(event);
+        villagers.register(event);
         enchantments.register(event);
         potions.register(event);
         event.register(Registries.BIOME_SOURCE,registry->registry.register(ResourceLocation.parse("mfcl:thaumcraft_biomes"),github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftBiomeSource.CODEC));
@@ -1360,11 +1378,14 @@ public final class ModernContentBridge {
         if (transaction != null && transaction.level == level) transaction.effects.add(action);
         else action.run();
     }
+    Integer statistic(net.minecraft.server.level.ServerPlayer player,String id){var transaction=placement.get();if(transaction!=null&&transaction.level==player.level()){var values=transaction.statistics.get(player.getUUID());if(values!=null&&values.containsKey(id))return values.get(id);}return statistics.read(player,id);}
+    void statistic(net.minecraft.server.level.ServerPlayer player,String id,int value){var transaction=placement.get();if(transaction!=null&&transaction.level==player.level())transaction.statistics.computeIfAbsent(player.getUUID(),key->new HashMap<>()).put(id,value);afterCommit(player.level(),()->statistics.write(player,id,value));}
     private final class PlacementTransaction implements AutoCloseable {
         private record Before(BlockState state, CompoundTag tile) {}
         private final Level level;
         private final Map<BlockPos,Before> before = new LinkedHashMap<>();
         private final List<Runnable> effects = new ArrayList<>();
+        private final Map<java.util.UUID,Map<String,Integer>> statistics=new HashMap<>();
         private boolean committed;
         PlacementTransaction(Level level) {
             if (placement.get() != null) throw new IllegalStateException("Nested legacy placement");

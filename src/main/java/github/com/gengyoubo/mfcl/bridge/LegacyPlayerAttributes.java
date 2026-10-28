@@ -16,12 +16,17 @@ public final class LegacyPlayerAttributes {
         var loader=actor.getClass().getClassLoader();var entity=loader.loadClass("net.minecraft.entity.Entity");
         var host=LegacyWorlds.hostOrNull(entity.getField("field_70170_p").get(actor));
         UUID id=(UUID)entity.getMethod("func_110124_au").invoke(actor);
-        var values=host==null?null:host.attributes(id);if(values==null){STATES.remove(actor);return;}
+        var values=host==null||id==null?null:host.attributes(id);if(values==null){STATES.remove(actor);return;}
         Object map=actor.getClass().getMethod("func_110140_aT").invoke(actor);
         var type=loader.loadClass("net.minecraft.entity.ai.attributes.IAttributeInstance");
         var modifier=loader.loadClass("net.minecraft.entity.ai.attributes.AttributeModifier");
         for(var value:values){
-            Object attribute=map.getClass().getMethod("func_111152_a",String.class).invoke(map,value.name());if(attribute==null)continue;
+            Object attribute=map.getClass().getMethod("func_111152_a",String.class).invoke(map,value.name());
+            if(attribute==null)for(var candidate:LegacyRegistrations.attributes(loader)){
+                var original=loader.loadClass("net.minecraft.entity.ai.attributes.IAttribute");
+                if(value.name().equals(original.getMethod("func_111108_a").invoke(candidate.value()))){attribute=map.getClass().getMethod("func_111150_b",original).invoke(map,candidate.value());break;}
+            }
+            if(attribute==null)continue;
             type.getMethod("func_111128_a",double.class).invoke(attribute,value.base());type.getMethod("func_142049_d").invoke(attribute);
             for(var m:value.modifiers()){
                 Object original=modifier.getConstructor(UUID.class,String.class,double.class,int.class).newInstance(m.id(),m.name(),m.amount(),m.operation());

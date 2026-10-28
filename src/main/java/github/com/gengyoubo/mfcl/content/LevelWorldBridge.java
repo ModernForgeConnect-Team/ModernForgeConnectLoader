@@ -230,7 +230,7 @@ public final class LevelWorldBridge {
             }
             @Override public boolean spawnLegacyEntity(Object entity) {
                 check();
-                try { var hosted = LegacyHostedEntity.host(content, level, entity); content.afterCommit(level, () -> level.addFreshEntity(hosted)); return true; }
+                try { if(content.villagers().spawn(entity,level))return true;var hosted = LegacyHostedEntity.host(content, level, entity); content.afterCommit(level, () -> level.addFreshEntity(hosted)); return true; }
                 catch (Exception failure) { throw new IllegalStateException("Cannot host original entity " + entity.getClass().getName(), failure); }
             }
             @Override public Object hostedLegacyEntity(java.util.UUID id) {
@@ -271,6 +271,8 @@ public final class LevelWorldBridge {
             @Override public void addEffect(UUID id,github.com.gengyoubo.mfcl.bridge.LegacyPlayerBody.Effect state) {
                 check();if(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,()->content.potions().apply(target,state));
             }
+            @Override public Integer statistic(UUID id,String originalId){check();var player=level.getPlayerByUUID(id);return player instanceof net.minecraft.server.level.ServerPlayer server?content.statistic(server,originalId):null;}
+            @Override public void statistic(UUID id,String originalId,int value){check();var player=level.getPlayerByUUID(id);if(player instanceof net.minecraft.server.level.ServerPlayer server)content.statistic(server,originalId,value);}
             @Override public void heal(UUID id,float amount) {
                 check();if(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,()->target.heal(amount));
             }

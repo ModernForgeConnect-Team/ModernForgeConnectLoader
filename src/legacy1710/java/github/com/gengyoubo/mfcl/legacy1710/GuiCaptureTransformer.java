@@ -87,6 +87,11 @@ public final class GuiCaptureTransformer implements IClassTransformer {
                 } else if(m.name.equals("registerMessage")&&m.desc.startsWith("(Lcpw/mods/fml/common/network/simpleimpl/IMessageHandler;")) {
                     InsnList register=new InsnList();register.add(new VarInsnNode(Opcodes.ALOAD,0));register.add(new VarInsnNode(Opcodes.ALOAD,1));register.add(new VarInsnNode(Opcodes.ALOAD,2));register.add(new VarInsnNode(Opcodes.ILOAD,3));register.add(new VarInsnNode(Opcodes.ALOAD,4));
                     register.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"register","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Class;ILjava/lang/Object;)V",false));m.instructions.insert(register);
+                } else if(m.name.equals("sendToAll")||m.name.equals("sendToDimension")||m.name.equals("sendToAllAround")) {
+                    InsnList send=new InsnList();send.add(new VarInsnNode(Opcodes.ALOAD,0));send.add(new VarInsnNode(Opcodes.ALOAD,1));
+                    int mode=m.name.equals("sendToAll")?0:m.name.equals("sendToDimension")?1:2;
+                    if(mode==0)send.add(new InsnNode(Opcodes.ACONST_NULL));else if(mode==1){send.add(new VarInsnNode(Opcodes.ILOAD,2));send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,"java/lang/Integer","valueOf","(I)Ljava/lang/Integer;",false));}else send.add(new VarInsnNode(Opcodes.ALOAD,2));
+                    send.add(new InsnNode(Opcodes.ICONST_0+mode));send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"distribute","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Z",false));send.add(new InsnNode(Opcodes.POP));send.add(new InsnNode(Opcodes.RETURN));m.instructions=send;m.tryCatchBlocks.clear();if(m.localVariables!=null)m.localVariables.clear();
                 } else if(m.name.equals("sendToServer")) {
                     InsnList send=new InsnList();LabelNode original=new LabelNode();send.add(new VarInsnNode(Opcodes.ALOAD,0));send.add(new VarInsnNode(Opcodes.ALOAD,1));
                     send.add(new MethodInsnNode(Opcodes.INVOKESTATIC,packets,"sendToServer","(Ljava/lang/Object;Ljava/lang/Object;)Z",false));send.add(new JumpInsnNode(Opcodes.IFEQ,original));send.add(new InsnNode(Opcodes.RETURN));send.add(original);send.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));m.instructions.insert(send);

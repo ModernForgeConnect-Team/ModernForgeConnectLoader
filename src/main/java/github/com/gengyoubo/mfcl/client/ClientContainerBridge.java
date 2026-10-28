@@ -21,6 +21,7 @@ public final class ClientContainerBridge {
     private static ClientContainerBridge active;
     public static ClientContainerBridge active(){return active;}
     public static void install(LegacyServices services) {
+        LegacyPackets.clientSender(services.loader(),message->{var mc=Minecraft.getInstance();if(mc.player==null||mc.getConnection()==null)return false;if(!mc.isSameThread())throw new IllegalStateException("Original client packets require the native client thread");github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendLegacyPacket(message);return true;});
         if(!LegacyScreens.guiBridgeEnabled())return;
         var bridge=new ClientContainerBridge(services);active=bridge;
         MinecraftForge.EVENT_BUS.addListener(bridge::init);

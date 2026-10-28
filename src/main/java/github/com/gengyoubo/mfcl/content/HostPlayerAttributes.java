@@ -6,14 +6,15 @@ import net.minecraft.world.entity.player.Player;
 import java.util.*;
 
 final class HostPlayerAttributes {
-    static Attribute type(String name){return TYPES.get(name);}
+    static Attribute type(String name){var vanilla=TYPES.get(name);var content=ModernContentBridge.active();return vanilla!=null?vanilla:content==null?null:content.attributes().type(name);}
     private static final Map<String,Attribute> TYPES=Map.of(
             "generic.maxHealth",Attributes.MAX_HEALTH,"generic.followRange",Attributes.FOLLOW_RANGE,
             "generic.knockbackResistance",Attributes.KNOCKBACK_RESISTANCE,"generic.movementSpeed",Attributes.MOVEMENT_SPEED,
             "generic.attackDamage",Attributes.ATTACK_DAMAGE);
     static List<HostWorldAccess.Attribute> read(Player player){
         var values=new ArrayList<HostWorldAccess.Attribute>();
-        TYPES.forEach((name,type)->{
+        var types=new LinkedHashMap<>(TYPES);var content=ModernContentBridge.active();if(content!=null)types.putAll(content.attributes().types());
+        types.forEach((name,type)->{
             var instance=player.getAttribute(type);if(instance==null)return;
             var permanent=new HashSet<UUID>();for(var tag:instance.save().getList("Modifiers",10))permanent.add(((net.minecraft.nbt.CompoundTag)tag).getUUID("UUID"));
             var modifiers=instance.getModifiers().stream().map(m->new HostWorldAccess.Modifier(m.getId(),m.getName(),m.getAmount(),m.getOperation().toValue(),permanent.contains(m.getId()))).toList();
@@ -23,7 +24,7 @@ final class HostPlayerAttributes {
     static void apply(Player player,List<HostWorldAccess.Attribute> before,List<HostWorldAccess.Attribute> after){
         for(var next:after){
             var prior=before.stream().filter(a->a.name().equals(next.name())).findFirst().orElse(null);
-            var type=TYPES.get(next.name());if(prior==null||type==null)continue;
+            var type=type(next.name());if(prior==null||type==null)continue;
             var instance=player.getAttribute(type);if(instance==null)continue;
             if(prior.base()!=next.base())instance.setBaseValue(next.base());
             var ids=new HashSet<UUID>();prior.modifiers().forEach(m->ids.add(m.id()));next.modifiers().forEach(m->ids.add(m.id()));

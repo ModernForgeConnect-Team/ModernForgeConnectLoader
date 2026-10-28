@@ -82,7 +82,7 @@ final class LegacyDimensionHost {
         finally{active.remove(key);}
     }
     private void chunkLoaded(ChunkEvent.Load event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || !mirrored(level)) return;
+        if (!(event.getLevel() instanceof ServerLevel level) || !mirrored(level)&&!event.isNewChunk()) return;
         long chunk = event.getChunk().getPos().toLong();
         synchronized (pending) { pending.computeIfAbsent(level, ignored -> new LongLinkedOpenHashSet()).add(chunk); }
     }
@@ -95,7 +95,10 @@ final class LegacyDimensionHost {
         // Marked first: a generator that fails would otherwise be retried on every load.
         done.chunks.add(chunk); done.setDirty();
         boolean outer = generating; generating = true;
-        try { terrain(level,x,z); generation.populate(level, x, z); }
+        try {
+            if(mirrored(level)){terrain(level,x,z);generation.populate(level,x,z);}
+            else content.logicTransaction(level,new net.minecraft.core.BlockPos(x<<4,64,z<<4),()->{generation.registered(level,x,z);return null;},false);
+        }
         catch (Exception | LinkageError failure) { LogUtils.getLogger().error("MFCL original population of chunk [{}, {}] in {} failed", x, z, level.dimension().location(), failure); }
         finally { generating = outer; }
     }
@@ -130,7 +133,7 @@ final class LegacyDimensionHost {
                 synchronized (pending) { if (queue.isEmpty()) break; chunk = queue.removeFirstLong(); }
                 if(populated(level).chunks.contains(chunk)||level.getChunkSource().getChunkNow(ChunkPos.getX(chunk),ChunkPos.getZ(chunk))==null)continue;
                 // Feature lookups may load neighboring chunks. Do not decorate those endlessly away from players.
-                if(content.services().dimensions().hasTerrain(level.dimension().location().toString())
+                if((!mirrored(level)||content.services().dimensions().hasTerrain(level.dimension().location().toString()))
                         &&level.getChunkSource().chunkMap.getPlayers(new ChunkPos(chunk),false).isEmpty()) {
                     synchronized(pending){queue.add(chunk);}continue;
                 }

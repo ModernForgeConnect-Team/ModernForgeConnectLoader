@@ -98,6 +98,8 @@ public interface HostWorldAccess {
     default void heal(java.util.UUID target,float amount) { }
     default void removeEffect(java.util.UUID target,int potion) { }
     default void clearEffects(java.util.UUID target) { }
+    default Integer statistic(java.util.UUID player,String originalId) { return null; }
+    default void statistic(java.util.UUID player,String originalId,int value) { }
     default void swing(java.util.UUID entity) { }
     /** Server PvP and team friendly-fire rules for an old player's canAttackPlayer callback. */
     default boolean canAttackPlayer(java.util.UUID attacker,java.util.UUID target) { return false; }

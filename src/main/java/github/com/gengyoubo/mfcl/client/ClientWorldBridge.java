@@ -103,6 +103,7 @@ public final class ClientWorldBridge {
                         var pos = result.getBlockPos();
                         return new HostWorldAccess.Hit(pos.getX(), pos.getY(), pos.getZ(), result.getDirection().get3DDataValue(), result.getLocation().x, result.getLocation().y, result.getLocation().z);
                     }
+                    @Override public Integer statistic(java.util.UUID id,String originalId){var player=Minecraft.getInstance().player;var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();var stat=content==null?null:content.statistics().statistic(originalId);return player==null||stat==null||!player.getUUID().equals(id)?null:player.getStats().getValue(stat);}
                     @Override public java.util.List<LegacyPlayerBody.Effect> effects(java.util.UUID id){
                         var player=next.getPlayerByUUID(id);var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
                         return player==null||content==null?java.util.List.of():content.potions().snapshot(player);

@@ -4,6 +4,8 @@ TC4 golems live inside `LegacyHostedEntity`, which extends the modern `Entity` r
 
 The envelope now forwards right-clicks through the shared inventory, packet and menu transaction. The original entity's `interactFirst` runs first; if it declines, the original item's living-target callback runs when the original target is living. This also permits the golem's own core-insertion callback and empty-hand interaction. Main/off-hand writes return to the correct host slot, and original entity state and DataWatcher changes are synchronized after the interaction. Interaction errors are logged without discarding the golem.
 
+TC4's chop and use cores create Forge fake players with name-only `GameProfile`s. The shared fake-player bridge now assigns these profiles a stable UUID from `MFCL:FakePlayer:` plus their name (UTF-8), before constructing the actor or looking up host player state. Different names get separate cached actors; explicit profile UUIDs are preserved. Attribute synchronization also skips actors without a UUID. This fixes the null UUID exception during core installation and NBT restoration with players online.
+
 ## Verification
 
 Use TC4 4.2.3.5 and Baubles 1.0.1.10 in a disposable game's `mods/1.7.10/`, with its EULA accepted:
@@ -18,3 +20,5 @@ Use TC4 4.2.3.5 and Baubles 1.0.1.10 in a disposable game's `mods/1.7.10/`, with
 ```
 
 Read `build/golem-game/logs/mfcl/golem-smoke.json`; the Gradle exit code alone does not establish success. The probe dispatches through real `Player.interactOn` and checks survival/creative main-hand binding, sneaking rebinding, off-hand binding and inventory conservation, original ID/home/facing/markers, bell NBT round-trip, original entity core insertion and consumption, lazy restoration of a saved golem before interaction, empty-hand safety and a vanilla non-golem negative control. It does not automate graphical clicks or the client marker overlay.
+
+The fake-player regression also checks name-only profile caching, separation of different names, preservation of explicit UUIDs, and core metadata 7/8 installation, single-item consumption, AI registration and NBT restoration while a host player is registered. It does not establish completion of natural chopping or item-use tasks.

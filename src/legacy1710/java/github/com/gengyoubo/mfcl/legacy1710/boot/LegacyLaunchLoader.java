@@ -38,6 +38,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
                 "net.minecraftforge.classloading.", "net.minecraftforge.transformers.")) addTransformerExclusion(prefix);
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ModernJavaTransformer");
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer");
+        registerTransformer("github.com.gengyoubo.mfcl.legacy1710.RegistryCaptureTransformer");
         registerTransformer(REDIRECTS);
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.DisplayPlatformAdapter");

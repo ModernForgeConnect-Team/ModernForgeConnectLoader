@@ -13,6 +13,10 @@ public final class LegacyPackets {
     private static final Map<Object,Channel> CHANNELS = Collections.synchronizedMap(new IdentityHashMap<>());
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
     private static final ThreadLocal<Object> WORLD=new ThreadLocal<>();
+    private static final Map<ClassLoader,java.util.function.Predicate<Message>> CLIENT_SENDERS=new WeakHashMap<>();
+    private static final Map<ClassLoader,Object> CLIENT_CONTEXTS=new WeakHashMap<>();
+    public static synchronized void clientSender(ClassLoader loader,java.util.function.Predicate<Message> sender){CLIENT_SENDERS.put(loader,sender);}
+    private static synchronized java.util.function.Predicate<Message> clientSender(ClassLoader loader){return CLIENT_SENDERS.get(loader);}
     static AutoCloseable world(Object world){
         Object before=WORLD.get();WORLD.set(world);
         return ()->{if(before==null)WORLD.remove();else WORLD.set(before);};
@@ -82,7 +86,7 @@ public final class LegacyPackets {
     }
     public static boolean sendToServer(Object wrapper,Object message) throws Exception {
         if(LegacyDeviceInput.send(wrapper,message))return true;
-        Scope scope=CURRENT.get();if(scope==null||scope.completion==null)return false;
+        Scope scope=CURRENT.get();if(scope==null||scope.completion==null){var sender=clientSender(message.getClass().getClassLoader());return sender!=null&&sender.test(encode(wrapper,message,"SERVER"));}
         if(!scope.completion.test(message))throw new UnsupportedOperationException("Unexpected packet during scan: "+message.getClass().getName());
         scope.scanRequest=message;return true;
     }
@@ -157,14 +161,14 @@ public final class LegacyPackets {
             Class<?> context=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.MessageContext"),side=loader.loadClass("cpw.mods.fml.relauncher.Side");
             var constructor=context.getDeclaredConstructor(loader.loadClass("net.minecraft.network.INetHandler"),side);constructor.setAccessible(true);
             Object reply=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessageHandler").getMethod("onMessage",messageType,context).invoke(handler.instance,packet,constructor.newInstance(connection,side.getField("SERVER").get(null)));
-            if(reply!=null)throw new UnsupportedOperationException("Original device packet returned an unsupported reply");
+            if(reply!=null)sendTo(CHANNELS.entrySet().stream().filter(entry->entry.getValue()==channel).map(Map.Entry::getKey).findFirst().orElseThrow(),reply,player);
         }finally{
             if(previousWorld==null)worlds.remove(dimension);else worlds.put(dimension,previousWorld);
             if(previousPlayer==null)SERVER_PLAYER.remove();else SERVER_PLAYER.set(previousPlayer);
         }
     }
     public static boolean sendTo(Object wrapper, Object message, Object player) throws Exception {
-        Scope scope=CURRENT.get();if(scope==null)return false;
+        Scope scope=CURRENT.get();if(scope==null){var loader=player.getClass().getClassLoader();Object world=loader.loadClass("net.minecraft.entity.Entity").getField("field_70170_p").get(player);var host=LegacyWorlds.hostOrNull(world);if(host==null||host.clientSide())return false;host.sendPacket((UUID)player.getClass().getMethod("func_110124_au").invoke(player),encode(wrapper,message,"CLIENT"));return true;}
         var loader=message.getClass().getClassLoader();
         var playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
         Object profile=playerType.getMethod("func_146103_bH").invoke(player);
@@ -201,11 +205,32 @@ public final class LegacyPackets {
                 messageType.getMethod("fromBytes",bufferType).invoke(packet,buffer);
                 Class<?> contextType=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.MessageContext"),sideType=loader.loadClass("cpw.mods.fml.relauncher.Side");
                 var constructor=contextType.getDeclaredConstructor(loader.loadClass("net.minecraft.network.INetHandler"),sideType);constructor.setAccessible(true);
-                Object context=constructor.newInstance(null,sideType.getField("CLIENT").get(null));
+                if((int)bufferType.getMethod("readableBytes").invoke(buffer)!=0)throw new IllegalArgumentException("Trailing original client packet data");
+                Object context=constructor.newInstance(clientContext(loader),sideType.getField("CLIENT").get(null));
                 Object reply=loader.loadClass("cpw.mods.fml.common.network.simpleimpl.IMessageHandler").getMethod("onMessage",messageType,contextType).invoke(handler.instance,packet,context);
-                if(reply!=null)throw new UnsupportedOperationException("Old client handler needs a server reply bridge");
+                if(reply!=null){var sender=clientSender(loader);if(sender==null||!sender.test(encode(CHANNELS.entrySet().stream().filter(entry->entry.getValue()==channel).map(Map.Entry::getKey).findFirst().orElseThrow(),reply,"SERVER")))throw new UnsupportedOperationException("No active native client transport for original reply");}
                 return null;
             } finally {bufferType.getMethod("release").invoke(buffer);}
         });
+    }
+    private static Object clientContext(ClassLoader loader)throws Exception {
+        Object connection=CLIENT_CONTEXTS.get(loader);var mcType=loader.loadClass("net.minecraft.client.Minecraft");Object mc=mcType.getMethod("func_71410_x").invoke(null),player=mcType.getField("field_71439_g").get(mc);
+        if(connection==null){var manager=loader.loadClass("net.minecraft.network.NetworkManager");Object network=manager.getConstructor(boolean.class).newInstance(true);
+            var type=loader.loadClass("net.minecraft.client.network.NetHandlerPlayClient");
+            connection=type.getConstructor(mcType,loader.loadClass("net.minecraft.client.gui.GuiScreen"),manager).newInstance(mc,null,network);CLIENT_CONTEXTS.put(loader,connection);
+        }
+        var world=connection.getClass().getDeclaredField("field_147300_g");world.setAccessible(true);world.set(connection,mcType.getField("field_71441_e").get(mc));
+        if(player!=null){var handler=loader.loadClass("net.minecraft.client.entity.EntityClientPlayerMP").getField("field_71174_a");handler.setAccessible(true);handler.set(player,connection);}
+        return connection;
+    }
+    public static boolean distribute(Object wrapper,Object message,Object target,int mode)throws Exception {
+        var loader=message.getClass().getClassLoader();var encoded=encode(wrapper,message,"CLIENT");
+        Integer dimension=null;double x=0,y=0,z=0,range=0;
+        if(mode==1)dimension=(Integer)target;
+        if(mode==2){var type=target.getClass();dimension=type.getField("dimension").getInt(target);x=type.getField("x").getDouble(target);y=type.getField("y").getDouble(target);z=type.getField("z").getDouble(target);range=type.getField("range").getDouble(target);}
+        for(Object world:LegacyWorlds.serverWorlds(loader)){
+            var host=LegacyWorlds.access(world);if(dimension!=null&&host.legacyDimensionId()!=dimension)continue;
+            for(var player:host.players()){double dx=player.x()-x,dy=player.y()-y,dz=player.z()-z;if(mode!=2||dx*dx+dy*dy+dz*dz<=range*range)host.sendPacket(player.id(),encoded);}
+        }return true;
     }
 }
