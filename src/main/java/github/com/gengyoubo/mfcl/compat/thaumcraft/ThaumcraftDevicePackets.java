@@ -47,8 +47,29 @@ final class ThaumcraftDevicePackets {
         LegacyPacketTargets.requirePlayerName(packet,player,"username","Research completion");
         LegacyPacketTargets.requireDimension(packet,player,"dim","Research completion");
         String key=(String)declared(packet,"key");
-        var research=player.getClass().getClassLoader().loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class);
-        if(key==null||research.invoke(null,key)==null)throw new IllegalArgumentException("Research completion targets unknown research");
+        var loader=player.getClass().getClassLoader();
+        Object research=key==null?null:loader.loadClass("thaumcraft.api.research.ResearchCategories").getMethod("getResearch",String.class).invoke(null,key);
+        if(research==null)throw new IllegalArgumentException("Research completion targets unknown research");
+        if(type==0)requireResearchAspects(loader,player,research);
+    }
+    /**
+     * TC4's server handler charges the research's aspects with addAspectPool, which ignores a shortfall, and only the
+     * client GUI checks the pool. Without this check a forged packet unlocks any research whose prerequisites are met for free.
+     */
+    private static void requireResearchAspects(ClassLoader loader,Object player,Object research) throws Exception {
+        Object tags=research.getClass().getField("tags").get(research);
+        if(tags==null)return;
+        Object proxy=ThaumcraftReflection.proxy(loader);
+        Object knowledge=proxy.getClass().getMethod("getPlayerKnowledge").invoke(proxy);
+        String name=LegacyObjects.playerName(player);
+        Class<?> aspectType=loader.loadClass("thaumcraft.api.aspects.Aspect");
+        var getAmount=tags.getClass().getMethod("getAmount",aspectType);
+        var getPool=knowledge.getClass().getMethod("getAspectPoolFor",String.class,aspectType);
+        for(Object aspect:(Object[])tags.getClass().getMethod("getAspects").invoke(tags)) {
+            int cost=(int)getAmount.invoke(tags,aspect);
+            if(cost>0&&((Number)getPool.invoke(knowledge,name,aspect)).intValue()<cost)
+                throw new IllegalArgumentException("Research completion lacks the required aspects");
+        }
     }
     private static Object target(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
         LegacyPacketTargets.requireDevice(packet,device,"Thaumcraft",10,"x","y","z","Research action");

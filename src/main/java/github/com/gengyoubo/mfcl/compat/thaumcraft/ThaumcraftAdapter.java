@@ -19,7 +19,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftFocusPouchAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftHoverHarnessContainerAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftHoverHarnessAdapter",
-                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter");
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftPortalAdapter",
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftTrunkInventoryAdapter");
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
         this.services = services;
