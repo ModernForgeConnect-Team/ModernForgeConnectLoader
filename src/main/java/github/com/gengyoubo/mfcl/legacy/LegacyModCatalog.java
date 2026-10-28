@@ -12,7 +12,9 @@ public record LegacyModCatalog(String targetMinecraft, String sourceMinecraft, L
     private static final Set<String> RUNTIME_COMPONENTS = Set.of("mcp", "FML", "Forge");
     private static final Pattern COMPLETION = Pattern.compile("Mod loading complete - (\\d+) mods loaded");
 
-    public record Entry(LegacyMod mod, String file, boolean loaded) { }
+    public record Entry(LegacyMod mod, String file, boolean loaded, Path archive) {
+        public Entry(LegacyMod mod, String file, boolean loaded) { this(mod, file, loaded, null); }
+    }
 
     public LegacyModCatalog { entries = List.copyOf(entries); }
 
@@ -21,7 +23,7 @@ public record LegacyModCatalog(String targetMinecraft, String sourceMinecraft, L
         Set<String> successful = report.legacyFmlStarted() ? Set.copyOf(loadedIds) : Set.of();
         for (var archive : report.archives()) for (var mod : archive.mods()) {
             if (!RUNTIME_COMPONENTS.contains(mod.id())) entries.putIfAbsent(mod.id(),
-                    new Entry(mod, Path.of(archive.file()).getFileName().toString(), successful.contains(mod.id())));
+                    new Entry(mod, Path.of(archive.file()).getFileName().toString(), successful.contains(mod.id()), Path.of(archive.file())));
         }
         // Coremods can supply containers which have no statically discoverable @Mod or metadata.
         successful.stream().filter(id -> !RUNTIME_COMPONENTS.contains(id)).sorted().forEach(id ->

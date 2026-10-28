@@ -226,7 +226,7 @@ public final class LegacyDiscovery {
             mods.put(mod.id(), metadata == null ? mod : new LegacyMod(mod.id(),
                     mod.name().isBlank() ? metadata.name() : mod.name(), mod.version().isBlank() ? metadata.version() : mod.version(),
                     mod.minecraftVersion().isBlank() ? metadata.minecraftVersion() : mod.minecraftVersion(),
-                    mod.entryClass(), metadata.metadataResource(), mod.requiredMods()));
+                    mod.entryClass(), metadata.metadataResource(), mod.requiredMods(), metadata.logoFile()));
         }
         return new LegacyArchive(path.toAbsolutePath().normalize().toString(), beforeHash, List.copyOf(mods.values()),
                 corePlugin, constantContainers.getOrDefault(corePlugin, ""), ats, classes, List.copyOf(requirements), List.copyOf(requiredClasses));
@@ -256,7 +256,7 @@ public final class LegacyDiscovery {
             }
             String id = fields.getOrDefault("modId", "");
             if (straightLine && allocations == 1 && !id.isBlank()) return new LegacyMod(id, fields.getOrDefault("name", id),
-                    fields.getOrDefault("version", ""), fields.getOrDefault("mcversion", ""), "", container + "#ModMetadata", List.of());
+                    fields.getOrDefault("version", ""), fields.getOrDefault("mcversion", ""), "", container + "#ModMetadata", List.of(), fields.getOrDefault("logoFile", ""));
         }
         return null;
     }
@@ -288,7 +288,7 @@ public final class LegacyDiscovery {
             List<String> dependencies = new ArrayList<>();
             JsonElement required = mod.get("dependencies");
             if (required != null && required.isJsonArray()) for (JsonElement dep : required.getAsJsonArray()) dependencies.add(dep.getAsString());
-            mods.add(new LegacyMod(id, string(mod, "name"), string(mod, "version"), string(mod, "mcversion"), "", resource, dependencies));
+            mods.add(new LegacyMod(id, string(mod, "name"), string(mod, "version"), string(mod, "mcversion"), "", resource, dependencies, string(mod, "logoFile")));
         }
     }
 

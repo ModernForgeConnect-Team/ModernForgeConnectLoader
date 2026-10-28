@@ -1,13 +1,17 @@
 package github.com.gengyoubo.mfcl.client;
 
 import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import github.com.gengyoubo.mfcl.legacy.LegacyMod;
 import github.com.gengyoubo.mfcl.legacy.LegacyModCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.client.gui.ModListScreen;
@@ -23,7 +27,9 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 import java.lang.reflect.Field;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.jar.JarFile;
 
 /** Adds display entries to Forge's screen, without registering legacy containers in modern FML. */
 public final class LegacyModListScreen extends ModListScreen {
@@ -32,17 +38,22 @@ public final class LegacyModListScreen extends ModListScreen {
     private DetailsPanel details;
     private LegacyInfo selection;
     private int renderedFrames;
+    private final Map<LegacyInfo, Logo> logos = new HashMap<>();
+    private record Logo(ResourceLocation texture, int width, int height) {
+        static final Logo NONE = new Logo(null, 0, 0);
+    }
 
     public static void install(LegacyModCatalog catalog) {
         List<LegacyInfo> entries = catalog.entries().stream().map(entry ->
-                new LegacyInfo(entry.mod(), entry.file(), catalog.sourceMinecraft(), entry.loaded(), entry.loaded() ? "" : catalog.failure())).toList();
+                new LegacyInfo(entry.mod(), entry.file(), catalog.sourceMinecraft(), entry.loaded(), entry.loaded() ? "" : catalog.failure(), entry.archive())).toList();
         if (entries.isEmpty()) return;
         LegacyRuntimeNotice.install(catalog);
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Opening event) -> {
             if (event.getNewScreen() != null && event.getNewScreen().getClass() == ModListScreen.class)
                 event.setNewScreen(new LegacyModListScreen(event.getCurrentScreen(), entries));
         });
-        if (Boolean.getBoolean("mfcl.test.modListSmoke")) ModListSmokeProbe.install(catalog, entries.get(0));
+        if (Boolean.getBoolean("mfcl.test.modListSmoke")) ModListSmokeProbe.install(catalog,
+                entries.stream().filter(info -> info.mod.id().equals("Thaumcraft")).findFirst().orElse(entries.get(0)));
     }
 
     private LegacyModListScreen(Screen parent, List<LegacyInfo> entries) {
@@ -112,12 +123,51 @@ public final class LegacyModListScreen extends ModListScreen {
         return super.mouseDragged(x, y, button, dx, dy);
     }
 
+    @Override public boolean mouseReleased(double x, double y, int button) {
+        boolean handled = details != null && details.mouseReleased(x, y, button);
+        return super.mouseReleased(x, y, button) || handled;
+    }
+
+    @Override public void removed() {
+        super.removed();
+        logos.values().stream().map(Logo::texture).filter(Objects::nonNull).forEach(Minecraft.getInstance().getTextureManager()::release);
+        logos.clear();
+    }
+
+    private Logo logo(LegacyInfo info) {
+        return logos.computeIfAbsent(info, key -> {
+            if (key.archive == null || key.mod.logoFile().isBlank()) return Logo.NONE;
+            // Read the declaring archive, preserving case and root resources such as TCLogo.png.
+            String path = key.mod.logoFile().replace('\\', '/');
+            while (path.startsWith("/")) path = path.substring(1);
+            try (var jar = new JarFile(key.archive.toFile())) {
+                var entry = jar.getJarEntry(path);
+                if (entry == null || entry.isDirectory()) return Logo.NONE;
+                try (var input = jar.getInputStream(entry)) {
+                    var image = NativeImage.read(input);
+                    int width = image.getWidth(), height = image.getHeight();
+                    var texture = new DynamicTexture(image);
+                    try {
+                        var id = Minecraft.getInstance().getTextureManager().register("mfcl_mod_logo", texture);
+                        return new Logo(id, width, height);
+                    } catch (RuntimeException failure) { texture.close(); throw failure; }
+                }
+            } catch (java.io.IOException | RuntimeException failure) {
+                com.mojang.logging.LogUtils.getLogger().warn("MFCL could not load logo {} from {}", path, key.archive, failure);
+                return Logo.NONE;
+            }
+        });
+    }
+
     private final class DetailsPanel extends ScrollPanel {
         private List<FormattedCharSequence> lines = List.of();
         private boolean visible;
+        private Logo logo = Logo.NONE;
         DetailsPanel(int left, int width, int height) { super(Minecraft.getInstance(), width, height, 6, left); }
         void set(LegacyInfo info) {
+            super.mouseReleased(0, 0, 0);
             visible = info != null; scrollDistance = 0;
+            logo = info == null ? Logo.NONE : LegacyModListScreen.this.logo(info);
             if (info == null) { lines = List.of(); return; }
             List<Component> text = new ArrayList<>(List.of(Component.literal(info.getDisplayName()),
                     Component.translatable("mfcl.mods.version", info.mod.version()),
@@ -133,12 +183,33 @@ public final class LegacyModListScreen extends ModListScreen {
             lines = List.copyOf(wrapped);
         }
         @Override public void render(GuiGraphics graphics, int x, int y, float partialTick) {
-            if (visible) super.render(graphics, x, y, partialTick);
+            if (visible) { clampScroll(); super.render(graphics, x, y, partialTick); }
         }
         @Override public boolean isMouseOver(double x, double y) { return visible && super.isMouseOver(x, y); }
-        @Override public boolean mouseScrolled(double x, double y, double delta) { return visible && super.mouseScrolled(x, y, delta); }
-        @Override protected int getContentHeight() { return lines.size() * font.lineHeight + 12; }
+        private int maxScroll() { return Math.max(0, getContentHeight() + border - height); }
+        private float scrollOffset() { return scrollDistance; }
+        private int scrollBarX() { return right - 3; }
+        private void clampScroll() { scrollDistance = Math.max(0, Math.min(maxScroll(), scrollDistance)); }
+        @Override public boolean mouseScrolled(double x, double y, double delta) {
+            if (!isMouseOver(x, y) || delta == 0 || maxScroll() == 0) return false;
+            scrollDistance -= delta * getScrollAmount(); clampScroll(); return true;
+        }
+        @Override public boolean mouseClicked(double x, double y, int button) {
+            if (!isMouseOver(x, y) || maxScroll() == 0) return false;
+            return super.mouseClicked(x, y, button);
+        }
+        @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
+            if (!visible || button != 0 || maxScroll() == 0) return false;
+            boolean handled = super.mouseDragged(x, y, button, dx, dy); clampScroll(); return handled;
+        }
+        @Override protected int getContentHeight() { return lines.size() * font.lineHeight + 12 + (logo.texture == null ? 0 : 56); }
         @Override protected void drawPanel(GuiGraphics graphics, int right, int y, Tesselator tess, int mouseX, int mouseY) {
+            if (logo.texture != null) {
+                RenderSystem.enableBlend();
+                RenderSystem.setShaderColor(1, 1, 1, 1);
+                graphics.blitInscribed(logo.texture, left + 6, y, Math.max(1, width - 18), 50, logo.width, logo.height, false, true);
+                y += 56;
+            }
             for (var line : lines) { graphics.drawString(font, line, left + 6, y, 0xFFFFFF, false); y += font.lineHeight; }
         }
         @Override public NarrationPriority narrationPriority() { return NarrationPriority.NONE; }
@@ -146,7 +217,7 @@ public final class LegacyModListScreen extends ModListScreen {
     }
 
     /** Presentation metadata only: never inserted into the host's actual mod/container registries. */
-    private record LegacyInfo(LegacyMod mod, String file, String gameVersion, boolean loaded, String failure) implements IModInfo {
+    private record LegacyInfo(LegacyMod mod, String file, String gameVersion, boolean loaded, String failure, Path archive) implements IModInfo {
         @Override public String getModId() { return mod.id(); }
         @Override public String getDisplayName() { return mod.name().isBlank() ? mod.id() : mod.name(); }
         @Override public ArtifactVersion getVersion() { return new DefaultArtifactVersion(mod.version().isBlank() ? "unknown" : mod.version()); }
@@ -158,7 +229,7 @@ public final class LegacyModListScreen extends ModListScreen {
         @Override public Map<String, Object> getModProperties() { return Map.of(); }
         @Override public Optional<URL> getUpdateURL() { return Optional.empty(); }
         @Override public Optional<URL> getModURL() { return Optional.empty(); }
-        @Override public Optional<String> getLogoFile() { return Optional.empty(); }
+        @Override public Optional<String> getLogoFile() { return Optional.of(mod.logoFile()).filter(value -> !value.isBlank()); }
         @Override public boolean getLogoBlur() { return false; }
         @Override public IConfigurable getConfig() {
             return new IConfigurable() {
@@ -210,6 +281,7 @@ public final class LegacyModListScreen extends ModListScreen {
                         require(screen.selection != null && screen.selection.loaded == target.loaded && screen.selection.gameVersion.equals(catalog.sourceMinecraft()), "Legacy version or load status incorrect");
                         screen.resize(mc, screen.width, screen.height);
                         require(screen.details.visible, "Legacy details lost on resize");
+                        verifyLogosAndScrolling(screen, target);
                         screen.children().stream().filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
                                 .map(net.minecraft.client.gui.components.EditBox.class::cast).findFirst().orElseThrow().setValue("");
                         stage = 4; frames = screen.renderedFrames;
@@ -224,14 +296,50 @@ public final class LegacyModListScreen extends ModListScreen {
                         stage = 6;
                     } else if (stage == 6 && screenshotSaved && mc.screen instanceof LegacyModListScreen screen) {
                         screen.onClose();
+                        require(screen.logos.isEmpty(), "Logo textures retained after closing the screen");
                         require(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen, "Mod list did not return to its parent");
-                        com.mojang.logging.LogUtils.getLogger().info("MFCL_MOD_LIST_SMOKE_PASS: combined modern/legacy entries, sort, search, version/load details, resize, modern details and return");
+                        com.mojang.logging.LogUtils.getLogger().info("MFCL_MOD_LIST_SMOKE_PASS: combined entries, sort, search, version/load details, real archive logos, bounded short/long scrolling, drag release, resize, texture cleanup, modern details and return");
                         stage = 99; mc.stop();
                     }
                 } catch (Throwable failure) {
                     com.mojang.logging.LogUtils.getLogger().error("MFCL_MOD_LIST_SMOKE_FAIL", failure); stage = 99; mc.stop();
                 }
             });
+        }
+        private static void verifyLogosAndScrolling(LegacyModListScreen screen, LegacyInfo target) {
+            var mc = Minecraft.getInstance();
+            for (var info : screen.legacyMods) {
+                var logo = screen.logo(info);
+                if (!info.mod.logoFile().isBlank()) require(logo.texture != null && logo.width > 0 && logo.height > 0, "Declared logo was not loaded: " + info.mod.id());
+                else require(logo.texture == null, "A mod without a declared logo borrowed another mod's image");
+            }
+            var texture = screen.logo(target).texture;
+            int width = screen.width, height = screen.height;
+            screen.resize(mc, 960, 540);
+            require(screen.details.maxScroll() == 0, "Short details unexpectedly overflow");
+            double x = screen.details.scrollBarX(), y = 40;
+            screen.mouseScrolled(x, y, -1000); screen.mouseScrolled(x, y, 1000);
+            screen.mouseClicked(x, y, 0); screen.mouseDragged(x, y + 100, 0, 0, 100); screen.mouseReleased(0, 0, 0);
+            require(screen.details.scrollOffset() == 0, "Non-scrollable details moved");
+            var longInfo = new LegacyInfo(target.mod, target.file, target.gameVersion, target.loaded, "Long diagnostic text for scroll testing. ".repeat(200), target.archive);
+            screen.details.set(longInfo);
+            require(screen.details.maxScroll() > 0, "Long details did not overflow");
+            require(screen.mouseClicked(x, y, 0), "Could not grab scrollbar");
+            screen.mouseDragged(x, y + 10000, 0, 0, 10000);
+            require(screen.details.scrollOffset() == screen.details.maxScroll(), "Dragging past bottom escaped scroll limit");
+            screen.mouseDragged(x, y, 0, 0, -10000);
+            require(screen.details.scrollOffset() == 0, "Could not drag back to top");
+            screen.mouseReleased(0, 0, 0);
+            require(!screen.mouseDragged(x, y + 100, 0, 0, 100) && screen.details.scrollOffset() == 0, "Dragging continued after release outside panel");
+            screen.mouseScrolled(x, y, -10000);
+            require(screen.details.scrollOffset() == screen.details.maxScroll(), "Wheel escaped bottom limit");
+            screen.mouseScrolled(x, y, 10000);
+            require(screen.details.scrollOffset() == 0, "Wheel did not return to top");
+            screen.mouseClicked(x, y, 0); screen.details.set(target);
+            require(!screen.mouseDragged(x, y + 100, 0, 0, 100) && screen.details.scrollOffset() == 0, "Selection retained old drag state");
+            screen.resize(mc, width, height);
+            require(Objects.equals(texture, screen.details.logo.texture), "Resize did not reuse the logo texture");
+            com.mojang.logging.LogUtils.getLogger().info("MFCL_MOD_LIST_LOGO_SCROLL_PASS: archive logos, no-logo fallback, short content, bottom/top drag and wheel bounds, outside release, selection reset and resize");
         }
         private static void verifyCounts(LegacyModCatalog catalog) {
             int modern = net.minecraftforge.fml.ModList.get().size();
