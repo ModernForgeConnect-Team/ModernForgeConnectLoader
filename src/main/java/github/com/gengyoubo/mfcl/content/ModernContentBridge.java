@@ -47,6 +47,8 @@ public final class ModernContentBridge {
     public HostRepresentations hostRepresentations() { return hostRepresentations; }
     private final ThreadLocal<PlacementTransaction> placement = new ThreadLocal<>();
     private final Map<String, Block> blocks = new LinkedHashMap<>();
+    private final Map<Block, LegacyContent.Block> reverseBlocks = new IdentityHashMap<>();
+    private final Map<String, github.com.gengyoubo.mfcl.api.spi.LegacyBlockProvider.NativeBlock> nativeBlocks = new HashMap<>();
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final Map<Item, LegacyContent.Item> reverseItems = new IdentityHashMap<>();
     private final LegacyContentPack pack;
@@ -392,10 +394,33 @@ public final class ModernContentBridge {
         event.register(Registries.BIOME_SOURCE,registry->registry.register(ResourceLocation.parse("mfcl:thaumcraft_biomes"),github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftBiomeSource.CODEC));
         event.register(Registries.BLOCK, registry -> {
             if (blocksRegistered) throw new IllegalStateException("Legacy block registration repeated");
+            var providerMap = new LinkedHashMap<String, github.com.gengyoubo.mfcl.api.spi.LegacyBlockProvider>();
+            for (var provider : github.com.gengyoubo.mfcl.api.LegacyBlockProviders.providers())
+                providerMap.put(provider.getClass().getName(), provider);
+            for (var provider : ServiceLoader.load(github.com.gengyoubo.mfcl.api.spi.LegacyBlockProvider.class,
+                    github.com.gengyoubo.mfcl.api.MfclApi.class.getClassLoader()))
+                providerMap.putIfAbsent(provider.getClass().getName(), provider);
+            var providers = providerMap.values();
             for (var entry : declarations.blocks()) {
                 if (BuiltInRegistries.BLOCK.containsKey(id(entry.key()))) throw new IllegalStateException("Host already owns block ID " + entry.key());
-                var block = entry.tileEntity() ? new MirroredTileBlock(entry) : new MirroredBlock(entry);
-                registry.register(id(entry.key()), block); blocks.put(entry.key(), block);
+                Block block = null;
+                for (var provider : providers) {
+                    var nativeBlock = provider.create(entry.key(), properties(entry),
+                            (level, pos, seed) -> displayTick(entry, (Level) level, (BlockPos) pos, seed));
+                    if (nativeBlock == null) continue;
+                    if (!entry.simple() || nativeBlocks.containsKey(entry.key()))
+                        throw new IllegalStateException("Unsupported or duplicate native block implementation: " + entry.key());
+                    if (!(nativeBlock.block() instanceof Block replacement) || !replacement.defaultBlockState().hasProperty(METADATA))
+                        throw new IllegalStateException("Native block must preserve the legacy_meta property: " + entry.key());
+                    for (int meta = 0; meta < 16; meta++) {
+                        if (!(nativeBlock.state(meta) instanceof BlockState state) || state.getBlock() != replacement
+                                || state.getValue(METADATA) != meta || nativeBlock.metadata(state) != meta)
+                            throw new IllegalStateException("Native block metadata round trip failed: " + entry.key() + "@" + meta);
+                    }
+                    nativeBlocks.put(entry.key(), nativeBlock); block = replacement;
+                }
+                if (block == null) block = entry.tileEntity() ? new MirroredTileBlock(entry) : new MirroredBlock(entry);
+                registry.register(id(entry.key()), block); blocks.put(entry.key(), block); reverseBlocks.put(block, entry);
             }
             blocksRegistered = true;
         });
@@ -406,7 +431,7 @@ public final class ModernContentBridge {
                 var properties = new Item.Properties().stacksTo(entry.maxDamage() > 0 ? 1 : entry.stackLimit());
                 if (entry.maxDamage() > 0) properties.durability(entry.maxDamage());
                 Item item = entry.blockKey() != null && blocks.containsKey(entry.blockKey())
-                        ? new MirroredBlockItem((MirroredBlock) blocks.get(entry.blockKey()), properties, entry)
+                        ? new MirroredBlockItem(blocks.get(entry.blockKey()), properties, entry)
                         : entry.armor() == null ? new MirroredItem(properties, entry)
                         : entry.armor().dyeable() ? new MirroredDyeableArmorItem(properties, entry) : new MirroredArmorItem(properties, entry);
                 registry.register(id(entry.key()), item); items.put(entry.key(), item); reverseItems.put(item, entry);
@@ -533,7 +558,11 @@ public final class ModernContentBridge {
     public HostWorldAccess.Block legacyBlock(BlockState state) {
         var represented = hostRepresentations.block(state);
         if (represented != null) return represented;
-        if (state.getBlock() instanceof MirroredBlock mirrored) return new HostWorldAccess.Block(mirrored.entry.key(), state.getValue(METADATA));
+        var declaration = reverseBlocks.get(state.getBlock());
+        if (declaration != null) {
+            var nativeBlock = nativeBlocks.get(declaration.key());
+            return new HostWorldAccess.Block(declaration.key(), nativeBlock == null ? state.getValue(METADATA) : nativeBlock.metadata(state));
+        }
         return hostBlocks.read(state);
     }
     public BlockState modernBlock(HostWorldAccess.Block old) {
@@ -543,8 +572,10 @@ public final class ModernContentBridge {
         if(vanilla!=null)return vanilla;
         Block block = blocks.get(old.legacyKey());
         if (block != null) {
-            if (!canPlace(((MirroredBlock) block).entry, old.metadata())) throw new UnsupportedOperationException("Legacy special rendering/placement bridge is pending: " + old.legacyKey() + "@" + old.metadata());
+            if (!canPlace(reverseBlocks.get(block), old.metadata())) throw new UnsupportedOperationException("Legacy special rendering/placement bridge is pending: " + old.legacyKey() + "@" + old.metadata());
             if (old.metadata() < 0 || old.metadata() > 15) throw new IllegalArgumentException("Legacy block metadata outside 0..15");
+            var nativeBlock = nativeBlocks.get(old.legacyKey());
+            if (nativeBlock != null) return (BlockState) nativeBlock.state(old.metadata());
             return block.defaultBlockState().setValue(METADATA, old.metadata());
         }
         if (old.metadata() != 0) throw new UnsupportedOperationException("No vanilla block metadata mapping for " + old);
@@ -552,6 +583,13 @@ public final class ModernContentBridge {
         var id = ResourceLocation.tryParse(key);
         if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) throw new UnsupportedOperationException("No host block representation: " + old);
         return BuiltInRegistries.BLOCK.get(id).defaultBlockState();
+    }
+    /** Original metadata writes must not erase properties the old format cannot express. */
+    BlockState modernBlock(HostWorldAccess.Block old, BlockState previous) {
+        var nativeBlock = nativeBlocks.get(old.legacyKey());
+        if (nativeBlock == null) return modernBlock(old);
+        if (old.metadata() < 0 || old.metadata() > 15) throw new IllegalArgumentException("Legacy block metadata outside 0..15");
+        return (BlockState) nativeBlock.update(previous, old.metadata());
     }
     private Component name(LegacyContent.Item entry, ItemStack stack) {
         try {
@@ -635,6 +673,13 @@ public final class ModernContentBridge {
         }
     }
     private final Set<String> displayFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private void displayTick(LegacyContent.Block entry, Level level, BlockPos pos, long seed) {
+        if (!level.isClientSide || displayFailures.contains(entry.key())) return;
+        try { services.logic().displayTick(entry.key(), services.worlds().bound(level), pos.getX(), pos.getY(), pos.getZ(), seed); }
+        catch (Exception | LinkageError failure) {
+            if (displayFailures.add(entry.key())) LogUtils.getLogger().warn("MFCL original randomDisplayTick disabled for {}", entry.key(), failure);
+        }
+    }
     private final Set<String> collisionFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Set<String> armorTickFailures = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private void armorTick(LegacyContent.Item entry, ItemStack stack, Level level, net.minecraft.world.entity.player.Player player) {
@@ -1004,7 +1049,7 @@ public final class ModernContentBridge {
     }
     private final class MirroredBlockItem extends BlockItem {
         private final LegacyContent.Item entry;
-        MirroredBlockItem(MirroredBlock block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
+        MirroredBlockItem(Block block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
         @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
@@ -1015,7 +1060,7 @@ public final class ModernContentBridge {
         }
         @Override public InteractionResult useOn(UseOnContext context) {
             // The placed metadata is checked where it is known: modernBlock on the original write, getPlacementState below.
-            if (!ModernContentBridge.canPlaceSomeForm(((MirroredBlock) getBlock()).entry)) {
+            if (!ModernContentBridge.canPlaceSomeForm(reverseBlocks.get(getBlock()))) {
                 if (context.getPlayer() != null && context.getLevel().isClientSide) context.getPlayer().displayClientMessage(Component.translatable("mfcl.content.special_block_pending"), true);
                 return InteractionResult.FAIL;
             }
@@ -1025,7 +1070,7 @@ public final class ModernContentBridge {
             return useLegacyItem(context);
         }
         @Override public InteractionResult place(BlockPlaceContext context) {
-            if (!ModernContentBridge.canPlaceSomeForm(((MirroredBlock) getBlock()).entry)) return InteractionResult.FAIL;
+            if (!ModernContentBridge.canPlaceSomeForm(reverseBlocks.get(getBlock()))) return InteractionResult.FAIL;
             BlockPos position = context.getClickedPos(); var before = context.getLevel().getBlockState(position);
             try { return super.place(context); }
             catch (Exception failure) {
@@ -1045,7 +1090,9 @@ public final class ModernContentBridge {
                         context.getClickedFace().get3DDataValue(), (float)hit.x, (float)hit.y, (float)hit.z, meta);
             } catch (Exception error) { throw new IllegalStateException("Cannot evaluate original placement metadata for " + entry.key(), error); }
             // A null state makes BlockItem.place refuse cleanly; only the server has computed the real metadata.
-            if (!context.getLevel().isClientSide && !ModernContentBridge.canPlace(((MirroredBlock) getBlock()).entry, meta & 15)) return null;
+            if (!context.getLevel().isClientSide && !ModernContentBridge.canPlace(reverseBlocks.get(getBlock()), meta & 15)) return null;
+            var nativeBlock = nativeBlocks.get(entry.blockKey());
+            if (nativeBlock != null) return (BlockState) nativeBlock.placement(state, meta & 15);
             return state.setValue(METADATA, meta & 15);
         }
     }

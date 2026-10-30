@@ -327,7 +327,7 @@ public final class LevelWorldBridge {
                 check(); dimensions.terrain(level,x>>4,z>>4);
                 var pos = new BlockPos(x,y,z); content.beforeMutation(level,pos);
                 net.minecraft.world.level.block.state.BlockState state;
-                try { state = content.modernBlock(block); }
+                try { state = content.modernBlock(block, level.getBlockState(pos)); }
                 catch (UnsupportedOperationException unsupported) { if (dimensions.skipUnsupported(block, unsupported)) return false; throw unsupported; }
                 return level.setBlock(pos, state, flags);
             }

@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-31",
+  "host": "Forge 1.20.1",
+  "legacy": "Forge 1.7.10",
+  "thaumcraft": "4.2.3.5",
+  "treeClient": {
+    "worldBounds": [
+      -64,
+      320
+    ],
+    "originalPacketYRoundTrips": [
+      "PacketNote:-64",
+      "PacketNote:-1",
+      "PacketNote:256",
+      "PacketNote:319",
+      "PacketFXVisDrain:-64",
+      "PacketFXVisDrain:-1",
+      "PacketFXVisDrain:256",
+      "PacketFXVisDrain:319"
+    ],
+    "originalTileYRoundTrips": [
+      -40,
+      280
+    ],
+    "originalVanillaGenerators": [
+      {
+        "y": -32,
+        "generator": "net.minecraft.world.gen.feature.WorldGenTrees"
+      },
+      {
+        "y": 280,
+        "generator": "net.minecraft.world.gen.feature.WorldGenTrees"
+      },
+      {
+        "y": -32,
+        "generator": "net.minecraft.world.gen.feature.WorldGenTaiga2"
+      },
+      {
+        "y": 280,
+        "generator": "net.minecraft.world.gen.feature.WorldGenTaiga2"
+      }
+    ],
+    "leafDrops": [
+      {
+        "broken": 4096,
+        "saplings": 22,
+        "leafVariant": 0
+      },
+      {
+        "broken": 4096,
+        "saplings": 15,
+        "leafVariant": 1
+      }
+    ],
+    "persistentLeavesNoSaplings": true,
+    "logRemovalMarksLeavesForDecay": true,
+    "saplingStatus": [
+      {
+        "block": "Block[legacyKey=Thaumcraft:blockMagicalLog, metadata=0]",
+        "light": 0,
+        "position": "0, -40, 0"
+      },
+      {
+        "block": "Block[legacyKey=Thaumcraft:blockMagicalLog, metadata=1]",
+        "light": 0,
+        "position": "32, -40, 0"
+      },
+      {
+        "block": "Block[legacyKey=Thaumcraft:blockMagicalLog, metadata=0]",
+        "light": 0,
+        "position": "0, 100, 0"
+      },
+      {
+        "block": "Block[legacyKey=Thaumcraft:blockMagicalLog, metadata=1]",
+        "light": 0,
+        "position": "32, 100, 0"
+      },
+      {
+        "block": "Block[legacyKey=Thaumcraft:blockMagicalLog, metadata=0]",
+        "light": 0,
+        "position": "0, 280, 0"
+      },
+      {
+        "block": "Block[legacyKey=Thaumcraft:blockMagicalLog, metadata=1]",
+        "light": 0,
+        "position": "32, 280, 0"
+      }
+    ],
+    "soundEventsSent": true,
+    "naturalSaplingGrowth": [
+      "0, -40, 0",
+      "32, -40, 0",
+      "0, 100, 0",
+      "32, 100, 0",
+      "0, 280, 0",
+      "32, 280, 0"
+    ],
+    "unsupportedLeavesNaturallyDecay": true,
+    "growthServerTicks": 193,
+    "audioChannels": [
+      "minecraft:block.grass.break",
+      "minecraft:block.wood.break",
+      "minecraft:ui.toast.in"
+    ],
+    "status": "PASS"
+  },
+  "nativeLeafHarvest": {
+    "cases": [
+      {
+        "species": "greatwood",
+        "isolatedUnflaggedBroken": 4096,
+        "isolatedUnflaggedSaplings": 0,
+        "chainedBroken": 4096,
+        "chainedDecayFlagged": 4064,
+        "chainedUnflagged": 32,
+        "chainedSaplings": 21
+      },
+      {
+        "species": "silverwood",
+        "isolatedUnflaggedBroken": 4096,
+        "isolatedUnflaggedSaplings": 0,
+        "chainedBroken": 4096,
+        "chainedDecayFlagged": 4064,
+        "chainedUnflagged": 32,
+        "chainedSaplings": 15
+      }
+    ],
+    "persistentLeafNegativeControl": true,
+    "noSilkTouchOrShears": true,
+    "status": "PASS"
+  },
+  "ftbScope": "Source-guided native break-loop reproduction; FTB Ultimine itself was not installed."
+}

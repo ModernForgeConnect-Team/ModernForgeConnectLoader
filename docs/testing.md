@@ -87,6 +87,7 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclBiomeSmokeTest` | TC4 dynamic biome registry/colors, normal-world natural biome chunks, original biome mutation, native sync, negative coordinates/neighbors and save reload | `biome-smoke.json` |
 | `mfclSilverwoodSmokeTest` | Native random-tick declaration controls, naturally grown silverwood pure nodes, client node NBT, bare/thaumometer/goggles TESR and screenshots, switching away from the lens, and actual creative node-item placement ([details](silverwood-nodes.md)) | `silverwood-smoke.json` |
 | `mfclWandNodeSmokeTest` | Actual client block/held use packets and natural held ticks against covered/exposed silverwood and floating nodes; charge conservation and release ([details](wand-node-charging.md)) | `wand-node-smoke.json` |
+| `mfclTreeSmokeTest` | Natural TC4 growth below 0 and above 255, original vanilla generators, signed packet / NBT round trips, leaf drops / decay and actual wood / leaf audio ([details](trees-and-world-height.md)) | `tree-smoke.json` |
 | `mfclBookSmokeTest` | Original Thaumonomicon GUI and interaction | Consult the book [acceptance record](thaumonomicon-progress.json) |
 | `mfclWandAudit` | Native wand crafting/charging, wand and staff focus equip/remove, sceptre selector rejection without inventory changes; with Extra Utilities installed, rebasing a negative-coordinate transfer-node snapshot before NBT inventory callbacks and contextual rendering | `wand-host-audit.json` |
 | `mfclPotionSmokeTest` | Original TC4 potion callbacks, native spell costs, warp cadence/ward/wuss, bath/soap rules, original client knowledge/fog/vignette packets, sprites/screen filters, duration/expiry and curative/warp data across world reload | `potion-smoke.json` |
@@ -116,6 +117,8 @@ For research-table rendering measurements, add `-PmfclGuiPerformanceTest` to the
 The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client connection, disconnect/reconnect and multi-player behaviour on a dedicated server are not covered by this probe.
 
 `-PmfclServerSmokeTest=gameplay` instead runs the door, hellbat, loot and elemental-arrow regressions once and writes `gameplay-smoke.json`. Use a disposable game directory: it creates and clears test entities and blocks. See the [gameplay fix record](gameplay-fixes-2026-10-21.md) for the isolated command and coverage.
+
+`-PmfclServerSmokeTest=leaf-harvest` runs the source-guided FTB Ultimine native break-loop reproduction, including initially unflagged connected leaves, isolated leaves and persistent player-placed controls. It writes `leaf-harvest-smoke.json`. This does not install or test FTB Ultimine itself; see [the tree / height record](trees-and-world-height.md) for the original TC4 metadata gates and exact coverage.
 
 `-PmfclServerSmokeTest=melee` checks original TC4 swords and tools against a vanilla iron sword: the original attack modifier, two native attacks with Sharpness V, sweeping (swords only), which sword/digger enchantments apply and what the table rolls, and that host enchantments survive the original hit callbacks. It writes `server-1.7.10-smoke-melee.json`; use a disposable game directory.
 
