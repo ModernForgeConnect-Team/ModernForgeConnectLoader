@@ -40,12 +40,14 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.LegacyReflectionTransformer");
         registerTransformer("github.com.gengyoubo.mfcl.legacy1710.RegistryCaptureTransformer");
         registerTransformer(REDIRECTS);
+        registerTransformer(HEIGHTS);
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.GuiPlatformAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.DisplayPlatformAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.ForgeChunkManagerAdapter");
         registerBytecodeAdapter("github.com.gengyoubo.mfcl.legacy1710.boot.FakePlayerAdapter");
     }
     private static final String REDIRECTS = "github.com.gengyoubo.mfcl.legacy1710.LegacyRedirectTransformer";
+    private static final String HEIGHTS = "github.com.gengyoubo.mfcl.legacy1710.WorldHeightTransformer";
     private final List<LegacyBytecodeAdapter> bytecodeAdapters = new ArrayList<LegacyBytecodeAdapter>();
     public void registerBytecodeAdapter(String name) throws Exception {
         bytecodeAdapters.add((LegacyBytecodeAdapter) root.loadClass(name).getConstructor().newInstance());
@@ -59,7 +61,7 @@ public final class LegacyLaunchLoader extends LaunchClassLoader {
             if (bytes == null) throw new ClassNotFoundException(name);
             for (LegacyBytecodeAdapter adapter : bytecodeAdapters) if (adapter.targets(name)) bytes = adapter.adapt(name, bytes);
             // Adapted classes skip the transformer chain; developer API call-site redirects still apply to them.
-            for (IClassTransformer transformer : getTransformers()) if (transformer.getClass().getName().equals(REDIRECTS)) bytes = transformer.transform(name, name, bytes);
+            for (IClassTransformer transformer : getTransformers()) if (transformer.getClass().getName().equals(REDIRECTS)||transformer.getClass().getName().equals(HEIGHTS)) bytes = transformer.transform(name, name, bytes);
             URL resource = findResource(name.replace('.', '/') + ".class");
             if (resource == null) throw new ClassNotFoundException(name);
             java.net.URLConnection connection = resource.openConnection();

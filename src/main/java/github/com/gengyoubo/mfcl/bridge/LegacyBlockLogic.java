@@ -99,6 +99,29 @@ public final class LegacyBlockLogic {
     }
     public boolean providesPower(String key) throws Exception { return services.items().inLegacy(() -> (boolean)blockType.getMethod("func_149744_f").invoke(block(key))); }
     public boolean hasComparator(String key) throws Exception { return services.items().inLegacy(() -> (boolean)blockType.getMethod("func_149740_M").invoke(block(key))); }
+    /** The inherited Block.onBlockActivated always returns false and must not consume a predicted client click. */
+    public boolean hasActivation(String key) throws Exception {
+        return services.items().inLegacy(() -> block(key).getClass().getMethod("func_149727_a",worldType,int.class,int.class,int.class,
+                services.loader().loadClass("net.minecraft.entity.player.EntityPlayer"),int.class,float.class,float.class,float.class).getDeclaringClass()!=blockType);
+    }
+    /** Old leaf-support notifications, including persistent/decay metadata, without replaying inventory-breaking callbacks. */
+    public void leavesRemoved(String key,Object world,int x,int y,int z)throws Exception {
+        services.items().inLegacy(()->{
+            Class<?> access=services.loader().loadClass("net.minecraft.world.IBlockAccess");
+            var support=blockType.getMethod("canSustainLeaves",access,int.class,int.class,int.class);
+            var leaves=blockType.getMethod("isLeaves",access,int.class,int.class,int.class);
+            Object removed=block(key);int radius=(boolean)support.invoke(removed,world,x,y,z)?4:(boolean)leaves.invoke(removed,world,x,y,z)?1:0;
+            if(radius==0)return null;
+            var decay=blockType.getMethod("beginLeavesDecay",worldType,int.class,int.class,int.class);
+            var lookup=worldType.getMethod("func_147439_a",int.class,int.class,int.class);
+            for(int dx=-radius;dx<=radius;dx++)for(int dy=-radius;dy<=radius;dy++)for(int dz=-radius;dz<=radius;dz++){
+                int xx=x+dx,yy=y+dy,zz=z+dz;if(!LegacyWorlds.validPosition(world,xx,yy,zz))continue;
+                Object neighbour=lookup.invoke(world,xx,yy,zz);
+                if((boolean)leaves.invoke(neighbour,world,xx,yy,zz))decay.invoke(neighbour,world,xx,yy,zz);
+            }
+            return null;
+        });
+    }
     public int comparator(String key, Object world, int x, int y, int z) throws Exception {
         return services.items().inLegacy(() -> (int)blockType.getMethod("func_149736_g",worldType,int.class,int.class,int.class,int.class).invoke(block(key),world,x,y,z,0));
     }

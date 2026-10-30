@@ -24,8 +24,9 @@ public final class LegacyContent {
                        boolean full3D, boolean rodRotation) {
         public Item { variants = List.copyOf(variants); pulls = List.copyOf(pulls); }
     }
+    public record Sound(float volume,float pitch,String breaking,String stepping,String placing) {}
     public record Block(String key, float hardness, float resistance, int light, boolean opaque,
-                        boolean tileEntity, int renderType, boolean inventory3D, List<List<String>> faces, List<Integer> tileMetas) {
+                        boolean tileEntity, int renderType, boolean inventory3D, List<List<String>> faces, List<Integer> tileMetas, boolean randomTicks, Sound sound) {
         public Block {
             faces = faces.stream().map(List::copyOf).toList();
             tileMetas = List.copyOf(tileMetas);
@@ -250,12 +251,16 @@ public final class LegacyContent {
             }
             var tileMetas = new ArrayList<Integer>();
             for (int meta = 0; meta < 16; meta++) if ((boolean) blockType.getMethod("hasTileEntity", int.class).invoke(block, meta)) tileMetas.add(meta);
+            Object sound=blockType.getField("field_149762_H").get(block);var soundType=loader.loadClass("net.minecraft.block.Block$SoundType");
             blockValues.add(new Block(key, number(blockType, block, "field_149782_v"),
                     ((Number) blockType.getMethod("func_149638_a", loader.loadClass("net.minecraft.entity.Entity")).invoke(block, new Object[]{null})).floatValue(),
                     (int) blockType.getMethod("func_149750_m").invoke(block), (boolean) blockType.getMethod("func_149662_c").invoke(block),
                     !tileMetas.isEmpty(), (int) blockType.getMethod("func_149645_b").invoke(block),
                     (boolean)data.loader().loadClass("net.minecraft.client.renderer.RenderBlocks").getMethod("func_147739_a", int.class)
-                            .invoke(null, (int)blockType.getMethod("func_149645_b").invoke(block)), faces, tileMetas));
+                            .invoke(null, (int)blockType.getMethod("func_149645_b").invoke(block)), faces, tileMetas,
+                    (boolean)blockType.getMethod("func_149653_t").invoke(block),new Sound(
+                            (float)soundType.getMethod("func_150497_c").invoke(sound),(float)soundType.getMethod("func_150494_d").invoke(sound),
+                            (String)soundType.getMethod("func_150495_a").invoke(sound),(String)soundType.getMethod("func_150498_e").invoke(sound),(String)soundType.getMethod("func_150496_b").invoke(sound))));
             oldBlocks.put(key, block);
             readMining(key,blockType,block);
         }
@@ -434,6 +439,15 @@ public final class LegacyContent {
             var type=data.loader().loadClass("net.minecraft.block.Block");
             var worldType=data.loader().loadClass("net.minecraft.world.World");
             var result=new ArrayList<LegacyClientData.Stack>();
+            var custom=type.getMethod("func_149690_a",worldType,int.class,int.class,int.class,int.class,float.class,int.class);
+            if(block.getClass().getMethod(custom.getName(),custom.getParameterTypes()).getDeclaringClass()!=type){
+                // Some old leaves spawn saplings here and deliberately return no items from getDrops.
+                LegacyDeviceContainers.withDrops(entity->{
+                    var snapshot=data.snapshot(entity.getClass().getMethod("func_92059_d").invoke(entity));
+                    if(snapshot!=null&&snapshot.count()>0)result.add(snapshot);
+                },()->{custom.invoke(block,world,x,y,z,metadata,1f,fortune);return null;});
+                return List.copyOf(result);
+            }
             for(Object stack:(List<?>)type.getMethod("getDrops",worldType,int.class,int.class,int.class,int.class,int.class)
                     .invoke(block,world,x,y,z,metadata,fortune)) {
                 var snapshot=data.snapshot(stack);if(snapshot!=null&&snapshot.count()>0)result.add(snapshot);

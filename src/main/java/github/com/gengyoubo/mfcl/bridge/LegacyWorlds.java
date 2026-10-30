@@ -455,6 +455,14 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     public static int light(Object world, int x, int y, int z) { return binding(world).host.light(x,y,z); }
     public static int height(Object world, int x, int z) { return binding(world).host.height(x,z); }
+    public static int minBuildHeight(Object world) { var host=hostOrNull(world);return host==null?0:host.minBuildHeight(); }
+    public static int maxBuildHeight(Object world) { var host=hostOrNull(world);return host==null?256:host.maxBuildHeight(); }
+    public static boolean regionLoaded(Object world,int x1,int y1,int z1,int x2,int y2,int z2){
+        var host=binding(world).host;if(y2<host.minBuildHeight()||y1>=host.maxBuildHeight())return false;
+        int y=Math.max(y1,host.minBuildHeight());
+        for(int x=x1>>4;x<=x2>>4;x++)for(int z=z1>>4;z<=z2>>4;z++)if(!host.loaded(x<<4,y,z<<4))return false;
+        return true;
+    }
     public static boolean canSeeSky(Object world, int x, int y, int z) { return binding(world).host.canSeeSky(x,y,z); }
     /** getClosestPlayer: a negative range is unlimited in 1.7.10; host player queries are bounded to 256 blocks. */
     public static Object closestPlayer(Object world, double x, double y, double z, double range) {
@@ -606,7 +614,8 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer, bridge, "func_72916_c", "(II)Z", "chunkLoaded", "(Ljava/lang/Object;II)Z", null);
         forward(writer, bridge, "func_72807_a", "(II)Lnet/minecraft/world/biome/BiomeGenBase;", "biome", "(Ljava/lang/Object;II)Ljava/lang/Object;", "net/minecraft/world/biome/BiomeGenBase");
         constant(writer, "func_72802_i", "(IIII)I", 0x00F000F0);
-        constant(writer, "func_72800_K", "()I", 256);
+        forward(writer,bridge,"func_72800_K","()I","maxBuildHeight","(Ljava/lang/Object;)I",null);
+        forward(writer,bridge,"func_72940_L","()I","maxBuildHeight","(Ljava/lang/Object;)I",null);
         constant(writer, "func_72806_N", "()Z", 0);
         forward(writer,bridge,"func_72879_k","(IIII)I","power","(Ljava/lang/Object;IIII)I",null);
         constant(writer, "func_72849_a", "(IIIZ)I", 15);
@@ -615,7 +624,7 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer,bridge,"func_147452_c","(IIILnet/minecraft/block/Block;II)V","blockEvent","(Ljava/lang/Object;IIILjava/lang/Object;II)V",null);
         forward(writer,bridge,"func_147464_a","(IIILnet/minecraft/block/Block;I)V","schedule","(Ljava/lang/Object;IIILjava/lang/Object;I)V",null);
         forward(writer,bridge,"func_147453_f","(IIILnet/minecraft/block/Block;)V","comparators","(Ljava/lang/Object;IIILjava/lang/Object;)V",null);
-        constant(writer, "func_72904_c", "(IIIIII)Z", 1);
+        forward(writer,bridge,"func_72904_c","(IIIIII)Z","regionLoaded","(Ljava/lang/Object;IIIIII)Z",null);
         forward(writer,bridge,"func_72908_a","(DDDLjava/lang/String;FF)V","sound","(Ljava/lang/Object;DDDLjava/lang/String;FF)V",null);
         forward(writer,bridge,"func_72889_a","(Lnet/minecraft/entity/player/EntityPlayer;IIIII)V","auxiliaryEffect","(Ljava/lang/Object;Ljava/lang/Object;IIIII)V",null);
         forward(writer,bridge,"func_72869_a","(Ljava/lang/String;DDDDDD)V","particle","(Ljava/lang/Object;Ljava/lang/String;DDDDDD)V",null);

@@ -60,6 +60,9 @@ public final class ClientContentBridge {
         else if (Boolean.getBoolean("mfcl.test.wandAudit")) WandHostAuditProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.multiblock")) MultiblockHostProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.biomes")) BiomeHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.silverwood")) SilverwoodHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.wandNode")) WandNodeHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.trees")) TreeHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.device")) DeviceHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.tooltip")) TooltipHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.api")) ApiHostSmokeProbe.install();

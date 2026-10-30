@@ -380,6 +380,8 @@ public final class LevelWorldBridge {
             }
             @Override public int light(int x, int y, int z) { check(); return level.getMaxLocalRawBrightness(new BlockPos(x,y,z)); }
             @Override public int height(int x, int z) { check(); return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z); }
+            @Override public int minBuildHeight() { check(); return level.getMinBuildHeight(); }
+            @Override public int maxBuildHeight() { check(); return level.getMaxBuildHeight(); }
             @Override public boolean canSeeSky(int x, int y, int z) { check(); return level.canSeeSky(new BlockPos(x,y,z)); }
             @Override public void neighborsChanged(int x, int y, int z) {
                 check(); var pos = new BlockPos(x,y,z); var block = level.getBlockState(pos).getBlock();

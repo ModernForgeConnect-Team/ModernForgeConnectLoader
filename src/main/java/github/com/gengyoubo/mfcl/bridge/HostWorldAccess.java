@@ -133,6 +133,8 @@ public interface HostWorldAccess {
     default int light(int x, int y, int z) { return 15; }
     /** First free y above the motion-blocking surface (1.7.10 getHeightValue). */
     default int height(int x, int z) { return 64; }
+    default int minBuildHeight() { return 0; }
+    default int maxBuildHeight() { return 256; }
     default boolean canSeeSky(int x, int y, int z) { return true; }
     /** Notifies host blocks around the position; original blocks there are notified by the legacy side. */
     default void neighborsChanged(int x, int y, int z) { }

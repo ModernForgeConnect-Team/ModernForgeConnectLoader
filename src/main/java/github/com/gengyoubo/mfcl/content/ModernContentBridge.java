@@ -1051,11 +1051,11 @@ public final class ModernContentBridge {
     }
     private class MirroredBlock extends Block {
         private final LegacyContent.Block entry;
-        private final boolean powerSource, comparatorSource;
+        private final boolean powerSource, comparatorSource, activation;
         MirroredBlock(LegacyContent.Block entry) {
             super(properties(entry)); this.entry = entry; registerDefaultState(stateDefinition.any().setValue(METADATA, 0));
-            try { powerSource = services.logic().providesPower(entry.key()); comparatorSource = services.logic().hasComparator(entry.key()); }
-            catch (Exception failure) { throw new IllegalStateException("Cannot read original redstone declarations",failure); }
+            try { powerSource = services.logic().providesPower(entry.key()); comparatorSource = services.logic().hasComparator(entry.key()); activation = services.logic().hasActivation(entry.key()); }
+            catch (Exception failure) { throw new IllegalStateException("Cannot read original block interaction declarations",failure); }
         }
         @Override public boolean isSignalSource(BlockState state) { return powerSource; }
         @Override public boolean hasAnalogOutputSignal(BlockState state) { return comparatorSource; }
@@ -1071,8 +1071,15 @@ public final class ModernContentBridge {
             catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("redstone power "+entry.key(),failure); LogUtils.getLogger().error("MFCL original power query failed at {}",pos,failure); return 0; }
         }
         @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(METADATA); }
+        @Override public void onRemove(BlockState state,Level level,BlockPos pos,BlockState next,boolean moving){
+            if(!level.isClientSide&&state.getBlock()!=next.getBlock())try{
+                logicTransaction(level,pos,()->{services.logic().leavesRemoved(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ());return null;},true);
+            }catch(Exception failure){throw new IllegalStateException("Cannot notify original leaves after removal of "+entry.key(),failure);}
+            super.onRemove(state,level,pos,next,moving);
+        }
         @Override public InteractionResult use(BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
-            if (level.isClientSide) return InteractionResult.SUCCESS;
+            // Inert blocks must let the item use path continue (e.g. a wand charging a node inside a silverwood log).
+            if (level.isClientSide) return activation ? InteractionResult.SUCCESS : InteractionResult.PASS;
             // Fluid containers (buckets, modded tanks/cells) exchange through the native fluid capability of original tanks.
             if (useFluidContainer(level,pos,player,hand,hit.getDirection())) return InteractionResult.CONSUME;
             try {
@@ -1417,6 +1424,16 @@ public final class ModernContentBridge {
     }
     private BlockBehaviour.Properties properties(LegacyContent.Block entry) {
         var properties = BlockBehaviour.Properties.of().strength(entry.hardness(), entry.resistance()).lightLevel(state -> entry.light());
+        // BlockBehaviour.randomTick delegates to our tick override, which runs the original updateTick transaction.
+        if(entry.randomTicks())properties.randomTicks();
+        var sound=entry.sound();
+        var breaking=net.minecraft.sounds.SoundEvent.createVariableRangeEvent(ResourceLocation.parse(LegacySounds.modernId(sound.breaking())));
+        var stepping=net.minecraft.sounds.SoundEvent.createVariableRangeEvent(ResourceLocation.parse(LegacySounds.modernId(sound.stepping())));
+        var placing=net.minecraft.sounds.SoundEvent.createVariableRangeEvent(ResourceLocation.parse(LegacySounds.placementId(sound.placing())));
+        String step=stepping.getLocation().toString(),base=step.endsWith(".step")?step.substring(0,step.length()-5):null;
+        properties.sound(new SoundType(sound.volume(),sound.pitch(),breaking,stepping,placing,
+                base==null?stepping:net.minecraft.sounds.SoundEvent.createVariableRangeEvent(ResourceLocation.parse(base+".hit")),
+                base==null?stepping:net.minecraft.sounds.SoundEvent.createVariableRangeEvent(ResourceLocation.parse(base+".fall"))));
         if(declarations.requiresTool(entry.key()))properties.requiresCorrectToolForDrops();
         if (!entry.opaque()) properties.noOcclusion().isSuffocating((state,level,pos)->false).isViewBlocking((state,level,pos)->false);
         return properties;

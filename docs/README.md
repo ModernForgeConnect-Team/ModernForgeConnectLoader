@@ -27,6 +27,8 @@ Read each record's date, tested versions and stated limits. A historical experim
 | Thaumcraft 4 / Baubles | [Initial acceptance](thaumcraft-progress.json), [pinned inputs](thaumcraft-reference-inputs.json), [runtime logic](runtime-logic.md), [logic acceptance](runtime-logic-progress.json) |
 | Thaumonomicon | [GUI implementation](thaumonomicon-bridge.md), [acceptance record](thaumonomicon-progress.json) |
 | Thaumometer | [Scanning, authority and persistence](thaumometer-bridge.md), [acceptance record](thaumometer-progress.json) |
+| TC4 silverwood natural growth, node rendering and held thaumometer visibility | [Random ticks and node verification](silverwood-nodes.md) |
+| TC4 wand charging of nodes inside silverwood and native client right-click fallback | [Node charging fix and verification](wand-node-charging.md) |
 | TC4 wand crafting, charging and focus support | [Function audit](wand-functions-audit.md), [runtime and native-menu evidence](wand-functions-audit.json) |
 | TC4 focus pouch / hover harness GUI, latency, storage and misplaced-armor safety | [Portable item fixes](focus-pouch-bridge.md) |
 | TC4 repair / haste registration, native enchantment NBT, original effects and world reload | [Enchantment bridge](enchantment-bridge.md) |

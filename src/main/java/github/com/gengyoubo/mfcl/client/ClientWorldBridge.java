@@ -95,6 +95,8 @@ public final class ClientWorldBridge {
                     }
                     @Override public int light(int x, int y, int z) { return next.getMaxLocalRawBrightness(new BlockPos(x,y,z)); }
                     @Override public int height(int x, int z) { return next.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z); }
+                    @Override public int minBuildHeight() { return next.getMinBuildHeight(); }
+                    @Override public int maxBuildHeight() { return next.getMaxBuildHeight(); }
                     @Override public boolean canSeeSky(int x, int y, int z) { return next.canSeeSky(new BlockPos(x,y,z)); }
                     @Override public HostWorldAccess.Hit rayTrace(double sx, double sy, double sz, double ex, double ey, double ez) {
                         var from = new net.minecraft.world.phys.Vec3(sx, sy, sz); var to = new net.minecraft.world.phys.Vec3(ex, ey, ez);

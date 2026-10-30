@@ -33,6 +33,11 @@ public final class LegacySounds {
     public static String modernId(String name) {
         String id=name.contains(":")?name:"minecraft:"+name;
         id=id.toLowerCase(Locale.ROOT);
+        if(id.startsWith("minecraft:dig.")||id.startsWith("minecraft:step.")){
+            String material=id.substring(id.indexOf('.')+1);if(material.equals("cloth"))material="wool";
+            if(Set.of("wood","stone","grass","gravel","sand","snow","glass","metal","ladder","anvil","wool").contains(material))
+                return "minecraft:block."+material+(id.startsWith("minecraft:dig.")?".break":".step");
+        }
         return id.startsWith("minecraft:")?"minecraft:"+VANILLA.getOrDefault(id.substring(10),id.substring(10)):id;
     }
     public static JsonObject definitions(String namespace,String json) {

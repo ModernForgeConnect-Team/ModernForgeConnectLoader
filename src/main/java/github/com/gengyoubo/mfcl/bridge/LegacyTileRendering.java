@@ -31,11 +31,19 @@ public final class LegacyTileRendering {
         });
     }
     public void view(Object world, double x, double y, double z, float yaw, float pitch, int ticks) throws Exception {
+        view(world,x,y,z,yaw,pitch,ticks,null,false);
+    }
+    /** Includes the current host hand, even when the held model is hidden or has no legacy renderer. */
+    public void view(Object world, double x, double y, double z, float yaw, float pitch, int ticks, LegacyClientData.Stack held) throws Exception {
+        view(world,x,y,z,yaw,pitch,ticks,held,true);
+    }
+    private void view(Object world, double x, double y, double z, float yaw, float pitch, int ticks, LegacyClientData.Stack held, boolean mirrorHeld) throws Exception {
         services.items().inLegacy(() -> {
             var loader = services.loader();
             services.containers().preparePlayer();
             var mc = loader.loadClass("net.minecraft.client.Minecraft"); Object client = mc.getMethod("func_71410_x").invoke(null);
             Object player = mc.getField("field_71439_g").get(client);
+            if(mirrorHeld)services.playerInventory().held(player,held);
             var entity = loader.loadClass("net.minecraft.entity.Entity");
             entity.getField("field_70170_p").set(player,world);
             for (String name : List.of("field_70165_t","field_70169_q","field_70142_S")) entity.getField(name).setDouble(player,x);

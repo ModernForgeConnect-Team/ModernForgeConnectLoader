@@ -45,6 +45,15 @@ public final class LegacyPlayerInventory {
     public void select(Object player, int slot) throws Exception {
         services.items().inLegacy(() -> { currentField.setInt(inventoryField.get(player), slot); return null; });
     }
+    /** Read-only render context: refresh or clear only the selected stack, preserving other slots and equal objects. */
+    public void held(Object player, LegacyClientData.Stack held) throws Exception {
+        services.items().inLegacy(() -> {
+            Object inventory=inventoryField.get(player);Object[] slots=(Object[])mainField.get(inventory);
+            int slot=currentField.getInt(inventory);Object next=held==null?null:services.items().materialize(held);
+            if(!same(services.loader().loadClass("net.minecraft.item.ItemStack"),slots[slot],next))slots[slot]=next;
+            return null;
+        });
+    }
     /** What {@link #expose} last put in each slot: the host's view, the old object and a copy to detect in-place changes. */
     private record Exposed(LegacyClientData.Stack[] host, Object[] objects, Object[] copies) {}
     private final Map<Object, Exposed> exposed = new com.google.common.collect.MapMaker().weakKeys().makeMap();

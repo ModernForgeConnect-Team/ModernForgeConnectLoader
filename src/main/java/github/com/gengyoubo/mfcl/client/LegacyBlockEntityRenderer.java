@@ -22,7 +22,8 @@ public final class LegacyBlockEntityRenderer implements BlockEntityRenderer<Lega
         if (System.nanoTime() < retryAfter.getOrDefault(tile, 0L)) return;
         try {
             var mc = Minecraft.getInstance(); var camera = mc.gameRenderer.getMainCamera(); var eye = camera.getPosition();
-            bridge.blockRendering().tiles().view(bridge.services().worlds().bound(tile.getLevel()),eye.x,eye.y,eye.z,camera.getYRot(),camera.getXRot(),mc.player == null ? 0 : mc.player.tickCount);
+            bridge.blockRendering().tiles().view(bridge.services().worlds().bound(tile.getLevel()),eye.x,eye.y,eye.z,camera.getYRot(),camera.getXRot(),mc.player == null ? 0 : mc.player.tickCount,
+                    mc.player==null?null:bridge.renderSnapshot(mc.player.getMainHandItem()));
             var pos = tile.getBlockPos();
             var primitives = bridge.blockRendering().tiles().capture(tile.legacyOrNull(), partial,pos.getX()-eye.x,pos.getY()-eye.y,pos.getZ()-eye.z);
             render(primitives, pose, buffers, light, overlay);

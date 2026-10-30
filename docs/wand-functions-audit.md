@@ -1,5 +1,7 @@
 # 法杖功能调查（2026-10-20）
 
+2026-10-30 补充：本页早期充能验收没有覆盖客户端点击银树节点的物品回退路径。该路径的修复及真实客户端持续使用对照见 [银树节点充能](wand-node-charging.md)。
+
 样本：未经修改的 Thaumcraft 4.2.3.5、Baubles 1.0.1.10；宿主 Forge 1.20.1 / Java 17。机器可读证据见 [wand-functions-audit.json](wand-functions-audit.json)。原始配方在隔离旧运行时执行；宿主测试在一次性世界内调用现代工作台和 `LegacyDeviceMenu` 的实际取出入口。
 
 ## 实现后的验收
