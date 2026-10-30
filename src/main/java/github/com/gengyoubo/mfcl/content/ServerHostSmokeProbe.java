@@ -45,6 +45,7 @@ public final class ServerHostSmokeProbe {
         if (phase.equals("bow")) { BowHostSmokeProbe.install(bridge); return; }
         if (phase.equals("melee")) { MeleeHostSmokeProbe.install(bridge); return; }
         if (phase.equals("bore")) { BoreHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("crucible")) { CrucibleHostSmokeProbe.install(bridge); return; }
         if (phase.equals("golem")) { GolemHostSmokeProbe.install(bridge); return; }
         if (phase.equals("golem-audit")) { GolemWorkAudit.install(bridge); return; }
         if (phase.equals("golem-jobs")) { GolemJobAudit.install(bridge); return; }

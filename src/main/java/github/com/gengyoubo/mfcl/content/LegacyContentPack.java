@@ -83,6 +83,8 @@ public final class LegacyContentPack {
             }
             json("assets/" + id.getNamespace() + "/blockstates/" + id.getPath() + ".json", Map.of("variants", variants));
         }
+        for(var tag:content.miningTags().entrySet())
+            json("data/minecraft/tags/blocks/"+tag.getKey()+".json",Map.of("replace",false,"values",tag.getValue().stream().map(ModernContentBridge::id).map(Object::toString).toList()));
         for (var item : content.items()) {
             var id = ModernContentBridge.id(item.key());
             if (content.customItems().contains(item.key())) {

@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class LegacyBlockEntity extends BlockEntity {
     private final ModernContentBridge content;
     private Object legacy;
+    private java.util.List<github.com.gengyoubo.mfcl.bridge.LegacyClientData.Stack> removedInventory=java.util.List.of();
     private volatile byte[] saved = new byte[0];
     public byte[] renderData() { return saved.clone(); }
     private String savedBlock;
@@ -47,6 +48,10 @@ public final class LegacyBlockEntity extends BlockEntity {
         var entry = content.declarations().blocks().stream().filter(block -> block.key().equals(key())).findFirst().orElse(null);
         if (entry == null || !entry.hasTile(getBlockState().getValue(ModernContentBridge.METADATA))) return null;
         return legacy();
+    }
+    /** Native loot is evaluated after setRemoved; never revive the invalidated original tile for its inventory. */
+    public java.util.List<github.com.gengyoubo.mfcl.bridge.LegacyClientData.Stack> inventoryDrops() throws Exception {
+        return isRemoved()?removedInventory:content.services().tiles().inventory(legacyOrNull());
     }
     public void replace(Object value) {
         try {
@@ -196,8 +201,10 @@ public final class LegacyBlockEntity extends BlockEntity {
         finally { legacy = null; }
     }
     @Override public void setRemoved() {
+        // A saved inventory may not have been materialized yet (break immediately after loading a chunk).
+        if(legacy==null&&saved.length>0&&level!=null&&!isRemoved())legacyOrNull();
         if (legacy != null) {
-            try { saved = content.services().tiles().save(legacy); savedBlock = key(); }
+            try { removedInventory=content.services().tiles().inventory(legacy); saved = content.services().tiles().save(legacy); savedBlock = key(); }
             catch (Exception error) { throw new IllegalStateException("Cannot retain old tile data during removal", error); }
             invalidateLegacy();
         }

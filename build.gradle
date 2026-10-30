@@ -40,6 +40,7 @@ minecraft {
             if (project.hasProperty('mfclBiomeSmokeTest')) property 'mfcl.test.biomes', 'true'
             if (project.hasProperty('mfclTooltipSmokeTest')) property 'mfcl.test.tooltip', 'true'
             if (project.hasProperty('mfclDeviceSmokeTest')) property 'mfcl.test.device', 'true'
+            if (project.hasProperty('mfclGuiPerformanceTest')) property 'mfcl.test.guiPerformance', 'true'
             if (project.hasProperty('mfclFocusPouchSmokeTest')) property 'mfcl.test.focusPouch', 'true'
             if (project.hasProperty('mfclDroppedItemFluidSmokeTest')) property 'mfcl.test.droppedItemFluid', 'true'
             if (project.hasProperty('mfclEnchantmentSmokeTest')) property 'mfcl.test.enchantments', 'true'
@@ -242,7 +243,11 @@ tasks.withType(JavaCompile).configureEach {
 }
 tasks.named('test', Test).configure {
     useJUnitPlatform()
-    systemProperty 'mfcl.test.runtimeClasspath', sourceSets.test.runtimeClasspath.asPath
+    // ForgeGradle may create artifact-preparation tasks while resolving this configuration.
+    // Keep resolution out of lazy task configuration, which IDEA realizes under a mutation guard.
+    doFirst {
+        systemProperty 'mfcl.test.runtimeClasspath', sourceSets.test.runtimeClasspath.asPath
+    }
     if (project.hasProperty('neiJar')) {
         inputs.file(file(project.property('neiJar')))
         systemProperty 'mfcl.test.neiJar', file(project.property('neiJar')).absolutePath

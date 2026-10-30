@@ -230,6 +230,12 @@ public final class LevelWorldBridge {
             }
             @Override public boolean spawnLegacyEntity(Object entity) {
                 check();
+                try {
+                    if(content.services().loader().loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity)) {
+                        var drop=LegacyItemDrops.create(content,level,entity);
+                        if(drop!=null)content.afterCommit(level,()->level.addFreshEntity(drop));return drop!=null;
+                    }
+                } catch(Exception failure){throw new IllegalStateException("Cannot translate original dropped item",failure);}
                 try { if(content.villagers().spawn(entity,level))return true;var hosted = LegacyHostedEntity.host(content, level, entity); content.afterCommit(level, () -> level.addFreshEntity(hosted)); return true; }
                 catch (Exception failure) { throw new IllegalStateException("Cannot host original entity " + entity.getClass().getName(), failure); }
             }

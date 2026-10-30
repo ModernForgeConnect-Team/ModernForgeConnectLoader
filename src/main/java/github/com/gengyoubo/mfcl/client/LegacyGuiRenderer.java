@@ -21,25 +21,27 @@ final class LegacyGuiRenderer {
     void draw(GuiGraphics graphics,List<LegacyGuiGraphics.Command> commands) throws Exception {
         var mc=Minecraft.getInstance();
         boolean depthTest=true;
+        boolean textPending=false;
         graphics.flush();
         try {
             for(var command:commands) {
+                // Only consecutive text may share the host font buffer. Never move it past a graphic or item.
+                if(textPending&&!(command instanceof LegacyGuiGraphics.Text)) {graphics.flush();textPending=false;}
                 if(command instanceof LegacyGuiGraphics.DepthTest state) {
                     // Flush before changing state so buffered item/text batches cannot cross the tooltip boundary.
-                    graphics.flush();depthTest=state.enabled();
+                    depthTest=state.enabled();
                 } else if(command instanceof LegacyGuiGraphics.Rect r) {
                     int x1=Math.min(r.x1(),r.x2()),x2=Math.max(r.x1(),r.x2()),y1=Math.min(r.y1(),r.y2()),y2=Math.max(r.y1(),r.y2());
                     graphics.fillGradient(depthTest?RenderType.gui():RenderType.guiOverlay(),x1,y1,x2,y2,r.top(),r.bottom(),0);
                 } else if(command instanceof LegacyGuiGraphics.Text t) {
                     graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
                     try {
-                        if(depthTest)graphics.drawString(mc.font,t.text(),0,0,t.color(),t.shadow());
-                        else mc.font.drawInBatch(t.text(),0,0,t.color(),t.shadow(),graphics.pose().last().pose(),graphics.bufferSource(),Font.DisplayMode.SEE_THROUGH,0,15728880,mc.font.isBidirectional());
+                        mc.font.drawInBatch(t.text(),0,0,t.color(),t.shadow(),graphics.pose().last().pose(),graphics.bufferSource(),depthTest?Font.DisplayMode.NORMAL:Font.DisplayMode.SEE_THROUGH,0,15728880,mc.font.isBidirectional());
+                        textPending=true;
                     } finally {graphics.pose().popPose();}
                 } else if(command instanceof LegacyGuiGraphics.Texture t) {
                     graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
                     try {
-                        graphics.flush();
                         if(depthTest)RenderSystem.enableDepthTest();else RenderSystem.disableDepthTest();
                         graphics.blit(texture(t.resource()).id(),0,0,t.u(),t.v(),t.width(),t.height(),256,256);
                     } finally {graphics.pose().popPose();RenderSystem.enableDepthTest();}
@@ -55,26 +57,30 @@ final class LegacyGuiRenderer {
                     mesh(graphics,mesh.primitives());
                 }
                 // Overlay backgrounds and glyphs use different render types; preserve their original draw order.
-                if(!depthTest)graphics.flush();
+                if(!depthTest) {graphics.flush();textPending=false;}
             }
         } finally {graphics.flush();RenderSystem.enableDepthTest();}
     }
     private void mesh(GuiGraphics graphics,List<LegacyVertexStream.Primitive> primitives) throws Exception {
-        graphics.flush();
         var buffer=com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
         var matrix=graphics.pose().last().pose();
         try {
             com.mojang.blaze3d.systems.RenderSystem.disableDepthTest();com.mojang.blaze3d.systems.RenderSystem.disableCull();
             com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+            LegacyVertexStream.Primitive previous=null;
             for(var primitive:primitives) {
                 var vertices=primitive.vertices();if(vertices.isEmpty())continue;
                 boolean textured=primitive.mode()>3&&!primitive.texture().isEmpty();
+                if(previous==null||!LegacyGuiGeometry.compatible(previous,primitive)) {
+                    if(previous!=null)com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());
                 com.mojang.blaze3d.systems.RenderSystem.blendFunc(primitive.state().sourceBlend(),primitive.state().destinationBlend());
                 if(textured) {
                     com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexColorShader);
                     com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0,texture(primitive.texture()).id());
                 } else com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionColorShader);
                 buffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS,textured?com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX_COLOR:com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_COLOR);
+                }
+                previous=primitive;
                 if(primitive.mode()<=3) {
                     int edges=primitive.mode()==1?vertices.size()/2:primitive.mode()==2?vertices.size():vertices.size()-1;
                     for(int edge=0;edge<edges;edge++) {
@@ -84,14 +90,20 @@ final class LegacyGuiRenderer {
                         vertex(buffer,matrix,a,a.x()+ox,a.y()+oy,false);vertex(buffer,matrix,b,b.x()+ox,b.y()+oy,false);
                         vertex(buffer,matrix,b,b.x()-ox,b.y()-oy,false);vertex(buffer,matrix,a,a.x()-ox,a.y()-oy,false);
                     }
-                } else for(var quad:LegacyWorldRenderer.quads(primitive.mode(),vertices.size()))for(int index:quad) {
-                    var v=vertices.get(index);vertex(buffer,matrix,v,v.x(),v.y(),textured);
-                }
-                com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());
+                } else LegacyGuiGeometry.quads(primitive.mode(),vertices.size(),(a,b,c,d)->{
+                    vertex(buffer,matrix,vertices.get(a),textured);vertex(buffer,matrix,vertices.get(b),textured);
+                    vertex(buffer,matrix,vertices.get(c),textured);vertex(buffer,matrix,vertices.get(d),textured);
+                });
             }
+            if(previous!=null)com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());
         } finally {
+            // A missing texture or invalid primitive must not leave the shared Tessellator building.
+            if(buffer.building())buffer.discard();
             com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();com.mojang.blaze3d.systems.RenderSystem.enableDepthTest();com.mojang.blaze3d.systems.RenderSystem.enableCull();
         }
+    }
+    private void vertex(com.mojang.blaze3d.vertex.BufferBuilder buffer,org.joml.Matrix4f matrix,LegacyVertexStream.Vertex v,boolean textured) {
+        vertex(buffer,matrix,v,v.x(),v.y(),textured);
     }
     private void vertex(com.mojang.blaze3d.vertex.BufferBuilder buffer,org.joml.Matrix4f matrix,LegacyVertexStream.Vertex v,double x,double y,boolean textured) {
         buffer.vertex(matrix,(float)x,(float)y,0);if(textured)buffer.uv(v.u(),v.v());

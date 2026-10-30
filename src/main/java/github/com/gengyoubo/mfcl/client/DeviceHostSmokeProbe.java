@@ -132,6 +132,7 @@ final class DeviceHostSmokeProbe {
                 pending=server(mc,()->{seedResearch(mc);activate(mc,research);return true;});stage=11;frames=0;
             }else if(stage==11&&pending.isDone()&&mc.screen instanceof LegacyDeviceScreen&&++frames>8) {
                 pending.join();verifyScreen(mc,"GuiResearchTable");screenshot(mc,"research-table");proof.put("researchTableOriginalGui",true);
+                if(Boolean.getBoolean("mfcl.test.guiPerformance"))proof.put("researchGuiPerformance",ResearchGuiPerformanceProbe.measure(content.services(),mc));
                 verifyItemTooltips(mc);
                 selectResearchPair(mc);clickResearchCombine(mc);stage=80;frames=0;
             }else if(stage==80&&++frames>12) {
@@ -237,6 +238,14 @@ final class DeviceHostSmokeProbe {
             for(String tag:new String[]{"aer","ignis","lux"}) {
                 known.getClass().getMethod("addDiscoveredAspect",String.class,type).invoke(known,player.getName().getString(),aspect(tag));
                 known.getClass().getMethod("setAspectPool",String.class,type,short.class).invoke(known,player.getName().getString(),aspect(tag),(short)(tag.equals("lux")?0:20));
+            }
+            if(Boolean.getBoolean("mfcl.test.guiPerformance")) {
+                var aspects=(Map<?,?>)type.getField("aspects").get(null);
+                for(Object aspect:aspects.values()) {
+                    String tag=(String)type.getMethod("getTag").invoke(aspect);
+                    known.getClass().getMethod("addDiscoveredAspect",String.class,type).invoke(known,player.getName().getString(),aspect);
+                    if(!Set.of("aer","ignis","lux").contains(tag))known.getClass().getMethod("setAspectPool",String.class,type,short.class).invoke(known,player.getName().getString(),aspect,(short)100);
+                }
             }
             return null;
         }});

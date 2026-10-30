@@ -12,6 +12,24 @@ final class HostDroppedItems {
     HostDroppedItems(ModernContentBridge content) {
         this.content = content; this.legacy = new LegacyDroppedItems(content.services());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(this::expire);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(this::toss);
+    }
+    private void toss(net.minecraftforge.event.entity.item.ItemTossEvent event) {
+        var drop=event.getEntity();var level=drop.level();var player=event.getPlayer();
+        if(level.isClientSide||drop.isRemoved()||event.isCanceled())return;
+        try {
+            var snapshot=HostEntityQueries.snapshot(level,drop);if(snapshot==null)return;
+            var placer=new github.com.gengyoubo.mfcl.bridge.LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
+            var result=content.logicTransaction(level,drop.blockPosition(),()->legacy.toss(content.services().worlds().bound(level),snapshot,placer),true);
+            if(result.canceled()){event.setCanceled(true);return;}
+            if(result.removed())drop.discard();
+            else if(!ModernContentBridge.sameLegacy(snapshot.item(),result.stack()))drop.setItem(content.applyTo(drop.getItem(),result.stack()));
+            var data=net.minecraft.nbt.NbtIo.readCompressed(new java.io.ByteArrayInputStream(result.entityData()));
+            drop.getPersistentData().merge(data);
+        } catch(Exception|LinkageError failure) {
+            github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("item toss",failure);
+            com.mojang.logging.LogUtils.getLogger().error("MFCL original item toss failed for {}",drop.getItem(),failure);
+        }
     }
     int lifespan(ItemStack stack, Level level) {
         try { return legacy.lifespan(content.services().worlds().bound(level), content.renderSnapshot(stack)); }

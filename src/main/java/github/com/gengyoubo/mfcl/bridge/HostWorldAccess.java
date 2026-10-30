@@ -32,7 +32,10 @@ public interface HostWorldAccess {
     default Food food(java.util.UUID player) { return null; }
     default void setFood(java.util.UUID player,Food food) { throw new UnsupportedOperationException("Host player food mutation is not available"); }
     default void addExhaustion(java.util.UUID player,float amount) { throw new UnsupportedOperationException("Host player exhaustion is not available"); }
-    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health) {
+    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health,byte[] entityData) {
+        public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health) {
+            this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health,null);
+        }
         public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities) {
             this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,null);
         }
@@ -46,7 +49,7 @@ public interface HostWorldAccess {
             this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,0,null);
         }
         public Entity relativeTo(double originX,double originY,double originZ) {
-            return new Entity(id,legacyClass,name,x-originX,y-originY,z-originZ,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health);
+            return new Entity(id,legacyClass,name,x-originX,y-originY,z-originZ,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health,entityData);
         }
     }
     /** {@code love} is the animal breeding timer (EntityAnimal.inLove), 0 for anything else. */

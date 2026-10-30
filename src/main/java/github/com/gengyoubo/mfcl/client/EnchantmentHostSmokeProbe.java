@@ -62,6 +62,7 @@ final class EnchantmentHostSmokeProbe {
     }
     private static void check(boolean value,String message){if(!value)throw new IllegalStateException(message);}
     private ItemStack pick(){return content.stack(pickKey,50,1,"");}
+    @SuppressWarnings("removal")
     private void audit(ServerPlayer player)throws Exception {
         repair=BuiltInRegistries.ENCHANTMENT.get(ResourceLocation.fromNamespaceAndPath("thaumcraft","repair"));haste=BuiltInRegistries.ENCHANTMENT.get(new ResourceLocation("thaumcraft","haste"));
         check(repair!=null&&haste!=null&&repair.getMaxLevel()==2&&haste.getMaxLevel()==3,"Missing registry entries/levels");

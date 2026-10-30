@@ -40,6 +40,8 @@ public final class LegacyContent {
     private final List<Block> blocks;
     private final List<LegacyCreativeTabs.Tab> tabs;
     private final Map<String, Object> oldBlocks = new HashMap<>();
+    private final Map<String,List<String>> miningTags = new LinkedHashMap<>();
+    private final Set<String> toolRequired = new HashSet<>();
     private final Map<String, List<LegacyVertexStream.Primitive>> geometry = new LinkedHashMap<>();
     /** IItemRenderer geometry per {@code ItemRenderType}, so held/entity models can differ from the inventory snapshot. */
     private final Map<String, List<LegacyVertexStream.Primitive>> contextGeometry = new LinkedHashMap<>();
@@ -255,6 +257,7 @@ public final class LegacyContent {
                     (boolean)data.loader().loadClass("net.minecraft.client.renderer.RenderBlocks").getMethod("func_147739_a", int.class)
                             .invoke(null, (int)blockType.getMethod("func_149645_b").invoke(block)), faces, tileMetas));
             oldBlocks.put(key, block);
+            readMining(key,blockType,block);
         }
         var itemValues = new ArrayList<Item>();
         var metadataByItem = new HashMap<String, Set<Integer>>();
@@ -391,6 +394,34 @@ public final class LegacyContent {
     }
     public List<Item> items() { return items; }
     public List<Block> blocks() { return blocks; }
+    public Map<String,List<String>> miningTags() { return miningTags; }
+    public boolean requiresTool(String key) { return toolRequired.contains(key); }
+    private void readMining(String key,Class<?> blockType,Object block) throws Exception {
+        Object material=blockType.getMethod("func_149688_o").invoke(block);
+        // Tags are block-wide. Only export declarations shared by every old metadata value.
+        Set<String> tools=new LinkedHashSet<>();Set<Integer> levels=new HashSet<>();
+        for(int meta=0;meta<16;meta++) {
+            tools.add((String)blockType.getMethod("getHarvestTool",int.class).invoke(block,meta));
+            levels.add((int)blockType.getMethod("getHarvestLevel",int.class).invoke(block,meta));
+        }
+        if(tools.size()!=1||levels.size()!=1)return;
+        if(!(boolean)data.loader().loadClass("net.minecraft.block.material.Material").getMethod("func_76229_l").invoke(material))toolRequired.add(key);
+        int level=levels.iterator().next();
+        if(level>3)return; // Custom old tiers have no equivalent in vanilla's modern mining tags.
+        String tool=tools.iterator().next();
+        if(tool==null) {
+            // Old pickaxes/axes/shovels also recognize materials, even without an explicit harvest declaration.
+            var itemType=data.loader().loadClass("net.minecraft.item.Item");
+            for(String candidate:List.of("pickaxe","axe","shovel")) {
+                Object stack=data.materialize(new LegacyClientData.Stack("minecraft:diamond_"+candidate,0,1,"",""));
+                Object item=data.loader().loadClass("net.minecraft.item.ItemStack").getMethod("func_77973_b").invoke(stack);
+                float speed=(float)itemType.getMethod("func_150893_a",data.loader().loadClass("net.minecraft.item.ItemStack"),blockType).invoke(item,stack,block);
+                if(speed>1)miningTag("mineable/"+candidate,key);
+            }
+        } else if(Set.of("pickaxe","axe","shovel","hoe").contains(tool))miningTag("mineable/"+tool,key);
+        if(level>=1&&level<=3)miningTag(level==1?"needs_stone_tool":level==2?"needs_iron_tool":"needs_diamond_tool",key);
+    }
+    private void miningTag(String tag,String key) { miningTags.computeIfAbsent(tag,ignored->new ArrayList<>()).add(key); }
     public List<LegacyCreativeTabs.Tab> tabs() { return tabs; }
     public ClassLoader loader() { return data.loader(); }
     public Set<String> registeredIcons() { return Set.copyOf(data.iconLayout().keySet()); }

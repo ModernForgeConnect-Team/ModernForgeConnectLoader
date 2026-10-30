@@ -16,6 +16,27 @@ public final class LegacyDroppedItems {
     }
 
     public record Expiration(boolean canceled, int extraLife, boolean removed, LegacyClientData.Stack stack) {}
+    public record Toss(boolean canceled,boolean removed,LegacyClientData.Stack stack,byte[] entityData) {}
+    /** Let original Forge subscribers attach provenance and apply their normal toss restrictions. */
+    public Toss toss(Object world,HostWorldAccess.Entity snapshot,LegacyTiles.Placer placer) throws Exception {
+        return services.items().inLegacy(()->{
+            try(var state=services.playerState().enter(world)) {
+                var loader=services.loader();var type=loader.loadClass("net.minecraft.entity.item.EntityItem");
+                Object entity=LegacyEntityAccess.mirror(services.items(),world,snapshot,null);
+                Object player=services.tiles().actor(world,placer,null);
+                var eventType=loader.loadClass("net.minecraftforge.event.entity.item.ItemTossEvent");
+                Object event=eventType.getConstructor(type,loader.loadClass("net.minecraft.entity.player.EntityPlayer")).newInstance(entity,player);
+                Object bus=loader.loadClass("net.minecraftforge.common.MinecraftForge").getField("EVENT_BUS").get(null);
+                boolean canceled=(boolean)bus.getClass().getMethod("post",loader.loadClass("cpw.mods.fml.common.eventhandler.Event")).invoke(bus,event);
+                Object stack=type.getMethod("func_92059_d").invoke(entity);
+                boolean removed=loader.loadClass("net.minecraft.entity.Entity").getField("field_70128_L").getBoolean(entity)
+                        ||stack==null||stack.getClass().getField("field_77994_a").getInt(stack)<=0;
+                Object data=type.getMethod("getEntityData").invoke(entity);
+                byte[] bytes=(byte[])loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_74798_a",loader.loadClass("net.minecraft.nbt.NBTTagCompound")).invoke(null,data);
+                return new Toss(canceled,removed,removed?null:services.items().snapshot(stack),bytes);
+            }
+        });
+    }
     public Expiration expire(Object world, HostWorldAccess.Entity snapshot, int age, int lifespan, int extraLife) throws Exception {
         return services.items().inLegacy(() -> {
             var loader = services.loader(); var type = loader.loadClass("net.minecraft.entity.item.EntityItem");

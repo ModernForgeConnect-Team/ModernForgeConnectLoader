@@ -20,6 +20,11 @@ final class LegacyEntityAccess {
         var base=loader.loadClass("net.minecraft.entity.Entity");
         base.getMethod("func_145769_d",int.class).invoke(entity,snapshot.entityId());
         base.getField("field_70170_p").set(entity,world);
+        if(snapshot.entityData()!=null) {
+            Object nbt=loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_74796_a",java.io.InputStream.class)
+                    .invoke(null,new java.io.ByteArrayInputStream(snapshot.entityData()));
+            var field=base.getDeclaredField("customEntityData");field.setAccessible(true);field.set(entity,nbt);
+        }
         base.getField("field_71093_bK").setInt(entity,loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(loader.loadClass("net.minecraft.world.World").getField("field_73011_w").get(world)));
         base.getField("field_70165_t").setDouble(entity,snapshot.x());base.getField("field_70163_u").setDouble(entity,snapshot.y());base.getField("field_70161_v").setDouble(entity,snapshot.z());
         base.getField("field_70159_w").setDouble(entity,snapshot.motionX());base.getField("field_70181_x").setDouble(entity,snapshot.motionY());base.getField("field_70179_y").setDouble(entity,snapshot.motionZ());

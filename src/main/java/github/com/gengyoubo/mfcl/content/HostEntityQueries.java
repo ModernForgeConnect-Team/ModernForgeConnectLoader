@@ -32,6 +32,8 @@ public final class HostEntityQueries {
         }
         LegacyClientData.Stack item=null;
         if(entity instanceof ItemEntity drop) {
+            String original=drop.getPersistentData().getString(LegacyItemDrops.ORIGINAL_CLASS);
+            if(!original.isEmpty())type=original;
             try {if(ModernContentBridge.active()!=null)item=ModernContentBridge.active().gameplayStack(drop.getItem());}
             catch(UnsupportedOperationException unmapped) { }
             catch(Exception failure) {throw new IllegalStateException("Cannot snapshot dropped item for the legacy world",failure);}
@@ -42,7 +44,13 @@ public final class HostEntityQueries {
         return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():entity.hasCustomName()?entity.getCustomName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable(),entity.getId(),item,
                 entity instanceof AgeableMob ageable?ageable.getAge():0,entity instanceof net.minecraft.world.entity.animal.Animal animal?animal.getInLoveTime():0,
                 entity instanceof Player player?new HostWorldAccess.Abilities(player.getAbilities().instabuild,player.getAbilities().invulnerable):null,
-                entity instanceof LivingEntity living?living.getHealth():null);
+                entity instanceof LivingEntity living?living.getHealth():null,entityData(entity));
+    }
+    private static byte[] entityData(Entity entity) {
+        if(entity.getPersistentData().isEmpty())return null;
+        try(var output=new java.io.ByteArrayOutputStream()) {
+            net.minecraft.nbt.NbtIo.writeCompressed(entity.getPersistentData(),output);return output.toByteArray();
+        } catch(java.io.IOException failure){throw new IllegalStateException("Cannot snapshot Forge entity data",failure);}
     }
     public static void apply(Level level,HostWorldAccess.Motion motion) {
         if(!(level instanceof net.minecraft.server.level.ServerLevel server))return;

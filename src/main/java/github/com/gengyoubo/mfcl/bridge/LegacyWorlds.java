@@ -295,7 +295,8 @@ public final class LegacyWorlds implements AutoCloseable {
             Boolean captured=LegacyEntityCapture.spawn(world,entity);if(captured!=null)return captured;
             ClassLoader loader = bound.loader;
             Class<?> arrowType = loader.loadClass("net.minecraft.entity.projectile.EntityArrow");
-            if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity))return LegacyDeviceContainers.drop(entity);
+            if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity))
+                return LegacyDeviceContainers.drop(entity)||bound.host.spawnLegacyEntity(entity);
             // Mod arrows (TC4 primal arrows...) keep their own impact logic and renderer; only the plain arrow is translated.
             if (entity.getClass() != arrowType) return bound.host.spawnLegacyEntity(entity);
             Class<?> entityType = loader.loadClass("net.minecraft.entity.Entity");

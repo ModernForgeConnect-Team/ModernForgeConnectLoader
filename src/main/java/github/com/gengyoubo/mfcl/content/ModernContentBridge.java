@@ -1234,8 +1234,7 @@ public final class ModernContentBridge {
                     result.add(mapped);
                 }
                 if (params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof LegacyBlockEntity tile) {
-                    Object legacy = tile.legacyOrNull();
-                    if (legacy != null) for (var drop : services.tiles().inventory(legacy)) {
+                    for (var drop : tile.inventoryDrops()) {
                         ItemStack mapped = mapStack(drop);
                         if (mapped.isEmpty()) throw new UnsupportedOperationException("Unmapped original inventory drop: " + drop.key());
                         result.add(mapped);
@@ -1416,8 +1415,9 @@ public final class ModernContentBridge {
             }
         }
     }
-    private static BlockBehaviour.Properties properties(LegacyContent.Block entry) {
+    private BlockBehaviour.Properties properties(LegacyContent.Block entry) {
         var properties = BlockBehaviour.Properties.of().strength(entry.hardness(), entry.resistance()).lightLevel(state -> entry.light());
+        if(declarations.requiresTool(entry.key()))properties.requiresCorrectToolForDrops();
         if (!entry.opaque()) properties.noOcclusion().isSuffocating((state,level,pos)->false).isViewBlocking((state,level,pos)->false);
         return properties;
     }
