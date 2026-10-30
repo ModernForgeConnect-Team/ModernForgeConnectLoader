@@ -30,5 +30,6 @@ forge*changelog.txt
 !/src/test/java/
 /src/test/java/*
 !/src/test/java/LegacyDisplayAdapterTest.java
+!/src/test/java/LegacyGuiGeometryTest.java
 /.claude/
 /tools/

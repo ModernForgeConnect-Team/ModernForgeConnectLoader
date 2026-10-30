@@ -92,6 +92,13 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
         return equipment;
     }
     private LegacyScenes scenes;
+    private LegacyClientScreens clientScreens;
+    public void installClientScreens(LegacyClientScreens value) { clientScreens = Objects.requireNonNull(value); }
+    @Override public LegacyClientScreens clientScreens() {
+        checkOpen();
+        if(clientScreens == null)throw new UnsupportedOperationException("Native client views are unavailable");
+        return clientScreens;
+    }
     public void installScenes(LegacyScenes value) { this.scenes = Objects.requireNonNull(value); }
     @Override public LegacyScenes scenes() {
         checkOpen();

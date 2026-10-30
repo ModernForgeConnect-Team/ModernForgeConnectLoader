@@ -76,6 +76,10 @@ public interface LegacyRuntime {
     default LegacyScenes scenes() {
         throw new UnsupportedOperationException("This MFCL build does not provide preview scenes");
     }
+    /** {@link LegacyFeatures#CLIENT_SCREENS}; physical client only. */
+    default LegacyClientScreens clientScreens() {
+        throw new UnsupportedOperationException("This MFCL build does not provide native device views");
+    }
     /** Bounded failure history; values contain no legacy objects. */
     List<Diagnostic> diagnostics();
 }

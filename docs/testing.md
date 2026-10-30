@@ -100,6 +100,8 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclTooltipSmokeTest` | Actual JEI single/batch item rendering followed by tooltip depth verification | `jei-tooltip-smoke.json` |
 | `mfclContentSmokeTest` | Reference content registration, rendering, placement and persistence | `content-1.7.10-smoke.json` |
 
+For research-table rendering measurements, add `-PmfclGuiPerformanceTest` to the device probe. It seeds all discovered aspects and records warmed GUI replay CPU timings; see [research GUI performance](research-gui-performance.md) for the command, visual comparison and scope.
+
 ### Dedicated server
 
 `mfclServerSmokeTest` runs on `runServer` without any graphical environment, in two launches against the same world. `write` places an original TC4 tile with an original inventory and an original NBT item in a host chest, lets it tick, saves and stops; `verify` restarts and checks the reloaded state. Both write `server-1.7.10-smoke-<phase>.json`, including runtime diagnostic counts:

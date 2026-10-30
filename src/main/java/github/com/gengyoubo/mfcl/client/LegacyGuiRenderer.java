@@ -29,7 +29,7 @@ final class LegacyGuiRenderer {
                 if(textPending&&!(command instanceof LegacyGuiGraphics.Text)) {graphics.flush();textPending=false;}
                 if(command instanceof LegacyGuiGraphics.DepthTest state) {
                     // Flush before changing state so buffered item/text batches cannot cross the tooltip boundary.
-                    depthTest=state.enabled();
+                    graphics.flush();depthTest=state.enabled();
                 } else if(command instanceof LegacyGuiGraphics.Rect r) {
                     int x1=Math.min(r.x1(),r.x2()),x2=Math.max(r.x1(),r.x2()),y1=Math.min(r.y1(),r.y2()),y2=Math.max(r.y1(),r.y2());
                     graphics.fillGradient(depthTest?RenderType.gui():RenderType.guiOverlay(),x1,y1,x2,y2,r.top(),r.bottom(),0);
@@ -42,6 +42,7 @@ final class LegacyGuiRenderer {
                 } else if(command instanceof LegacyGuiGraphics.Texture t) {
                     graphics.pose().pushPose();graphics.pose().translate(t.x(),t.y(),0);graphics.pose().scale((float)t.sx(),(float)t.sy(),1);
                     try {
+                        graphics.flush();
                         if(depthTest)RenderSystem.enableDepthTest();else RenderSystem.disableDepthTest();
                         graphics.blit(texture(t.resource()).id(),0,0,t.u(),t.v(),t.width(),t.height(),256,256);
                     } finally {graphics.pose().popPose();RenderSystem.enableDepthTest();}
@@ -62,6 +63,7 @@ final class LegacyGuiRenderer {
         } finally {graphics.flush();RenderSystem.enableDepthTest();}
     }
     private void mesh(GuiGraphics graphics,List<LegacyVertexStream.Primitive> primitives) throws Exception {
+        graphics.flush();
         var buffer=com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
         var matrix=graphics.pose().last().pose();
         try {
@@ -73,12 +75,12 @@ final class LegacyGuiRenderer {
                 boolean textured=primitive.mode()>3&&!primitive.texture().isEmpty();
                 if(previous==null||!LegacyGuiGeometry.compatible(previous,primitive)) {
                     if(previous!=null)com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());
-                com.mojang.blaze3d.systems.RenderSystem.blendFunc(primitive.state().sourceBlend(),primitive.state().destinationBlend());
-                if(textured) {
-                    com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexColorShader);
-                    com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0,texture(primitive.texture()).id());
-                } else com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionColorShader);
-                buffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS,textured?com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX_COLOR:com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_COLOR);
+                    com.mojang.blaze3d.systems.RenderSystem.blendFunc(primitive.state().sourceBlend(),primitive.state().destinationBlend());
+                    if(textured) {
+                        com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexColorShader);
+                        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0,texture(primitive.texture()).id());
+                    } else com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionColorShader);
+                    buffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS,textured?com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX_COLOR:com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_COLOR);
                 }
                 previous=primitive;
                 if(primitive.mode()<=3) {
@@ -98,7 +100,7 @@ final class LegacyGuiRenderer {
             if(previous!=null)com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());
         } finally {
             // A missing texture or invalid primitive must not leave the shared Tessellator building.
-            if(buffer.building())buffer.discard();
+            if(buffer.building())buffer.end().release();
             com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();com.mojang.blaze3d.systems.RenderSystem.enableDepthTest();com.mojang.blaze3d.systems.RenderSystem.enableCull();
         }
     }

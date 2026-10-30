@@ -59,6 +59,7 @@ public final class ClientContainerBridge {
         List<LegacyGuiGraphics.Command> commands=List.of();Throwable failure;
         boolean tooltipReady;
         net.minecraft.client.gui.GuiGraphics graphics;
+        github.com.gengyoubo.mfcl.api.LegacyClientScreens.Controller nativeView;
         Bound(Object gui,LegacyScreens.Session session){this.gui=gui;this.session=session;}
     }
     private void init(ScreenEvent.Init.Post event) {
@@ -69,7 +70,7 @@ public final class ClientContainerBridge {
     private void bind(AbstractContainerScreen<?> screen) {
         try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,0,0,keys())) {
             services.items().language(Minecraft.getInstance().options.languageCode);
-            Bound previous=bindings.remove(screen);if(previous!=null)previous.session.close();
+            Bound previous=bindings.remove(screen);if(previous!=null){if(previous.nativeView!=null)previous.nativeView.close();previous.session.close();}
             List<LegacyContainers.Slot> slots=new ArrayList<>();
             for(var slot:screen.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));
             Object gui=screen instanceof LegacyDeviceScreen device?device.originalGui():services.containers().create(screen.width,screen.height,screen.getGuiLeft(),screen.getGuiTop(),screen.getXSize(),screen.getYSize(),slots);
@@ -78,7 +79,13 @@ public final class ClientContainerBridge {
             if(!(screen instanceof LegacyDeviceScreen device)||device.getMenu().receivedContents())services.containers().update(gui,slots);
             bindings.put(screen,new Bound(gui,session));
             origins.put(gui,screen);
-        } catch(Exception failure){LogUtils.getLogger().error("MFCL legacy container initialization failed",failure);}
+        } catch(Exception failure){LogUtils.getLogger().error("MFCL legacy container initialization failed",failure);return;}
+        var bound=bindings.get(screen);
+        if(screen instanceof LegacyDeviceScreen device)try {
+            bound.nativeView=ApiClientScreens.create(screen,bound.gui,()->bindings.get(screen)==bound);
+            device.nativeView(bound.nativeView);
+            if(bound.nativeView!=null)bound.nativeView.tick();
+        }catch(Exception failure){bound.failure=failure;throw new IllegalStateException("Cannot initialize native device view",failure);}
     }
     private LegacyClientData.Stack snapshot(net.minecraft.world.item.ItemStack value) throws Exception {
         if(value.isEmpty())return null;
@@ -94,6 +101,7 @@ public final class ClientContainerBridge {
     }
     private void capture(ScreenEvent.Render.Pre event) {
         Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
+        if(bound.nativeView!=null)return;
         bound.tooltipReady=false;bound.graphics=event.getGuiGraphics();
         try(var frame=LegacyGuiGraphics.begin(event.getScreen().width,event.getScreen().height,event.getMouseX(),event.getMouseY(),keys())) {
             services.items().inLegacy(()->deviceAction(event.getScreen(),()->{if(event.getScreen() instanceof AbstractContainerScreen<?> container)services.containers().carried(snapshot(container.getMenu().getCarried()));bound.session.draw(event.getMouseX(),event.getMouseY(),event.getPartialTick());return null;}));bound.commands=frame.commands();
@@ -108,6 +116,7 @@ public final class ClientContainerBridge {
     }
     private void render(ScreenEvent.Render.Post event) {
         Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
+        if(bound.nativeView!=null)return;
         try {renderer.draw(event.getGuiGraphics(),bound.commands);}
         catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI replay failed",failure);}
         finally {bound.tooltipReady=false;bound.graphics=null;}
@@ -135,16 +144,25 @@ public final class ClientContainerBridge {
             if(screen instanceof AbstractContainerScreen<?> container&&(!(screen instanceof LegacyDeviceScreen device)||device.getMenu().receivedContents())){var slots=new ArrayList<LegacyContainers.Slot>();for(var slot:container.getMenu().slots)slots.add(new LegacyContainers.Slot(slot.x,slot.y,snapshot(slot.getItem())));services.containers().update(b.gui,slots);}
             b.session.tick();return false;
         });
+        if(bound.nativeView!=null&&bound.failure==null)bound.nativeView.tick();
     }
-    private void mouse(ScreenEvent.MouseButtonPressed.Pre event){if(event.getScreen() instanceof HostedScreen)return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().mouse(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
-    private void release(ScreenEvent.MouseButtonReleased.Pre event){if(event.getScreen() instanceof HostedScreen)return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().release(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
-    private void scroll(ScreenEvent.MouseScrolled.Pre event){if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().scroll(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getScrollDelta()>0?1:-1)))event.setCanceled(true);}
-    private void character(ScreenEvent.CharacterTyped.Pre event){if(event.getScreen() instanceof HostedScreen)return;int[] point=pointer(event.getScreen());if(dispatch(event.getScreen(),point[0],point[1],b->services.containers().key(b.gui,event.getCodePoint(),0)))event.setCanceled(true);}
-    private void key(ScreenEvent.KeyPressed.Pre event){if(event.getScreen() instanceof HostedScreen)return;int legacy=legacyKey(event.getKeyCode());int[] point=pointer(event.getScreen());if(legacy!=0&&dispatch(event.getScreen(),point[0],point[1],b->services.containers().key(b.gui,'\0',legacy)))event.setCanceled(true);}
+    private void mouse(ScreenEvent.MouseButtonPressed.Pre event){if(event.getScreen() instanceof HostedScreen||nativeScreen(event.getScreen()))return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().mouse(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
+    private void release(ScreenEvent.MouseButtonReleased.Pre event){if(event.getScreen() instanceof HostedScreen||nativeScreen(event.getScreen()))return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().release(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getButton())))event.setCanceled(true);}
+    private void scroll(ScreenEvent.MouseScrolled.Pre event){if(nativeScreen(event.getScreen()))return;if(dispatch(event.getScreen(),(int)event.getMouseX(),(int)event.getMouseY(),b->services.containers().scroll(b.gui,(int)event.getMouseX(),(int)event.getMouseY(),event.getScrollDelta()>0?1:-1)))event.setCanceled(true);}
+    private void character(ScreenEvent.CharacterTyped.Pre event){if(event.getScreen() instanceof HostedScreen||nativeScreen(event.getScreen()))return;int[] point=pointer(event.getScreen());if(dispatch(event.getScreen(),point[0],point[1],b->services.containers().key(b.gui,event.getCodePoint(),0)))event.setCanceled(true);}
+    private void key(ScreenEvent.KeyPressed.Pre event){if(event.getScreen() instanceof HostedScreen||nativeScreen(event.getScreen()))return;int legacy=legacyKey(event.getKeyCode());int[] point=pointer(event.getScreen());if(legacy!=0&&dispatch(event.getScreen(),point[0],point[1],b->services.containers().key(b.gui,'\0',legacy)))event.setCanceled(true);}
+    private boolean nativeScreen(Screen screen){var bound=bindings.get(screen);return bound!=null&&bound.nativeView!=null;}
     private static int legacyKey(int key){return switch(key){case GLFW.GLFW_KEY_ESCAPE->1;case GLFW.GLFW_KEY_BACKSPACE->14;case GLFW.GLFW_KEY_ENTER->28;case GLFW.GLFW_KEY_R->19;case GLFW.GLFW_KEY_U->22;case GLFW.GLFW_KEY_O->24;default->0;};}
     private static int[] pointer(Screen screen){var mc=Minecraft.getInstance();return new int[]{(int)(mc.mouseHandler.xpos()*screen.width/mc.getWindow().getScreenWidth()),(int)(mc.mouseHandler.ypos()*screen.height/mc.getWindow().getScreenHeight())};}
     private interface Action{boolean run(Bound bound)throws Exception;}
     private boolean dispatch(Screen screen,int x,int y,Action action){var bound=bindings.get(screen);if(bound==null||bound.failure!=null)return false;try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,x,y,keys())){boolean handled=services.items().inLegacy(()->deviceAction(screen,()->action.run(bound)));Object requested=frame.requestedScreen();if(frame.hasScreenRequest())Minecraft.getInstance().tell(()->transition(screen,requested));if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));return handled;}catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI input failed",failure);return false;}}
+    <T> T nativeAction(Screen screen,java.util.concurrent.Callable<T> action) {
+        try(var frame=LegacyGuiGraphics.begin(screen.width,screen.height,0,0,keys())) {
+            T result=services.items().inLegacy(()->deviceAction(screen,action));
+            if(frame.hasClickSound())Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK,1f));
+            return result;
+        }catch(RuntimeException failure){throw failure;}catch(Exception failure){throw new IllegalStateException("Native device action failed",failure);}
+    }
     private <T> T deviceAction(Screen screen,java.util.concurrent.Callable<T> action) throws Exception {
         boolean device=screen instanceof LegacyDeviceScreen,hosted=screen instanceof HostedScreen;
         if(!device&&!hosted)return action.call();
@@ -206,7 +224,7 @@ public final class ClientContainerBridge {
     }
     private void close(ScreenEvent.Closing event) {
         Bound bound=bindings.remove(event.getScreen());if(bound==null)return;
-        try {services.items().inLegacy(()->{
+        try {if(bound.nativeView!=null)bound.nativeView.close();services.items().inLegacy(()->{
             // The native menu returns/drops the carried stack; the original client must not do it again.
             if(event.getScreen() instanceof AbstractContainerScreen<?>)services.containers().carried(null);
             bound.session.close();return null;

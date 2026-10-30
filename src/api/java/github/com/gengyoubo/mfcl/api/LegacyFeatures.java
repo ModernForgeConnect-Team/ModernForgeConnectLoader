@@ -54,4 +54,6 @@ public final class LegacyFeatures {
     public static final String REDIRECTS = "redirects";
     /** {@link LegacyRuntime#scenes()}; only on a physical client. */
     public static final String SCENES = "scenes";
+    /** {@link LegacyRuntime#clientScreens()}; only on a physical client. */
+    public static final String CLIENT_SCREENS = "client-screens";
 }

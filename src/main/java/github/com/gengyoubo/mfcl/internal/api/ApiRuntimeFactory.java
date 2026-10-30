@@ -99,6 +99,8 @@ public final class ApiRuntimeFactory {
             runtime.addFeatures(LegacyFeatures.CLIENT_PLAYER);
             runtime.installScenes(new github.com.gengyoubo.mfcl.client.ApiScenes(runtime, content));
             runtime.addFeatures(LegacyFeatures.SCENES);
+            runtime.installClientScreens(new github.com.gengyoubo.mfcl.client.ApiClientScreens(runtime, content));
+            runtime.addFeatures(LegacyFeatures.CLIENT_SCREENS);
         }
         runtime.addFeatures(LegacyFeatures.HOST_REPRESENTATIONS, LegacyFeatures.HOST_BLOCKS, LegacyFeatures.PLAYER, LegacyFeatures.PLAYER_IDENTITY,
                 LegacyFeatures.PLAYER_SYNC, LegacyFeatures.EQUIPMENT, LegacyFeatures.EQUIPMENT_TICK, LegacyFeatures.EQUIPMENT_WRITE_BACK,

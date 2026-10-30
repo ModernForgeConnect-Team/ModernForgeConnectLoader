@@ -11,6 +11,8 @@ import net.minecraft.world.entity.player.Inventory;
 /** Original device GUI layout with native menu clicks and server-owned inventory synchronization. */
 public final class LegacyDeviceScreen extends AbstractContainerScreen<LegacyDeviceMenu> {
     private final Object original;
+    private github.com.gengyoubo.mfcl.api.LegacyClientScreens.Controller nativeView;
+    void nativeView(github.com.gengyoubo.mfcl.api.LegacyClientScreens.Controller view){nativeView=view;}
     public Object originalGui(){return original;}
     public LegacyDeviceScreen(LegacyDeviceMenu menu,Inventory inventory,Component title) {
         super(menu,inventory,title);
@@ -37,21 +39,26 @@ public final class LegacyDeviceScreen extends AbstractContainerScreen<LegacyDevi
             });
         }catch(Exception failure){com.mojang.logging.LogUtils.getLogger().error("Cannot construct original device GUI",failure);throw new IllegalStateException("Cannot construct original device GUI",failure);}
     }
-    @Override protected void renderBg(GuiGraphics graphics,float partial,int x,int y) {}
+    @Override protected void renderBg(GuiGraphics graphics,float partial,int x,int y) {if(nativeView!=null)nativeView.renderBackground(graphics,leftPos,topPos,x,y,partial);}
     @Override public boolean mouseClicked(double x,double y,int button) {
-        return ClientContainerBridge.active().deviceMouse(this,(int)x,(int)y,button,false)||super.mouseClicked(x,y,button);
+        return nativeView!=null?(nativeView.mouseClicked(x,y,button)||super.mouseClicked(x,y,button)):
+                ClientContainerBridge.active().deviceMouse(this,(int)x,(int)y,button,false)||super.mouseClicked(x,y,button);
     }
     @Override public boolean mouseReleased(double x,double y,int button) {
-        return ClientContainerBridge.active().deviceMouse(this,(int)x,(int)y,button,true)||super.mouseReleased(x,y,button);
+        return nativeView!=null?(nativeView.mouseReleased(x,y,button)||super.mouseReleased(x,y,button)):
+                ClientContainerBridge.active().deviceMouse(this,(int)x,(int)y,button,true)||super.mouseReleased(x,y,button);
     }
     @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy) {
+        if(nativeView!=null)return nativeView.mouseDragged(x,y,button,dx,dy)||super.mouseDragged(x,y,button,dx,dy);
         ClientContainerBridge.active().deviceDrag(this,(int)x,(int)y,button);return super.mouseDragged(x,y,button,dx,dy);
     }
     @Override public boolean mouseScrolled(double x,double y,double delta) {
-        return ClientContainerBridge.active().deviceScroll(this,(int)x,(int)y,delta)||super.mouseScrolled(x,y,delta);
+        return nativeView!=null?(nativeView.mouseScrolled(x,y,delta)||super.mouseScrolled(x,y,delta)):
+                ClientContainerBridge.active().deviceScroll(this,(int)x,(int)y,delta)||super.mouseScrolled(x,y,delta);
     }
     @Override protected void renderLabels(GuiGraphics graphics,int x,int y) {}
     @Override public void render(GuiGraphics graphics,int x,int y,float partial) {
         renderBackground(graphics);super.render(graphics,x,y,partial);renderTooltip(graphics,x,y);
+        if(nativeView!=null)nativeView.renderForeground(graphics,x,y,partial);
     }
 }
