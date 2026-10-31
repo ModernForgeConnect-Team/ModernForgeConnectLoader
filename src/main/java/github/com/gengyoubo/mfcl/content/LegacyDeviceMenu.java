@@ -32,6 +32,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
     private boolean opening=true;
     private boolean receivedContents;
     private Object predictedGui,predictedPlayer;
+    private Object clientPlayer;
     private int[] playerInventorySlots;
     public boolean receivedContents(){return original!=null||receivedContents;}
     @Override public void initializeContents(int state,List<ItemStack> stacks,ItemStack carried) {
@@ -46,6 +47,7 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
             inventory.setItem(playerInventorySlots[slot],stack.copy());
     }
     public void bindClientContainer(Object gui,Object player) throws Exception {
+        clientPlayer=player;
         Object container=content.services().loader().loadClass("net.minecraft.client.gui.inventory.GuiContainer").getField("field_147002_h").get(gui);
         // Every original GUI needs authoritative player-slot reconciliation, even without local click prediction.
         Object oldInventory=content.services().loader().loadClass("net.minecraft.entity.player.EntityPlayer").getField("field_71071_by").get(player);
@@ -61,6 +63,10 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
         if(LegacyDeviceContainers.predicts(container)){
             predictedGui=gui;predictedPlayer=player;
         }
+    }
+    /** Original GUI code reads its retained actor, rather than creating a new player snapshot each frame. */
+    public void refreshClientEffects()throws Exception {
+        if(original==null&&clientPlayer!=null)LegacyPotions.refresh(clientPlayer,LegacyObjects.world(clientPlayer),inventory.player.getUUID());
     }
     private final List<LegacyPackets.Message> initialPackets=new ArrayList<>();
     public Object originalPlayer(){return original==null?null:original.player();}
@@ -166,6 +172,8 @@ public final class LegacyDeviceMenu extends AbstractContainerMenu {
                 byte[] saved=server.getPersistentData().getByteArray(ModernContentBridge.LEGACY_ENTITY_DATA);
                 if(saved.length!=0)services.playerData().write(original.player(),saved);
                 services.playerState().initialize(original.player());
+                if(LegacyPotions.refreshChanged(original.player(),world,server.getUUID()))
+                    content.logicTransaction(server.serverLevel(),origin(),()->{LegacyDeviceContainers.playerEffectsChanged(original);return null;},true);
                 byte[] prior=services.playerData().read(original.player());
                 try {
                     T result=action.call();

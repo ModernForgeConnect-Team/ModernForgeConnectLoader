@@ -94,13 +94,19 @@ public final class LegacyPotions {
     }
     /** Query mirrors must answer hasPotion/getActivePotionEffect from the real entity's current effects. */
     public static void refresh(Object entity,Object world,UUID id)throws Exception {
-        var runtime=RUNTIMES.get(entity.getClass().getClassLoader());if(runtime==null||!runtime.living.isInstance(entity))return;
+        refreshChanged(entity,world,id);
+    }
+    /** Refresh durations too, but only additions, removals and amplifier changes affect container calculations. */
+    public static boolean refreshChanged(Object entity,Object world,UUID id)throws Exception {
+        var runtime=RUNTIMES.get(entity.getClass().getClassLoader());if(runtime==null||!runtime.living.isInstance(entity))return false;
         var values=new HashMap<Integer,Object>();
         for(var state:LegacyWorlds.access(world).effects(id)){
             Object old=runtime.effect.getConstructor(int.class,int.class,int.class,boolean.class).newInstance(state.id(),state.duration(),state.amplifier(),state.ambient());
             restoreCuratives(entity.getClass().getClassLoader(),old,state.curatives());values.put(state.id(),old);
         }
-        runtime.active.set(entity,values);
+        var before=(Map<?,?>)runtime.active.get(entity);boolean changed=before==null?!values.isEmpty():!before.keySet().equals(values.keySet());
+        if(!changed&&before!=null)for(var entry:values.entrySet())if(!runtime.effect.getMethod("func_76458_c").invoke(before.get(entry.getKey())).equals(runtime.effect.getMethod("func_76458_c").invoke(entry.getValue()))){changed=true;break;}
+        runtime.active.set(entity,values);return changed;
     }
     /** Keep same-callback reads consistent after a mirrored addPotionEffect. */
     public static Object added(Object entity,Object incoming)throws Exception {

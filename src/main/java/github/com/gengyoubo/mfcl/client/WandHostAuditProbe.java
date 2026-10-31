@@ -25,7 +25,9 @@ final class WandHostAuditProbe {
     private String focusItemKey;
     private String focusFixture="wand";
     private CompletableFuture<?> pending;
-    private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(4);
+    private ArcaneWorkbenchHostAcceptance workbench;
+    private String worldName;
+    private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(8);
     private WandHostAuditProbe(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){MinecraftForge.EVENT_BUS.addListener(new WandHostAuditProbe(content)::tick);}
     private void tick(TickEvent.ClientTickEvent event){
@@ -34,7 +36,8 @@ final class WandHostAuditProbe {
             if(System.nanoTime()>deadline)throw new IllegalStateException("Wand host audit timed out at "+stage);
             if(stage==0&&mc.screen instanceof TitleScreen&&mc.getOverlay()==null){
                 org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(2);stage=1;
-                mc.createWorldOpenFlows().createFreshLevel("mfcl-wand-audit-"+System.currentTimeMillis(),new LevelSettings("Wand audit",GameType.SURVIVAL,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),
+                worldName="mfcl-wand-audit-"+System.currentTimeMillis();
+                mc.createWorldOpenFlows().createFreshLevel(worldName,new LevelSettings("Wand audit",GameType.SURVIVAL,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),
                     new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
             }else if(stage==1&&mc.player!=null&&mc.level!=null&&mc.screen==null){
                 pending=server(mc,()->{audit(mc);verifyNode(mc);prepareFocus(mc);return true;});stage=2;frames=0;
@@ -54,7 +57,11 @@ final class WandHostAuditProbe {
             }else if(stage==10&&++frames>8){pending=server(mc,()->{verifyFocus(mc,true);return true;});stage=11;frames=0;
             }else if(stage==11&&pending.isDone()&&++frames>8&&mc.screen==null){pending.join();selectFocus(mc,true);stage=12;frames=0;
             }else if(stage==12&&++frames>8){pending=server(mc,()->{verifyFocus(mc,false);return true;});stage=13;
-            }else if(stage==13&&pending.isDone()){pending.join();report.put("status","PASS");finish(mc);}
+            }else if(stage==13&&pending.isDone()){
+                pending.join();
+                if(workbench==null)workbench=new ArcaneWorkbenchHostAcceptance(content,report,worldName);
+                if(workbench.tick(mc)){report.put("status","PASS");finish(mc);}
+            }
         }catch(Throwable failure){report.put("status","FAIL");report.put("failure",failure.toString());try{finish(mc);}catch(Exception write){throw new IllegalStateException(write);}}
     }
     private <T> CompletableFuture<T> server(Minecraft mc,java.util.concurrent.Callable<T> action){return mc.getSingleplayerServer().submit(()->{try{return action.call();}catch(Exception failure){throw new IllegalStateException(failure);}});}

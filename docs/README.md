@@ -31,6 +31,7 @@ Read each record's date, tested versions and stated limits. A historical experim
 | TC4 wand charging of nodes inside silverwood and native client right-click fallback | [Node charging fix and verification](wand-node-charging.md) |
 | Negative / upper world heights, wood / leaf sounds, TC4 sapling drops and FTB-style native harvesting | [Tree fixes and height audit](trees-and-world-height.md), [acceptance data](trees-height-progress.json) |
 | TC4 wand crafting, charging and focus support | [Function audit](wand-functions-audit.md), [runtime and native-menu evidence](wand-functions-audit.json) |
+| TC4 deconstruction-table vis costs and arcane-workbench wand persistence | [Crafting and save/logout/login verification](arcane-workbench.md) |
 | TC4 focus pouch / hover harness GUI, latency, storage and misplaced-armor safety | [Portable item fixes](focus-pouch-bridge.md) |
 | TC4 repair / haste registration, native enchantment NBT, original effects and world reload | [Enchantment bridge](enchantment-bridge.md) |
 | TC4 elemental sword, axe and pickaxe right-click effects | [Elemental tool fixes](elemental-tools.md) |

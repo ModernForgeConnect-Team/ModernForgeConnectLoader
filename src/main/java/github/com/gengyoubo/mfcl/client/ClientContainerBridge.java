@@ -167,6 +167,7 @@ public final class ClientContainerBridge {
         boolean device=screen instanceof LegacyDeviceScreen,hosted=screen instanceof HostedScreen;
         if(!device&&!hosted)return action.call();
         try(var input=new LegacyDeviceInput()){
+            if(screen instanceof LegacyDeviceScreen original)original.getMenu().refreshClientEffects();
             T result=action.call();
             if(device)for(var packet:input.packets())github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendDevicePacket(((LegacyDeviceScreen)screen).getMenu().containerId,packet);
             else for(var packet:input.packets())github.com.gengyoubo.mfcl.content.ScanSyncChannel.sendLegacyPacket(packet);

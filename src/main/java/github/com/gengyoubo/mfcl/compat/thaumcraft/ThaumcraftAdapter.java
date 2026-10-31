@@ -47,6 +47,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         ThaumcraftOuterLands.install(services);
         LegacyDeviceContainers.registerPredictedContainer(loader,"thaumcraft.common.container.ContainerFocusPouch");
         LegacyDeviceContainers.registerPredictedContainer(loader,"thaumcraft.common.container.ContainerHoverHarness");
+        LegacyDeviceContainers.registerPlayerEffectsListener(loader,"thaumcraft.common.container.ContainerArcaneWorkbench",(container,player)->
+                container.getClass().getMethod("func_75130_a",loader.loadClass("net.minecraft.inventory.IInventory")).invoke(container,LegacyObjects.declared(container,"tileEntity")));
         LegacyPackets.allowServer(loader,ThaumcraftDevicePackets::prepare);
         services.playerState().register(new ThaumcraftKnowledge(loader));
         services.scanners().register(new ThaumcraftScanner(loader));

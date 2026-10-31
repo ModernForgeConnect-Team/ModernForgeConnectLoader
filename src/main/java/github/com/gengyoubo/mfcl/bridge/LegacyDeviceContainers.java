@@ -16,6 +16,17 @@ public final class LegacyDeviceContainers {
     }
     private static final Map<ClassLoader,Map<String,GuiProvider>> PROVIDERS=new WeakHashMap<>();
     private static final Map<ClassLoader,Set<String>> PREDICTED=new WeakHashMap<>();
+    @FunctionalInterface public interface PlayerEffectsListener {void changed(Object container,Object player)throws Exception;}
+    private static final Map<ClassLoader,Map<String,PlayerEffectsListener>> EFFECT_LISTENERS=new WeakHashMap<>();
+    /** Original containers whose cached results depend on the viewer's current status effects. */
+    public static synchronized void registerPlayerEffectsListener(ClassLoader loader,String type,PlayerEffectsListener listener){
+        EFFECT_LISTENERS.computeIfAbsent(loader,ignored->new HashMap<>()).put(type,listener);
+    }
+    public static void playerEffectsChanged(Open opened)throws Exception {
+        PlayerEffectsListener listener;
+        synchronized(LegacyDeviceContainers.class){listener=EFFECT_LISTENERS.getOrDefault(opened.container().getClass().getClassLoader(),Map.of()).get(opened.container().getClass().getName());}
+        if(listener!=null)listener.changed(opened.container(),opened.player());
+    }
     /** Opt in only containers whose ordinary client slot-click logic is safe to preview and reconcile. */
     public static synchronized void registerPredictedContainer(ClassLoader loader,String type) {
         PREDICTED.computeIfAbsent(loader,ignored->new HashSet<>()).add(type);
