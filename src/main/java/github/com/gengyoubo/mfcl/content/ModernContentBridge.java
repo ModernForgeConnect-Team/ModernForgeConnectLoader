@@ -542,6 +542,8 @@ public final class ModernContentBridge {
         boolean changed = false;
         for (var tile : chunk.getBlockEntities().values()) {
             if (tile instanceof LegacyBlockEntity) continue; // Original tiles hold original stacks, converted on every access.
+            // Reading an unlooted chest rolls its loot and setChanged() asks for this still-loading chunk: the server deadlocks.
+            if (hasPendingLoot(tile)) continue;
             try {
                 if (tile instanceof net.minecraft.world.Container container) changed |= migrate(container);
                 else if (tile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).resolve().orElse(null)
@@ -561,13 +563,21 @@ public final class ModernContentBridge {
         else if (entity instanceof net.minecraft.world.entity.decoration.ItemFrame frame) { var after = migrate(frame.getItem()); if (after != frame.getItem()) frame.setItem(after, false); }
         else if (entity instanceof net.minecraft.world.entity.player.Player player) { migrate(player.getInventory()); migrate(player.getEnderChestInventory()); }
         else {
-            if (entity instanceof net.minecraft.world.Container container) migrate(container);
+            // Chest minecarts/boats with a loot table hold no old stacks yet; reading them would roll the loot early.
+            if (entity instanceof net.minecraft.world.Container container
+                    && !(entity instanceof net.minecraft.world.entity.vehicle.ContainerEntity loot && loot.getLootTable() != null)) migrate(container);
             // Mobs and armor stands joining are still on their first tick, so re-equipping plays no sound.
             if (entity instanceof LivingEntity living) for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
                 var before = living.getItemBySlot(slot); var after = migrate(before);
                 if (after != before) living.setItemSlot(slot, after);
             }
         }
+    }
+    private static final java.lang.reflect.Field LOOT_TABLE = net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField(
+            net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity.class, "f_59605_");
+    private static boolean hasPendingLoot(net.minecraft.world.level.block.entity.BlockEntity tile) {
+        if (!(tile instanceof net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity chest)) return false;
+        try { return LOOT_TABLE.get(chest) != null; } catch (IllegalAccessException failure) { throw new IllegalStateException(failure); }
     }
     private boolean migrate(net.minecraft.world.Container container) {
         boolean changed = false;
