@@ -522,6 +522,14 @@ public final class LegacyClientData {
             return snapshot(stack);
         });
     }
+    /** A stack's tag in the shared compressed binary NBT format, or null without one. */
+    public byte[] tagBytes(Stack source) throws Exception {
+        if (source.tag().isEmpty()) return null;
+        return inLegacy(()->{
+            Object tag=stackType.getField("field_77990_d").get(materialize(source));
+            return tag==null?null:(byte[])loader.loadClass("net.minecraft.nbt.CompressedStreamTools").getMethod("func_74798_a",loader.loadClass("net.minecraft.nbt.NBTTagCompound")).invoke(null,tag);
+        });
+    }
     /** Replaces a stack's tag using the shared binary NBT format (old indexed SNBT is not modern SNBT). */
     public Stack withTag(Stack source,byte[] compressed) throws Exception {
         return inLegacy(()->{

@@ -51,6 +51,7 @@ public final class ModernContentBridge {
     private final Map<String, github.com.gengyoubo.mfcl.api.spi.LegacyBlockProvider.NativeBlock> nativeBlocks = new HashMap<>();
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final Map<Item, LegacyContent.Item> reverseItems = new IdentityHashMap<>();
+    private final LegacyItemSplits itemSplits;
     private final LegacyContentPack pack;
     private final LegacyEnchantmentBridge enchantments;
     private final LegacyPotionBridge potions;
@@ -75,6 +76,7 @@ public final class ModernContentBridge {
         this.villagers = new LegacyVillagerBridge(this);
         this.enchantments = new LegacyEnchantmentBridge(this);
         this.potions = new LegacyPotionBridge(this);
+        this.itemSplits = new LegacyItemSplits(services);
         try (var context = new LegacyInventoryContext(services)) {
             declarations = new LegacyContent(services.items());
             blockShapes = new LegacyBlockShapes(services);
@@ -114,7 +116,6 @@ public final class ModernContentBridge {
         var variantsByItem=new HashMap<String,Set<Integer>>();
         for(var item:declarations.items())variantsByItem.put(item.key(),item.variants().stream().map(LegacyContent.Variant::metadata).collect(java.util.stream.Collectors.toSet()));
         oreDictionary.tag(services,variantsByItem);
-        for(var tag:services.hostItemTags().entrySet())pack.itemTag(tag.getKey(),tag.getValue().stream().filter(key->declarations.items().stream().anyMatch(item->item.key().equals(key))).map(key->id(key).toString()).toList());
         creative = new CreativeTabBridge(this);
         hostTools = new HostToolStacks(services);
         hostInventoryStacks = new HostInventoryStacks(services);
@@ -127,6 +128,8 @@ public final class ModernContentBridge {
             LegacySmeltingRecipes.install(bus);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::playerLoggedIn);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::missingMappings);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::migrateChunk);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::migrateEntity);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::arrowNock);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(bridge::arrowLoose);
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
@@ -258,8 +261,9 @@ public final class ModernContentBridge {
     /** {@code LegacyMappings.applyTo} for item stacks: the converted stack, keeping host-owned tags and capabilities of an unchanged item. */
     public ItemStack applyTo(ItemStack existing, LegacyClientData.Stack old) {
         var updated = gameplayStack(old);
-        if (existing.isEmpty() || updated.isEmpty() || existing.getItem() != updated.getItem()) return updated;
-        var merged = existing.copy(); merged.setCount(updated.getCount());
+        if (existing.isEmpty() || updated.isEmpty() || !sameOriginal(existing, updated)) return updated;
+        // Old code may move a split item to a sibling (a new wand cap); host-owned data follows it.
+        var merged = itemSplits.migrate(existing, updated.getItem()).copy(); merged.setCount(updated.getCount());
         merged.setTag(updated.getTag() == null ? null : updated.getTag().copy());
         return keepHostTags(existing, merged);
     }
@@ -381,7 +385,15 @@ public final class ModernContentBridge {
         LegacyRegistryIds.validate(keys);
     }
     private void missingMappings(net.minecraftforge.registries.MissingMappingsEvent event) {
-        LegacyRegistryIds.remap(event.getMappings(Registries.ITEM,"mfcl"),items);
+        // A withdrawn split variant falls back to its original host item; its stored metadata and NBT are complete.
+        var itemIds = new HashMap<ResourceLocation, Item>(); items.forEach((key, item) -> itemIds.put(id(key), item));
+        var remapped = Collections.newSetFromMap(new IdentityHashMap<net.minecraftforge.registries.MissingMappingsEvent.Mapping<Item>, Boolean>());
+        for (var mapping : event.getAllMappings(Registries.ITEM)) {
+            String path = mapping.getKey().getPath(); int slash = path.lastIndexOf('/');
+            Item original = slash < 0 ? null : itemIds.get(ResourceLocation.fromNamespaceAndPath(mapping.getKey().getNamespace(), path.substring(0, slash)));
+            if (original != null) { mapping.remap(original); remapped.add(mapping); }
+        }
+        LegacyRegistryIds.remap(event.getMappings(Registries.ITEM,"mfcl").stream().filter(mapping -> !remapped.contains(mapping)).toList(),items);
         LegacyRegistryIds.remap(event.getMappings(Registries.BLOCK,"mfcl"),blocks);
     }
     private void register(RegisterEvent event) {
@@ -426,18 +438,29 @@ public final class ModernContentBridge {
         });
         event.register(Registries.ITEM, registry -> {
             if (!blocksRegistered || itemsRegistered) throw new IllegalStateException("Legacy registry window ordering violated");
+            var originalIds = new HashSet<ResourceLocation>();
+            for (var entry : declarations.items()) originalIds.add(id(entry.key()));
+            int splitItems = 0;
             for (var entry : declarations.items()) {
                 if (BuiltInRegistries.ITEM.containsKey(id(entry.key()))) throw new IllegalStateException("Host already owns item ID " + entry.key());
-                var properties = new Item.Properties().stacksTo(entry.maxDamage() > 0 ? 1 : entry.stackLimit());
-                if (entry.maxDamage() > 0) properties.durability(entry.maxDamage());
-                Item item = entry.blockKey() != null && blocks.containsKey(entry.blockKey())
-                        ? new MirroredBlockItem(blocks.get(entry.blockKey()), properties, entry)
-                        : entry.armor() == null ? new MirroredItem(properties, entry)
-                        : entry.armor().dyeable() ? new MirroredDyeableArmorItem(properties, entry) : new MirroredArmorItem(properties, entry);
+                Item item = mirror(entry, false);
                 registry.register(id(entry.key()), item); items.put(entry.key(), item); reverseItems.put(item, entry);
+                var split = itemSplits.plan(entry);
+                if (split == null) continue;
+                var variants = new LinkedHashMap<String, Item>();
+                for (String variant : split.variants()) {
+                    var variantId = LegacyItemSplits.id(entry.key(), variant);
+                    if (BuiltInRegistries.ITEM.containsKey(variantId) || originalIds.contains(variantId)) throw new IllegalStateException("Host item split ID is taken: " + variantId);
+                    Item variantItem = mirror(entry, true);
+                    registry.register(variantId, variantItem); reverseItems.put(variantItem, entry); variants.put(variant, variantItem);
+                    try { pack.copyItemModel(id(entry.key()), variantId); }
+                    catch (java.io.IOException failure) { throw new IllegalStateException("Cannot write split item model " + variantId, failure); }
+                }
+                itemSplits.register(entry.key(), split, variants); splitItems += variants.size();
             }
+            writeItemTags();
             itemsRegistered = true;
-            LogUtils.getLogger().info("MFCL_CONTENT_REGISTRATION_PASS: blocks={} items={}", blocks.size(), items.size());
+            LogUtils.getLogger().info("MFCL_CONTENT_REGISTRATION_PASS: blocks={} items={} splitItems={}", blocks.size(), items.size(), splitItems);
         });
         event.register(Registries.CREATIVE_MODE_TAB, creative::register);
         event.register(Registries.MENU,registry->{
@@ -457,6 +480,102 @@ public final class ModernContentBridge {
                 registry.register(ResourceLocation.tryParse("mfcl:legacy_tile_1_7_10"), tileType);
             }
         });
+    }
+    private Item mirror(LegacyContent.Item entry, boolean split) {
+        var properties = new Item.Properties().stacksTo(entry.maxDamage() > 0 ? 1 : entry.stackLimit());
+        if (entry.maxDamage() > 0) properties.durability(entry.maxDamage());
+        return entry.blockKey() != null && blocks.containsKey(entry.blockKey())
+                ? new MirroredBlockItem(blocks.get(entry.blockKey()), properties, entry, split)
+                : entry.armor() == null ? new MirroredItem(properties, entry)
+                : entry.armor().dyeable() ? new MirroredDyeableArmorItem(properties, entry) : new MirroredArmorItem(properties, entry);
+    }
+    /** Host tags of original items, split items included; an ore subtype tags exactly the split items it covers. */
+    private void writeItemTags() {
+        var tags = new LinkedHashMap<String, LinkedHashSet<String>>();
+        for (var tag : services.hostItemTags().entrySet()) for (String key : tag.getValue()) {
+            if (!items.containsKey(key)) continue;
+            var values = tags.computeIfAbsent(tag.getKey(), ignored -> new LinkedHashSet<>());
+            values.add(id(key).toString());
+            for (var split : itemSplits.items(key)) values.add(itemSplitId(key, split));
+        }
+        for (var tag : oreDictionary.subtypes().entrySet()) {
+            var listed = new HashMap<String, Set<Integer>>();
+            for (var stack : tag.getValue()) if (itemSplits.split(stack.key())) listed.computeIfAbsent(stack.key(), ignored -> new HashSet<>()).add(stack.metadata());
+            for (var item : listed.entrySet()) {
+                var entry = declarations.items().stream().filter(candidate -> candidate.key().equals(item.getKey())).findFirst().orElseThrow();
+                var covered = new LinkedHashMap<Item, Boolean>();
+                for (var variant : entry.variants()) {
+                    Item split = itemSplits.select(entry.key(), variant.metadata(), "");
+                    if (split != null) covered.merge(split, item.getValue().contains(32767) || item.getValue().contains(variant.metadata()), Boolean::logicalAnd);
+                }
+                covered.forEach((split, all) -> { if (all) tags.computeIfAbsent(tag.getKey(), ignored -> new LinkedHashSet<>()).add(itemSplitId(entry.key(), split)); });
+            }
+        }
+        try { for (var tag : tags.entrySet()) pack.itemTag(tag.getKey(), List.copyOf(tag.getValue())); }
+        catch (java.io.IOException failure) { throw new IllegalStateException("Cannot write original item tags", failure); }
+    }
+    private String itemSplitId(String key, Item split) { return LegacyItemSplits.id(key, itemSplits.variant(split)).toString(); }
+    /** The original host item of a key followed by its split items. */
+    public List<Item> hostItems(String key) {
+        Item item = items.get(key); if (item == null) return List.of();
+        var result = new ArrayList<Item>(); result.add(item); result.addAll(itemSplits.items(key)); return result;
+    }
+    /** Whether a host stack is the original item {@code key}, on its original host item or any split of it. */
+    public boolean is(ItemStack stack, String key) {
+        var entry = stack.isEmpty() ? null : reverseItems.get(stack.getItem()); return entry != null && entry.key().equals(key);
+    }
+    /** Both stacks are the same original item, whichever host items they are on. */
+    public boolean sameOriginal(ItemStack first, ItemStack second) {
+        if (ItemStack.isSameItem(first, second)) return true;
+        var entry = reverseItems.get(first.getItem()); return entry != null && entry == reverseItems.get(second.getItem());
+    }
+    /** Moves a saved stack of a split original item to the host item the current split rules select. */
+    public ItemStack migrate(ItemStack stack) {
+        var entry = stack.isEmpty() ? null : reverseItems.get(stack.getItem());
+        if (entry == null || !itemSplits.split(entry.key())) return stack;
+        CompoundTag stored = stack.getTagElement(STACK_TAG);
+        Item target = itemSplits.select(entry.key(), metadata(stack), stored == null ? "" : stored.getString("snbt"));
+        return itemSplits.migrate(stack, target == null ? items.get(entry.key()) : target);
+    }
+    private void migrateChunk(net.minecraftforge.event.level.ChunkEvent.Load event) {
+        if (event.getLevel().isClientSide() || !itemSplits.any() || !(event.getChunk() instanceof net.minecraft.world.level.chunk.LevelChunk chunk)) return;
+        boolean changed = false;
+        for (var tile : chunk.getBlockEntities().values()) {
+            if (tile instanceof LegacyBlockEntity) continue; // Original tiles hold original stacks, converted on every access.
+            try {
+                if (tile instanceof net.minecraft.world.Container container) changed |= migrate(container);
+                else if (tile.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).resolve().orElse(null)
+                        instanceof net.minecraftforge.items.IItemHandlerModifiable handler)
+                    for (int slot = 0; slot < handler.getSlots(); slot++) {
+                        var before = handler.getStackInSlot(slot); var after = migrate(before);
+                        if (after != before) { handler.setStackInSlot(slot, after); changed = true; }
+                    }
+            } catch (RuntimeException failure) { LogUtils.getLogger().warn("MFCL split item migration skipped {} at {}", BlockEntityType.getKey(tile.getType()), tile.getBlockPos(), failure); }
+        }
+        if (changed) chunk.setUnsaved(true);
+    }
+    private void migrateEntity(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
+        if (event.getLevel().isClientSide() || !itemSplits.any()) return;
+        var entity = event.getEntity();
+        if (entity instanceof net.minecraft.world.entity.item.ItemEntity item) { var after = migrate(item.getItem()); if (after != item.getItem()) item.setItem(after); }
+        else if (entity instanceof net.minecraft.world.entity.decoration.ItemFrame frame) { var after = migrate(frame.getItem()); if (after != frame.getItem()) frame.setItem(after, false); }
+        else if (entity instanceof net.minecraft.world.entity.player.Player player) { migrate(player.getInventory()); migrate(player.getEnderChestInventory()); }
+        else {
+            if (entity instanceof net.minecraft.world.Container container) migrate(container);
+            // Mobs and armor stands joining are still on their first tick, so re-equipping plays no sound.
+            if (entity instanceof LivingEntity living) for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+                var before = living.getItemBySlot(slot); var after = migrate(before);
+                if (after != before) living.setItemSlot(slot, after);
+            }
+        }
+    }
+    private boolean migrate(net.minecraft.world.Container container) {
+        boolean changed = false;
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            var before = container.getItem(slot); var after = migrate(before);
+            if (after != before) { container.setItem(slot, after); changed = true; }
+        }
+        return changed;
     }
     public ItemStack mapStack(LegacyClientData.Stack old) {
         if (old.key().equals(LegacyHostTools.PICKAXE) || old.key().equals(LegacyHostStacks.ITEM)) return gameplayStack(old);
@@ -513,6 +632,7 @@ public final class ModernContentBridge {
     }
     public ItemStack stack(String key, int metadata, int count, String tag) {
         Item item = items.get(key); if (item == null) return ItemStack.EMPTY;
+        Item split = itemSplits.select(key, metadata, tag); if (split != null) item = split;
         ItemStack stack = new ItemStack(item, count);
         if (item.canBeDepleted()) stack.setDamageValue(metadata);
         if ((!item.canBeDepleted() && metadata != 0) || (tag != null && !tag.isEmpty())) {
@@ -1020,7 +1140,11 @@ public final class ModernContentBridge {
                 current.setCount(updated.getCount());current.setTag(updated.getTag()==null?null:updated.getTag().copy());
                 if(wear>0)current.hurt(wear,player.getRandom(),player instanceof net.minecraft.server.level.ServerPlayer server?server:null);
             }
-            else if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
+            else {
+                // A changed original NBT can select a sibling split item; host-owned tags follow it there.
+                if(!current.isEmpty()&&!updated.isEmpty()&&sameOriginal(current,updated))keepHostTags(itemSplits.migrate(current,updated.getItem()),updated);
+                if(hand==net.minecraft.world.InteractionHand.OFF_HAND&&slot==inventory.selected)player.setItemInHand(hand,updated);else inventory.setItem(slot,updated);
+            }
         }
         catch (Exception unmapped) { }
     }
@@ -1049,7 +1173,10 @@ public final class ModernContentBridge {
     }
     private final class MirroredBlockItem extends BlockItem {
         private final LegacyContent.Item entry;
-        MirroredBlockItem(Block block, Properties properties, LegacyContent.Item entry) { super(block, properties); this.entry = entry; }
+        /** A split item never claims its block, so Block.asItem stays the original host item. */
+        private final boolean split;
+        MirroredBlockItem(Block block, Properties properties, LegacyContent.Item entry, boolean split) { super(block, properties); this.entry = entry; this.split = split; }
+        @Override public void registerBlocks(Map<Block, Item> blockToItem, Item item) { if (!split) super.registerBlocks(blockToItem, item); }
         @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }

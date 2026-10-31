@@ -43,6 +43,16 @@ public final class LegacyOreDictionary {
         return null;
     }
 
+    /** Forge tag to the exact original subtypes listed under it; wildcard entries keep metadata 32767. */
+    public Map<String, List<LegacyClientData.Stack>> subtypes() {
+        var result = new LinkedHashMap<String, List<LegacyClientData.Stack>>();
+        for (var entry : entries.entrySet()) {
+            String tag = forgeTag(entry.getKey());
+            if (tag != null) result.computeIfAbsent(tag, ignored -> new ArrayList<>()).addAll(entry.getValue());
+        }
+        return result;
+    }
+
     /** Registers host tags for original items whose declared variants are all inside one ore dictionary name. */
     public void tag(LegacyServices services, Map<String, Set<Integer>> variantsByItem) {
         for (var entry : entries.entrySet()) {

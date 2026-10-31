@@ -39,17 +39,17 @@ public final class ClientContentBridge {
         });
         bus.addListener((FMLClientSetupEvent event) -> event.enqueueWork(() -> {
             net.minecraft.client.gui.screens.MenuScreens.register(bridge.deviceMenuType(),LegacyDeviceScreen::new);
-            for (var entry : bridge.declarations().items()) ItemProperties.register(bridge.items().get(entry.key()), ResourceLocation.fromNamespaceAndPath("mfcl", "metadata"),
+            for (var entry : bridge.declarations().items()) for (var item : bridge.hostItems(entry.key())) ItemProperties.register(item, ResourceLocation.fromNamespaceAndPath("mfcl", "metadata"),
                     (stack, level, entity, seed) -> ModernContentBridge.metadata(stack));
             // Ticks drawn so far, matching the original held-use icon frames sampled per item.
-            for (var entry : bridge.declarations().items()) if (!entry.pulls().isEmpty()) ItemProperties.register(bridge.items().get(entry.key()), ResourceLocation.fromNamespaceAndPath("mfcl", "pull"),
+            for (var entry : bridge.declarations().items()) if (!entry.pulls().isEmpty()) for (var item : bridge.hostItems(entry.key())) ItemProperties.register(item, ResourceLocation.fromNamespaceAndPath("mfcl", "pull"),
                     (stack, level, entity, seed) -> entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? stack.getUseDuration() - entity.getUseItemRemainingTicks() : 0);
         }));
         bus.addListener((net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) -> {
             for (var entry : bridge.declarations().items()) event.register((stack, tint) -> {
                 try { return bridge.services().items().itemColor(bridge.renderSnapshot(stack), tint); }
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
-            }, bridge.items().get(entry.key()));
+            }, bridge.hostItems(entry.key()).toArray(net.minecraft.world.item.Item[]::new));
         });
         if (Boolean.getBoolean("mfcl.test.potions")) PotionHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.elementalTools")) ElementalToolsHostSmokeProbe.install(bridge);

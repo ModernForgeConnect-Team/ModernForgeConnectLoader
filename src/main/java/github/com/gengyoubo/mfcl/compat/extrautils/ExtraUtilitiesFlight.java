@@ -34,8 +34,7 @@ final class ExtraUtilitiesFlight {
     }
     private ModernContentBridge content(){var content=ModernContentBridge.active();return content!=null&&content.services()==services?content:null;}
     private boolean carriesRing(ModernContentBridge content,ServerPlayer player){
-        var ring=content.items().get("ExtraUtilities:angelRing");
-        return ring!=null&&player.getInventory().items.stream().anyMatch(stack->!stack.isEmpty()&&stack.getItem()==ring);
+        return player.getInventory().items.stream().anyMatch(stack->content.is(stack,"ExtraUtilities:angelRing"));
     }
     private Object persisted(Object actor) throws Exception {
         var helper=services.loader().loadClass("com.rwtema.extrautils.helper.XUHelper");

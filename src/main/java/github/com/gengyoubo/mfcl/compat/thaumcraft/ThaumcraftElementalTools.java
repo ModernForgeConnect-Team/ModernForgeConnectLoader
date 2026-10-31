@@ -16,7 +16,7 @@ final class ThaumcraftElementalTools {
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((TickEvent.PlayerTickEvent event)->{
                 if(event.phase!=TickEvent.Phase.END||!(event.player instanceof ServerPlayer player)||!player.isUsingItem())return;
                 var content=ModernContentBridge.active();if(content==null||content.services()!=services)return;
-                if(player.getUseItem().getItem()!=content.items().get("Thaumcraft:ItemSwordElemental"))return;
+                if(!content.is(player.getUseItem(),"Thaumcraft:ItemSwordElemental"))return;
                 try{FLOAT_TICKS.setInt(player.connection,0);}catch(IllegalAccessException failure){throw new IllegalStateException("Cannot apply TC4 sword floating counter reset",failure);}
             });
         });

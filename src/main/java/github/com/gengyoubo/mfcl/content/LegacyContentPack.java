@@ -262,6 +262,13 @@ public final class LegacyContentPack {
         var id = net.minecraft.resources.ResourceLocation.parse(tag);
         json("data/" + id.getNamespace() + "/tags/items/" + id.getPath() + ".json", Map.of("replace", false, "values", items));
     }
+    /** A split item draws exactly like its original host item, metadata and pull overrides included. */
+    public void copyItemModel(net.minecraft.resources.ResourceLocation original, net.minecraft.resources.ResourceLocation split) throws IOException {
+        Path source = directory.resolve("assets/" + original.getNamespace() + "/models/item/" + original.getPath() + ".json").normalize();
+        Path target = directory.resolve("assets/" + split.getNamespace() + "/models/item/" + split.getPath() + ".json").normalize();
+        if (!source.startsWith(directory) || !target.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + split);
+        Files.createDirectories(target.getParent()); Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+    }
     void json(String resource, Object value) throws IOException {
         Path file = directory.resolve(resource).normalize();
         if (!file.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + resource);
