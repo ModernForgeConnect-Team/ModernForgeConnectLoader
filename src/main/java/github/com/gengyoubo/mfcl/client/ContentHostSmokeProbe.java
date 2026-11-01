@@ -81,6 +81,7 @@ final class ContentHostSmokeProbe {
                 proof.put("stitchedTexturesVerified", true);
                 verifyContainerMirrors(mc);
                 verifyStackRendering(mc);
+                verifyRepresentedHostIcons();
                 proof.put("renderCaptureFailures", bridge.declarations().captureDiagnostics().stream()
                         .filter(line -> line.contains("failed") || line.contains("unresolved") || line.contains("unavailable")).toList());
                 proof.put("capturedInventoryVariants", bridge.pack().geometry().size());
@@ -284,6 +285,19 @@ final class ContentHostSmokeProbe {
         proof.put("unmappedHostContainerVerified", true);
         proof.put("originalWandTooltipsChecked", tooltips);
         mc.setScreen(null);
+    }
+    private void verifyRepresentedHostIcons() throws Exception {
+        for (var item : List.of(Items.NETHERITE_INGOT, Items.AMETHYST_BLOCK)) {
+            var id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).toString();
+            bridge.hostRepresentations().item(id);
+            var stack = new ItemStack(item, 2);
+            stack.getOrCreateTag().putString("icon_test", "preserved");
+            var original = bridge.gameplayStack(stack);
+            var rendered = ModernItemMapping.renderStack(original);
+            if (rendered.getCount() != stack.getCount() || !ItemStack.isSameItemSameTags(stack, rendered))
+                throw new IllegalStateException("Represented host item did not render as itself: " + id);
+        }
+        proof.put("representedHostItemAndBlockIcons", true);
     }
     private void verifySpecialBlockModels(Minecraft mc) throws Exception {
         String key = "Thaumcraft:blockCosmeticOpaque";

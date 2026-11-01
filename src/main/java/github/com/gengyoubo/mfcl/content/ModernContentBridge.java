@@ -589,6 +589,8 @@ public final class ModernContentBridge {
     }
     public ItemStack mapStack(LegacyClientData.Stack old) {
         if (old.key().equals(LegacyHostTools.PICKAXE) || old.key().equals(LegacyHostStacks.ITEM)) return gameplayStack(old);
+        var represented = hostRepresentations.stack(old);
+        if (!represented.isEmpty()) return represented;
         return items.containsKey(old.key()) ? stack(old.key(), old.metadata(), old.count(), old.tag()) : HostStackMapping.renderStack(old);
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
