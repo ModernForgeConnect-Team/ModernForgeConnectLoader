@@ -10,6 +10,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     @Override public boolean supports(Set<String> mods) { return mods.contains("Thaumcraft"); }
     @Override public void beforeBoot(ClassLoader loader) throws Exception {
         LegacyModAdapter.registerBytecodeAdapters(loader,
+                "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftNoteAspectsAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftBiomeAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftWarpAdapter",
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftDamageSourceAdapter",
