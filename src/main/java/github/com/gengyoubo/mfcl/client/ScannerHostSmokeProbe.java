@@ -84,6 +84,8 @@ final class ScannerHostSmokeProbe {
                     player.teleportTo(.5,-59,.5);player.setYRot(0);player.setXRot(0);
                     player.getInventory().setItem(0,content.stack("Thaumcraft:ItemThaumometer",0,1,""));player.inventoryMenu.broadcastChanges();return true;
                 });stage=2;
+            } else if(stage==2&&pending.isDone()&&ready(mc,Blocks.STONE)&&Boolean.getBoolean("mfcl.test.scannerNodeOnly")) {
+                pending.join();pending=server(mc,()->{setupNode(mc);return true;});stage=30;frames=0;
             } else if(stage==2&&pending.isDone()&&ready(mc,Blocks.STONE)) {
                 pending.join();before=pool(mc,true);proof.put("initialTerra",before);hold(mc);stage=3;frames=0;
             } else if(stage==3&&++frames>=35) {
@@ -161,7 +163,52 @@ final class ScannerHostSmokeProbe {
                     if(drawing.primitives().isEmpty())throw new IllegalStateException("Mapped target lost the lens: "+targetCases.get(targetCase));
                 }
                 if(++targetCase<targetCases.size())stage=15;
-                else {proof.put("blockTargetsRenderedWithoutCrash",targetCases.size());proof.put("oldBlockNamesAndMetadataVerified",true);proof.put("newBlocksUseIdleLensWithoutInventedAspects",true);proof.put("status","PASS");finish(mc,null);}
+                else {
+                    proof.put("blockTargetsRenderedWithoutCrash",targetCases.size());proof.put("oldBlockNamesAndMetadataVerified",true);proof.put("newBlocksUseIdleLensWithoutInventedAspects",true);
+                    pending=server(mc,()->{setupNode(mc);return true;});stage=30;frames=0;
+                }
+            } else if(stage==30&&pending.isDone()&&ready(mc,content.blocks().get("Thaumcraft:blockMagicalLog"))&&++frames>15) {
+                pending.join();
+                if(Boolean.getBoolean("mfcl.test.scannerNodeOnly")) {
+                    // This focused fixture starts with an explicit old research record; real held scans remain in the full probe.
+                    pending=server(mc,()->{seedNodeScanForDisplay(mc);return nodeScanned(mc,true);});
+                    proof.put("nodeDisplayFixtureSeeded",true);stage=32;frames=0;
+                } else {hold(mc);stage=31;frames=0;}
+            } else if(stage==31&&++frames>=65) {
+                release(mc);pending=server(mc,()->nodeScanned(mc,true));stage=32;frames=0;
+            } else if(stage==32&&pending.isDone()&&++frames>15) {
+                if(!(boolean)pending.join())throw new IllegalStateException("Actual held scan did not record the aura node");
+                if(!nodeScanned(mc,false)){if(frames<100)return;throw new IllegalStateException("Node scan record did not reach the client");}
+                var drawing=content.services().dynamicItems().capture(content.renderSnapshot(mc.player.getMainHandItem()),"EQUIPPED_FIRST_PERSON").orElseThrow();
+                proof.put("nodeLensTextures",drawing.primitives().stream().map(p->p.texture()).distinct().toList());proof.put("nodeLensTexts",drawing.texts().stream().map(t->t.text()).toList());
+                if(drawing.primitives().stream().noneMatch(p->p.texture().contains("textures/aspects/aer.png")))throw new IllegalStateException("Scanned node's air aspect not rendered inside the lens");
+                var image=mc.gameDirectory.toPath().resolve("screenshots/scanner-node-aspects.png");java.nio.file.Files.createDirectories(image.getParent());
+                try(var screenshot=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){screenshot.writeToFile(image);}
+                proof.put(Boolean.getBoolean("mfcl.test.scannerNodeOnly")?"previouslyScannedNodeLensAspect":"nodeScanAndLensAspect",true);
+                pending=server(mc,()->{var level=mc.getSingleplayerServer().overworld();content.services().items().inLegacy(()->{
+                    var loader=content.services().loader();var tile=(github.com.gengyoubo.mfcl.content.LegacyBlockEntity)level.getBlockEntity(target);Object node=tile.legacy();
+                    var type=loader.loadClass("thaumcraft.api.nodes.NodeType");var modifier=loader.loadClass("thaumcraft.api.nodes.NodeModifier");
+                    node.getClass().getMethod("setNodeType",type).invoke(node,type.getField("PURE").get(null));
+                    node.getClass().getMethod("setNodeModifier",modifier).invoke(node,modifier.getField("BRIGHT").get(null));
+                    tile.synchronize();return null;});return true;});stage=33;frames=0;
+            } else if(stage==33&&pending.isDone()&&++frames>20) {
+                pending.join();var services=content.services();var loader=services.loader();
+                boolean synchronizedState=services.items().inLegacy(()->{
+                    var tile=(github.com.gengyoubo.mfcl.content.LegacyBlockEntity)mc.level.getBlockEntity(target);Object node=tile.legacyOrNull();
+                    return node!=null&&"PURE".equals(String.valueOf(node.getClass().getMethod("getNodeType").invoke(node)))
+                            &&"BRIGHT".equals(String.valueOf(node.getClass().getMethod("getNodeModifier").invoke(node)));
+                });
+                if(!synchronizedState){if(frames<100)return;throw new IllegalStateException("PURE/BRIGHT node state did not synchronize to client");}
+                String type=(String)loader.loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class).invoke(null,"nodetype.PURE.name");
+                String modifier=(String)loader.loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class).invoke(null,"nodemod.BRIGHT.name");
+                String expected=type+", "+modifier;
+                var drawing=services.dynamicItems().capture(content.renderSnapshot(mc.player.getMainHandItem()),"EQUIPPED_FIRST_PERSON").orElseThrow();
+                var labels=drawing.texts().stream().map(t->t.text()).toList();
+                if(!labels.contains(expected))throw new IllegalStateException("Scanned PURE/BRIGHT node label missing: expected "+expected+", got "+labels);
+                proof.put("pureBrightNodeStateSynced",true);proof.put("pureBrightNodeLabel",expected);
+                var image=mc.gameDirectory.toPath().resolve("screenshots/scanner-node-pure-bright.png");java.nio.file.Files.createDirectories(image.getParent());
+                try(var screenshot=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){screenshot.writeToFile(image);}
+                proof.put("status","PASS");finish(mc,null);
             }
         }catch(Throwable failure){finish(mc,failure);}
     }
@@ -191,10 +238,38 @@ final class ScannerHostSmokeProbe {
     private boolean scanned(Minecraft mc,boolean server,String key) throws Exception {
         return knowledge(mc,server,()->{var loader=content.services().loader();Object old=content.services().items().materialize(new LegacyClientData.Stack(key,0,1,"",""));var item=loader.loadClass("net.minecraft.item.ItemStack").getMethod("func_77973_b").invoke(old);int hash=(int)loader.loadClass("thaumcraft.common.lib.research.ScanManager").getMethod("generateItemHash",loader.loadClass("net.minecraft.item.Item"),int.class).invoke(null,item,0);Object proxy=loader.loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null);var map=(Map<?,?>)proxy.getClass().getMethod("getScannedObjects").invoke(proxy);return map.get("Dev") instanceof List<?> list&&list.contains("@"+hash);});
     }
+    private void setupNode(Minecraft mc) throws Exception {
+        var level=mc.getSingleplayerServer().overworld();level.setBlockAndUpdate(target,content.modernBlock(new HostWorldAccess.Block("Thaumcraft:blockMagicalLog",2)));
+        content.services().items().inLegacy(()->{var loader=content.services().loader();var tile=(github.com.gengyoubo.mfcl.content.LegacyBlockEntity)level.getBlockEntity(target);Object node=tile.legacy();
+            var aspect=loader.loadClass("thaumcraft.api.aspects.Aspect");Object list=loader.loadClass("thaumcraft.api.aspects.AspectList").getConstructor().newInstance();list.getClass().getMethod("add",aspect,int.class).invoke(list,aspect.getField("AIR").get(null),20);
+            node.getClass().getMethod("setAspects",list.getClass()).invoke(node,list);node.getClass().getMethod("setNodeType",loader.loadClass("thaumcraft.api.nodes.NodeType")).invoke(node,loader.loadClass("thaumcraft.api.nodes.NodeType").getField("NORMAL").get(null));tile.synchronize();return null;});
+    }
+    private void seedNodeScanForDisplay(Minecraft mc) throws Exception {
+        var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var services=content.services();
+        content.players().callback(player,actor->{
+            var loader=services.loader();var tile=(github.com.gengyoubo.mfcl.content.LegacyBlockEntity)player.serverLevel().getBlockEntity(target);
+            String id=(String)tile.legacy().getClass().getMethod("getId").invoke(tile.legacy());
+            Object proxy=loader.loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null);
+            Object manager=proxy.getClass().getMethod("getResearchManager").invoke(proxy);
+            manager.getClass().getMethod("completeScannedPhenomena",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),String.class).invoke(manager,actor,"@NODE"+id);
+            services.playerState().synchronize(actor);
+        });
+    }
+    private boolean nodeScanned(Minecraft mc,boolean server) throws Exception {
+        return knowledge(mc,server,()->{var loader=content.services().loader();Object proxy=loader.loadClass("thaumcraft.common.Thaumcraft").getField("proxy").get(null);
+            var map=(Map<?,?>)proxy.getClass().getMethod("getScannedPhenomena").invoke(proxy);
+            boolean result=map.get("Dev") instanceof List<?> list&&list.stream().anyMatch(value->value.toString().startsWith("@NODE")&&value.toString().endsWith(":0:-58:3"));
+            if(server&&!result) {
+                var level=mc.getSingleplayerServer().overworld();var tile=(github.com.gengyoubo.mfcl.content.LegacyBlockEntity)level.getBlockEntity(target);Object node=tile.legacy();
+                String id=(String)node.getClass().getMethod("getId").invoke(node);var locations=(Map<?,?>)loader.loadClass("thaumcraft.common.tiles.TileNode").getField("locations").get(null);
+                proof.put("nodeScanDiagnostic",Map.of("id",id,"location",String.valueOf(locations.get(id)),"scanned",String.valueOf(map.get("Dev"))));
+            }
+            return result;});
+    }
     private void finish(Minecraft mc,Throwable failure) {
         stage=99;mc.options.keyUse.setDown(false);
         if(failure!=null){proof.put("status","FAIL");proof.put("failure",failure.toString());com.mojang.logging.LogUtils.getLogger().error("MFCL_SCANNER_SMOKE_FAIL",failure);}
-        try {var path=mc.gameDirectory.toPath().resolve("logs/mfcl/scanner-smoke.json");java.nio.file.Files.createDirectories(path.getParent());java.nio.file.Files.writeString(path,new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(proof));}catch(Exception error){throw new IllegalStateException(error);}
+        try {var path=mc.gameDirectory.toPath().resolve(Boolean.getBoolean("mfcl.test.scannerNodeOnly")?"logs/mfcl/scanner-node-smoke.json":"logs/mfcl/scanner-smoke.json");java.nio.file.Files.createDirectories(path.getParent());java.nio.file.Files.writeString(path,new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(proof));}catch(Exception error){throw new IllegalStateException(error);}
         com.mojang.logging.LogUtils.getLogger().info("MFCL_SCANNER_SMOKE_RESULT: {}",proof);if(mc.level!=null){mc.level.disconnect();mc.clearLevel();}mc.stop();
     }
 }

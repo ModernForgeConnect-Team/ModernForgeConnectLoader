@@ -20,6 +20,8 @@ public final class RuntimeDriver {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         List<String> completed = new ArrayList<String>(); result.put("completed", completed);
         String stage = "COREMODS";
+        Map<String,Double> timings = new LinkedHashMap<String,Double>(); result.put("timingsMs", timings);
+        long phaseStart=System.nanoTime();
         try {
             final LaunchClassLoader loader = Launch.classLoader;
             Class<?> remapper = loader.loadClass("cpw.mods.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper");
@@ -72,11 +74,12 @@ public final class RuntimeDriver {
             Field ats = CoreModManager.class.getDeclaredField("accessTransformers"); ats.setAccessible(true);
             for (Object transformer : (List<?>) ats.get(null)) loader.registerTransformer((String) transformer);
             loader.registerTransformer("github.com.gengyoubo.mfcl.legacy1710.GuiCaptureTransformer");
+            loader.registerTransformer("github.com.gengyoubo.mfcl.legacy1710.ThaumcraftResearchClipTransformer");
             loader.registerTransformer("github.com.gengyoubo.mfcl.legacy1710.EntityHostTransformer");
-            completed.add(stage); stage = "VANILLA_BOOTSTRAP";
+            completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "VANILLA_BOOTSTRAP";
             Loader.injectData(FMLInjectionData.data()); Loader.instance();
             Class<?> bootstrap = loader.loadClass("net.minecraft.init.Bootstrap"); bootstrap.getMethod("func_151354_b").invoke(null);
-            completed.add(stage); stage = "FORGE_INITIALIZATION";
+            completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "FORGE_INITIALIZATION";
             IFMLSidedHandler sided = (IFMLSidedHandler) Proxy.newProxyInstance(loader, new Class<?>[]{IFMLSidedHandler.class},
                     new InvocationHandler() {
                         @Override public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -105,13 +108,36 @@ public final class RuntimeDriver {
                     });
             FMLCommonHandler.instance().beginLoading(sided);
             initializeClient.run();
-            completed.add(stage); stage = "CONSTRUCTING";
+            completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "CONSTRUCTING";
             // The only mod candidates: Loader's own mods directory is an empty private folder (ModernJavaTransformer).
             ModListHelper.additionalMods.clear();
             for (File mod : mods) ModListHelper.additionalMods.put(mod.getAbsolutePath(), mod);
-            Loader.instance().loadMods(); completed.add(stage); stage = "PREINITIALIZATION";
-            Loader.instance().preinitializeMods(); completed.add(stage); stage = "INITIALIZATION_POSTINITIALIZATION";
-            Loader.instance().initializeMods(); completed.add(stage);
+            Loader.instance().loadMods(); completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "PREINITIALIZATION";
+            Loader.instance().preinitializeMods(); completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "INITIALIZATION_POSTINITIALIZATION";
+            // Test-only: exercise TC4's real postInit expansion even when another coremod already enlarged the array.
+            Field potionRegistry = null; Object[] beforeExpansion = null;
+            if (Boolean.getBoolean("mfcl.test.potionExpansion")) {
+                Class<?> potion = loader.loadClass("net.minecraft.potion.Potion");
+                potionRegistry = potion.getField("field_76425_a");
+                if (potion.getClassLoader() != loader || Modifier.isFinal(potionRegistry.getModifiers()))
+                    throw new IllegalStateException("Legacy potion registry was not made writable");
+                Object[] current = (Object[]) potionRegistry.get(null);
+                int length = 112;
+                for (int i = length; i < current.length; i++) if (current[i] != null)
+                    throw new IllegalStateException("Cannot shrink populated potion registry for expansion test");
+                beforeExpansion = (Object[]) java.lang.reflect.Array.newInstance(potion, length);
+                System.arraycopy(current, 0, beforeExpansion, 0, Math.min(current.length, length));
+                potionRegistry.set(null, beforeExpansion);
+            }
+            Loader.instance().initializeMods(); completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);
+            if (potionRegistry != null) {
+                Object[] expanded = (Object[]) potionRegistry.get(null);
+                if (expanded == beforeExpansion || expanded.length != beforeExpansion.length + 8)
+                    throw new IllegalStateException("TC4 did not replace and extend the potion registry");
+                for (int i = 0; i < beforeExpansion.length; i++) if (beforeExpansion[i] != null && beforeExpansion[i] != expanded[i])
+                    throw new IllegalStateException("TC4 expansion lost potion " + i);
+                result.put("potionExpansionVerified", true);
+            }
             LegacyRegistrationSeal.seal(); result.put("registrationSealed", true);
             List<String> modIds = new ArrayList<String>();
             Map<String, String> modVersions = new LinkedHashMap<String, String>();

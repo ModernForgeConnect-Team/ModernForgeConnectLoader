@@ -122,7 +122,7 @@ final class GameplayHostSmokeProbe {
         String key="Thaumcraft:blockMagicalLeaves";
         var leaves=content.declarations().blocks().stream().filter(block->block.key().equals(key)).findFirst().orElseThrow();
         var id=ModernContentBridge.id(key);
-        var models=content.pack().directory().resolve("assets/"+id.getNamespace()+"/models/block/"+id.getPath());
+        var models=content.pack().resourceFile("assets/"+id.getNamespace()+"/models/block/"+id.getPath());
         for(int meta=0;meta<16;meta++) {
             check(leaves.faces().get(meta).equals(leaves.faces().get(meta&1)),"Leaf state lost species texture: "+meta);
             for(String icon:leaves.faces().get(meta))check(!icon.isBlank()&&!content.pack().worldTexture(icon).equals("minecraft:item/barrier"),"Leaf state has placeholder texture: "+meta);

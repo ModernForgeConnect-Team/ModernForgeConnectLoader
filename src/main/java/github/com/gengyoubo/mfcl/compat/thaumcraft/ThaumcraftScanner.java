@@ -33,7 +33,12 @@ final class ThaumcraftScanner implements LegacyHeldScanners.Scanner {
         }
         if (scan == null) return null;
         byte type = scan.getClass().getField("type").getByte(scan);
-        if (type == 3) return (String) scan.getClass().getField("phenomena").get(scan);
+        if (type == 3) {
+            String phenomenon=(String)scan.getClass().getField("phenomena").get(scan);
+            if(phenomenon!=null&&phenomenon.startsWith("NODE"))
+                return (String)loader.loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class).invoke(null,"tile.blockAiry.0.name");
+            return null;
+        }
         return LegacyItemUse.scanTargetName(loader, type == 2 ? scan.getClass().getField("entity").get(scan) : null,
                 scan.getClass().getField("id").getInt(scan), scan.getClass().getField("meta").getInt(scan));
     }

@@ -23,12 +23,19 @@ final class LegacyGuiRenderer {
         var mc=Minecraft.getInstance();
         boolean depthTest=true;
         boolean textPending=false;
+        boolean researchClip=false;
         graphics.flush();
         try {
             for(var command:commands) {
                 // Only consecutive text may share the host font buffer. Never move it past a graphic or item.
                 if(textPending&&!(command instanceof LegacyGuiGraphics.Text)) {graphics.flush();textPending=false;}
-                if(command instanceof LegacyGuiGraphics.DepthTest state) {
+                if(command instanceof LegacyGuiGraphics.ResearchClip clip) {
+                    graphics.flush();textPending=false;
+                    if(clip.enabled()&&!researchClip) {
+                        var screen=mc.screen;int left=(screen.width-256)/2,top=(screen.height-230)/2;
+                        graphics.enableScissor(left+16,top+16,left+240,top+214);researchClip=true;
+                    } else if(!clip.enabled()&&researchClip) {graphics.disableScissor();researchClip=false;}
+                } else if(command instanceof LegacyGuiGraphics.DepthTest state) {
                     // Flush before changing state so buffered item/text batches cannot cross the tooltip boundary.
                     graphics.flush();depthTest=state.enabled();
                 } else if(command instanceof LegacyGuiGraphics.Rect r) {
@@ -61,7 +68,7 @@ final class LegacyGuiRenderer {
                 // Overlay backgrounds and glyphs use different render types; preserve their original draw order.
                 if(!depthTest) {graphics.flush();textPending=false;}
             }
-        } finally {graphics.flush();RenderSystem.enableDepthTest();}
+        } finally {graphics.flush();if(researchClip)graphics.disableScissor();RenderSystem.enableDepthTest();}
     }
     private void mesh(GuiGraphics graphics,List<LegacyVertexStream.Primitive> primitives,boolean researchBrowser) throws Exception {
         graphics.flush();

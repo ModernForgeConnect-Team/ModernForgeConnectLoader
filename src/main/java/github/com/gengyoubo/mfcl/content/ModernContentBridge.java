@@ -72,6 +72,7 @@ public final class ModernContentBridge {
 
     private ModernContentBridge(LegacyServices services) throws Exception {
         this.services = services;
+        long startupTimer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
         this.attributes = new LegacyAttributeBridge(services);
         this.statistics = new LegacyStatisticsBridge(services);
         this.villagers = new LegacyVillagerBridge(this);
@@ -89,12 +90,16 @@ public final class ModernContentBridge {
             legacyBlockKeys = Set.copyOf((Set<String>)registry.getClass().getMethod("func_148742_b").invoke(registry));
             hostBlocks = new HostBlockMapping(legacyBlockKeys);
         }
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("contentCaptureAndBridges",startupTimer);
         fluidRegistry = new LegacyFluidRegistry(this);
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         LogUtils.getLogger().info("MFCL content: generating resource pack");
         net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: Generating legacy resource pack");
+        startupTimer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
         pack = new LegacyContentPack(services.gameDirectory(), declarations, blockRendering);
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("resourcePackBase",startupTimer);
+        startupTimer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
         statistics.generate(pack);
         villagers.generateSkins(pack);
         LegacyChestLoot.generate(pack);
@@ -118,6 +123,7 @@ public final class ModernContentBridge {
         var variantsByItem=new HashMap<String,Set<Integer>>();
         for(var item:declarations.items())variantsByItem.put(item.key(),item.variants().stream().map(LegacyContent.Variant::metadata).collect(java.util.stream.Collectors.toSet()));
         oreDictionary.tag(services,variantsByItem);
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("resourcePackRuntimeAndRecipes",startupTimer);
         creative = new CreativeTabBridge(this);
         hostTools = new HostToolStacks(services);
         hostInventoryStacks = new HostInventoryStacks(services);
@@ -148,6 +154,7 @@ public final class ModernContentBridge {
             for (String diagnostic : bridge.declarations.captureDiagnostics()) LogUtils.getLogger().info("MFCL capture: {}", diagnostic);
             LogUtils.getLogger().info("MFCL world ISBRH support: {}", bridge.blockRendering.supported());
             for (String diagnostic : bridge.blockRendering.diagnostics()) LogUtils.getLogger().info("MFCL world capture: {}", diagnostic);
+            github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.write(services.gameDirectory(),"content-installed");
             return bridge;
         } catch (Exception failure) { throw new IllegalStateException("Cannot freeze legacy content declarations", failure); }
     }

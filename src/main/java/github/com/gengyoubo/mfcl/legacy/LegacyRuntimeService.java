@@ -45,9 +45,12 @@ public final class LegacyRuntimeService {
                         github.com.gengyoubo.mfcl.bridge.LegacyClientData.ClientSession session) {
         loadedModIds = java.util.Set.of();
         loadedModVersions = java.util.Map.of();
+        long timer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
         Report inspected = inspect(gameDirectory);
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("discovery",timer);timer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
         // Checked on every startup, also without legacy mods (then only as notices), so a broken runtime is visible early.
         List<LegacyDiagnostic> runtimeCheck = LegacyRuntimeCheck.run(gameDirectory, runtimeDirectory, inspected.archives(), autoPrepareFailure);
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("runtimeVerification",timer);
         if (inspected.state() != State.RUNTIME_NOT_READY) {
             if (runtimeCheck.isEmpty()) return inspected;
             List<LegacyDiagnostic> diagnostics = new ArrayList<>(inspected.diagnostics());
@@ -69,10 +72,15 @@ public final class LegacyRuntimeService {
                 // log, the reports and the client UI all surface.
                 state = State.RUNTIME_FAILED;
             } else {
+                timer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
                 runtime = new EmbeddedLegacyRuntime(gameDirectory, runtimeDirectory, inspected);
+                github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("embeddedRuntimeConstruction",timer);
                 runtime.clientSession(session);
                 runtime.openGlBackend(backend);
+                timer=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
                 var stages = runtime.boot();
+                github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("embeddedRuntimeBoot",timer);
+                if(stages.containsKey("timingsMs"))github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.detail("legacyLifecycleMs",stages.get("timingsMs"));
                 if (stages.get("loadedMods") instanceof List<?> loaded) {
                     loadedModIds = loaded.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet());
                 }

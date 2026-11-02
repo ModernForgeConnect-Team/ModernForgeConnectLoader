@@ -25,6 +25,7 @@ final class ClientStartupSmokeProbe {
         if (completed || event.phase != TickEvent.Phase.END || !(mc.screen instanceof TitleScreen) || mc.getOverlay() != null) return;
         if (++frames < 10) return;
         completed = true;
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.write(content.services().gameDirectory(),"test-title-screen");
         var report = new LinkedHashMap<String, Object>();
         try {
             if (!content.registered() || content.blocks().size() != content.declarations().blocks().size()

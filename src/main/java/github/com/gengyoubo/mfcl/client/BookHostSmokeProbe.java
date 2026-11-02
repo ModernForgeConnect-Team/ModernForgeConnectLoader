@@ -48,6 +48,14 @@ final class BookHostSmokeProbe {
                 if(commands.stream().noneMatch(LegacyGuiGraphics.Texture.class::isInstance))throw new IllegalStateException("Research background was not drawn");
                 var completed=(Map<?,?>)old.getClass().getField("completedResearch").get(null);
                 if(!completed.containsKey(mc.player.getName().getString()))return;
+                boolean clipping=false;int clippedMeshes=0,clippedItems=0,clipStarts=0,clipEnds=0;
+                for(var command:commands) {
+                    if(command instanceof LegacyGuiGraphics.ResearchClip clip){clipping=clip.enabled();if(clipping)clipStarts++;else clipEnds++;}
+                    else if(clipping&&command instanceof LegacyGuiGraphics.Mesh)clippedMeshes++;
+                    else if(clipping&&command instanceof LegacyGuiGraphics.Item)clippedItems++;
+                }
+                if(clipStarts!=1||clipEnds!=1||clipping||clippedMeshes==0||clippedItems==0)throw new IllegalStateException("Research node pass was not clipped: "+clipStarts+"/"+clipEnds+" meshes="+clippedMeshes+" items="+clippedItems);
+                proof.put("researchNodesAndItemsClipped",true);
                 var lines=commands.stream().filter(LegacyGuiGraphics.Mesh.class::isInstance).map(LegacyGuiGraphics.Mesh.class::cast)
                         .flatMap(mesh->mesh.primitives().stream()).filter(primitive->primitive.mode()==3).toList();
                 if(!lines.isEmpty()&&lines.stream().anyMatch(line->line.state().lineWidth()!=3f))throw new IllegalStateException("Original research line width was not captured");

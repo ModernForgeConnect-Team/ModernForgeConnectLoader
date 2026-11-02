@@ -4,8 +4,9 @@ import java.util.*;
 
 /** Thread-confined GUI command capture. No legacy OpenGL context or native input library is entered. */
 public final class LegacyGuiGraphics {
-    public sealed interface Command permits Rect, Text, Texture, Item, Mesh, DepthTest {}
+    public sealed interface Command permits Rect, Text, Texture, Item, Mesh, DepthTest, ResearchClip {}
     public record DepthTest(boolean enabled) implements Command {}
+    public record ResearchClip(boolean enabled) implements Command {}
     public record Rect(int x1, int y1, int x2, int y2, int top, int bottom) implements Command {}
     public record Text(String text, int x, int y, int color, boolean shadow, double sx, double sy) implements Command {}
     public record Texture(String resource, int x, int y, int u, int v, int width, int height, double sx, double sy) implements Command {}
@@ -49,6 +50,7 @@ public final class LegacyGuiGraphics {
     }
     private static Frame frame() { return Objects.requireNonNull(CURRENT.get(), "Legacy GUI operation outside a host frame"); }
     public static boolean capturing() { return CURRENT.get() != null; }
+    public static void researchClip(boolean enabled) { Frame f=CURRENT.get(); if(f!=null){f.flushGeometry();f.commands.add(new ResearchClip(enabled));} }
     public static void depthTest(boolean enabled) {
         Frame f = CURRENT.get();
         if (f == null || f.depthTest == enabled) return;

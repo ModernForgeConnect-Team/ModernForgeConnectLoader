@@ -11,8 +11,21 @@ public final class ModernJavaTransformer implements IClassTransformer {
         if (!name.equals("cpw.mods.fml.common.Loader") && !name.equals("net.minecraftforge.common.util.EnumHelper")
                 && !name.equals("cpw.mods.fml.common.registry.ObjectHolderRef") && !name.equals("cpw.mods.fml.common.discovery.ModDiscoverer")
                 && !name.equals("net.minecraftforge.common.ForgeVersion") && !name.equals("cpw.mods.fml.common.registry.GameData")
-                && !name.equals("net.minecraft.item.Item") && !name.equals("net.minecraft.block.Block")) return bytes;
+                && !name.equals("net.minecraft.item.Item") && !name.equals("net.minecraft.block.Block")
+                && !name.equals("net.minecraft.potion.Potion")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
+        if (name.equals("net.minecraft.potion.Potion")) {
+            boolean found = false;
+            for (FieldNode field : node.fields) {
+                if (field.name.equals("field_76425_a") && field.desc.equals("[Lnet/minecraft/potion/Potion;")
+                        && (field.access & Opcodes.ACC_STATIC) != 0) {
+                    field.access &= ~Opcodes.ACC_FINAL;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) throw new IllegalStateException("Missing legacy Potion.field_76425_a registry array");
+        }
         java.util.List<MethodNode> wrappers = new java.util.ArrayList<MethodNode>();
         for (MethodNode method : node.methods) {
             String bridge = null;

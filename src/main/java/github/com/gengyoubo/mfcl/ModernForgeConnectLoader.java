@@ -16,6 +16,7 @@ public final class ModernForgeConnectLoader {
     private final LegacyRuntimeService runtimeService = new LegacyRuntimeService();
 
     public ModernForgeConnectLoader() {
+        var startup=github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.now();
         var gameDirectory = FMLPaths.GAMEDIR.get();
         var supportDirectory = java.nio.file.Path.of(System.getProperty("mfcl.legacyRuntimeDir", gameDirectory.resolve("mfcl/runtime/1.7.10").toString()));
         var backend = new java.util.concurrent.atomic.AtomicReference<github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend>();
@@ -29,6 +30,7 @@ public final class ModernForgeConnectLoader {
             try { net.minecraftforge.fml.loading.progress.StartupNotificationManager.addModMessage("MFCL: " + message); }
             catch (Throwable ignored) { /* the early loading screen is optional */ }
         });
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("runtimePrepare",startup);
         var result = runtimeService.start(gameDirectory, supportDirectory, backend.get(), session.get());
         LOGGER.info("MFCL: reading Forge 1.7.10 mods from {} and original 1.7.10 JARs in {}", result.modDirectory(),
                 new github.com.gengyoubo.mfcl.legacy.LegacyPaths(gameDirectory).rootModDirectory());

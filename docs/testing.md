@@ -91,6 +91,8 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclBookSmokeTest` | Original Thaumonomicon GUI and interaction | Consult the book [acceptance record](thaumonomicon-progress.json) |
 | `mfclWandAudit` | Native wand crafting/charging, [deconstruction-table displayed costs, warp-exhaustion changes/expiry, vis gating, delayed slot packets and workbench wand persistence across world reload/login](arcane-workbench.md), wand and staff focus equip/remove, sceptre selector rejection without inventory changes; with Extra Utilities installed, rebasing a negative-coordinate transfer-node snapshot before NBT inventory callbacks and contextual rendering | `wand-host-audit.json` |
 | `mfclPotionSmokeTest` | Original TC4 potion callbacks, native spell costs, warp cadence/ward/wuss, bath/soap rules, original client knowledge/fog/vignette packets, sprites/screen filters, duration/expiry and curative/warp data across world reload | `potion-smoke.json` |
+
+
 | `mfclLogicSmokeTest` | Supported native/legacy block and inventory logic | Consult the logic [acceptance record](runtime-logic-progress.json) |
 | `mfclCraftingSmokeTest` | Standard workbench recipes, native output consumption, JEI projection and reload | `crafting-smoke.json` |
 | `mfclDeviceSmokeTest` | JEI creative tabs, original device GUIs, server slot restrictions/clicks/drops, carried-stack close, tile subtype conversion, research-aspect combinations/persistence, note insertion/place/erase/sync, native reveal/learning and lifter motion | `device-smoke.json` |
@@ -103,6 +105,8 @@ Enable one primary probe per run; these are developer test modes, not normal lau
 | `mfclGeneratorSmokeTest` | Original Extra Utilities generator, GUI/coal clicks/sound, and bidirectional RF/FE capability transfers with side/rate/simulation, conservation, rollback, persistence and invalidation checks | `generator-smoke.json` |
 | `mfclTooltipSmokeTest` | Actual JEI single/batch item rendering followed by tooltip depth verification | `jei-tooltip-smoke.json` |
 | `mfclContentSmokeTest` | Reference content registration, rendering, placement and persistence | `content-1.7.10-smoke.json` |
+
+To specifically verify TC4's potion-array reflection and save/reload, combine `-PmfclPotionSmokeTest -PmfclPotionExpansionTest -PmfclPotionReflectionOnly` with a disposable TC4 game directory. The expansion flag temporarily sets the legacy registry to 112 entries before mod initialization, then verifies that TC4's actual post-init grows it to 120 without losing existing entries. The focused mode writes `potion-reflection-smoke.json` and omits the broader TC4 warp/soap acceptance; it must not be treated as a replacement for the full potion smoke test.
 
 For research-table rendering measurements, add `-PmfclGuiPerformanceTest` to the device probe. It seeds all discovered aspects and records warmed GUI replay CPU timings; see [research GUI performance](research-gui-performance.md) for the command, visual comparison and scope.
 
@@ -138,3 +142,5 @@ Extra Utilities input and focused regression/graphical commands are recorded in 
 Check both the process exit status and the probe JSON `status` / recorded assertions. A clean Gradle exit alone is not sufficient evidence that every in-game assertion passed. Preserve logs when reporting a new failure; source-controlled acceptance JSON is a dated summary, not a promise about untested mod combinations.
 
 Plain `runClient` uses `run/` unless `-PmfclRunDir` is supplied. Preparing `build/thaumcraft-smoke/game` does not populate that default directory. To use TC4 in a normal development session, install original TC4/Baubles into `run/mods/1.7.10/` and the prepared runtime plus its verified manifest into `run/mfcl/runtime/1.7.10/`, or launch with the fixture directory and `-PlegacyRuntimeDir` explicitly. `run/logs/mfcl/legacy-1.7.10.json` reporting `NO_LEGACY_MODS` means no old mod archives were found in that run's directory.
+
+Startup phase timings, cache behavior, local measurements and the distinction between the base pack and runtime overlay are documented in [startup performance](startup-performance.md).

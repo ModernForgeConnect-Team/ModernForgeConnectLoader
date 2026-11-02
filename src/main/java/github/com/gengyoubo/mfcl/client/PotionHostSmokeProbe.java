@@ -58,7 +58,7 @@ final class PotionHostSmokeProbe {
                     }
                 }
                 proof.put("nativeClientEffectsNamesAndIcons",true);
-                new ThaumcraftPotionHostAcceptance(content,proof).verifyClient();
+                if(!Boolean.getBoolean("mfcl.test.potionReflectionOnly"))new ThaumcraftPotionHostAcceptance(content,proof).verifyClient();
                 for(String name:List.of("deathgaze","unhunger","sunscorned"))mc.player.addEffect(new MobEffectInstance(effect(name),200,0));
                 mc.setScreen(new InventoryScreen(mc.player));
             }else if(stage==3){
@@ -84,7 +84,7 @@ final class PotionHostSmokeProbe {
                     player.removeEffect(effect("visexhaust"));
                     content.players().callback(player,actor->{check(!(boolean)actor.getClass().getMethod("func_82165_m",int.class).invoke(actor,content.services().potions().id("thaumcraft:visexhaust")),"Native removal was not reflected in the old actor");});
                     proof.put("saveReloadCurativesAndNativeRemoval",true);
-                    new ThaumcraftPotionHostAcceptance(content,proof).verifyReload(player);
+                    if(!Boolean.getBoolean("mfcl.test.potionReflectionOnly"))new ThaumcraftPotionHostAcceptance(content,proof).verifyReload(player);
                 });
             }else if(stage==7){proof.put("status","PASS");finish(mc);return;}
             stage++;frames=0;
@@ -92,6 +92,25 @@ final class PotionHostSmokeProbe {
     }
     private void audit(ServerPlayer player)throws Exception {
         var services=content.services();var loader=services.loader();var oldEffect=loader.loadClass("net.minecraft.potion.PotionEffect");
+        services.items().inLegacy(()->{
+            var potion=loader.loadClass("net.minecraft.potion.Potion");
+            var field=potion.getField("field_76425_a");
+            check(potion.getClassLoader()==loader&&!java.lang.reflect.Modifier.isFinal(field.getModifiers()),"Legacy registry is final or owned by the wrong loader");
+            Object[] original=(Object[])field.get(null);
+            if(Boolean.getBoolean("mfcl.test.potionExpansion")) {
+                check(original.length==120,"TC4 postInit did not expand the 112-entry test registry");
+                proof.put("thaumcraftPostInitExpandedRegistry",true);
+            }
+
+            Object[] replacement=(Object[])java.lang.reflect.Array.newInstance(potion,original.length+1);
+            System.arraycopy(original,0,replacement,0,original.length);
+            try {
+                field.set(null,replacement);
+                check(field.get(null)==replacement&&java.util.Arrays.equals(original,java.util.Arrays.copyOf(replacement,original.length)),"Reflective potion array replacement lost entries");
+            } finally {field.set(null,original);}
+            proof.put("legacyPotionRegistryReflectiveReplacement",true);
+            return null;
+        });
         check(services.potions().entries().stream().filter(entry->entry.key().startsWith("thaumcraft:")).count()==9,"Expected the nine potions actually present in TC4 4.2.3.5");
         for(var entry:services.potions().entries())check(BuiltInRegistries.MOB_EFFECT.get(LegacyRegistryIds.id(entry.key()))==content.potions().effect(entry.id()),"Native effect mapping mismatch: "+entry.key());
         proof.put("registeredOriginalEffects",services.potions().entries());
@@ -141,7 +160,7 @@ final class PotionHostSmokeProbe {
         var potion=content.gameplayStack(new LegacyClientData.Stack("minecraft:potion",0,1,"","{CustomPotionEffects:[{Id:"+taint+"b,Duration:120,Amplifier:1b}]}"));
         check(net.minecraft.world.item.alchemy.PotionUtils.getMobEffects(potion).stream().anyMatch(effect->effect.getEffect()==effect("fluxtaint")),"Old custom potion item kept the wrong numeric effect ID");
         check(content.gameplayStack(potion).tag().contains("Id:"+taint+"b"),"Potion item did not round-trip to the original ID");proof.put("customPotionItemIdRoundTrip",true);
-        new ThaumcraftPotionHostAcceptance(content,proof).run(player);
+        if(!Boolean.getBoolean("mfcl.test.potionReflectionOnly"))new ThaumcraftPotionHostAcceptance(content,proof).run(player);
         content.players().callback(player,actor->{
             Object effect=oldEffect.getConstructor(int.class,int.class,int.class,boolean.class).newInstance(services.potions().id("thaumcraft:visexhaust"),1200,0,false);
             ((List<?>)oldEffect.getMethod("getCurativeItems").invoke(effect)).clear();actor.getClass().getMethod("func_70690_d",oldEffect).invoke(actor,effect);
@@ -149,7 +168,7 @@ final class PotionHostSmokeProbe {
         player.addEffect(new MobEffectInstance(effect("warpward"),1200,0));player.addEffect(new MobEffectInstance(effect("blurredvision"),600,0));player.addEffect(new MobEffectInstance(effect("infvisexhaust"),1,0));started=player.tickCount;
     }
     private void finish(Minecraft mc)throws Exception {
-        var path=mc.gameDirectory.toPath().resolve("logs/mfcl/potion-smoke.json");java.nio.file.Files.createDirectories(path.getParent());java.nio.file.Files.writeString(path,new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(proof));
+        var path=mc.gameDirectory.toPath().resolve(Boolean.getBoolean("mfcl.test.potionReflectionOnly")?"logs/mfcl/potion-reflection-smoke.json":"logs/mfcl/potion-smoke.json");java.nio.file.Files.createDirectories(path.getParent());java.nio.file.Files.writeString(path,new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(proof));
         com.mojang.logging.LogUtils.getLogger().info("MFCL_POTION_SMOKE: {}",proof);stage=99;if(mc.level!=null){mc.level.disconnect();mc.clearLevel();}mc.stop();
     }
 }

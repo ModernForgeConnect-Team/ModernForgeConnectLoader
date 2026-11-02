@@ -18,7 +18,8 @@ import java.util.jar.JarFile;
 
 /** Derived resources only: original mod archives are read, never edited or installed as modern mods. */
 public final class LegacyContentPack {
-    private final Path directory;
+    private Path directory;
+    private Path baseDirectory;
     private final LegacyContent content;
     private final LegacyBlockRendering worldRendering;
     private final Map<String, String> textures = new HashMap<>();
@@ -28,7 +29,35 @@ public final class LegacyContentPack {
     public LegacyContentPack(Path gameDirectory, LegacyContent content, github.com.gengyoubo.mfcl.bridge.LegacyBlockRendering worldRendering) throws Exception {
         this.content = content;this.worldRendering=worldRendering;
         Path parent = gameDirectory.resolve("mfcl/generated-packs"); Files.createDirectories(parent);
-        directory = Files.createTempDirectory(parent, "content-1.7.10-");
+        Path cacheRoot=gameDirectory.resolve("mfcl/cache/resources");boolean cacheAvailable=true;
+        try {Files.createDirectories(cacheRoot);}
+        catch(IOException unavailable){cacheAvailable=false;com.mojang.logging.LogUtils.getLogger().warn("MFCL resource cache unavailable; generating a session pack",unavailable);}
+        String fingerprint=null;long fingerprintStart=System.nanoTime();
+        try {if(cacheAvailable)fingerprint=LegacyPackCache.fingerprint(content,worldRendering);}
+        catch(Exception unsupported){com.mojang.logging.LogUtils.getLogger().warn("MFCL resource cache disabled for this startup",unsupported);}
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("resourceCacheFingerprint",fingerprintStart);
+        Path reference=fingerprint==null?null:cacheRoot.resolve(fingerprint+".ref");
+        Path candidate=null;
+        if(reference!=null&&Files.isRegularFile(reference))try {
+            String name=Files.readString(reference,StandardCharsets.UTF_8).trim();
+            if(name.startsWith(fingerprint+"-")&&name.matches("[a-f0-9-]+"))candidate=cacheRoot.resolve(name);
+        } catch(IOException ignored) { /* An unreadable pointer is a cache miss. */ }
+        long lookupStart=System.nanoTime();var cached=candidate==null?null:LegacyPackCache.read(candidate,fingerprint);
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.elapsed("resourceCacheValidation",lookupStart);
+        if(cached!=null) {
+            baseDirectory=candidate;directory=Files.createTempDirectory(parent,"session-1.7.10-");
+            textures.putAll(cached.textures());missingIcons.addAll(cached.missing());
+            resolveGeometry(content.geometry(),geometry);resolveGeometry(content.contextGeometry(),contextGeometry);writeContentManifest();
+            github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.detail("resourceCache","hit");
+            progress("Reusing validated legacy resource base");return;
+        }
+        github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.detail("resourceCache",fingerprint==null?"disabled":"miss");
+        try {directory=Files.createTempDirectory(cacheAvailable?cacheRoot:parent,".building-");}
+        catch(IOException unavailable) {
+            com.mojang.logging.LogUtils.getLogger().warn("MFCL resource cache is not writable; generating a session pack",unavailable);
+            fingerprint=null;directory=Files.createTempDirectory(parent,".building-");
+            github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.detail("resourceCache","disabled");
+        }
         progress("Copying legacy textures and sounds");
         int copied = 0;
         // TESRs select additional skins and animation textures at runtime, beyond creative inventory snapshots.
@@ -119,12 +148,29 @@ public final class LegacyContentPack {
         resolveGeometry(content.geometry(), geometry);
         resolveGeometry(content.contextGeometry(), contextGeometry);
         languages();
+        if(fingerprint!=null) {
+            try {
+                LegacyPackCache.finish(directory,fingerprint,textures,missingIcons);
+                Path published=cacheRoot.resolve(fingerprint+"-"+UUID.randomUUID());
+                try {Files.move(directory,published,StandardCopyOption.ATOMIC_MOVE);}
+                catch(AtomicMoveNotSupportedException unsupported){Files.move(directory,published);}
+                directory=published;
+                Path pointer=Files.createTempFile(cacheRoot,".pointer-",".tmp");
+                Files.writeString(pointer,published.getFileName().toString(),StandardCharsets.UTF_8);
+                try {Files.move(pointer,reference,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
+                catch(AtomicMoveNotSupportedException unsupported){Files.move(pointer,reference,StandardCopyOption.REPLACE_EXISTING);}
+            } catch(IOException conflict) {com.mojang.logging.LogUtils.getLogger().warn("MFCL resource cache could not be published; this session keeps its generated base",conflict);}
+        }
+        baseDirectory=directory;directory=Files.createTempDirectory(parent,"session-1.7.10-");
+        writeContentManifest();
+        progress("Legacy resource pack ready");
+    }
+    private void writeContentManifest() throws IOException {
         json("mfcl-content-manifest.json", Map.of("blocks", content.blocks(), "items", content.items(), "creativeTabs", content.tabs(), "missingIcons", missingIcons,
                 "customItems", List.copyOf(content.customItems()),
                 "registryIds", Map.of("blocks",content.blocks().stream().collect(java.util.stream.Collectors.toMap(LegacyContent.Block::key,entry->ModernContentBridge.id(entry.key()).toString())),
                         "items",content.items().stream().collect(java.util.stream.Collectors.toMap(LegacyContent.Item::key,entry->ModernContentBridge.id(entry.key()).toString()))),
                 "simpleBlocks", content.blocks().stream().filter(LegacyContent.Block::simple).map(LegacyContent.Block::key).toList()));
-        progress("Legacy resource pack ready");
     }
     private static void progress(String message) {
         com.mojang.logging.LogUtils.getLogger().info("MFCL content: {}", message);
@@ -266,9 +312,10 @@ public final class LegacyContentPack {
     }
     /** A split item draws exactly like its original host item, metadata and pull overrides included. */
     public void copyItemModel(net.minecraft.resources.ResourceLocation original, net.minecraft.resources.ResourceLocation split) throws IOException {
-        Path source = directory.resolve("assets/" + original.getNamespace() + "/models/item/" + original.getPath() + ".json").normalize();
+        String originalPath="assets/"+original.getNamespace()+"/models/item/"+original.getPath()+".json";
+        Path source = resourceFile(originalPath);
         Path target = directory.resolve("assets/" + split.getNamespace() + "/models/item/" + split.getPath() + ".json").normalize();
-        if (!source.startsWith(directory) || !target.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + split);
+        if ((!source.startsWith(directory)&&!source.startsWith(baseDirectory)) || !target.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + split);
         Files.createDirectories(target.getParent()); Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
     }
     void json(String resource, Object value) throws IOException {
@@ -296,13 +343,19 @@ public final class LegacyContentPack {
         String value = textures.get("path:" + resource); return value == null || value.isEmpty() ? null : value;
     }
     public Path directory() { return directory; }
+    /** Resolve an existing generated resource across the session overlay and immutable base. */
+    public Path resourceFile(String resource) {
+        Path overlay=directory.resolve(resource).normalize(),base=baseDirectory.resolve(resource).normalize();
+        if(!overlay.startsWith(directory)||!base.startsWith(baseDirectory))throw new IllegalArgumentException("Resource escapes pack: "+resource);
+        return Files.exists(overlay)?overlay:base;
+    }
     public void craftingRecipe(String namespace,String hash) throws IOException {json("data/"+namespace+"/recipes/legacy_crafting/"+hash+".json",Map.of("type","mfcl:legacy_crafting","original",hash));}
     public void smeltingRecipe(String namespace,String hash) throws IOException {json("data/"+namespace+"/recipes/legacy_smelting/"+hash+".json",Map.of("type","mfcl:legacy_smelting","original",hash));}
     public Set<String> missingIcons() { return Collections.unmodifiableSet(missingIcons); }
     public void findPacks(AddPackFindersEvent event) {
         event.addRepositorySource(consumer -> {
             Pack pack = Pack.readMetaAndCreate("mfcl_legacy_1_7_10", Component.literal("MFCL 1.7.10"), true,
-                    name -> new PathPackResources(name, directory, false), event.getPackType(), Pack.Position.TOP, PackSource.BUILT_IN);
+                    name -> new LayeredLegacyPackResources(name, baseDirectory, directory), event.getPackType(), Pack.Position.TOP, PackSource.BUILT_IN);
             consumer.accept(Objects.requireNonNull(pack, "Generated legacy pack metadata"));
         });
     }

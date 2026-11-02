@@ -9,6 +9,13 @@ import net.minecraftforge.eventbus.api.IEventBus;
 public final class ClientContentBridge {
     private ClientContentBridge() {}
     public static void install(ModernContentBridge bridge, IEventBus bus) {
+        var startupReported=new java.util.concurrent.atomic.AtomicBoolean();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ClientTickEvent event)->{
+            if(event.phase==net.minecraftforge.event.TickEvent.Phase.END&&!startupReported.get()
+                    &&net.minecraft.client.Minecraft.getInstance().screen instanceof net.minecraft.client.gui.screens.TitleScreen
+                    &&net.minecraft.client.Minecraft.getInstance().getOverlay()==null&&startupReported.compareAndSet(false,true))
+                github.com.gengyoubo.mfcl.bridge.LegacyStartupMetrics.write(bridge.services().gameDirectory(),"title-screen");
+        });
         ClientLegacyAudio.install(bridge.services());
         ClientLegacyChat.install(bridge.services());
         ExtraUtilitiesWings.install(bridge,bus);
