@@ -48,6 +48,10 @@ final class BookHostSmokeProbe {
                 if(commands.stream().noneMatch(LegacyGuiGraphics.Texture.class::isInstance))throw new IllegalStateException("Research background was not drawn");
                 var completed=(Map<?,?>)old.getClass().getField("completedResearch").get(null);
                 if(!completed.containsKey(mc.player.getName().getString()))return;
+                var lines=commands.stream().filter(LegacyGuiGraphics.Mesh.class::isInstance).map(LegacyGuiGraphics.Mesh.class::cast)
+                        .flatMap(mesh->mesh.primitives().stream()).filter(primitive->primitive.mode()==3).toList();
+                if(!lines.isEmpty()&&lines.stream().anyMatch(line->line.state().lineWidth()!=3f))throw new IllegalStateException("Original research line width was not captured");
+                if(!lines.isEmpty())proof.put("originalResearchLineWidth",3);
                 proof.put("nativeRightClickOpenedOriginalBook",true);proof.put("registeredResearchPacketDelivered",true);proof.put("capturedCommands",commands.size());
                 String name=(String)bridge.services().loader().loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class).invoke(null,"tc.research_name.ORE");
                 if(name.equals("tc.research_name.ORE"))throw new IllegalStateException("Original research language was not loaded");

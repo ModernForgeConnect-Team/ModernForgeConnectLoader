@@ -192,15 +192,19 @@ public final class LegacyWorldGraphics {
         if (cap == 2929) LegacyGuiGraphics.depthTest(enabled);
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
         if (cap >= 3168 && cap <= 3171) f.generated[cap-3168] = enabled;
-        f.state = new LegacyVertexStream.RenderState(cap == 3042 ? enabled : s.blend(), s.sourceBlend(), s.destinationBlend(), s.depthWrite(), cap == 2884 ? enabled : s.cull(),cap == 2929 ? enabled : s.depthTest());
+        f.state = new LegacyVertexStream.RenderState(cap == 3042 ? enabled : s.blend(), s.sourceBlend(), s.destinationBlend(), s.depthWrite(), cap == 2884 ? enabled : s.cull(),cap == 2929 ? enabled : s.depthTest(),s.lineWidth());
+    }
+    public static void glLineWidth(float width) {
+        Frame f=frame(); if(f==null || width<=0 || !Float.isFinite(width))return; f.check(); var s=f.state;
+        f.state=new LegacyVertexStream.RenderState(s.blend(),s.sourceBlend(),s.destinationBlend(),s.depthWrite(),s.cull(),s.depthTest(),width);
     }
     public static void glBlendFunc(int source, int destination) {
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
-        f.state = new LegacyVertexStream.RenderState(s.blend(), source, destination, s.depthWrite(), s.cull(),s.depthTest());
+        f.state = new LegacyVertexStream.RenderState(s.blend(), source, destination, s.depthWrite(), s.cull(),s.depthTest(),s.lineWidth());
     }
     public static void glDepthMask(boolean enabled) {
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;
-        f.state = new LegacyVertexStream.RenderState(s.blend(), s.sourceBlend(), s.destinationBlend(), enabled, s.cull(),s.depthTest());
+        f.state = new LegacyVertexStream.RenderState(s.blend(), s.sourceBlend(), s.destinationBlend(), enabled, s.cull(),s.depthTest(),s.lineWidth());
     }
     public static void glPushAttrib(int mask) { LegacyGuiGraphics.pushDepthAttributes(mask);Frame f = frame(); if (f != null) { f.check(); f.attributes.push(f.state); } }
     public static void glPopAttrib() { LegacyGuiGraphics.popDepthAttributes();Frame f = frame(); if (f != null) { f.check(); f.state = f.attributes.pop(); } }
@@ -330,7 +334,8 @@ public final class LegacyWorldGraphics {
     }
     private static void applyCommand(Class<?> owner, String operation, List<Double> a) {
         double d0 = a.size() > 0 ? a.get(0) : 0, d1 = a.size() > 1 ? a.get(1) : 0, d2 = a.size() > 2 ? a.get(2) : 0, d3 = a.size() > 3 ? a.get(3) : 0;
-        if (operation.equals("glBegin(I)V")) glBegin((int) d0);
+        if (operation.equals("glLineWidth(F)V")) glLineWidth((float)d0);
+        else if (operation.equals("glBegin(I)V")) glBegin((int) d0);
         else if (operation.equals("glMatrixMode(I)V")) glMatrixMode((int)d0);
         else if (operation.equals("glEnable(I)V")) glEnable((int)d0);
         else if (operation.equals("glDisable(I)V")) glDisable((int)d0);

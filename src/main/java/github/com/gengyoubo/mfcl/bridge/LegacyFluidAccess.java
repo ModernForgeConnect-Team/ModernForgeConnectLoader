@@ -22,6 +22,92 @@ public final class LegacyFluidAccess {
         }
         return handler!=null;
     }
+    /** Frozen catalogue of old fluids and fluid blocks; block metadata stays owned by the old implementation. */
+    public record FluidBlock(String key,boolean finite,int quanta,int densityDirection,boolean liquidMaterial) {}
+    public record Definition(String name,String description,int density,int viscosity,int temperature,int luminosity,boolean gaseous,int color,String icon,LegacyClientData.Stack bucket,List<FluidBlock> blocks) {}
+    public List<Definition> catalog() throws Exception {
+        if(!available())return List.of();
+        return services.items().inLegacy(()->{
+            var loader=services.loader();var base=loader.loadClass("net.minecraftforge.fluids.BlockFluidBase");
+            var finite=loader.loadClass("net.minecraftforge.fluids.BlockFluidFinite");
+            var oldBlock=loader.loadClass("net.minecraft.block.Block");Object blocks=oldBlock.getField("field_149771_c").get(null);
+            var keyOf=blocks.getClass().getMethod("func_148750_c",Object.class);
+            var found=new LinkedHashMap<String,Object>((Map<String,Object>)registry.getMethod("getRegisteredFluids").invoke(null));
+            var byName=new HashMap<String,List<FluidBlock>>();
+            var quanta=base.getDeclaredField("quantaPerBlock");quanta.setAccessible(true);
+            var directionField=base.getDeclaredField("densityDir");directionField.setAccessible(true);
+            for(Object block:(Iterable<?>)blocks){
+                if(!base.isInstance(block))continue;
+                String key=(String)keyOf.invoke(blocks,block);if(key==null||key.startsWith("minecraft:"))continue;
+                Object fluid=base.getMethod("getFluid").invoke(block);if(fluid==null)continue;
+                String name=(String)fluidType.getMethod("getName").invoke(fluid);
+                Object existing=found.putIfAbsent(name,fluid);
+                if(existing!=null&&existing!=fluid)throw new IllegalStateException("Conflicting original fluid identities: "+name);
+                Object material=oldBlock.getMethod("func_149688_o").invoke(block);
+                boolean liquid=(boolean)loader.loadClass("net.minecraft.block.material.Material").getMethod("func_76224_d").invoke(material);
+                byName.computeIfAbsent(name,ignored->new ArrayList<>()).add(new FluidBlock(key,finite.isInstance(block),quanta.getInt(block),directionField.getInt(block),liquid));
+            }
+            var bucketItems=new HashMap<String,LegacyClientData.Stack>();
+            Class<?> containers=loader.loadClass("net.minecraftforge.fluids.FluidContainerRegistry");
+            Object emptyBucket=containers.getField("EMPTY_BUCKET").get(null);
+            Object bucketItem=stackTypeForItems(loader).getMethod("func_77973_b").invoke(emptyBucket);
+            for(Object container:(Object[])containers.getMethod("getRegisteredFluidContainerData").invoke(null)){
+                var ct=container.getClass();Object oldFluid=ct.getField("fluid").get(container),empty=ct.getField("emptyContainer").get(container),filled=ct.getField("filledContainer").get(container);
+                if(oldFluid==null||empty==null||filled==null||stackType.getField("amount").getInt(oldFluid)!=1000||stackTypeForItems(loader).getMethod("func_77973_b").invoke(empty)!=bucketItem)continue;
+                String name=name(oldFluid);if(name!=null)bucketItems.putIfAbsent(name,services.items().snapshot(filled));
+            }
+            var definitions=new ArrayList<Definition>();
+            for(var entry:found.entrySet()){
+                String name=entry.getKey();if(name.equals("water")||name.equals("lava"))continue;
+                Object fluid=entry.getValue(),icon=fluidType.getMethod("getStillIcon").invoke(fluid);String iconName=null;
+                if(icon!=null)iconName=(String)loader.loadClass("net.minecraft.util.IIcon").getMethod("func_94215_i").invoke(icon);
+                definitions.add(new Definition(name,(String)fluidType.getMethod("getUnlocalizedName").invoke(fluid),(int)fluidType.getMethod("getDensity").invoke(fluid),(int)fluidType.getMethod("getViscosity").invoke(fluid),
+                        (int)fluidType.getMethod("getTemperature").invoke(fluid),(int)fluidType.getMethod("getLuminosity").invoke(fluid),(boolean)fluidType.getMethod("isGaseous").invoke(fluid),
+                        (int)fluidType.getMethod("getColor").invoke(fluid),iconName,bucketItems.get(name),List.copyOf(byName.getOrDefault(name,List.of()))));
+            }
+            definitions.sort(Comparator.comparing(Definition::name));return List.copyOf(definitions);
+        });
+    }
+    private static Class<?> stackTypeForItems(ClassLoader loader) throws ClassNotFoundException {return loader.loadClass("net.minecraft.item.ItemStack");}
+    public Set<String> containerKeys() throws Exception {
+        if(!available())return Set.of();
+        return services.items().inLegacy(()->{
+            var result=new HashSet<String>();var type=services.loader().loadClass("net.minecraftforge.fluids.FluidContainerRegistry");
+            for(Object data:(Object[])type.getMethod("getRegisteredFluidContainerData").invoke(null))for(String field:List.of("filledContainer","emptyContainer")){
+                Object stack=data.getClass().getField(field).get(data);if(stack!=null){var snapshot=services.items().snapshot(stack);if(snapshot!=null)result.add(snapshot.key());}
+            }
+            return Set.copyOf(result);
+        });
+    }
+    public record Container(String fluid,int amount,int capacity,boolean tagged) {}
+    public Container container(LegacyClientData.Stack value) throws Exception {
+        if(value==null||!available())return null;
+        return services.items().inLegacy(()->{
+            var itemStack=stackTypeForItems(services.loader());var type=services.loader().loadClass("net.minecraftforge.fluids.FluidContainerRegistry");
+            Object stack=services.items().materialize(value);
+            if(!(boolean)type.getMethod("isContainer",itemStack).invoke(null,stack))return null;
+            Object fluid=type.getMethod("getFluidForFilledItem",itemStack).invoke(null,stack);
+            int capacity=(int)type.getMethod("getContainerCapacity",itemStack).invoke(null,stack);
+            return fluid==null?new Container(null,0,Math.max(0,capacity),false):new Container(name(fluid),stackType.getField("amount").getInt(fluid),Math.max(0,capacity),stackType.getField("tag").get(fluid)!=null);
+        });
+    }
+    public LegacyClientData.Stack fillContainer(LegacyClientData.Stack value,String fluid,int amount) throws Exception {
+        if(value==null||fluid==null||amount<=0||!available())return null;
+        return services.items().inLegacy(()->{
+            var itemStack=stackTypeForItems(services.loader());var type=services.loader().loadClass("net.minecraftforge.fluids.FluidContainerRegistry");
+            Object oldFluid=stack(fluid,amount);if(oldFluid==null)return null;
+            Object result=type.getMethod("fillFluidContainer",stackType,itemStack).invoke(null,oldFluid,services.items().materialize(value));
+            return result==null?null:services.items().snapshot(result);
+        });
+    }
+    public LegacyClientData.Stack drainContainer(LegacyClientData.Stack value) throws Exception {
+        if(value==null||!available())return null;
+        return services.items().inLegacy(()->{
+            var itemStack=stackTypeForItems(services.loader());var type=services.loader().loadClass("net.minecraftforge.fluids.FluidContainerRegistry");
+            Object result=type.getMethod("drainFluidContainer",itemStack).invoke(null,services.items().materialize(value));
+            return result==null?null:services.items().snapshot(result);
+        });
+    }
     public boolean supports(Object tile){return tile!=null&&available()&&handler.isInstance(tile);}
     private Object side(Integer side) {
         int value=side==null?6:side;if(value<0||value>6)throw new IllegalArgumentException("Invalid fluid side: "+value);

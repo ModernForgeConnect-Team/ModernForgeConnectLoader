@@ -117,7 +117,7 @@ public final class ClientContainerBridge {
     private void render(ScreenEvent.Render.Post event) {
         Bound bound=bindings.get(event.getScreen());if(bound==null||bound.failure!=null)return;
         if(bound.nativeView!=null)return;
-        try {renderer.draw(event.getGuiGraphics(),bound.commands);}
+        try {renderer.draw(event.getGuiGraphics(),bound.commands,bound.gui.getClass().getName().equals("thaumcraft.client.gui.GuiResearchBrowser"));}
         catch(Throwable failure){bound.failure=failure;LogUtils.getLogger().error("MFCL original GUI replay failed",failure);}
         finally {bound.tooltipReady=false;bound.graphics=null;}
     }

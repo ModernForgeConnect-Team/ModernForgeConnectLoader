@@ -37,6 +37,8 @@ final class LegacyFluidHandler implements IFluidHandler {
         if(legacy==null)return null;
         if(legacy.equals("water"))return Fluids.WATER;
         if(legacy.equals("lava"))return Fluids.LAVA;
+        var content=ModernContentBridge.active();
+        if(content!=null){var mapped=content.fluidRegistry().host(legacy);if(mapped!=null)return mapped;}
         Fluid match=null;
         for(var entry:ForgeRegistries.FLUIDS.getEntries()) {
             var fluid=entry.getValue();
@@ -50,6 +52,8 @@ final class LegacyFluidHandler implements IFluidHandler {
         if(fluid==null||fluid==Fluids.EMPTY)return null;
         if(fluid.isSame(Fluids.WATER))return "water";
         if(fluid.isSame(Fluids.LAVA))return "lava";
+        var content=ModernContentBridge.active();
+        if(content!=null){var mapped=content.fluidRegistry().legacy(fluid);if(mapped!=null)return mapped;}
         var key=ForgeRegistries.FLUIDS.getKey(fluid);
         return key==null||!fluid.isSource(fluid.defaultFluidState())?null:key.getPath();
     }

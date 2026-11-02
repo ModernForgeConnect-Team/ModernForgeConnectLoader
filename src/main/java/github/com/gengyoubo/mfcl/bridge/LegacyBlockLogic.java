@@ -97,6 +97,19 @@ public final class LegacyBlockLogic {
         return services.items().inLegacy(() -> (boolean)blockType.getMethod("func_149696_a",worldType,int.class,int.class,int.class,int.class,int.class)
                 .invoke(block(key),world,x,y,z,event,data));
     }
+    /** Only old Forge fluids need their placement and neighbour callbacks to seed flow updates. */
+    public boolean isForgeFluid(String key) throws Exception {
+        return services.items().inLegacy(() -> services.loader().loadClass("net.minecraftforge.fluids.BlockFluidBase").isInstance(block(key)));
+    }
+    public void fluidAdded(String key,Object world,int x,int y,int z) throws Exception {
+        services.items().inLegacy(() -> {blockType.getMethod("func_149726_b",worldType,int.class,int.class,int.class).invoke(block(key),world,x,y,z);return null;});
+    }
+    public void fluidNeighbourChanged(String key,Object world,int x,int y,int z,int nx,int ny,int nz) throws Exception {
+        services.items().inLegacy(() -> {
+            Object neighbour=worldType.getMethod("func_147439_a",int.class,int.class,int.class).invoke(world,nx,ny,nz);
+            blockType.getMethod("func_149695_a",worldType,int.class,int.class,int.class,blockType).invoke(block(key),world,x,y,z,neighbour);return null;
+        });
+    }
     public boolean providesPower(String key) throws Exception { return services.items().inLegacy(() -> (boolean)blockType.getMethod("func_149744_f").invoke(block(key))); }
     public boolean hasComparator(String key) throws Exception { return services.items().inLegacy(() -> (boolean)blockType.getMethod("func_149740_M").invoke(block(key))); }
     /** The inherited Block.onBlockActivated always returns false and must not consume a predicted client click. */

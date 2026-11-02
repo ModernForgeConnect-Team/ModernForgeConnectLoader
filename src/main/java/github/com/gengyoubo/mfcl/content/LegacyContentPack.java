@@ -64,6 +64,8 @@ public final class LegacyContentPack {
         var transparent = directory.resolve("assets/mfcl/textures/models/armor/transparent.png"); Files.createDirectories(transparent.getParent());
         javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(64, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB), "png", transparent.toFile());
         json("pack.mcmeta", Map.of("pack", Map.of("pack_format", 15, "description", "MFCL original 1.7.10 content resources")));
+        var transparentFluid = directory.resolve("assets/mfcl/textures/block/legacy/fluid_transparent.png");Files.createDirectories(transparentFluid.getParent());
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(16,16,java.awt.image.BufferedImage.TYPE_INT_ARGB),"png",transparentFluid.toFile());
         // builtin/entity item models reference no texture, so their sprites must be stitched explicitly.
         json("assets/mfcl/atlases/blocks.json", Map.of("sources", List.of(Map.of("type", "minecraft:directory", "source", "block/legacy"))));
         // Contextual world icons (e.g. connected glass) may never appear in an inventory capture.

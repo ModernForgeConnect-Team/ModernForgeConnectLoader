@@ -6,7 +6,6 @@ import github.com.gengyoubo.mfcl.client.LegacyKeyMappings;
 import github.com.gengyoubo.mfcl.content.*;
 import net.minecraft.client.*;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.common.MinecraftForge;
@@ -30,7 +29,7 @@ final class ThaumcraftWandControls {
                 if(focus){
                     // F is also the modern offhand shortcut. Consume that queued click while a wand owns this key.
                     if(mc.options.keySwapOffhand.matches(event.getKey(),event.getScanCode()))while(mc.options.keySwapOffhand.consumeClick()){}
-                    open(services);
+                    if(mc.player.isShiftKeyDown())send(services,"REMOVE");else open(services);
                 }else send(services,null);
             }catch(Exception failure){LogUtils.getLogger().error("MFCL wand control failed",failure);}
         });
@@ -49,9 +48,16 @@ final class ThaumcraftWandControls {
                 var host=mc.player.getInventory().getItem(i);if(host.isEmpty())continue;
                 try{ThaumcraftWandFocus.add(services.loader(),services.items().materialize(content.gameplayStack(host)),result);}catch(UnsupportedOperationException unmapped){}
             }
-            var names=new LinkedHashMap<String,String>();for(var choice:result.entrySet())names.put(choice.getKey(),services.items().displayName(services.items().snapshot(choice.getValue())));return names;
+            var names=new LinkedHashMap<String,LegacyClientData.Stack>();for(var choice:result.entrySet())names.put(choice.getKey(),services.items().snapshot(choice.getValue()));return names;
         });
-        mc.setScreen(new Selector(services,choices));
+        if(choices.isEmpty())return;
+        var equipped=services.items().inLegacy(()->{
+            Object stack=services.items().materialize(content.gameplayStack(mc.player.getMainHandItem()));
+            Object item=LegacyObjects.item(stack);
+            Object focus=item.getClass().getMethod("getFocusItem",services.loader().loadClass("net.minecraft.item.ItemStack")).invoke(item,stack);
+            return focus==null?null:services.items().snapshot(focus);
+        });
+        mc.setScreen(new Selector(services,choices,equipped));
     }
     static void send(LegacyServices services,String focus) throws Exception {
         var mc=Minecraft.getInstance();var content=ModernContentBridge.active();
@@ -64,17 +70,55 @@ final class ThaumcraftWandControls {
         });ScanSyncChannel.sendLegacyPacket(packet);
     }
     private static final class Selector extends Screen {
-        private final LegacyServices services;private final List<Map.Entry<String,String>> choices;private int page;
-        Selector(LegacyServices services,Map<String,String> choices){super(Component.translatable("mfcl.wand.focus.title"));this.services=services;this.choices=new ArrayList<>(choices.entrySet());}
-        @Override protected void init(){
-            int rows=Math.max(1,(height-100)/22),start=page*rows,end=Math.min(choices.size(),start+rows);
-            for(int i=start;i<end;i++){var choice=choices.get(i);addRenderableWidget(Button.builder(Component.literal(choice.getValue()),button->select(choice.getKey())).bounds(width/2-110,36+(i-start)*22,220,20).build());}
-            addRenderableWidget(Button.builder(Component.translatable("mfcl.wand.focus.remove"),button->select("REMOVE")).bounds(width/2-110,height-54,220,20).build());
-            if(page>0)addRenderableWidget(Button.builder(Component.literal("←"),button->{page--;rebuildWidgets();}).bounds(width/2-110,height-28,60,20).build());
-            if(end<choices.size())addRenderableWidget(Button.builder(Component.literal("→"),button->{page++;rebuildWidgets();}).bounds(width/2+50,height-28,60,20).build());
+        private final LegacyServices services;
+        private final List<Map.Entry<String,LegacyClientData.Stack>> choices;
+        private final LegacyClientData.Stack equipped;
+        Selector(LegacyServices services,Map<String,LegacyClientData.Stack> choices,LegacyClientData.Stack equipped){super(Component.translatable("mfcl.wand.focus.title"));this.services=services;this.choices=new ArrayList<>(choices.entrySet());this.equipped=equipped;}
+        private double radius(){return 16.0+choices.size()*2.5;}
+        private int selected(double x,double y){
+            double dx=x-width/2.0,dy=y-height/2.0;
+            for(int i=0;i<choices.size();i++){
+                double angle=Math.PI*2*i/choices.size()-Math.PI/2;
+                if(Math.abs(dx-Math.cos(angle)*radius())<=10&&Math.abs(dy-Math.sin(angle)*radius())<=10)return i;
+            }
+            return -1;
         }
         private void select(String key){try{send(services,key);onClose();}catch(Exception failure){LogUtils.getLogger().error("MFCL focus selection failed",failure);}}
+        @Override public boolean mouseClicked(double x,double y,int button){
+            if(button!=0)return super.mouseClicked(x,y,button);
+            int i=selected(x,y);if(i>=0)select(choices.get(i).getKey());return true;
+        }
+        @Override public boolean keyReleased(int key,int scan,int modifiers){
+            var binding=LegacyKeyMappings.find(FOCUS);
+            if(binding!=null&&binding.matches(key,scan)){
+                var mc=Minecraft.getInstance();double x=mc.mouseHandler.xpos()*width/mc.getWindow().getScreenWidth(),y=mc.mouseHandler.ypos()*height/mc.getWindow().getScreenHeight();
+                int i=selected(x,y);if(i>=0)select(choices.get(i).getKey());else onClose();return true;
+            }
+            return super.keyReleased(key,scan,modifiers);
+        }
         @Override public boolean isPauseScreen(){return false;}
-        @Override public void render(GuiGraphics graphics,int x,int y,float partial){renderBackground(graphics);super.render(graphics,x,y,partial);graphics.drawCenteredString(font,title,width/2,14,0xffffff);}
+        @Override public void render(GuiGraphics graphics,int x,int y,float partial){
+            var content=ModernContentBridge.active();var mc=Minecraft.getInstance();int cx=width/2,cy=height/2;
+            var radial=net.minecraft.resources.ResourceLocation.parse(content.pack().worldResource("thaumcraft:textures/misc/radial.png"));
+            var radial2=net.minecraft.resources.ResourceLocation.parse(content.pack().worldResource("thaumcraft:textures/misc/radial2.png"));
+            var pose=graphics.pose();float angle=(mc.player.tickCount+partial)/2f;
+            com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+            graphics.setColor(.5f,.5f,.5f,.5f);
+            drawLayer(graphics,radial,cx,cy,(float)(radius()*2.75),angle);
+            drawLayer(graphics,radial2,cx,cy,(float)(radius()*2.55),-angle);
+            graphics.setColor(1,1,1,1);
+            if(equipped!=null)graphics.renderItem(content.gameplayStack(equipped),cx-8,cy-8);
+            int hovered=selected(x,y);
+            for(int i=0;i<choices.size();i++){
+                double a=Math.PI*2*i/choices.size()-Math.PI/2;
+                int ix=cx+(int)Math.round(Math.cos(a)*radius())-8,iy=cy+(int)Math.round(Math.sin(a)*radius())-8;
+                graphics.renderItem(content.gameplayStack(choices.get(i).getValue()),ix,iy);
+            }
+            if(hovered>=0)try{graphics.renderTooltip(font,Component.literal(services.items().displayName(choices.get(hovered).getValue())),x,y);}catch(Exception failure){LogUtils.getLogger().debug("Cannot name focus",failure);}
+        }
+        private void drawLayer(GuiGraphics graphics,net.minecraft.resources.ResourceLocation texture,int x,int y,float size,float angle){
+            var pose=graphics.pose();pose.pushPose();pose.translate(x,y,0);pose.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(angle));pose.scale(size/256f,size/256f,1);
+            graphics.blit(texture,-128,-128,0,0,256,256,256,256);pose.popPose();
+        }
     }
 }

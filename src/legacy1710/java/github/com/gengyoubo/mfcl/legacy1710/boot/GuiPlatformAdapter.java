@@ -10,7 +10,7 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
     private static final String DISPATCH = "github/com/gengyoubo/mfcl/bridge/LegacyRenderBridge";
     private static final String WORLD = "github/com/gengyoubo/mfcl/bridge/LegacyWorldGraphics";
     private static final java.util.Set<String> WORLD_METHODS = new java.util.HashSet<>(java.util.Arrays.asList(
-            "glBegin(I)V", "glEnd()V", "glEnable(I)V", "glDisable(I)V", "glIsEnabled(I)Z", "glBlendFunc(II)V", "glDepthMask(Z)V", "glPushAttrib(I)V", "glPopAttrib()V",
+            "glBegin(I)V", "glEnd()V", "glLineWidth(F)V", "glEnable(I)V", "glDisable(I)V", "glIsEnabled(I)Z", "glBlendFunc(II)V", "glDepthMask(Z)V", "glPushAttrib(I)V", "glPopAttrib()V",
             "glMatrixMode(I)V", "glTexGeni(III)V", "glTexGen(IILjava/nio/FloatBuffer;)V",
             "glVertex2f(FF)V", "glVertex2d(DD)V", "glVertex3f(FFF)V", "glVertex3d(DDD)V",
             "glTexCoord2f(FF)V", "glTexCoord2d(DD)V", "glNormal3f(FFF)V", "glNormal3d(DDD)V",

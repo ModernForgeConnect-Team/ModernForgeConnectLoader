@@ -25,6 +25,18 @@ class LegacyGuiGeometryTest {
         assertFalse(LegacyGuiGeometry.compatible(quad,primitive(7,"aspect",new LegacyVertexStream.RenderState(false,770,771,true,false,false))));
         assertTrue(LegacyGuiGeometry.compatible(primitive(1,"unused",quad.state()),primitive(7,"",quad.state())));
     }
+    @Test void capturedLineWidthSurvivesOtherStateChanges() {
+        try(var frame=github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.begin()) {
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glLineWidth(3);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glEnable(3042);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glBlendFunc(770,771);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glBegin(3);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glVertex2f(0,0);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glVertex2f(1,1);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glEnd();
+            assertEquals(3f,frame.primitives().get(0).state().lineWidth());
+        }
+    }
     @Test void conversionRejectsUnsupportedModes() {
         assertThrows(UnsupportedOperationException.class,()->LegacyGuiGeometry.quads(99,4,(a,b,c,d)->fail()));
     }

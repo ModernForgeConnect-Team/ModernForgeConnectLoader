@@ -18,7 +18,8 @@ final class LegacyGuiRenderer {
     private final Map<String,Texture> textures=new HashMap<>();
     private final Set<String> missingIcons=new HashSet<>();
     LegacyGuiRenderer(LegacyServices services){this.services=services;}
-    void draw(GuiGraphics graphics,List<LegacyGuiGraphics.Command> commands) throws Exception {
+    void draw(GuiGraphics graphics,List<LegacyGuiGraphics.Command> commands) throws Exception { draw(graphics,commands,false); }
+    void draw(GuiGraphics graphics,List<LegacyGuiGraphics.Command> commands,boolean researchBrowser) throws Exception {
         var mc=Minecraft.getInstance();
         boolean depthTest=true;
         boolean textPending=false;
@@ -55,23 +56,34 @@ final class LegacyGuiRenderer {
                         else graphics.renderItem(stack,0,0);
                     } finally {graphics.pose().popPose();}
                 } else if(command instanceof LegacyGuiGraphics.Mesh mesh) {
-                    mesh(graphics,mesh.primitives());
+                    mesh(graphics,mesh.primitives(),researchBrowser);
                 }
                 // Overlay backgrounds and glyphs use different render types; preserve their original draw order.
                 if(!depthTest) {graphics.flush();textPending=false;}
             }
         } finally {graphics.flush();RenderSystem.enableDepthTest();}
     }
-    private void mesh(GuiGraphics graphics,List<LegacyVertexStream.Primitive> primitives) throws Exception {
+    private void mesh(GuiGraphics graphics,List<LegacyVertexStream.Primitive> primitives,boolean researchBrowser) throws Exception {
         graphics.flush();
         var buffer=com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
         var matrix=graphics.pose().last().pose();
+        boolean clipped=false;
         try {
             com.mojang.blaze3d.systems.RenderSystem.disableDepthTest();com.mojang.blaze3d.systems.RenderSystem.disableCull();
             com.mojang.blaze3d.systems.RenderSystem.enableBlend();
             LegacyVertexStream.Primitive previous=null;
             for(var primitive:primitives) {
                 var vertices=primitive.vertices();if(vertices.isEmpty())continue;
+                boolean lineClip=researchBrowser&&primitive.mode()>=1&&primitive.mode()<=3;
+                if(lineClip!=clipped) {
+                    if(previous!=null){com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());previous=null;}
+                    if(lineClip) {
+                        var screen=Minecraft.getInstance().screen;
+                        int left=(screen.width-256)/2,top=(screen.height-230)/2;
+                        graphics.enableScissor(left+16,top+16,left+240,top+214);
+                    } else graphics.disableScissor();
+                    clipped=lineClip;
+                }
                 boolean textured=primitive.mode()>3&&!primitive.texture().isEmpty();
                 if(previous==null||!LegacyGuiGeometry.compatible(previous,primitive)) {
                     if(previous!=null)com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(buffer.end());
@@ -88,7 +100,9 @@ final class LegacyGuiRenderer {
                     for(int edge=0;edge<edges;edge++) {
                         var a=vertices.get(primitive.mode()==1?edge*2:edge);var b=vertices.get(primitive.mode()==1?edge*2+1:(edge+1)%vertices.size());
                         double dx=b.x()-a.x(),dy=b.y()-a.y(),length=Math.hypot(dx,dy);if(length==0)continue;
-                        double ox=-dy/length*1.5,oy=dx/length*1.5;
+                        // OpenGL line widths are framebuffer pixels, independent of GUI scale and model transforms.
+                        double halfWidth=primitive.state().lineWidth()/(2.0*Minecraft.getInstance().getWindow().getGuiScale());
+                        double ox=-dy/length*halfWidth,oy=dx/length*halfWidth;
                         vertex(buffer,matrix,a,a.x()+ox,a.y()+oy,false);vertex(buffer,matrix,b,b.x()+ox,b.y()+oy,false);
                         vertex(buffer,matrix,b,b.x()-ox,b.y()-oy,false);vertex(buffer,matrix,a,a.x()-ox,a.y()-oy,false);
                     }
@@ -101,6 +115,7 @@ final class LegacyGuiRenderer {
         } finally {
             // A missing texture or invalid primitive must not leave the shared Tessellator building.
             if(buffer.building())buffer.end().release();
+            if(clipped)graphics.disableScissor();
             com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();com.mojang.blaze3d.systems.RenderSystem.enableDepthTest();com.mojang.blaze3d.systems.RenderSystem.enableCull();
         }
     }

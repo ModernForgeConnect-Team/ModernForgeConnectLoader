@@ -54,12 +54,14 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         services.playerState().register(new ThaumcraftKnowledge(loader));
         services.scanners().register(new ThaumcraftScanner(loader));
         ThaumcraftCrossbow.install(services);
+        ThaumcraftBucketInteraction.install(services);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(ThaumcraftResearchCommand::register);
         return Map.of("status", "READY", "playerStateHooks", ThaumcraftKnowledge.ID, "heldScanners", "thaumcraft4:thaumometer", "dimensions", ThaumcraftOuterLands.HOST_KEY);
     }
     @Override public void installClient() {
         try{ThaumcraftWarpVisuals.install(services);}catch(Exception failure){throw new IllegalStateException("Cannot install original warp feedback",failure);}
         ThaumcraftWandControls.install(services);
+        ThaumcraftWandHud.install(services);
         ThaumcraftDynamicItems.install(services);
         ThaumcraftGoggles.install(services);
         ThaumcraftParticles.install(services);
@@ -83,3 +85,4 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
         }
     }
 }
+

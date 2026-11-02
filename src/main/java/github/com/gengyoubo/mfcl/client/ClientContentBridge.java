@@ -39,6 +39,7 @@ public final class ClientContentBridge {
         });
         bus.addListener((FMLClientSetupEvent event) -> event.enqueueWork(() -> {
             net.minecraft.client.gui.screens.MenuScreens.register(bridge.deviceMenuType(),LegacyDeviceScreen::new);
+            for(var fluid:bridge.legacyFluids())net.minecraft.client.renderer.ItemBlockRenderTypes.setRenderLayer(fluid,net.minecraft.client.renderer.RenderType.cutout());
             for (var entry : bridge.declarations().items()) for (var item : bridge.hostItems(entry.key())) ItemProperties.register(item, ResourceLocation.fromNamespaceAndPath("mfcl", "metadata"),
                     (stack, level, entity, seed) -> ModernContentBridge.metadata(stack));
             // Ticks drawn so far, matching the original held-use icon frames sampled per item.
@@ -51,7 +52,8 @@ public final class ClientContentBridge {
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.hostItems(entry.key()).toArray(net.minecraft.world.item.Item[]::new));
         });
-        if (Boolean.getBoolean("mfcl.test.potions")) PotionHostSmokeProbe.install(bridge);
+        if (Boolean.getBoolean("mfcl.test.grassFace")) GrassFaceHostSmokeProbe.install(bridge);
+        else if (Boolean.getBoolean("mfcl.test.potions")) PotionHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.elementalTools")) ElementalToolsHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.enchantments")) EnchantmentHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.focusPouch")) FocusPouchHostSmokeProbe.install(bridge);

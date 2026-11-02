@@ -35,6 +35,7 @@ public final class ModernContentBridge {
     private static ModernContentBridge active;
     private final LegacyServices services;
     private final LegacyContent declarations;
+    private final LegacyFluidRegistry fluidRegistry;
     private final LegacyBlockRendering blockRendering;
     private final LegacyBlockShapes blockShapes;
     private final LegacyItemUse itemUse;
@@ -88,6 +89,7 @@ public final class ModernContentBridge {
             legacyBlockKeys = Set.copyOf((Set<String>)registry.getClass().getMethod("func_148742_b").invoke(registry));
             hostBlocks = new HostBlockMapping(legacyBlockKeys);
         }
+        fluidRegistry = new LegacyFluidRegistry(this);
         validateIds(declarations.blocks().stream().map(LegacyContent.Block::key).toList());
         validateIds(declarations.items().stream().map(LegacyContent.Item::key).toList());
         LogUtils.getLogger().info("MFCL content: generating resource pack");
@@ -154,6 +156,9 @@ public final class ModernContentBridge {
     /** Equipment sources, forwarded events and persistent player state of the developer API. */
     public HostPlayers players() { return players; }
     public LegacyContent declarations() { return declarations; }
+    LegacyFluidRegistry fluidRegistry() { return fluidRegistry; }
+    public java.util.Collection<net.minecraft.world.level.material.Fluid> legacyFluids(){return fluidRegistry.fluids();}
+    public net.minecraft.world.level.material.Fluid legacyFluid(String name){return fluidRegistry.host(name);}
     public LegacyBlockRendering blockRendering() { return blockRendering; }
     public LegacyBlockShapes blockShapes() { return blockShapes; }
     public LegacyServices services() { return services; }
@@ -397,6 +402,7 @@ public final class ModernContentBridge {
         LegacyRegistryIds.remap(event.getMappings(Registries.BLOCK,"mfcl"),blocks);
     }
     private void register(RegisterEvent event) {
+        fluidRegistry.register(event);
         LegacyChestLoot.register(event);
         attributes.register(event);
         statistics.register(event);
@@ -770,6 +776,9 @@ public final class ModernContentBridge {
     private class MirroredArmorItem extends net.minecraft.world.item.ArmorItem {
         final LegacyContent.Item entry;
         MirroredArmorItem(Properties properties, LegacyContent.Item entry) { super(new LegacyArmorMaterial(entry), armorType(entry), properties); this.entry = entry; }
+        @Override public net.minecraftforge.common.capabilities.ICapabilityProvider initCapabilities(ItemStack stack,CompoundTag nbt) {
+            return entry!=null&&fluidRegistry.isContainerItem(entry.key())?new LegacyFluidItemHandler(ModernContentBridge.this,stack):super.initCapabilities(stack,nbt);
+        }
         @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level,net.minecraft.world.entity.player.Player player,net.minecraft.world.InteractionHand hand) {
             try {
@@ -852,6 +861,9 @@ public final class ModernContentBridge {
     private final class MirroredItem extends Item {
         private final LegacyContent.Item entry;
         MirroredItem(Properties properties, LegacyContent.Item entry) { super(properties); this.entry = entry; }
+        @Override public net.minecraftforge.common.capabilities.ICapabilityProvider initCapabilities(ItemStack stack,CompoundTag nbt) {
+            return entry!=null&&fluidRegistry.isContainerItem(entry.key())?new LegacyFluidItemHandler(ModernContentBridge.this,stack):super.initCapabilities(stack,nbt);
+        }
         @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
@@ -1048,7 +1060,14 @@ public final class ModernContentBridge {
             try {
                 result = level.isClientSide
                         ? github.com.gengyoubo.mfcl.client.ClientContainerBridge.useItem(()->itemUse.rightClick(world,source,held))
-                        : logicTransaction(level,player.blockPosition(),()->LegacyItemDrops.capture(this,player,()->itemUse.rightClick(world,source,held)),true);
+                        : logicTransaction(level,player.blockPosition(),()->{
+                            var outcome=LegacyItemDrops.capture(this,player,()->itemUse.rightClick(world,source,held));
+                            // Some original items place a block but return the unchanged stack in creative mode.
+                            // The native interaction must still be consumed when the transaction changed the world.
+                            var transaction=placement.get();
+                            return !outcome.used()&&transaction!=null&&transaction.hasBlockChanges()
+                                    ?new LegacyItemUse.Result(true,outcome.useDuration(),outcome.prompt(),outcome.messages(),outcome.feedback(),outcome.device()):outcome;
+                        },true);
             } catch(Exception failure){services.playerInventory().write(actor,before);throw failure;}
             if(!level.isClientSide)collectLegacyInventory(player,actor,before,hand);
             if(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
@@ -1189,6 +1208,9 @@ public final class ModernContentBridge {
         private final boolean split;
         MirroredBlockItem(Block block, Properties properties, LegacyContent.Item entry, boolean split) { super(block, properties); this.entry = entry; this.split = split; }
         @Override public void registerBlocks(Map<Block, Item> blockToItem, Item item) { if (!split) super.registerBlocks(blockToItem, item); }
+        @Override public net.minecraftforge.common.capabilities.ICapabilityProvider initCapabilities(ItemStack stack,CompoundTag nbt) {
+            return entry!=null&&fluidRegistry.isContainerItem(entry.key())?new LegacyFluidItemHandler(ModernContentBridge.this,stack):super.initCapabilities(stack,nbt);
+        }
         @Override public int getEntityLifespan(ItemStack stack, Level level) { return droppedItems.lifespan(stack, level); }
         @Override public int getMaxStackSize(ItemStack stack) { return entry==null?super.getMaxStackSize(stack):stackLimit(entry,stack); }
         @Override public Component getName(ItemStack stack) { return name(entry, stack); }
@@ -1237,11 +1259,26 @@ public final class ModernContentBridge {
     }
     private class MirroredBlock extends Block {
         private final LegacyContent.Block entry;
-        private final boolean powerSource, comparatorSource, activation;
+        private final boolean powerSource, comparatorSource, activation, forgeFluid;
         MirroredBlock(LegacyContent.Block entry) {
             super(properties(entry)); this.entry = entry; registerDefaultState(stateDefinition.any().setValue(METADATA, 0));
-            try { powerSource = services.logic().providesPower(entry.key()); comparatorSource = services.logic().hasComparator(entry.key()); activation = services.logic().hasActivation(entry.key()); }
+            try { powerSource = services.logic().providesPower(entry.key()); comparatorSource = services.logic().hasComparator(entry.key()); activation = services.logic().hasActivation(entry.key()); forgeFluid = services.logic().isForgeFluid(entry.key()); }
             catch (Exception failure) { throw new IllegalStateException("Cannot read original block interaction declarations",failure); }
+        }
+        @Override public void onPlace(BlockState state, Level level, BlockPos pos, BlockState previous, boolean moving) {
+            super.onPlace(state,level,pos,previous,moving);
+            if(!forgeFluid||level.isClientSide||state.getBlock()==previous.getBlock())return;
+            try {logicTransaction(level,pos,()->{services.logic().fluidAdded(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ());return null;},true);}
+            catch(Exception failure){throw new IllegalStateException("Cannot schedule original fluid on placement: "+entry.key(),failure);}
+        }
+        @Override public void neighborChanged(BlockState state,Level level,BlockPos pos,Block neighbour,BlockPos from,boolean moving) {
+            super.neighborChanged(state,level,pos,neighbour,from,moving);
+            if(!forgeFluid||level.isClientSide)return;
+            try {logicTransaction(level,pos,()->{services.logic().fluidNeighbourChanged(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ(),from.getX(),from.getY(),from.getZ());return null;},true);}
+            catch(Exception failure){throw new IllegalStateException("Cannot schedule original fluid after neighbour change: "+entry.key(),failure);}
+        }
+        @Override public net.minecraft.world.level.material.FluidState getFluidState(BlockState state) {
+            return forgeFluid?fluidRegistry.state(entry.key(),state.getValue(METADATA)):super.getFluidState(state);
         }
         @Override public boolean isSignalSource(BlockState state) { return powerSource; }
         @Override public boolean hasAnalogOutputSignal(BlockState state) { return comparatorSource; }
@@ -1472,6 +1509,8 @@ public final class ModernContentBridge {
                 if (state.hasProperty(METADATA)) return legacyBlock(state);
                 String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
                 if (state.isAir()) id = "minecraft:air";
+                // In 1.20 "grass" is the plant; in 1.7 it names the opaque grass block.
+                if (id.equals("minecraft:grass")) return new HostWorldAccess.Block("minecraft:tallgrass", 1);
                 if (id.equals("minecraft:grass_block")) id = "minecraft:grass";
                 // New vanilla blocks have no old registry entry; preserve their occlusion for old neighbor queries.
                 if (!legacyBlockKeys.contains(id)) id = state.isSolidRender(level, origin.offset(x,y,z)) ? "minecraft:stone" : "minecraft:air";
@@ -1588,6 +1627,10 @@ public final class ModernContentBridge {
                 var tile = level.getBlockEntity(key);
                 return new Before(level.getBlockState(key),tile == null ? null : tile.saveWithFullMetadata());
             });
+        }
+        boolean hasBlockChanges() {
+            for(var entry:before.entrySet())if(!level.getBlockState(entry.getKey()).equals(entry.getValue().state()))return true;
+            return false;
         }
         void commit() {
             commit(true);

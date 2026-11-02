@@ -42,7 +42,15 @@ final class WandHostAuditProbe {
             }else if(stage==1&&mc.player!=null&&mc.level!=null&&mc.screen==null){
                 pending=server(mc,()->{audit(mc);verifyNode(mc);prepareFocus(mc);return true;});stage=2;frames=0;
             }else if(stage==2&&pending.isDone()&&++frames>12&&mc.screen==null){
-                pending.join();selectFocus(mc,false);stage=3;frames=0;
+                pending.join();
+                var focus=mc.player.getInventory().getItem(1);mc.player.getInventory().setItem(1,ItemStack.EMPTY);
+                pressFocusKey(mc);check(mc.screen==null,"Empty focus inventory opened selector");
+                mc.player.getInventory().setItem(1,focus);report.put("emptyFocusInventoryDoesNotOpen",true);
+                pressFocusKey(mc);check(mc.screen!=null&&mc.screen.getClass().getSimpleName().equals("Selector"),"Focus selector did not open");stage=20;frames=0;
+            }else if(stage==20&&++frames>6){
+                net.minecraft.client.Screenshot.grab(mc.gameDirectory,"wand-focus-selector.png",mc.getMainRenderTarget(),message->{});
+                check(mc.screen.mouseClicked(mc.screen.width/2.0,mc.screen.height/2.0-18.5,0),"Focus icon click was not handled");
+                stage=3;frames=0;
             }else if(stage==3&&++frames>8){pending=server(mc,()->{verifyFocus(mc,true);return true;});stage=4;frames=0;
             }else if(stage==4&&pending.isDone()&&++frames>8&&mc.screen==null){pending.join();selectFocus(mc,true);stage=5;frames=0;
             }else if(stage==5&&++frames>8){pending=server(mc,()->{verifyFocus(mc,false);return true;});stage=6;
@@ -73,11 +81,14 @@ final class WandHostAuditProbe {
         check(!mc.options.keySwapOffhand.consumeClick(),"F also queued an offhand swap while holding a wand");
     }
     private void selectFocus(Minecraft mc,boolean remove){
-        pressFocusKey(mc);
-        check(mc.screen!=null&&mc.screen.getClass().getSimpleName().equals("Selector"),"F did not open the focus selector");
-        var buttons=mc.screen.children().stream().filter(child->child instanceof net.minecraft.client.gui.components.Button).map(child->(net.minecraft.client.gui.components.Button)child).toList();
-        var button=remove?buttons.stream().filter(value->value.getMessage().getString().equals(net.minecraft.network.chat.Component.translatable("mfcl.wand.focus.remove").getString())).findFirst().orElseThrow():buttons.get(0);
-        button.onPress();report.put("nativeFocusSelectorAndOffhandConflict",true);
+        if(remove){
+            mc.player.input.shiftKeyDown=true;try{pressFocusKey(mc);}finally{mc.player.input.shiftKeyDown=false;}
+            check(mc.screen==null,"Sneaking opened the focus selector");
+        }else{
+            pressFocusKey(mc);check(mc.screen!=null&&mc.screen.getClass().getSimpleName().equals("Selector"),"F did not open the focus selector");
+            check(mc.screen.mouseClicked(mc.screen.width/2.0,mc.screen.height/2.0-18.5,0),"Focus icon click was not handled");
+        }
+        report.put("nativeFocusSelectorAndOffhandConflict",true);
     }
     private void prepareFocus(Minecraft mc)throws Exception{
         prepareFocus(mc,"wand");
