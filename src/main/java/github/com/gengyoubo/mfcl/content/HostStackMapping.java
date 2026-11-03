@@ -55,7 +55,8 @@ public final class HostStackMapping {
         ResourceLocation id = ResourceLocation.tryParse(key);
         if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) return ItemStack.EMPTY;
         ItemStack result = new ItemStack(BuiltInRegistries.ITEM.get(id), Math.max(1, old.count()));
-        if (result.isDamageableItem()) result.setDamageValue(meta);
+        // Item.canBeDepleted avoids ItemStack.isDamageableItem, which other mods hook and may call into unfilled registries during mod construction.
+        if (result.getItem().canBeDepleted()) result.setDamageValue(meta);
         // Legacy NBT is retained by the bridge; it is not copied blindly into a modern item for display.
         return result;
     }
@@ -87,6 +88,6 @@ public final class HostStackMapping {
     }
     private static boolean isDamageable(String key) {
         ResourceLocation id = ResourceLocation.tryParse(key);
-        return id != null && BuiltInRegistries.ITEM.containsKey(id) && new ItemStack(BuiltInRegistries.ITEM.get(id)).isDamageableItem();
+        return id != null && BuiltInRegistries.ITEM.containsKey(id) && BuiltInRegistries.ITEM.get(id).canBeDepleted();
     }
 }
