@@ -329,7 +329,15 @@ public final class LevelWorldBridge {
                 net.minecraft.world.level.block.state.BlockState state;
                 try { state = content.modernBlock(block, level.getBlockState(pos)); }
                 catch (UnsupportedOperationException unsupported) { if (dimensions.skipUnsupported(block, unsupported)) return false; throw unsupported; }
-                return level.setBlock(pos, state, flags);
+                boolean changed = level.setBlock(pos, state, flags);
+                if ((block.legacyKey().equals("minecraft:leaves") || block.legacyKey().equals("minecraft:leaves2"))
+                        && (block.metadata() & 8) != 0 && state.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock) {
+                    var leaf = state.getBlock();
+                    content.afterCommit(level, () -> {
+                        if (level.getBlockState(pos).is(leaf)) level.scheduleTick(pos, leaf, 1);
+                    });
+                }
+                return changed;
             }
             @Override public boolean canPlaceBlock(Block block, int x, int y, int z) {
                 check(); var candidate = content.blocks().get(block.legacyKey());

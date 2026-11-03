@@ -36,3 +36,4 @@ forge*changelog.txt
 /.claude/
 /tools/*
 !/tools/HeightAudit.java
+/run-tree-leaf-fix/

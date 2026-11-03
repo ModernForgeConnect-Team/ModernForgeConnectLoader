@@ -25,7 +25,7 @@ final class TreeHostSmokeProbe {
     private final List<BlockPos> saplings=new ArrayList<>();
     private final long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(6);
     private CompletableFuture<Boolean> pending;
-    private BlockPos decay;
+    private BlockPos decay, vanillaDecay;
     private long started;
     private int stage,frames;
     private TreeHostSmokeProbe(ModernContentBridge content){this.content=content;}
@@ -122,10 +122,25 @@ final class TreeHostSmokeProbe {
         for(int i=0;i<100;i++){level.setBlock(at,state("Thaumcraft:blockMagicalLeaves",13),2);player.gameMode.destroyBlock(at);}
         check(level.getEntitiesOfClass(ItemEntity.class,new AABB(at).inflate(3)).isEmpty(),"Player-placed persistent leaves farmed saplings");proof.put("persistentLeavesNoSaplings",true);
         var log=at.south(4);decay=log.east();level.setBlock(log,state("Thaumcraft:blockMagicalLog",1),2);level.setBlock(decay,state("Thaumcraft:blockMagicalLeaves",1),2);
+        vanillaDecay=log.west();
+        level.setBlock(vanillaDecay,Blocks.DARK_OAK_LEAVES.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DISTANCE,1).setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,true),2);
+        for(String key:List.of("minecraft:leaves","minecraft:leaves2"))for(int species=0;species<(key.endsWith("leaves2")?2:4);species++)for(int flags:new int[]{0,4,8,12}) {
+            var mapped=state(key,species|flags);
+            var roundTrip=content.legacyBlock(mapped);
+            check(roundTrip.legacyKey().equals(key)&&roundTrip.metadata()==(species|(flags&4)),"Vanilla leaf mapping differs: "+key+"@"+(species|flags));
+        }
         player.gameMode.destroyBlock(log);check((level.getBlockState(decay).getValue(ModernContentBridge.METADATA)&8)!=0,"Removing wood did not notify old leaves");proof.put("logRemovalMarksLeavesForDecay",true);
+        var vanilla=level.getBlockState(vanillaDecay);
+        check(vanilla.is(Blocks.DARK_OAK_LEAVES)&&vanilla.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DISTANCE)==1&&vanilla.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED),"Vanilla leaf metadata write lost host properties");
+        proof.put("vanillaLeafMetadataMapping",true);
     }
     private boolean observe(Minecraft mc){
         var level=mc.getSingleplayerServer().overworld();
+        if(!proof.containsKey("vanillaLeafDecayRechecked")&&level.getGameTime()-started>2){
+            var leaf=level.getBlockState(vanillaDecay);
+            check(!leaf.is(Blocks.DARK_OAK_LEAVES)||leaf.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DISTANCE)==7,"Vanilla leaf distance was not recomputed after log removal");
+            proof.put("vanillaLeafDecayRechecked",true);
+        }
         if(!proof.containsKey("soundEventsSent")&&level.getGameTime()-started>40){
             level.levelEvent(null,2001,new BlockPos(16,51,9),net.minecraft.world.level.block.Block.getId(state("Thaumcraft:blockMagicalLog",1)));
             level.levelEvent(null,2001,new BlockPos(17,51,9),net.minecraft.world.level.block.Block.getId(state("Thaumcraft:blockMagicalLeaves",1)));proof.put("soundEventsSent",true);

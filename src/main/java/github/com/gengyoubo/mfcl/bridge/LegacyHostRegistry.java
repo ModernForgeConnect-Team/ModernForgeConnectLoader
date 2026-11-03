@@ -36,7 +36,9 @@ public final class LegacyHostRegistry {
         if (!key.startsWith("mfcl_host:")) throw new IllegalArgumentException("Host identity namespace required");
         var domain = create(loader);
         if (domain.itemNames.containsKey(key)) throw new IllegalArgumentException("Duplicate host identity: " + key);
-        int id = domain.reserve(32767);
+        // ItemStack's crafting callback indexes StatList.objectCraftStats by this ID.
+        // In 1.7.10 that array has 32000 entries, despite the wider registry ID range.
+        int id = domain.reserve(31999);
         domain.ids.put(item, id); domain.items.put(id, item); domain.itemNames.put(key, item); domain.names.put(item, key);
     }
     public static synchronized void registerBlock(ClassLoader loader, String key, Object block, Object item) throws Exception {

@@ -732,7 +732,14 @@ public final class ModernContentBridge {
     /** Original metadata writes must not erase properties the old format cannot express. */
     BlockState modernBlock(HostWorldAccess.Block old, BlockState previous) {
         var nativeBlock = nativeBlocks.get(old.legacyKey());
-        if (nativeBlock == null) return modernBlock(old);
+        if (nativeBlock == null) {
+            var state = modernBlock(old);
+            if (state.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock && state.is(previous.getBlock())) {
+                state = state.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DISTANCE, previous.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DISTANCE))
+                        .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED, previous.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED));
+            }
+            return state;
+        }
         if (old.metadata() < 0 || old.metadata() > 15) throw new IllegalArgumentException("Legacy block metadata outside 0..15");
         return (BlockState) nativeBlock.update(previous, old.metadata());
     }

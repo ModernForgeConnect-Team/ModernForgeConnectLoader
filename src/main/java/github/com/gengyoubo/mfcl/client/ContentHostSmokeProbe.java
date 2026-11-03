@@ -293,6 +293,15 @@ final class ContentHostSmokeProbe {
             var stack = new ItemStack(item, 2);
             stack.getOrCreateTag().putString("icon_test", "preserved");
             var original = bridge.gameplayStack(stack);
+            var loader = bridge.services().loader();
+            var legacyStack = bridge.services().items().materialize(original);
+            var itemType = loader.loadClass("net.minecraft.item.Item");
+            var legacyItem = legacyStack.getClass().getMethod("func_77973_b").invoke(legacyStack);
+            int itemId = (int) itemType.getMethod("func_150891_b", itemType).invoke(null, legacyItem);
+            var stats = loader.loadClass("net.minecraft.stats.StatList");
+            int craftingStatsSize = java.lang.reflect.Array.getLength(stats.getField("field_75928_D").get(null));
+            if (itemId < 0 || itemId >= craftingStatsSize)
+                throw new IllegalStateException("Represented host item exceeds crafting statistics: " + id + " (" + itemId + ")");
             var rendered = ModernItemMapping.renderStack(original);
             if (rendered.getCount() != stack.getCount() || !ItemStack.isSameItemSameTags(stack, rendered))
                 throw new IllegalStateException("Represented host item did not render as itself: " + id);
