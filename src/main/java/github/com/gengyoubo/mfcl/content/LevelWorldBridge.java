@@ -42,6 +42,8 @@ public final class LevelWorldBridge {
     private void unload(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel level) {
             dimensions.unloading(level);
+            // Other mods may unload levels that never loaded: Moonlight's FakeServerLevel only ever posts Unload.
+            if (content.services().worlds().findBound(level) == null) return;
             try {content.services().worlds().unloaded(level);}
             catch(Exception failure){throw new IllegalStateException("Cannot unload original world",failure);}
             content.services().worlds().unbind(level); hostTicks.remove(level);
@@ -107,6 +109,7 @@ public final class LevelWorldBridge {
                 if (!level.getServer().isSameThread()) throw new IllegalStateException("Legacy server world requires the server thread");
             }
             @Override public String dimensionKey() { return level.dimension().location().toString(); }
+            @Override public boolean dimensionWorld() { return level.getServer().getLevel(level.dimension()) == level; }
             @Override public Flight flight(java.util.UUID id){
                 check();var player=level.getServer().getPlayerList().getPlayer(id);
                 if(player==null||player.serverLevel()!=level)return null;
@@ -329,7 +332,12 @@ public final class LevelWorldBridge {
                 net.minecraft.world.level.block.state.BlockState state;
                 try { state = content.modernBlock(block, level.getBlockState(pos)); }
                 catch (UnsupportedOperationException unsupported) { if (dimensions.skipUnsupported(block, unsupported)) return false; throw unsupported; }
-                boolean changed = level.setBlock(pos, state, flags);
+                // Block entity creation runs other mods' code under this call. Forge's event transformer resolves classes they
+                // load for the first time through the context loader, which here would still be the legacy runtime's.
+                boolean changed;
+                Thread thread = Thread.currentThread(); ClassLoader previous = thread.getContextClassLoader();
+                try { thread.setContextClassLoader(LevelWorldBridge.class.getClassLoader()); changed = level.setBlock(pos, state, flags); }
+                finally { thread.setContextClassLoader(previous); }
                 if ((block.legacyKey().equals("minecraft:leaves") || block.legacyKey().equals("minecraft:leaves2"))
                         && (block.metadata() & 8) != 0 && state.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock) {
                     var leaf = state.getBlock();

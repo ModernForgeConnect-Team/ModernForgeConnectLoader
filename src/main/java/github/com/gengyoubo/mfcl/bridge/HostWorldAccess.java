@@ -3,6 +3,8 @@ package github.com.gengyoubo.mfcl.bridge;
 /** Synchronous host world contract. The host remains the only owner of world state. */
 public interface HostWorldAccess {
     record Block(String legacyKey, int metadata) {}
+    /** False for a mod's auxiliary level (LittleTiles sub-levels) that shares a dimension key with the real level; it never stands in for that dimension. */
+    default boolean dimensionWorld(){return true;}
     /** Compressed, read-only native block entity NBT for diagnostics through a legacy proxy tile. */
     default byte[] nativeTileData(int x,int y,int z){return null;}
     /** Compressed native entity NBT for read-only inspection; null when the entity cannot be saved. */

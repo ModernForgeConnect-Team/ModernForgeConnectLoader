@@ -7,7 +7,7 @@ import java.util.*;
 
 /** Maintains typed old World/WorldProvider objects, stable identity, direct fields and synchronous forwarding. */
 public final class LegacyWorlds implements AutoCloseable {
-    public static java.util.List<Object> serverWorlds(ClassLoader loader){synchronized(DISPATCH){return DISPATCH.values().stream().filter(binding->binding.loader==loader&&binding.owner==Thread.currentThread()&&!binding.host.clientSide()).map(binding->binding.world).toList();}}
+    public static java.util.List<Object> serverWorlds(ClassLoader loader){synchronized(DISPATCH){return DISPATCH.values().stream().filter(binding->binding.loader==loader&&binding.owner==Thread.currentThread()&&!binding.host.clientSide()&&binding.host.dimensionWorld()).map(binding->binding.world).toList();}}
     private static final Map<Object, Binding> DISPATCH = Collections.synchronizedMap(new IdentityHashMap<>());
     private final Map<Object, Binding> worlds = new IdentityHashMap<>();
     private final ClassLoader loader;
@@ -107,7 +107,7 @@ public final class LegacyWorlds implements AutoCloseable {
             set(providerType, provider, "field_76577_b", info.getClass().getMethod("func_76067_t").invoke(info));
             set(providerType, provider, "field_82913_c", info.getClass().getMethod("func_82571_y").invoke(info));
         }
-        if(!host.clientSide())dimensionWorlds().put(dimension,world);
+        if(!host.clientSide()&&host.dimensionWorld())dimensionWorlds().put(dimension,world);
         refreshDifficulty(binding);
         set(loader.loadClass("net.minecraft.world.World"),world,"field_73020_y",LegacyChunkProvider.create(loader,world));
         return world;
@@ -157,11 +157,13 @@ public final class LegacyWorlds implements AutoCloseable {
     // Not synchronized: inLegacy takes the runtime lock, which other threads hold while they look up bound worlds.
     public void loaded(Object hostIdentity) throws Exception {
         Object world = bound(hostIdentity); int dimension = binding(world).host.legacyDimensionId();
+        if (!binding(world).host.dimensionWorld()) return;
         items.inLegacy(() -> { for (var hooks : lifecycles) hooks.loaded(world, dimension); return null; });
     }
     /** Writes old WorldSavedData (MapStorage, per-world storage) and runs adapter save hooks, as WorldServer.saveAllChunks did. */
     public void save(Object hostIdentity) throws Exception {
         Object world = bound(hostIdentity); int dimension = binding(world).host.legacyDimensionId();
+        if (!binding(world).host.dimensionWorld()) return;
         items.inLegacy(() -> {
             var type = loader.loadClass("net.minecraft.world.World"); var storage = loader.loadClass("net.minecraft.world.storage.MapStorage");
             for (String field : List.of("field_72988_C", "perWorldStorage")) { Object data = type.getField(field).get(world); if (data != null) storage.getMethod("func_75744_a").invoke(data); }
@@ -204,7 +206,7 @@ public final class LegacyWorlds implements AutoCloseable {
     static Object serverWorld(int dimension) {
         synchronized (DISPATCH) {
             for (var binding : DISPATCH.values())
-                if (!binding.host.clientSide() && binding.owner == Thread.currentThread() && binding.host.legacyDimensionId() == dimension) return binding.world;
+                if (!binding.host.clientSide() && binding.host.dimensionWorld() && binding.owner == Thread.currentThread() && binding.host.legacyDimensionId() == dimension) return binding.world;
         }
         return null;
     }
