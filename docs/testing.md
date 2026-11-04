@@ -135,6 +135,8 @@ The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client co
 
 `-PmfclServerSmokeTest=golem-audit` records the 208 body/core/advanced combinations and natural navigation. `golem-jobs` records 1200 ticks of representative natural tasks; `golem-reload` checks NBT restoration with a registered player. These investigation probes report known failures and use `COMPLETE` for completion, not universal compatibility. Use disposable TC4/Baubles worlds. See [the golem audit](golem-function-audit.md) for the results and coverage limits.
 
+`-PmfclServerSmokeTest=golem-gather` is an acceptance probe, not an investigation: it runs the natural Gather-core AI on 16 isolated sites and checks every tick that the items on the ground, in the chests and carried stay constant, including full containers, targets removed while the golem walks, death and NBT reload while carrying, and pickup delays. It reports `logs/mfcl/golem-gather-smoke.json`, whose `status` must be `PASS`. See [the Gather core fix](golem-function-audit.md#聚集核心修复2026-11-05).
+
 Additional NEI and GPU workflows are provided by `tools/test-nei-host.ps1` and existing flags such as `mfclNeiWorldSmokeTest`, `mfclOpenGlSmokeTest` and `mfclModListSmokeTest`. Scope and limitations are linked from the [documentation index](README.md).
 
 Extra Utilities input and focused regression/graphical commands are recorded in [the compatibility fix record](extrautilities-startup.md). The original-JAR regression uses `-PextrautilitiesJar=<original-file>` with `-PlegacySupportDir=<support-root>` and skips explicitly when either input is missing.

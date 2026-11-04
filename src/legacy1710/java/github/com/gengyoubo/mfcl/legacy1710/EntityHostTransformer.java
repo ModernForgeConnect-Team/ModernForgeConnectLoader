@@ -8,13 +8,14 @@ import org.objectweb.asm.tree.*;
  * Entity mirrors are snapshots of host entities. Every declaration of attackEntityFrom, setFire and addPotionEffect
  * (SRG names are unique to the Entity hierarchy) first asks the bridge whether {@code this} is such a mirror, so
  * the effect reaches the real host entity instead of a discarded copy. Other entities run their original code.
+ * EntityItem also reports reads of its stack and liveness, the two ways old code reaches a dropped item it kept.
  */
 public final class EntityHostTransformer implements IClassTransformer {
     private static final String HOOKS = "github/com/gengyoubo/mfcl/bridge/LegacyEntityHooks";
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null) return null;
         String constants = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_70691_i") && !constants.contains("func_70618_n") && !constants.contains("func_82170_o") && !constants.contains("func_70674_bp") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a") && !constants.contains("func_70893_e")) return bytes;
+        if (!constants.contains("func_70097_a") && !constants.contains("func_70015_d") && !constants.contains("func_70690_d") && !constants.contains("func_70691_i") && !constants.contains("func_70618_n") && !constants.contains("func_82170_o") && !constants.contains("func_70674_bp") && !constants.contains("func_71038_i") && !constants.contains("func_96122_a") && !constants.contains("func_70893_e") && !constants.contains("func_92059_d")) return bytes;
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
         boolean changed = false;
         for (MethodNode m : node.methods) {
@@ -26,6 +27,9 @@ public final class EntityHostTransformer implements IClassTransformer {
                         m.instructions.set(call,new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"animation","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",false));changed=true;
                     }
                 }
+            }
+            if(m.name.equals("func_92059_d")&&m.desc.equals("()Lnet/minecraft/item/ItemStack;")) {
+                m.instructions.insert(droppedItemHook());changed=true;continue;
             }
             InsnList code = new InsnList(); LabelNode original = new LabelNode();
             code.add(new VarInsnNode(Opcodes.ALOAD, 0));
@@ -62,8 +66,20 @@ public final class EntityHostTransformer implements IClassTransformer {
             if (needsFrame(node, m)) code.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
             m.instructions.insert(code); changed = true;
         }
+        if(node.name.equals("net/minecraft/entity/item/EntityItem")) {
+            // isEntityAlive is inherited, and is usually the first thing old AI asks of a retained target each tick.
+            MethodNode alive=new MethodNode(Opcodes.ACC_PUBLIC,"func_70089_S","()Z",null,null);
+            alive.instructions.add(droppedItemHook());alive.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));
+            alive.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,node.superName,"func_70089_S","()Z",false));alive.instructions.add(new InsnNode(Opcodes.IRETURN));
+            node.methods.add(alive);changed=true;
+        }
         if (!changed) return bytes;
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS); node.accept(writer); return writer.toByteArray();
+    }
+    private static InsnList droppedItemHook() {
+        InsnList code=new InsnList();
+        code.add(new VarInsnNode(Opcodes.ALOAD,0));code.add(new MethodInsnNode(Opcodes.INVOKESTATIC,HOOKS,"droppedItem","(Ljava/lang/Object;)V",false));
+        return code;
     }
     private static boolean needsFrame(ClassNode node, MethodNode m) {
         boolean frames = false;

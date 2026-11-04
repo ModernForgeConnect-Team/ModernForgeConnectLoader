@@ -18,6 +18,8 @@ public final class LegacyWorlds implements AutoCloseable {
         final Object world; final HostWorldAccess host; final Thread owner; final ClassLoader loader; final LegacyClientData items; final LegacyBiomes biomes;
         final Map<java.util.UUID,Object> queried=new LinkedHashMap<>();
         final Map<java.util.UUID,HostWorldAccess.Entity> snapshots=new LinkedHashMap<>();
+        /** One mirror per live host item, so what old AI retained and what a later query returns are the same object. */
+        final Map<java.util.UUID,Object> droppedItems=new com.google.common.collect.MapMaker().weakValues().makeMap();
         boolean motionCapture;
         long playersAt = Long.MIN_VALUE; List<Object> players = List.of();
         Binding(Object world, HostWorldAccess host, LegacyClientData items,LegacyBiomes biomes) { this.world = world; this.host = host; this.loader = items.loader(); this.items=items;this.biomes=biomes; owner = Thread.currentThread(); }
@@ -376,12 +378,32 @@ public final class LegacyWorlds implements AutoCloseable {
             if(bound.motionCapture){bound.queried.put(id,entity);bound.snapshots.put(id,snapshot);}
         }
     }
+    /**
+     * First access this tick to an item mirror retained from an earlier query: the host item may have moved, shrunk or
+     * gone, and changes made from now on must be committed like those to a mirror queried in this tick. A gone item reads
+     * as dead and empty, so taking from it yields nothing.
+     */
+    static void retainedDroppedItem(Object world,Object entity) throws Exception {
+        Binding bound=world==null?null:DISPATCH.get(world);
+        if(bound==null||bound.owner!=Thread.currentThread()||!bound.motionCapture||bound.host.clientSide())return;
+        var type=bound.loader.loadClass("net.minecraft.entity.Entity");var dead=type.getField("field_70128_L");
+        if(dead.getBoolean(entity)||bound.queried.get(type.getMethod("func_110124_au").invoke(entity))==entity)return;
+        refreshEntity(world,entity);
+        if(!dead.getBoolean(entity))return;
+        Object stack=entity.getClass().getMethod("func_92059_d").invoke(entity);
+        if(stack!=null)stack.getClass().getField("field_77994_a").setInt(stack,0);
+    }
     private static Object mirrored(Binding binding,Object world,HostWorldAccess.Entity snapshot) throws Exception {
         // A host entity that hosts an old entity is that old entity; it must not be replaced by a snapshot.
         Object hosted=binding.host.hostedLegacyEntity(snapshot.id());
         if(hosted!=null){if(binding.motionCapture){binding.queried.putIfAbsent(snapshot.id(),hosted);binding.snapshots.putIfAbsent(snapshot.id(),snapshot);}return hosted;}
         Object entity=binding.motionCapture?binding.queried.get(snapshot.id()):null;
-        if(entity==null){entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,binding.host.existingEntity(snapshot.id()));if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}}
+        if(entity==null){
+            boolean drop=snapshot.item()!=null&&!binding.host.clientSide();
+            entity=LegacyEntityAccess.mirror(binding.items,world,snapshot,drop?binding.droppedItems.get(snapshot.id()):binding.host.existingEntity(snapshot.id()));
+            if(drop)binding.droppedItems.put(snapshot.id(),entity);
+            if(binding.motionCapture){binding.queried.put(snapshot.id(),entity);binding.snapshots.put(snapshot.id(),snapshot);}
+        }
         return entity;
     }
     static LegacyClientData items(Object world){return binding(world).items;}
@@ -451,9 +473,22 @@ public final class LegacyWorlds implements AutoCloseable {
         try {
             for(var entry:binding.queried.entrySet()) {
                 var next=LegacyEntityAccess.motion(binding.loader,entry.getValue(),entry.getKey());var previous=binding.snapshots.get(entry.getKey());
+                if(previous.item()!=null&&LegacyEntityHooks.isMirror(entry.getValue()))commitDroppedItem(binding,entry.getValue(),entry.getKey(),previous.item());
                 if(next.x()!=previous.motionX()||next.y()!=previous.motionY()||next.z()!=previous.motionZ()||next.fallDistance()!=previous.fallDistance()||next.love()!=previous.love())binding.host.applyMotion(next);
             }
         }finally{clearEntityQueries(world);}
+    }
+    /** EntityItem.onUpdate would have killed an emptied item; a mirror never ticks, so emptied and dead both remove the host item. */
+    private static void commitDroppedItem(Binding binding,Object mirror,UUID id,LegacyClientData.Stack before) throws Exception {
+        Object stack=mirror.getClass().getMethod("func_92059_d").invoke(mirror);
+        if(binding.loader.loadClass("net.minecraft.entity.Entity").getField("field_70128_L").getBoolean(mirror)||stack==null||stack.getClass().getField("field_77994_a").getInt(stack)<=0){binding.host.droppedItem(id,null);return;}
+        var now=binding.items.snapshot(stack);
+        // The trip through the old form may normalize a stack: only what old code changed afterwards is a change.
+        if(sameStack(before,now)||sameStack(binding.items.snapshot(binding.items.materialize(before)),now))return;
+        binding.host.droppedItem(id,now);
+    }
+    private static boolean sameStack(LegacyClientData.Stack left,LegacyClientData.Stack right) {
+        return left.key().equals(right.key())&&left.metadata()==right.metadata()&&left.count()==right.count()&&left.tag().equals(right.tag());
     }
     public static int light(Object world, int x, int y, int z) { return binding(world).host.light(x,y,z); }
     public static int height(Object world, int x, int z) { return binding(world).host.height(x,z); }

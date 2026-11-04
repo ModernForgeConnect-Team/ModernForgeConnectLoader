@@ -135,6 +135,26 @@ public final class LegacyBlockLogic {
             return null;
         });
     }
+    private final java.util.Map<String,Boolean> harvestCallbacks = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Whether the original block overrides onBlockHarvested; the inherited one does nothing. */
+    public boolean hasHarvestCallback(String key) throws Exception {
+        Boolean known = harvestCallbacks.get(key);
+        if (known != null) return known;
+        boolean value = services.items().inLegacy(() -> block(key).getClass().getMethod("func_149681_a", worldType, int.class, int.class, int.class, int.class,
+                services.loader().loadClass("net.minecraft.entity.player.EntityPlayer")).getDeclaringClass() != blockType);
+        harvestCallbacks.put(key, value); return value;
+    }
+    /**
+     * Original onBlockHarvested. Like 1.7.10's ItemInWorldManager, this runs for every game mode while the block and
+     * its tile still exist. Blocks such as jars compute their drops here because their getDrops needs that tile.
+     */
+    public void harvested(String key, Object world, int x, int y, int z, int metadata, Object player) throws Exception {
+        services.items().inLegacy(() -> {
+            blockType.getMethod("func_149681_a", worldType, int.class, int.class, int.class, int.class, services.loader().loadClass("net.minecraft.entity.player.EntityPlayer"))
+                    .invoke(block(key), world, x, y, z, metadata, player);
+            return null;
+        });
+    }
     public int comparator(String key, Object world, int x, int y, int z) throws Exception {
         return services.items().inLegacy(() -> (int)blockType.getMethod("func_149736_g",worldType,int.class,int.class,int.class,int.class).invoke(block(key),world,x,y,z,0));
     }

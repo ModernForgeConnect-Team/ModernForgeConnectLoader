@@ -201,6 +201,12 @@ public final class LevelWorldBridge {
                 }catch(com.mojang.brigadier.exceptions.CommandSyntaxException failure){throw new IllegalArgumentException("Invalid captured host entity data",failure);}
             }
             @Override public void applyMotion(HostWorldAccess.Motion motion) {check();content.afterCommit(level,()->HostEntityQueries.apply(level,motion));}
+            @Override public void droppedItem(java.util.UUID id,github.com.gengyoubo.mfcl.bridge.LegacyClientData.Stack stack) {
+                check();content.afterCommit(level,()->{
+                    if(!(level.getEntity(id) instanceof net.minecraft.world.entity.item.ItemEntity drop)||drop.isRemoved())return;
+                    if(stack==null)drop.discard();else drop.setItem(content.applyTo(drop.getItem(),stack));
+                });
+            }
             @Override public java.util.List<HostWorldAccess.Entity> players() {
                 check(); return level.players().stream().map(player -> HostEntityQueries.snapshot(level, player)).filter(java.util.Objects::nonNull).toList();
             }

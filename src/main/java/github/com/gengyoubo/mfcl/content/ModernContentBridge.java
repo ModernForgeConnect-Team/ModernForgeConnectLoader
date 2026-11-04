@@ -1308,6 +1308,20 @@ public final class ModernContentBridge {
             catch (Exception failure) { github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("redstone power "+entry.key(),failure); LogUtils.getLogger().error("MFCL original power query failed at {}",pos,failure); return 0; }
         }
         @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(METADATA); }
+        /** Native loot is evaluated after the tile is gone, so this is the only point where the original harvest callback can read it. */
+        @Override public void playerWillDestroy(Level level,BlockPos pos,BlockState state,net.minecraft.world.entity.player.Player player){
+            if(!level.isClientSide&&player instanceof net.minecraft.server.level.ServerPlayer server&&canPlace(entry,state.getValue(METADATA)))try{
+                if(services.logic().hasHarvestCallback(entry.key())){
+                    Object world=services.worlds().bound(level);
+                    logicTransaction(level,pos,()->LegacyItemDrops.captureHarvest(ModernContentBridge.this,level,()->withServerActor(server,actor->
+                            services.logic().harvested(entry.key(),world,pos.getX(),pos.getY(),pos.getZ(),state.getValue(METADATA),actor))),true);
+                }
+            }catch(Exception|LinkageError failure){
+                github.com.gengyoubo.mfcl.bridge.LegacyDiagnostics.legacyFailure("block harvest "+entry.key(),failure);
+                LogUtils.getLogger().error("MFCL original onBlockHarvested failed for {} at {}",entry.key(),pos,failure);
+            }
+            super.playerWillDestroy(level,pos,state,player);
+        }
         @Override public void onRemove(BlockState state,Level level,BlockPos pos,BlockState next,boolean moving){
             if(!level.isClientSide&&state.getBlock()!=next.getBlock())try{
                 logicTransaction(level,pos,()->{services.logic().leavesRemoved(entry.key(),services.worlds().bound(level),pos.getX(),pos.getY(),pos.getZ());return null;},true);

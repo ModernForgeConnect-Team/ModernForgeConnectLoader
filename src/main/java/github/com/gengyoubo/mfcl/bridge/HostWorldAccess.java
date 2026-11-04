@@ -34,7 +34,10 @@ public interface HostWorldAccess {
     default Food food(java.util.UUID player) { return null; }
     default void setFood(java.util.UUID player,Food food) { throw new UnsupportedOperationException("Host player food mutation is not available"); }
     default void addExhaustion(java.util.UUID player,float amount) { throw new UnsupportedOperationException("Host player exhaustion is not available"); }
-    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health,byte[] entityData) {
+    record Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health,byte[] entityData,int pickupDelay) {
+        public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health,byte[] entityData) {
+            this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health,entityData,0);
+        }
         public Entity(java.util.UUID id,String legacyClass,String name,double x,double y,double z,double motionX,double motionY,double motionZ,float fallDistance,float width,float height,boolean sneaking,boolean pushable,int entityId,LegacyClientData.Stack item,int age,int love,Abilities abilities,Float health) {
             this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health,null);
         }
@@ -51,7 +54,7 @@ public interface HostWorldAccess {
             this(id,legacyClass,name,x,y,z,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,0,null);
         }
         public Entity relativeTo(double originX,double originY,double originZ) {
-            return new Entity(id,legacyClass,name,x-originX,y-originY,z-originZ,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health,entityData);
+            return new Entity(id,legacyClass,name,x-originX,y-originY,z-originZ,motionX,motionY,motionZ,fallDistance,width,height,sneaking,pushable,entityId,item,age,love,abilities,health,entityData,pickupDelay);
         }
     }
     /** {@code love} is the animal breeding timer (EntityAnimal.inLove), 0 for anything else. */
@@ -117,6 +120,8 @@ public interface HostWorldAccess {
     /** Old World.newExplosion; the host explosion damages real entities and breaks blocks with host rules. */
     default void explode(double x, double y, double z, float power, boolean fire, boolean breakBlocks) { }
     default void applyMotion(Motion motion) { }
+    /** What old code left of a host dropped item it changed through its mirror; null removes the item. */
+    default void droppedItem(java.util.UUID id,LegacyClientData.Stack stack) { }
     default void updateComparators(int x, int y, int z) { }
     default void blockEvent(int x, int y, int z, String block, int event, int data) { throw new UnsupportedOperationException("Host block events are not available"); }
     default void schedule(int x, int y, int z, String block, int delay) { throw new UnsupportedOperationException("Host block scheduling is not available"); }

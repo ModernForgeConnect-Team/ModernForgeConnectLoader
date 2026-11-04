@@ -68,6 +68,12 @@ public final class LegacyEntityHooks {
         try { var host = host(entity); return host != null && !host.clientSide(); }
         catch (Throwable failure) { report("mirror lookup", failure); return false; }
     }
+    /** EntityItem.getEntityItem and isEntityAlive: old AI keeps an item mirror for many ticks and changes it long after the query. */
+    public static void droppedItem(Object entity) {
+        if (MIRRORS.isEmpty() || !MIRRORS.containsKey(entity)) return;
+        try { LegacyWorlds.retainedDroppedItem(access(entity).world.get(entity), entity); }
+        catch (Throwable failure) { report("dropped item refresh", failure); }
+    }
     public static boolean attack(Object entity, Object source, float amount) {
         try {
             var access = access(entity); var host = host(entity);

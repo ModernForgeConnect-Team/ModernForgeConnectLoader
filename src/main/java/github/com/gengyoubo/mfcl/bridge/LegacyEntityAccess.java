@@ -5,7 +5,7 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 /**
- * Entity query snapshots. Motion/fall and breeding (inLove) changes are committed back to the owning host world;
+ * Entity query snapshots. Motion/fall, breeding (inLove) and dropped-item stack or removal changes are committed back to the owning host world;
  * damage, burning and potion effects are forwarded immediately by LegacyEntityHooks.
  */
 final class LegacyEntityAccess {
@@ -96,6 +96,13 @@ final class LegacyEntityAccess {
         if(loader.loadClass("net.minecraft.entity.item.EntityItem").isInstance(entity)) {
             if(snapshot.item()==null)throw new IllegalArgumentException("Dropped item mirror requires its actual stack");
             entity.getClass().getMethod("func_92058_a",loader.loadClass("net.minecraft.item.ItemStack")).invoke(entity,items.materialize(snapshot.item()));
+            // Old selection logic skips items that players could not pick up yet either (delayBeforeCanPickup >= 5, never-pickup display items).
+            loader.loadClass("net.minecraft.entity.item.EntityItem").getField("field_145804_b").setInt(entity,snapshot.pickupDelay());
+            if(existing!=null) {
+                // A reused item mirror becomes the host's current state again: nothing old code left on it outlives a commit.
+                base.getField("field_70128_L").setBoolean(entity,false);
+                if(snapshot.entityData()==null){var field=base.getDeclaredField("customEntityData");field.setAccessible(true);field.set(entity,null);}
+            }
         }
         double half=snapshot.width()/2;
         Object box=loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a",double.class,double.class,double.class,double.class,double.class,double.class).invoke(null,snapshot.x()-half,snapshot.y(),snapshot.z()-half,snapshot.x()+half,snapshot.y()+snapshot.height(),snapshot.z()+half);

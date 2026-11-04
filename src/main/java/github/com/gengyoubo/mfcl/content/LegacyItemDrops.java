@@ -22,6 +22,14 @@ final class LegacyItemDrops {
             result.setDefaultPickUpDelay();return result;
         });
     }
+    /** Original block-harvest drops: nobody threw them, and the host rule applies because the old world keeps its own default rules. */
+    static <T> T captureHarvest(ModernContentBridge content,net.minecraft.world.level.Level level,Callable<T> action) throws Exception {
+        return content.services().items().inLegacy(()->LegacyDeviceContainers.withDrops(entity->{
+            if(!level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS))return;
+            var drop=create(content,level,entity);
+            if(drop!=null)content.afterCommit(level,()->level.addFreshEntity(drop));
+        },action));
+    }
     static <T> T capture(ModernContentBridge content,Player player,Callable<T> action) throws Exception {
         return content.services().items().inLegacy(()->LegacyDeviceContainers.withDrops(entity->{
             content.afterCommit(player.level(),()->{

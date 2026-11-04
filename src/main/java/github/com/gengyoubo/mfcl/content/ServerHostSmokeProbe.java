@@ -41,6 +41,7 @@ public final class ServerHostSmokeProbe {
 
     public static void install(ModernContentBridge bridge, String phase) {
         if (phase.equals("leaf-harvest")) { LeafHarvestHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("harvest-drops")) { HarvestDropsHostSmokeProbe.install(bridge); return; }
         if (phase.equals("gameplay")) { GameplayHostSmokeProbe.install(bridge); return; }
         if (phase.equals("outer-write") || phase.equals("outer-verify")) { OuterLandsSmokeProbe.install(bridge, phase.equals("outer-write")); return; }
         if (phase.equals("bow")) { BowHostSmokeProbe.install(bridge); return; }
@@ -48,6 +49,7 @@ public final class ServerHostSmokeProbe {
         if (phase.equals("bore")) { BoreHostSmokeProbe.install(bridge); return; }
         if (phase.equals("crucible")) { CrucibleHostSmokeProbe.install(bridge); return; }
         if (phase.equals("golem")) { GolemHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("golem-gather")) { GolemGatherHostSmokeProbe.install(bridge); return; }
         if (phase.equals("golem-audit")) { GolemWorkAudit.install(bridge); return; }
         if (phase.equals("golem-jobs")) { GolemJobAudit.install(bridge); return; }
         if (phase.equals("golem-reload")) { GolemJobAudit.installReload(bridge); return; }

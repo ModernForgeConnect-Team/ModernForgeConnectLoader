@@ -12,6 +12,7 @@ import java.util.*;
 
 /** Snapshots host entities for legacy AABB queries without exposing native entities across class loaders. */
 public final class HostEntityQueries {
+    private static final java.lang.reflect.Field PICKUP_DELAY=net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField(ItemEntity.class,"f_31986_");
     private HostEntityQueries() {}
     public static List<HostWorldAccess.Entity> query(Level level,double minX,double minY,double minZ,double maxX,double maxY,double maxZ) {
         return level.getEntities((Entity)null,new AABB(minX,minY,minZ,maxX,maxY,maxZ)).stream().map(entity->snapshot(level,entity)).filter(Objects::nonNull).toList();
@@ -30,7 +31,7 @@ public final class HostEntityQueries {
             }
             if (represented != null) type = represented;
         }
-        LegacyClientData.Stack item=null;
+        LegacyClientData.Stack item=null;int pickupDelay=0;
         if(entity instanceof ItemEntity drop) {
             String original=drop.getPersistentData().getString(LegacyItemDrops.ORIGINAL_CLASS);
             if(!original.isEmpty())type=original;
@@ -39,12 +40,14 @@ public final class HostEntityQueries {
             catch(Exception failure) {throw new IllegalStateException("Cannot snapshot dropped item for the legacy world",failure);}
             // An unsupported stack must not become EntityItem's vanilla fallback stone stack.
             if(item==null)return null;
+            try {pickupDelay=PICKUP_DELAY.getInt(drop);}
+            catch(IllegalAccessException failure) {throw new IllegalStateException(failure);}
         }
         var motion=entity.getDeltaMovement();
         return new HostWorldAccess.Entity(entity.getUUID(),type,entity instanceof Player?entity.getName().getString():entity.hasCustomName()?entity.getCustomName().getString():"",entity.getX(),entity.getY(),entity.getZ(),motion.x,motion.y,motion.z,entity.fallDistance,entity.getBbWidth(),entity.getBbHeight(),entity.isShiftKeyDown(),entity.isPushable(),entity.getId(),item,
                 entity instanceof AgeableMob ageable?ageable.getAge():0,entity instanceof net.minecraft.world.entity.animal.Animal animal?animal.getInLoveTime():0,
                 entity instanceof Player player?new HostWorldAccess.Abilities(player.getAbilities().instabuild,player.getAbilities().invulnerable):null,
-                entity instanceof LivingEntity living?living.getHealth():null,entityData(entity));
+                entity instanceof LivingEntity living?living.getHealth():null,entityData(entity),pickupDelay);
     }
     private static byte[] entityData(Entity entity) {
         if(entity.getPersistentData().isEmpty())return null;
