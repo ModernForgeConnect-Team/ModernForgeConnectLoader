@@ -184,6 +184,7 @@ final class GameplayHostSmokeProbe {
         cases.add(services.items().materialize(new LegacyClientData.Stack("minecraft:golden_helmet",12,1,"","{ench:[0:{id:0s,lvl:3s},1:{id:34s,lvl:2s}]}")));
         cases.add(services.items().materialize(new LegacyClientData.Stack("minecraft:enchanted_book",0,1,"","{StoredEnchantments:[0:{id:16s,lvl:4s}]}")));
         cases.add(services.items().materialize(new LegacyClientData.Stack("minecraft:potion",16386,1,"","")));
+        cases.add(services.items().materialize(new LegacyClientData.Stack("minecraft:potion",0,1,"","{CustomPotionEffects:[0:{Id:13b,Duration:120,Amplifier:1b,Ambient:0b}]}")));
         var keys=new TreeSet<String>();int enchanted=0;
         for(Object original:cases) {
             var old=services.items().snapshot(original);keys.add(old.key());
@@ -194,6 +195,10 @@ final class GameplayHostSmokeProbe {
             Object restored=services.items().materialize(back);
             check(Objects.equals(stackType.getField("field_77990_d").get(original),stackType.getField("field_77990_d").get(restored)),"Loot NBT changed: "+old+" -> "+back);
         }
+        var changed=content.gameplayStack(new LegacyClientData.Stack("minecraft:potion",16386,1,"",""));
+        changed.getTag().getList("CustomPotionEffects",net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).putInt("Duration",42);
+        var changedBack=content.gameplayStack(changed);
+        check(LegacyVanillaStacks.originalTag(services,changedBack).getList("CustomPotionEffects",net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).getInt("Duration")==42,"Changed potion effect was lost");
         check(enchanted>0,"No enchanted loot was tested");return Map.of("samples",cases.size(),"enchanted",enchanted,"keys",keys);
     }
     private Object arrowFlags() throws Exception {

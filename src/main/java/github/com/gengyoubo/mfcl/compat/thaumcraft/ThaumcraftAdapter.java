@@ -25,7 +25,8 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
         this.services = services;
-        services.items().supplement("zh_cn",Map.of("item.ItemResource.18.name","金币"));
+        services.items().supplement("zh_cn",Map.of("item.ItemResource.18.name","金币","tile.blockMagicalLog.silverwoodknot.name","银树树瘤"));
+        services.items().supplement("en_us",Map.of("tile.blockMagicalLog.silverwoodknot.name","Silverwood Knot"));
         var loader = services.loader();
         var generation=loader.loadClass("thaumcraft.common.lib.world.ThaumcraftWorldGenerator");
         var config=loader.loadClass("thaumcraft.common.config.Config");

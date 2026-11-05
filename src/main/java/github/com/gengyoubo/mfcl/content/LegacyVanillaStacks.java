@@ -51,6 +51,7 @@ final class LegacyVanillaStacks {
                 result.getOrCreateTag().put("CustomPotionEffects",effects);
             }
             var source=new CompoundTag();source.putString("key",old.key());source.putInt("metadata",old.metadata());source.put("tag",tag.copy());
+            if(potion&&!tag.contains("CustomPotionEffects"))source.put("generated_potion_effects",result.getTag().getList("CustomPotionEffects",Tag.TAG_COMPOUND).copy());
             source.putBoolean("enchantments_mapped",true);
             result.getOrCreateTag().put(SOURCE,source);
             return result;
@@ -66,7 +67,7 @@ final class LegacyVanillaStacks {
         var source=original?root.getCompound(SOURCE):new CompoundTag();String key=original?source.getString("key"):net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         if(!key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid original loot identity: "+key);
         var tag=source.getCompound("tag").copy();
-        if(root.contains("CustomPotionEffects"))tag.put("CustomPotionEffects",potionEffects(services,root.getList("CustomPotionEffects",Tag.TAG_COMPOUND),false));
+        if(root.contains("CustomPotionEffects")&&!(source.contains("generated_potion_effects",Tag.TAG_LIST)&&source.getList("generated_potion_effects",Tag.TAG_COMPOUND).equals(root.getList("CustomPotionEffects",Tag.TAG_COMPOUND))))tag.put("CustomPotionEffects",potionEffects(services,root.getList("CustomPotionEffects",Tag.TAG_COMPOUND),false));
         else if(tag.contains("CustomPotionEffects"))tag.remove("CustomPotionEffects");
         // Native enchanting/repairing can change supported enchantments after the item was awarded.
         for(String name:List.of("ench","StoredEnchantments")) {

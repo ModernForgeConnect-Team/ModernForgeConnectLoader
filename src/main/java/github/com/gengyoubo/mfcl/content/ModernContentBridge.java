@@ -676,7 +676,7 @@ public final class ModernContentBridge {
     public LegacyClientData.Stack snapshot(ItemStack stack) {
         var item = reverseItems.get(stack.getItem()); if (item == null) return null;
         if (stack.hasTag()) for (String key : stack.getTag().getAllKeys())
-            if (!key.equals(STACK_TAG) && !key.equals("Damage") && !HOST_OWNED_TAGS.contains(key)) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
+            if (!key.equals(STACK_TAG) && !key.equals("Damage") && !HOST_OWNED_TAGS.contains(key) && !(key.equals("BlockEntityTag") && stack.getItem() instanceof MirroredBlockItem)) throw new UnsupportedOperationException("Host item NBT needs an explicit legacy mapping: " + key);
         CompoundTag tag = stack.getTagElement(STACK_TAG);
         var original=new LegacyClientData.Stack(item.key(), metadata(stack), stack.getCount(), "", tag == null ? "" : tag.getString("snbt"));
         try{return enchantments.exportNative(stack,original);}catch(Exception failure){throw new IllegalStateException("Cannot map native enchantments",failure);}
@@ -1197,6 +1197,7 @@ public final class ModernContentBridge {
     public static ItemStack keepHostTags(ItemStack current, ItemStack updated) {
         var kept = current.getTag(); if (kept == null || updated.isEmpty() || current.getItem() != updated.getItem()) return updated;
         for (String key : HOST_OWNED_TAGS) if (!key.equals("Enchantments")&&kept.contains(key)) updated.getOrCreateTag().put(key, kept.get(key).copy());
+        if(current.getItem() instanceof MirroredBlockItem && kept.contains("BlockEntityTag"))updated.getOrCreateTag().put("BlockEntityTag",kept.get("BlockEntityTag").copy());
         if(active!=null)active.enchantments.keepNative(current,updated);
         return updated;
     }
@@ -1272,7 +1273,7 @@ public final class ModernContentBridge {
         }
     }
     private class MirroredBlock extends Block {
-        private final LegacyContent.Block entry;
+        protected final LegacyContent.Block entry;
         private final boolean powerSource, comparatorSource, activation, forgeFluid;
         MirroredBlock(LegacyContent.Block entry) {
             super(properties(entry)); this.entry = entry; registerDefaultState(stateDefinition.any().setValue(METADATA, 0));
@@ -1504,9 +1505,9 @@ public final class ModernContentBridge {
     }
     private final class MirroredTileBlock extends MirroredBlock implements EntityBlock {
         MirroredTileBlock(LegacyContent.Block entry) { super(entry); }
-        @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new LegacyBlockEntity(ModernContentBridge.this, pos, state); }
+        @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return entry.hasTile(state.getValue(METADATA)) ? new LegacyBlockEntity(ModernContentBridge.this, pos, state) : null; }
         @Override public <T extends BlockEntity> net.minecraft.world.level.block.entity.BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-            if (type != tileType) return null;
+            if (type != tileType || !entry.hasTile(state.getValue(METADATA))) return null;
             return level.isClientSide ? (world,pos,current,tile) -> ((LegacyBlockEntity)tile).tickClient() : (world,pos,current,tile) -> ((LegacyBlockEntity)tile).tickServer();
         }
     }
@@ -1591,6 +1592,18 @@ public final class ModernContentBridge {
             var result = LegacyItemDrops.capture(this,player,()->first
                     ? callback.useFirst(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z)
                     : callback.use(services.worlds().bound(level),actor,held,before,selected,pos.getX(),pos.getY(),pos.getZ(),context.getClickedFace().get3DDataValue(),(float)hit.x,(float)hit.y,(float)hit.z));
+            if (!first && result.used() && stack.getItem() instanceof MirroredBlockItem blockItem && BlockItem.getBlockEntityData(stack)!=null) {
+                // Apply only to a block actually placed by this callback, through vanilla's permission checks.
+                for (var placed : List.of(pos, pos.relative(context.getClickedFace()))) {
+                    var previous=transaction.before.get(placed);
+                    if(previous==null || previous.state().equals(level.getBlockState(placed)) || !level.getBlockState(placed).is(blockItem.getBlock()))continue;
+                    var data=BlockItem.getBlockEntityData(stack);
+                    var blockKey=reverseBlocks.get(blockItem.getBlock()).key();
+                    if(data.contains("mfcl_legacy_block") && !data.getString("mfcl_legacy_block").equals(blockKey))throw new IllegalArgumentException("Block entity data belongs to another legacy block");
+                    if(BlockItem.updateCustomBlockEntityTag(level,player,placed,stack) && level.getBlockEntity(placed) instanceof LegacyBlockEntity tile)tile.synchronize();
+                    break;
+                }
+            }
             transaction.commit();
             if (level.isClientSide) return result.used() ? InteractionResult.SUCCESS : InteractionResult.PASS;
             for (int slot = 0; slot < result.inventory().size() && slot < 36; slot++) {

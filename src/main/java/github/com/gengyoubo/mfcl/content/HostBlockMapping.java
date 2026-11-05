@@ -32,7 +32,8 @@ public final class HostBlockMapping {
                 Map.entry("redstone_wall_torch","redstone_torch"),Map.entry("wall_torch","torch"),
                 Map.entry("water_cauldron","cauldron"),
                 Map.entry("spawner","mob_spawner"),
-                Map.entry("carrots","carrots"),Map.entry("potatoes","potatoes"),
+                // The old wheat crop shares its name with an item that is no BlockItem, so neither rule above maps it.
+                Map.entry("wheat","wheat"),Map.entry("carrots","carrots"),Map.entry("potatoes","potatoes"),
                 Map.entry("nether_portal","portal"),Map.entry("tripwire","tripwire"),Map.entry("dead_bush","deadbush"),
                 // Post-1.7 variants that are the same thing to old logic (crucible heat, bellows and spill neighbour reads).
                 Map.entry("cave_air","air"),Map.entry("void_air","air"),Map.entry("soul_fire","fire"));
@@ -71,6 +72,10 @@ public final class HostBlockMapping {
         } else if(state.getBlock() instanceof LeavesBlock) {
             if(state.getValue(BlockStateProperties.PERSISTENT))meta|=4;
         } else if(state.getBlock() instanceof LiquidBlock)meta=state.getValue(LiquidBlock.LEVEL);
+        // Old growth state is metadata: original crop logic (CropUtils.isGrownCrop, bone meal) tells ripeness from it.
+        else if(state.getBlock() instanceof CropBlock crop)meta=crop.getAge(state);
+        else if(state.is(Blocks.NETHER_WART))meta=state.getValue(BlockStateProperties.AGE_3);
+        else if(state.is(Blocks.COCOA))meta=horizontal(state)|state.getValue(BlockStateProperties.AGE_2)<<2;
         return new HostWorldAccess.Block(key,meta);
     }
     /** Null leaves unsupported states to the caller's explicit mapping error. */
@@ -93,6 +98,16 @@ public final class HostBlockMapping {
             BlockState state=(redstone?(wall?Blocks.REDSTONE_WALL_TORCH:Blocks.REDSTONE_TORCH):(wall?Blocks.WALL_TORCH:Blocks.TORCH)).defaultBlockState();
             if(wall)state=state.setValue(BlockStateProperties.HORIZONTAL_FACING,switch(meta){case 1->Direction.EAST;case 2->Direction.WEST;case 3->Direction.SOUTH;default->Direction.NORTH;});
             return redstone?state.setValue(BlockStateProperties.LIT,!key.equals("minecraft:unlit_redstone_torch")):state;
+        }
+        if(key.equals("minecraft:wheat")||key.equals("minecraft:carrots")||key.equals("minecraft:potatoes")) {
+            if(meta<0||meta>7)return null;
+            var crop=key.equals("minecraft:wheat")?Blocks.WHEAT:key.equals("minecraft:carrots")?Blocks.CARROTS:Blocks.POTATOES;
+            return crop.defaultBlockState().setValue(BlockStateProperties.AGE_7,meta);
+        }
+        if(key.equals("minecraft:nether_wart"))return meta>=0&&meta<=3?Blocks.NETHER_WART.defaultBlockState().setValue(BlockStateProperties.AGE_3,meta):null;
+        if(key.equals("minecraft:cocoa")) {
+            if(meta<0||meta>>2>2)return null;
+            return Blocks.COCOA.defaultBlockState().setValue(BlockStateProperties.AGE_2,meta>>2).setValue(BlockStateProperties.HORIZONTAL_FACING,switch(meta&3){case 0->Direction.SOUTH;case 1->Direction.WEST;case 2->Direction.NORTH;default->Direction.EAST;});
         }
         if(key.equals("minecraft:cauldron"))return meta==0?Blocks.CAULDRON.defaultBlockState():meta>=1&&meta<=3?Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL,meta):null;
         if((key.equals("minecraft:stonebrick")&&meta>=0&&meta<=3)||(key.equals("minecraft:stone_slab")&&meta>=0&&meta<=15)) {

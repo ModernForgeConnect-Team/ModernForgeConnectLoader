@@ -54,6 +54,44 @@ final class HarvestDropsHostSmokeProbe {
         this.level=level;level.setChunkForced(0,0,true);proof.put("cases",cases);
         for(int x=-5;x<=5;x++)for(int z=-5;z<=5;z++)level.setBlockAndUpdate(ORIGIN.offset(x,-1,z),Blocks.STONE.defaultBlockState());
         player=FakePlayerFactory.getMinecraft(level);player.setGameMode(GameType.SURVIVAL);player.getInventory().clearContent();player.setPos(.5,100,-2.5);
+        scenario("ordinarySilverwoodWithCopiedEmptyTileData",()->{
+            String key="Thaumcraft:blockMagicalLog";
+            var state=content.modernBlock(new HostWorldAccess.Block(key,1));
+            level.setBlockAndUpdate(ORIGIN,state);
+            check(level.getBlockEntity(ORIGIN)==null,"Ordinary silverwood has a tile envelope");
+            var stack=content.itemForBlock(key,1);var data=new net.minecraft.nbt.CompoundTag();
+            data.putString("mfcl_legacy_block",key);data.putByteArray("mfcl_legacy_nbt",new byte[0]);
+            net.minecraft.world.item.BlockItem.setBlockEntityData(stack,content.tileType(),data);
+            level.setBlockAndUpdate(ORIGIN,Blocks.AIR.defaultBlockState());
+            player.setItemInHand(InteractionHand.MAIN_HAND,stack);
+            var below=ORIGIN.below();var hit=new BlockHitResult(Vec3.atCenterOf(below).add(0,.5,0),Direction.UP,below,false);
+            var context=new UseOnContext(player,InteractionHand.MAIN_HAND,hit);
+            check(!stack.onItemUseFirst(context).consumesAction(),"First-use unexpectedly consumed ordinary log");
+            check(stack.useOn(context).consumesAction(),"Copied ordinary silverwood could not be placed");
+            check(content.legacyBlock(level.getBlockState(ORIGIN)).metadata()==1,"Ordinary silverwood metadata changed");
+            check(level.getBlockEntity(ORIGIN)==null,"Placed ordinary silverwood has a tile envelope");
+            player.setItemInHand(InteractionHand.MAIN_HAND,ItemStack.EMPTY);
+        });
+        scenario("silverwoodKnotNameAndBlockEntityPlacement",()->{
+            String key="Thaumcraft:blockMagicalLog";
+            Object node=place(key,2);
+            legacy(()->{node.getClass().getMethod("setAspects",loader("thaumcraft.api.aspects.AspectList")).invoke(node,aspects("AIR",20));return null;});
+            var stack=content.itemForBlock(key,2);
+            try {content.services().items().language("zh_cn");check(stack.getHoverName().getString().equals("银树树瘤"),"Missing knot translation: "+stack.getHoverName().getString());}
+            finally {content.services().items().language("en_us");}
+            var data=level.getBlockEntity(ORIGIN).saveWithoutMetadata();
+            net.minecraft.world.item.BlockItem.setBlockEntityData(stack,content.tileType(),data);
+            level.setBlockAndUpdate(ORIGIN,Blocks.AIR.defaultBlockState());
+            player.setItemInHand(InteractionHand.MAIN_HAND,stack);
+            var below=ORIGIN.below();var hit=new BlockHitResult(Vec3.atCenterOf(below).add(0,.5,0),Direction.UP,below,false);
+            var context=new UseOnContext(player,InteractionHand.MAIN_HAND,hit);
+            check(!stack.onItemUseFirst(context).consumesAction(),"First-use unexpectedly consumed placement");
+            check(stack.useOn(context).consumesAction(),"Knot with block entity data could not be placed");
+            Object restored=((LegacyBlockEntity)level.getBlockEntity(ORIGIN)).legacy();
+            int amount=legacy(()->{Object list=restored.getClass().getMethod("getAspects").invoke(restored);return (int)list.getClass().getMethod("getAmount",loader("thaumcraft.api.aspects.Aspect")).invoke(list,aspect("AIR"));});
+            check(amount==20,"Node aspects were not restored: "+amount);
+            player.setItemInHand(InteractionHand.MAIN_HAND,ItemStack.EMPTY);
+        });
         scenario("emptyJarDropsPlainJar",()->{place(JAR,0);breakBlock();single(JAR,0);});
         scenario("filledJarKeepsEssentia",()->{
             fill(place(JAR,0),"AIR",16);breakBlock();
