@@ -59,6 +59,14 @@ public final class ClientContentBridge {
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.hostItems(entry.key()).toArray(net.minecraft.world.item.Item[]::new));
         });
+        bus.addListener((net.minecraftforge.client.event.RegisterColorHandlersEvent.Block event) -> {
+            var leaves = bridge.blocks().get("Thaumcraft:blockMagicalLeaves");
+            if (leaves != null) event.register((state, level, pos, tint) -> {
+                if ((state.getValue(ModernContentBridge.METADATA) & 1) != 0) return 0x8899aa;
+                if (level == null || pos == null) return 0x48b518;
+                return net.minecraft.client.renderer.BiomeColors.getAverageFoliageColor(level, pos);
+            }, leaves);
+        });
         if (Boolean.getBoolean("mfcl.test.grassFace")) GrassFaceHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.potions")) PotionHostSmokeProbe.install(bridge);
         else if (Boolean.getBoolean("mfcl.test.elementalTools")) ElementalToolsHostSmokeProbe.install(bridge);

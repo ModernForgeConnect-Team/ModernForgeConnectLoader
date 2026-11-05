@@ -210,11 +210,13 @@ public final class LegacyContentPack {
         var textures=new LinkedHashMap<String,String>();
         for(int side=0;side<6;side++)textures.put(names[side],texture(block.faces().get(meta).get(side),"blocks"));
         textures.put("particle",textures.get("north"));
-        if(bounds.full())return Map.of("parent","minecraft:block/cube","textures",textures);
+        boolean magicalLeaves=block.key().equals("Thaumcraft:blockMagicalLeaves");
+        if(bounds.full()&&!magicalLeaves)return Map.of("parent","minecraft:block/cube","textures",textures);
         var faces=new LinkedHashMap<String,Object>();
         boolean[] boundary={bounds.minY()==0,bounds.maxY()==1,bounds.minZ()==0,bounds.maxZ()==1,bounds.minX()==0,bounds.maxX()==1};
         for(int side=0;side<6;side++){
             var face=new LinkedHashMap<String,Object>();face.put("texture","#"+names[side]);
+            if(magicalLeaves)face.put("tintindex",0);
             // Inset sides remain visible beside neighboring blocks. Only boundary faces can be culled.
             if(boundary[side])face.put("cullface",names[side]);
             faces.put(names[side],face);

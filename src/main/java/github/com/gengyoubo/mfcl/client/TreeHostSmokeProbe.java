@@ -44,7 +44,7 @@ final class TreeHostSmokeProbe {
                 org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(4);mc.options.simulationDistance().set(4);
                 mc.createWorldOpenFlows().createFreshLevel("mfcl-trees-"+System.currentTimeMillis(),new LevelSettings("MFCL trees",GameType.CREATIVE,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),
                         new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());stage=1;
-            }else if(stage==1&&mc.player!=null&&mc.screen==null){pending=server(mc,()->{setup(mc);return false;});stage=2;
+            }else if(stage==1&&mc.player!=null&&mc.screen==null){leafColors(mc);pending=server(mc,()->{setup(mc);return false;});stage=2;
             }else if(stage==2){
                 if(pending!=null){if(!pending.isDone())return;boolean done=pending.join();pending=null;if(done){stage=3;frames=0;return;}}
                 if(++frames%10==0)pending=server(mc,()->observe(mc));
@@ -56,6 +56,19 @@ final class TreeHostSmokeProbe {
         }catch(Throwable failure){proof.put("status","FAIL");proof.put("failure",failure.toString());com.mojang.logging.LogUtils.getLogger().error("MFCL tree acceptance failed",failure);try{finish(mc);}catch(Exception e){throw new IllegalStateException(e);}}
     }
     private net.minecraft.world.level.block.state.BlockState state(String key,int meta){return content.modernBlock(new HostWorldAccess.Block(key,meta));}
+    private void leafColors(Minecraft mc) {
+        var pos=mc.player.blockPosition();var level=mc.level;
+        int greatwood=net.minecraft.client.renderer.BiomeColors.getAverageFoliageColor(level,pos);
+        for(int meta=0;meta<16;meta++){
+            var leaf=state("Thaumcraft:blockMagicalLeaves",meta);
+            check(mc.getBlockColors().getColor(leaf,level,pos,0)==((meta&1)==0?greatwood:0x8899aa),"Wrong leaf biome tint: "+meta);
+            var model=mc.getBlockRenderer().getBlockModel(leaf);
+            for(var side:net.minecraft.core.Direction.values())
+                check(model.getQuads(leaf,side,net.minecraft.util.RandomSource.create()).stream().allMatch(quad->quad.getTintIndex()==0)
+                        && !model.getQuads(leaf,side,net.minecraft.util.RandomSource.create()).isEmpty(),"Leaf face lacks tint: "+meta+" "+side);
+        }
+        proof.put("leafBiomeTint",true);
+    }
     private void platform(ServerLevel level,BlockPos base){for(int x=-6;x<=6;x++)for(int z=-6;z<=6;z++)level.setBlock(base.offset(x,-1,z),Blocks.DIRT.defaultBlockState(),2);}
     private void setup(Minecraft mc)throws Exception {
         var level=mc.getSingleplayerServer().overworld();var player=level.players().get(0);var services=content.services();var loader=services.loader();var world=services.worlds().bound(level);
