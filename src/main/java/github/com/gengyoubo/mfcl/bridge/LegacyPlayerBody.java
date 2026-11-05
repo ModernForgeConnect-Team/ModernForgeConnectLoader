@@ -19,6 +19,8 @@ public final class LegacyPlayerBody {
     public interface Host {
         /** Null when that side has no such host player. */
         State read(UUID player, boolean client);
+        /** Current host eye height, or the ordinary standing height for synthetic players. */
+        default float eyeHeight(UUID player, boolean client) { return 1.62f; }
         void write(UUID player, boolean client, State before, State after);
     }
     public static final int VANILLA_POTIONS = 23;
@@ -48,6 +50,10 @@ public final class LegacyPlayerBody {
     private LegacyPlayerBody() {}
     public static void host(Host value) { host = Objects.requireNonNull(value); }
     public static boolean available() { return host != null; }
+    public static float eyeHeight(UUID id, boolean client) {
+        var current = host;
+        return current == null ? 1.62f : current.eyeHeight(id, client);
+    }
     private static Access access(Object actor) { return ACCESS.computeIfAbsent(actor.getClass().getClassLoader(), Access::of); }
 
     public static void pull(Object actor, boolean client) throws Exception {

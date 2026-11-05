@@ -468,11 +468,12 @@ public final class LegacyItemUse {
         // otherwise its own host entity is returned as the pointed target.
         var uuid=entity.getDeclaredField("field_96093_i");uuid.setAccessible(true);uuid.set(actor,placer.id());
         boolean client=services.loader().loadClass("net.minecraft.world.World").getField("field_72995_K").getBoolean(world);
-        playerType.getField("eyeHeight").setFloat(actor,client?.12f:1.62f);
+        float eyeHeight = LegacyPlayerBody.eyeHeight(placer.id(), client);
+        playerType.getField("eyeHeight").setFloat(actor,client?.12f:eyeHeight);
         entity.getField("field_70129_M").setFloat(actor,client?1.62f:0);
         entity.getField("field_70170_p").set(actor, world);
         entity.getField("field_71093_bK").setInt(actor,services.loader().loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(services.loader().loadClass("net.minecraft.world.World").getField("field_73011_w").get(world)));
-        double oldY=placer.y()+(client?1.62:0);
+        double oldY=placer.y()+(client?eyeHeight:0);
         entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, oldY); entity.getField("field_70161_v").setDouble(actor, placer.z());
         for(String field:new String[]{"field_70169_q","field_70142_S"})entity.getField(field).setDouble(actor,placer.x());
         for(String field:new String[]{"field_70167_r","field_70137_T"})entity.getField(field).setDouble(actor,oldY);

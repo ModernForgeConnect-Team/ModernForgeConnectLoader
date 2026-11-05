@@ -87,7 +87,10 @@ final class ScannerHostSmokeProbe {
             } else if(stage==2&&pending.isDone()&&ready(mc,Blocks.STONE)&&Boolean.getBoolean("mfcl.test.scannerNodeOnly")) {
                 pending.join();pending=server(mc,()->{setupNode(mc);return true;});stage=30;frames=0;
             } else if(stage==2&&pending.isDone()&&ready(mc,Blocks.STONE)) {
-                pending.join();before=pool(mc,true);proof.put("initialTerra",before);hold(mc);stage=3;frames=0;
+                pending.join();verifyEyeHeight(mc.player, true);
+                server(mc,()->{verifyEyeHeight(mc.getSingleplayerServer().getPlayerList().getPlayers().get(0), false);return true;}).join();
+                proof.put("lowPoseEyeHeightClientAndServer",true);
+                before=pool(mc,true);proof.put("initialTerra",before);hold(mc);stage=3;frames=0;
             } else if(stage==3&&++frames>=35) {
                 release(mc);pending=server(mc,()->{
                     int amount=pool(mc,true);if(amount<=before||!scanned(mc,true,"minecraft:stone"))throw new IllegalStateException("Original scan did not award terra: "+before+" -> "+amount);
@@ -217,6 +220,30 @@ final class ScannerHostSmokeProbe {
     }
     private <T> java.util.concurrent.CompletableFuture<T> server(Minecraft mc,java.util.concurrent.Callable<T> action) {
         return mc.getSingleplayerServer().submit(()->{try{return action.call();}catch(Exception failure){throw new IllegalStateException(failure);}});
+    }
+    private void verifyEyeHeight(net.minecraft.world.entity.player.Player player, boolean client) throws Exception {
+        var prior=player.getPose();
+        try {
+            player.setPose(net.minecraft.world.entity.Pose.SWIMMING);
+            float height=player.getEyeHeight();
+            if(height>=1.2f)throw new IllegalStateException("Low-pose fixture did not change eye height: "+height);
+            var source=new LegacyTiles.Placer(player.getUUID(),player.getName().getString(),player.getX(),player.getY(),player.getZ(),0,0);
+            var services=content.services();
+            services.items().inLegacy(()->{
+                Object world=services.worlds().bound(player.level());
+                // Check both a new actor and the reused item-use actor.
+                for(Object actor:new Object[]{services.tiles().actor(world,source,null),content.itemUse().clientActor(world,source,null),content.itemUse().clientActor(world,source,null)}) {
+                    var entity=services.loader().loadClass("net.minecraft.entity.Entity");
+                    var oldPlayer=services.loader().loadClass("net.minecraft.entity.player.EntityPlayer");
+                    double y=entity.getField("field_70163_u").getDouble(actor);
+                    float oldEye=(float)oldPlayer.getMethod("func_70047_e").invoke(actor);
+                    float defaultEye=(float)oldPlayer.getMethod("getDefaultEyeHeight").invoke(actor);
+                    double rayY=y+oldEye-(client?defaultEye:0);
+                    if(Math.abs(rayY-player.getEyeY())>0.0001)throw new IllegalStateException("Legacy ray eye "+rayY+" differs from host "+player.getEyeY()+" client="+client);
+                }
+                return null;
+            });
+        } finally { player.setPose(prior); }
     }
     private void hold(Minecraft mc) {
         mc.player.setYRot(0);mc.player.setXRot(0);mc.player.yRotO=0;mc.player.xRotO=0;mc.options.keyUse.setDown(true);

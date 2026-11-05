@@ -322,6 +322,10 @@ public final class HostPlayers implements LegacyEquipment, LegacyEvents {
     // ---- Player state
 
     private final class Body implements LegacyPlayerBody.Host {
+        @Override public float eyeHeight(UUID id, boolean client) {
+            var player = player(id, client);
+            return player == null ? 1.62f : player.getEyeHeight();
+        }
         @Override public LegacyPlayerBody.State read(UUID id, boolean client) {
             var player = player(id, client);
             if (player == null) return null;

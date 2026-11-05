@@ -33,6 +33,7 @@ forge*changelog.txt
 !/src/test/java/LegacyGuiGeometryTest.java
 !/src/test/java/LegacyPackCacheTest.java
 !/src/test/java/WorldHeightTransformerTest.java
+!/src/test/java/ReentrantEntityQueryTest.java
 /.claude/
 /tools/*
 !/tools/HeightAudit.java

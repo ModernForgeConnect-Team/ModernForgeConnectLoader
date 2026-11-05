@@ -150,7 +150,8 @@ public final class LegacyTiles {
         var uuid=entity.getDeclaredField("field_96093_i");uuid.setAccessible(true);uuid.set(actor,placer.id());
         var random=entity.getDeclaredField("field_70146_Z");random.setAccessible(true);random.set(actor,new Random());
         entity.getField("capturedDrops").set(actor,new ArrayList<>());
-        player.getField("eyeHeight").setFloat(actor,client?.12f:1.62f);
+        float eyeHeight = LegacyPlayerBody.eyeHeight(placer.id(), client);
+        player.getField("eyeHeight").setFloat(actor,client?.12f:eyeHeight);
         entity.getField("field_70129_M").setFloat(actor,client?1.62f:0);
         var profile = player.getDeclaredField("field_146106_i"); profile.setAccessible(true);
         profile.set(actor, loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(placer.id(), placer.name()));
@@ -171,7 +172,7 @@ public final class LegacyTiles {
         LegacyPlayerFlight.refresh(actor);
         // Entity.dimension: old code compares it with dimension ids (TC4 eldritch portals pick the travel direction by it).
         entity.getField("field_71093_bK").setInt(actor, loader.loadClass("net.minecraft.world.WorldProvider").getField("field_76574_g").getInt(worldType.getField("field_73011_w").get(world)));
-        entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()+(client?1.62:0)); entity.getField("field_70161_v").setDouble(actor, placer.z());
+        entity.getField("field_70165_t").setDouble(actor, placer.x()); entity.getField("field_70163_u").setDouble(actor, placer.y()+(client?eyeHeight:0)); entity.getField("field_70161_v").setDouble(actor, placer.z());
         entity.getField("field_70177_z").setFloat(actor, placer.yaw()); entity.getField("field_70125_A").setFloat(actor, placer.pitch());
         // Range/ray-trace helpers read the player's bounding box; the allocated actor has none, so build one directly.
         Object box = loader.loadClass("net.minecraft.util.AxisAlignedBB").getMethod("func_72330_a", double.class, double.class, double.class, double.class, double.class, double.class)
