@@ -1529,11 +1529,22 @@ public final class ModernContentBridge {
     }
     public LegacyBlockRendering.View renderView(BlockGetter level, BlockPos origin, BlockState center) {
         return new LegacyBlockRendering.View() {
+            private boolean incomplete;
+            private boolean available(int x,int z) {
+                var pos=origin.offset(x,0,z);
+                if (level instanceof net.minecraft.server.level.WorldGenRegion region && !region.hasChunk(pos.getX() >> 4,pos.getZ() >> 4)) {
+                    incomplete=true; return false;
+                }
+                return true;
+            }
+            public boolean cacheable() { return !incomplete; }
             public String biome(int x,int z) {
+                if (!available(x,z)) return "minecraft:plains";
                 var pos=origin.offset(x,0,z);
                 return level instanceof LevelReader reader?HostBiomeQueries.key(reader,pos):github.com.gengyoubo.mfcl.client.ClientBiomeQueries.key(pos);
             }
             public HostWorldAccess.Block block(int x, int y, int z) {
+                if (!available(x,z)) return new HostWorldAccess.Block("minecraft:air",0);
                 var state = x == 0 && y == 0 && z == 0 ? center : level.getBlockState(origin.offset(x,y,z));
                 if (state.hasProperty(METADATA)) return legacyBlock(state);
                 String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
@@ -1546,15 +1557,18 @@ public final class ModernContentBridge {
                 return new HostWorldAccess.Block(id, 0);
             }
             public byte[] tileData(int x, int y, int z) {
+                if (!available(x,z)) return null;
                 if (x == 0 && y == 0 && z == 0 && level.getBlockState(origin).getBlock() != center.getBlock()) return null;
                 return level.getBlockEntity(origin.offset(x,y,z)) instanceof LegacyBlockEntity tile ? tile.renderData() : null;
             }
             // Same neighbour tiles as the live old worlds: original tiles, and native FE tiles as RF endpoints.
             public boolean legacyTile(int x, int y, int z) {
+                if (!available(x,z)) return false;
                 if (x == 0 && y == 0 && z == 0 && level.getBlockState(origin).getBlock() != center.getBlock()) return true;
                 return level.getBlockEntity(origin.offset(x,y,z)) instanceof LegacyBlockEntity;
             }
             public HostEnergyAccess energy(int x, int y, int z) {
+                if (!available(x,z)) return null;
                 var tile = level.getBlockEntity(origin.offset(x,y,z));
                 if (tile == null || tile.isRemoved() || tile instanceof LegacyBlockEntity) return null;
                 int receive = 0, extract = 0;

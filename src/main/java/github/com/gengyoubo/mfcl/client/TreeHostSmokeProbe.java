@@ -72,6 +72,7 @@ final class TreeHostSmokeProbe {
     private void platform(ServerLevel level,BlockPos base){for(int x=-6;x<=6;x++)for(int z=-6;z<=6;z++)level.setBlock(base.offset(x,-1,z),Blocks.DIRT.defaultBlockState(),2);}
     private void setup(Minecraft mc)throws Exception {
         var level=mc.getSingleplayerServer().overworld();var player=level.players().get(0);var services=content.services();var loader=services.loader();var world=services.worlds().bound(level);
+        worldgenBoundary(level);
         level.getGameRules().getRule(GameRules.RULE_RANDOMTICKING).set(0,mc.getSingleplayerServer());level.setDayTime(6000);
         services.items().inLegacy(()->{
             var worldType=loader.loadClass("net.minecraft.world.World");
@@ -115,6 +116,23 @@ final class TreeHostSmokeProbe {
         check(state("Thaumcraft:blockMagicalLeaves",1).getSoundType().getBreakSound().getLocation().toString().equals("minecraft:block.grass.break"),"Leaf sound property not mirrored");
         // Real block-destruction level events resolve the mirrored state's sound on the receiving client.
         level.getGameRules().getRule(GameRules.RULE_RANDOMTICKING).set(1024,mc.getSingleplayerServer());started=level.getGameTime();
+    }
+    private void worldgenBoundary(ServerLevel level) {
+        var region=new net.minecraft.server.level.WorldGenRegion(level,List.of(level.getChunk(0,0)),net.minecraft.world.level.chunk.ChunkStatus.SPAWN,0);
+        var leaf=state("Thaumcraft:blockTaintFibres",0);
+        for(int x:new int[]{0,15})for(int z:new int[]{0,15}){
+            var pos=new BlockPos(x,100,z);var previous=level.getBlockState(pos);
+            try {
+                level.setBlock(pos,leaf,2);
+                var view=content.renderView(region,pos,leaf);
+                int dx=x==0?-1:1,dz=z==0?-1:1;
+                check(view.block(dx,0,0).legacyKey().equals("minecraft:air"),"Out-of-region block was not treated as unavailable");
+                check(view.tileData(0,0,dz)==null&&!view.legacyTile(dx,0,0)&&view.energy(dx,0,0)==null,"Out-of-region tile was accessible");
+                check(!view.cacheable(),"Partial worldgen view was marked cacheable");
+                leaf.getCollisionShape(region,pos);leaf.getShape(region,pos);
+            } finally {level.setBlock(pos,previous,2);}
+        }
+        proof.put("worldgenBoundaryShapes",true);
     }
     private void leafLoot(ServerLevel level,ServerPlayer player)throws Exception {
         player.setGameMode(GameType.SURVIVAL);player.getInventory().clearContent();var at=new BlockPos(-8,-20,0);level.setBlock(at.below(),Blocks.STONE.defaultBlockState(),2);

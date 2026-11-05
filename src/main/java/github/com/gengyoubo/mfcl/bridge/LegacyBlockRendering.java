@@ -14,6 +14,8 @@ public final class LegacyBlockRendering {
         default boolean legacyTile(int x, int y, int z) { return true; }
         /** FE connections of a host tile without an original counterpart; null when it has none. */
         default HostEnergyAccess energy(int x, int y, int z) { return null; }
+        /** A partial world-generation view must not populate or reuse the shared shape cache. */
+        default boolean cacheable() { return true; }
     }
     public record Layer(int pass, List<LegacyVertexStream.Primitive> geometry) {
         public Layer { geometry = List.copyOf(geometry); }

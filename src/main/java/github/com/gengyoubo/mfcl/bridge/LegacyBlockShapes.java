@@ -53,7 +53,7 @@ public final class LegacyBlockShapes {
                     byte[] tile = view.tileData(x,y,z);
                     cells.add(new Cell(view.block(x,y,z), java.nio.ByteBuffer.wrap(tile == null ? new byte[0] : tile).asReadOnlyBuffer()));
                 }
-                Shapes known = cache.get(cells); if (known != null) return known;
+                if (view.cacheable()) { Shapes known = cache.get(cells); if (known != null) return known; }
             }
             try (var scene = new LegacyBlockScene(services, view)) {
                 stateBounds.invoke(block, scene.world(), 0,0,0);
@@ -68,7 +68,7 @@ public final class LegacyBlockShapes {
                 Object selected = targetable ? selection.invoke(block, scene.world(), 0,0,0) : null;
                 var result = new Shapes(collisions, selected == null ? List.of() : List.of(box(selected)), (boolean) replaceable.invoke(block, scene.world(), 0,0,0));
                 // Player/sneaking/position decisions must never enter the shared entity-free shape cache.
-                if(!dynamic)cache.put(List.copyOf(cells), result); return result;
+                if(!dynamic && view.cacheable())cache.put(List.copyOf(cells), result); return result;
             } finally { blockType.getMethod("func_149683_g").invoke(block); }
         });
     }
