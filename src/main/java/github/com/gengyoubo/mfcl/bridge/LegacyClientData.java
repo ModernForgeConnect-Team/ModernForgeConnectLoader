@@ -37,6 +37,14 @@ public final class LegacyClientData {
     private List<Stack> catalogSnapshots;
     private Map<String, List<Stack>> catalogByKey;
     private final Map<Stack, Object> originals = new HashMap<>();
+    /** The first original of each variant. Callers often build stacks with another count or an empty name. */
+    private final Map<Variant, Object> originalsByVariant = new HashMap<>();
+    private record Variant(String key, int metadata, String tag) {
+        static Variant of(Stack stack) { return new Variant(stack.key(), stack.metadata(), stack.tag()); }
+    }
+    /** Development only: "scan" restores the linear lookup for A/B runs; "verify" checks the index against a full scan. */
+    private final String indexMode = System.getProperty("mfcl.debug.materializeIndex", "");
+    private final MaterializeIndexCheck indexCheck = new MaterializeIndexCheck();
     private final List<String> diagnostics = new ArrayList<>();
     private boolean ready;
     private List<Object> ownCrafting;
@@ -488,8 +496,8 @@ public final class LegacyClientData {
     }
     public synchronized Object materialize(Stack value) throws Exception {
         Object existing = originals.get(value);
-        if (existing == null) existing = originals.entrySet().stream().filter(e -> e.getKey().key().equals(value.key())
-                && e.getKey().metadata() == value.metadata() && e.getKey().tag().equals(value.tag())).map(Map.Entry::getValue).findFirst().orElse(null);
+        if (existing == null) existing = variantOriginal(value);
+        else if (indexMode.equals("verify")) { indexCheck.exactHits++; reportIndexCheck(); }
         Object result;
         if (existing != null) result = copyStack.invoke(existing);
         else {
@@ -504,6 +512,64 @@ public final class LegacyClientData {
             }
         }
         stackType.getField("field_77994_a").setInt(result, value.count()); return result;
+    }
+    private Object variantOriginal(Stack value) {
+        if (indexMode.equals("scan")) return originals.entrySet().stream().filter(e -> e.getKey().key().equals(value.key())
+                && e.getKey().metadata() == value.metadata() && e.getKey().tag().equals(value.tag())).map(Map.Entry::getValue).findFirst().orElse(null);
+        Object indexed = originalsByVariant.get(Variant.of(value));
+        if (indexMode.equals("verify")) verifyIndex(value, indexed);
+        return indexed;
+    }
+    /** Counters from "verify" mode. A mismatch means the index and a full scan could disagree for that variant. */
+    public record MaterializeIndexStats(long exactHits, long variantHits, long misses, long entriesVisited,
+                                        long ambiguousVariants, long mismatches, long failures, int originals, int variants) {}
+    private static final class MaterializeIndexCheck {
+        private static final int MAX_LOGGED = 20;
+        private static final long REPORT_NANOS = 10_000_000_000L;
+        long exactHits, variantHits, misses, entriesVisited, ambiguousVariants, mismatches, failures;
+        long lastReport = System.nanoTime();
+    }
+    public synchronized MaterializeIndexStats materializeIndexStats() {
+        var check = indexCheck;
+        return new MaterializeIndexStats(check.exactHits, check.variantHits, check.misses, check.entriesVisited,
+                check.ambiguousVariants, check.mismatches, check.failures, originals.size(), originalsByVariant.size());
+    }
+    /** Never changes the lookup's result or throws: it only records what a full scan of the same variant would see. */
+    private void verifyIndex(Stack value, Object indexed) {
+        var check = indexCheck;
+        try {
+            var variant = Variant.of(value);
+            int candidates = 0;
+            boolean differs = false;
+            for (var entry : originals.entrySet()) {
+                check.entriesVisited++;
+                if (!variant.equals(Variant.of(entry.getKey()))) continue;
+                candidates++;
+                if (indexed != null && !sameOriginal(indexed, entry.getValue())) differs = true;
+            }
+            if (indexed == null) check.misses++; else check.variantHits++;
+            if (candidates > 1) check.ambiguousVariants++;
+            if (indexed == null ? candidates > 0 : candidates == 0 || differs) {
+                if (check.mismatches++ < MaterializeIndexCheck.MAX_LOGGED) com.mojang.logging.LogUtils.getLogger().warn(
+                        "MFCL materialize index mismatch: key={}, metadata={}, tagLength={}, indexed={}, candidates={}, contentDiffers={}",
+                        value.key(), value.metadata(), value.tag() == null ? -1 : value.tag().length(), indexed != null, candidates, differs);
+            }
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            if (check.failures++ < MaterializeIndexCheck.MAX_LOGGED) com.mojang.logging.LogUtils.getLogger().warn("MFCL materialize index check failed for {}", value.key(), failure);
+        }
+        reportIndexCheck();
+    }
+    /** Item, damage and full NBT, ignoring count. The tag string alone can hide differences in old NBT. */
+    private boolean sameOriginal(Object first, Object second) throws ReflectiveOperationException {
+        var damage = stackType.getMethod("func_77960_j");
+        return itemOfStack.invoke(first) == itemOfStack.invoke(second) && damage.invoke(first).equals(damage.invoke(second))
+                && (boolean) stackType.getMethod("func_77970_a", stackType, stackType).invoke(null, first, second);
+    }
+    private void reportIndexCheck() {
+        long now = System.nanoTime();
+        if (now - indexCheck.lastReport < MaterializeIndexCheck.REPORT_NANOS) return;
+        indexCheck.lastReport = now;
+        com.mojang.logging.LogUtils.getLogger().info("MFCL materialize index check: {}", materializeIndexStats());
     }
     /** Adds host presentation tags to a copy using the old NBT implementation, preserving old indexed lists. */
     public Stack renderTags(Stack source,Integer repairCost,Integer color,String name) throws Exception {
@@ -547,7 +613,11 @@ public final class LegacyClientData {
         Stack stack = new Stack(represented != null ? represented : host == null ? (String) nameOfItem.invoke(registry, item) : host.key(),
                 (Integer) stackType.getMethod("func_77960_j").invoke(value), stackType.getField("field_77994_a").getInt(value),
                 host == null ? (String) stackType.getMethod("func_82833_r").invoke(value) : host.name(), nbt == null ? "" : nbt.toString());
-        if (!originals.containsKey(stack)) originals.put(stack, copyStack.invoke(value));
+        if (!originals.containsKey(stack)) {
+            Object copy = copyStack.invoke(value);
+            originals.put(stack, copy);
+            originalsByVariant.putIfAbsent(Variant.of(stack), copy);
+        }
         return stack;
     }
     public synchronized <T> T inLegacy(Callable<T> work) throws Exception {
