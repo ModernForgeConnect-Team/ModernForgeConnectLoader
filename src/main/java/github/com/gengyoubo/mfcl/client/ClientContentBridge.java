@@ -32,6 +32,7 @@ public final class ClientContentBridge {
         LegacyItemTooltips.install(bridge);
         LegacyEffects.install(bridge);
         LegacyPotionPostEffects.install(bridge,bus);
+        if (Boolean.getBoolean("mfcl.test.splitRegistry")) github.com.gengyoubo.mfcl.content.SplitRegistrySmokeProbe.install(bridge);
         bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge));
             event.registerEntityRenderer(bridge.legacyEntityType(), context -> new LegacyHostedEntityRenderer(context, bridge));

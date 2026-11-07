@@ -30,6 +30,7 @@ minecraft {
             if (project.hasProperty('mfclModListSmokeTest')) property 'mfcl.test.modListSmoke', 'true'
             if (project.hasProperty('mfclOpenGlSmokeTest')) property 'mfcl.test.openGl', 'true'
             if (project.hasProperty('mfclGrassFaceSmokeTest')) property 'mfcl.test.grassFace', 'true'
+            if (project.hasProperty('mfclSplitRegistrySmokeTest')) property 'mfcl.test.splitRegistry', 'true'
             if (project.hasProperty('mfclContentSmokeTest')) property 'mfcl.test.content', 'true'
             if (project.hasProperty('mfclLogicSmokeTest')) property 'mfcl.test.logic', 'true'
             if (project.hasProperty('mfclWandAudit')) property 'mfcl.test.wandAudit', 'true'
@@ -95,6 +96,7 @@ minecraft {
 }
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 repositories {
+    if (project.hasProperty('mfclSplitRegistrySmokeTest')) maven { url uri('build/split-registry-smoke/maven') }
     maven { url = 'https://libraries.minecraft.net' }
     maven {
         url "https://cursemaven.com"
@@ -159,6 +161,10 @@ tasks.register('prepareLegacyRuntime', JavaExec) {
 }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    if (project.hasProperty('mfclSplitRegistrySmokeTest')) {
+        runtimeOnly fg.deobf('mfcl.smoke:tc4-modern:0.1.4')
+        runtimeOnly fg.deobf('mfcl.smoke:tc-modern-lib:0.1.4')
+    }
     if (project.hasProperty('tinkersTestVersion')) {
         repositories.maven { url 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
         runtimeOnly fg.deobf("maven.modrinth:mantle:${providers.gradleProperty('mantleTestVersion').getOrElse('1.11.117')}")

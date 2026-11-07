@@ -159,6 +159,7 @@ public final class ModernContentBridge {
         } catch (Exception failure) { throw new IllegalStateException("Cannot freeze legacy content declarations", failure); }
     }
     public static ModernContentBridge active() { return active; }
+    Map<ResourceLocation, Item> splitVariants() { return itemSplits.registeredVariants(); }
     private HostPlayers players;
     /** Equipment sources, forwarded events and persistent player state of the developer API. */
     public HostPlayers players() { return players; }

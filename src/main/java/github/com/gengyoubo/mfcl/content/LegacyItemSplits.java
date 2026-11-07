@@ -86,9 +86,17 @@ final class LegacyItemSplits {
     /** A saved stack moved to the item the current rules select; the same instance when it is already there. */
     ItemStack migrate(ItemStack stack, Item target) {
         if (stack.isEmpty() || target == null || stack.getItem() == target) return stack;
+        var key = BuiltInRegistries.ITEM.getResourceKey(target).orElse(null);
+        if (key == null || BuiltInRegistries.ITEM.getOptional(key.location()).orElse(null) != target) return stack;
         CompoundTag saved = stack.serializeNBT();
-        saved.putString("id", BuiltInRegistries.ITEM.getKey(target).toString());
+        saved.putString("id", key.location().toString());
         return ItemStack.of(saved);
+    }
+
+    Map<ResourceLocation, Item> registeredVariants() {
+        var result = new LinkedHashMap<ResourceLocation, Item>();
+        splits.forEach((key, split) -> split.items().forEach((variant, item) -> result.put(id(key, variant), item)));
+        return result;
     }
 
     private LegacyItemProvider.Stack stack(String key, int metadata, String snbt) {
