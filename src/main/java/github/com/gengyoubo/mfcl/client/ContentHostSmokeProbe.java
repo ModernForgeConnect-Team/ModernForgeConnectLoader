@@ -30,8 +30,8 @@ final class ContentHostSmokeProbe {
     private Map<String, Object> proof;
     private volatile boolean screenshotSaved;
     private int itemGallery;
-    private static final String[] GALLERY_ITEMS = {"Thaumcraft:ItemEssence", "Thaumcraft:ItemWispEssence", "Thaumcraft:blockLootCrate"};
-    private static final String[] GALLERY_IMAGES = {"essence", "wisp-essence", "loot-crates"};
+    private static final String[] GALLERY_ITEMS = {"Thaumcraft:ItemEssence", "Thaumcraft:ItemWispEssence", "Thaumcraft:blockLootCrate", "Thaumcraft:blockStairsSilverwood"};
+    private static final String[] GALLERY_IMAGES = {"essence", "wisp-essence", "loot-crates", "wood-items"};
     private record TileCheck(String key, BlockPos position, int metadata, byte[] nbt, Object serverIdentity) {}
     private final List<TileCheck> tileChecks = new ArrayList<>();
     private BlockPos glassPosition;
@@ -82,6 +82,7 @@ final class ContentHostSmokeProbe {
                 verifyContainerMirrors(mc);
                 verifyStackRendering(mc);
                 verifyRepresentedHostIcons();
+                verifyWoodItemGeometry(bridge);
                 proof.put("renderCaptureFailures", bridge.declarations().captureDiagnostics().stream()
                         .filter(line -> line.contains("failed") || line.contains("unresolved") || line.contains("unavailable")).toList());
                 proof.put("capturedInventoryVariants", bridge.pack().geometry().size());
@@ -239,6 +240,27 @@ final class ContentHostSmokeProbe {
         if (table == null || table.stream().noneMatch(p -> p.texture().contains("scanner.png")))
             throw new IllegalStateException("Deconstruction table lost its embedded thaumometer");
         proof.put("originalItemRenderContexts",contexts);
+    }
+    /** Stair items keep their step, low side toward the viewer's left; drawFaces planks shade like host cubes. */
+    static void verifyWoodItemGeometry(ModernContentBridge bridge) {
+        for (String stairs : List.of("Thaumcraft:blockStairsSilverwood@0","Thaumcraft:blockStairsGreatwood@0")) {
+            var geometry = bridge.declarations().geometry().get(stairs);
+            if (geometry == null || geometry.size() != 12) throw new IllegalStateException("Stair item lost its two original cuboids: " + stairs);
+            double lowTop = geometry.stream().flatMap(p -> p.vertices().stream()).filter(v -> v.x() > .01).mapToDouble(LegacyVertexStream.Vertex::y).max().orElseThrow();
+            double tallTop = geometry.stream().flatMap(p -> p.vertices().stream()).filter(v -> v.x() < -.01).mapToDouble(LegacyVertexStream.Vertex::y).max().orElseThrow();
+            if (Math.abs(lowTop) > 1e-6 || Math.abs(tallTop-.5) > 1e-6) throw new IllegalStateException("Stair item step is misoriented: " + stairs + " low=" + lowTop + " tall=" + tallTop);
+        }
+        for (String planks : List.of("Thaumcraft:blockWoodenDevice@6","Thaumcraft:blockWoodenDevice@7")) {
+            var geometry = bridge.declarations().geometry().get(planks);
+            if (geometry == null || geometry.size() != 6) throw new IllegalStateException("Plank item capture missing: " + planks);
+            for (var primitive : geometry) {
+                var vertices = primitive.vertices(); var first = vertices.get(0);
+                boolean faceX = vertices.stream().allMatch(v -> Math.abs(v.x()-first.x()) < 1e-6);
+                boolean faceZ = vertices.stream().allMatch(v -> Math.abs(v.z()-first.z()) < 1e-6);
+                if (faceX && Math.abs(first.nx()) < .99 || faceZ && Math.abs(first.nz()) < .99)
+                    throw new IllegalStateException("Plank item side normal does not match its face: " + planks + " " + first);
+            }
+        }
     }
     private void verifyPlacedTileRendering(Minecraft mc) throws Exception {
         var tiles = bridge.blockRendering().tiles();
@@ -541,7 +563,7 @@ final class ContentHostSmokeProbe {
                 throw new IllegalStateException("Original tile block could not be placed: " + declaration.key());
             int metadata = level.getBlockState(target).getValue(ModernContentBridge.METADATA);
             String tileClass = "";
-            if (declaration.tileEntity()) {
+            if (declaration.hasTile(metadata)) {
                 var envelope = (github.com.gengyoubo.mfcl.content.LegacyBlockEntity) level.getBlockEntity(target);
                 Object original = envelope.legacyOrNull();
                 if (original != null) {
