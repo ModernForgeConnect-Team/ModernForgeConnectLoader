@@ -23,6 +23,41 @@ public final class LegacyVertexStream {
     public static final int GL_TRIANGLES = 4, GL_TRIANGLE_STRIP = 5, GL_TRIANGLE_FAN = 6,
             GL_QUADS = 7, GL_QUAD_STRIP = 8, GL_POLYGON = 9;
     private LegacyVertexStream() { }
+    /**
+     * TC4's inventory helper gives X faces a Z normal and Z faces an X normal, which swaps the side shading under
+     * host item lighting. Only that exact mismatch is corrected; deliberately flipped or non-axial normals stay.
+     */
+    public static List<Primitive> correctSwappedSideNormals(List<Primitive> primitives) {
+        var result = new java.util.ArrayList<Primitive>(primitives.size());
+        for (var primitive : primitives) {
+            if (primitive.mode() != GL_QUADS || primitive.vertices().size() % 4 != 0) { result.add(primitive); continue; }
+            var vertices = new java.util.ArrayList<>(primitive.vertices());
+            for (int base = 0; base < vertices.size(); base += 4) {
+                Vertex a = vertices.get(base), b = vertices.get(base+1), c = vertices.get(base+2);
+                double bx = b.x()-a.x(), by = b.y()-a.y(), bz = b.z()-a.z(), cx = c.x()-a.x(), cy = c.y()-a.y(), cz = c.z()-a.z();
+                double x = by*cz-bz*cy, y = bz*cx-bx*cz, z = bx*cy-by*cx, length = Math.sqrt(x*x+y*y+z*z);
+                if (length < 1e-9) continue;
+                x /= length; y /= length; z /= length;
+                boolean faceX = isSideAxis(x, y, z), faceZ = isSideAxis(z, y, x);
+                if (!faceX && !faceZ) continue;
+                boolean swapped = true;
+                for (int index = base; index < base+4; index++) {
+                    var vertex = vertices.get(index);
+                    swapped &= faceX ? isSideAxis(vertex.nz(), vertex.ny(), vertex.nx()) : isSideAxis(vertex.nx(), vertex.ny(), vertex.nz());
+                }
+                if (!swapped) continue;
+                for (int index = base; index < base+4; index++) {
+                    var v = vertices.get(index);
+                    vertices.set(index, new Vertex(v.x(), v.y(), v.z(), v.u(), v.v(), (float)x, (float)y, (float)z, v.argb()));
+                }
+            }
+            result.add(new Primitive(primitive.mode(), primitive.texture(), vertices, primitive.state()));
+        }
+        return List.copyOf(result);
+    }
+    private static boolean isSideAxis(double axis, double y, double other) {
+        return Math.abs(Math.abs(axis)-1) < 1e-3 && Math.abs(y) < 1e-3 && Math.abs(other) < 1e-3;
+    }
     public static double[] identity() { return new double[]{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}; }
     public static double[] copy(double[] matrix) { return matrix.clone(); }
     public static void multiply(double[] left, double[] right) {

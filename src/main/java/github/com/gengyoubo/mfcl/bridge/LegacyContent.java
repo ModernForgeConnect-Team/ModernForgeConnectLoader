@@ -163,6 +163,7 @@ public final class LegacyContent {
         static RenderStack of(LegacyClientData.Stack stack) { return new RenderStack(stack.key(), stack.metadata(), stack.tag()); }
     }
 
+    private static final int STAIRS_RENDER_TYPE = 10;
     /** Executes the real old inventory renderers once and keeps their geometry; texture stays the icon name. */
     private void captureStaticGeometry() {
         Object renderer;
@@ -180,6 +181,8 @@ public final class LegacyContent {
                 for (var variant : item.variants()) {
                     LegacyWorldGraphics.Frame frame = LegacyWorldGraphics.begin();
                     boolean drawn = false;
+                    // Vanilla's old GUI frame nets Y 315 for stairs; the host block transform applies Y 225.
+                    if (block.renderType() == STAIRS_RENDER_TYPE) LegacyWorldGraphics.rotate(90, 0, 1, 0);
                     try { drawn = Boolean.TRUE.equals(data.inLegacy(() -> render.invoke(renderer, block.key(), variant.metadata(), 0))); }
                     catch (Throwable failure) {
                         Throwable cause = failure;
@@ -193,7 +196,7 @@ public final class LegacyContent {
                         catch (IllegalStateException failure) { drawn = false; captureDiagnostics.add("block capture failed to close " + block.key() + "@" + variant.metadata() + ": " + failure); }
                     }
                     if (!drawn || captured.isEmpty()) continue;
-                    var resolved = resolveIcons(captured);
+                    var resolved = LegacyVertexStream.correctSwappedSideNormals(resolveIcons(captured));
                     if (resolved.isEmpty()) { captureDiagnostics.add("unresolved icons " + block.key() + "@" + variant.metadata() + " (" + captured.size() + " primitives)"); continue; }
                     geometry.put(item.key() + "@" + variant.metadata(), resolved);
                     captureDiagnostics.add("captured " + item.key() + "@" + variant.metadata() + ": " + resolved.size() + " primitives, "

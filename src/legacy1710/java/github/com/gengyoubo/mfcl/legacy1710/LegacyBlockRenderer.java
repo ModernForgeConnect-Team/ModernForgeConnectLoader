@@ -9,6 +9,7 @@ import java.lang.reflect.Proxy;
  * Reflection keeps this source set free of Minecraft compile-time types.
  */
 public final class LegacyBlockRenderer {
+    private static final int STAIRS = 10;
     public boolean renderInventory(String blockKey, int metadata, int modelId) throws Exception {
         ClassLoader loader = getClass().getClassLoader();
         Class<?> blockType = loader.loadClass("net.minecraft.block.Block");
@@ -33,6 +34,11 @@ public final class LegacyBlockRenderer {
             return null;
         });
         Object renderBlocks = renderBlocksType.getConstructor(accessType).newInstance(access);
+        if (renderType == STAIRS) {
+            // The FML registry only knows mod renderers; vanilla draws the two stair cuboids in RenderBlocks itself.
+            renderBlocksType.getMethod("func_147800_a", blockType, int.class, float.class).invoke(renderBlocks, block, metadata, 1f);
+            return true;
+        }
         Method render = renderingType.getMethod("renderInventoryBlock", renderBlocksType, blockType, int.class, int.class);
         render.invoke(rendering, renderBlocks, block, metadata, renderType);
         return true;
