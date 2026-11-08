@@ -3,10 +3,13 @@ package github.com.gengyoubo.mfcl.content;
 import github.com.gengyoubo.mfcl.bridge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.wrapper.InvWrapper;
 import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -31,17 +34,21 @@ final class HostInventoryTiles {
             if(tile==null||tile.isRemoved()||tile instanceof LegacyBlockEntity)return null;
             if(!tile.getCapability(ForgeCapabilities.ITEM_HANDLER,null).isPresent()){peers.remove(tile);return null;}
             var cached=peers.get(tile);Object peer=cached==null?null:cached.get();if(peer!=null)return peer;
-            peer=LegacyInventoryPeers.create(content.services(),content.services().worlds().bound(level),position.getX(),position.getY(),position.getZ(),new Endpoint(tile));
+            // A native chest becomes an old TileEntityChest (generators cast to it before filling loot). Old code joins double
+            // chests itself through the neighbouring chest, so that view covers this half only, not Forge's combined handler.
+            boolean chest=tile instanceof ChestBlockEntity;
+            peer=LegacyInventoryPeers.create(content.services(),content.services().worlds().bound(level),position.getX(),position.getY(),position.getZ(),new Endpoint(tile,chest),chest);
             peers.put(tile,new WeakReference<>(peer));return peer;
         });
     }
     private final class Endpoint implements HostInventoryAccess {
         private final BlockEntity tile;
         private final BlockPos position;
-        Endpoint(BlockEntity tile){this.tile=tile;position=tile.getBlockPos().immutable();}
+        private final IItemHandler single;
+        Endpoint(BlockEntity tile,boolean chest){this.tile=tile;position=tile.getBlockPos().immutable();single=chest?new InvWrapper((Container)tile):null;}
         private IItemHandler handler() {
             if(content.services().worlds().findBound(level)==null||tile.isRemoved()||!level.hasChunkAt(position)||level.getBlockEntity(position)!=tile)return null;
-            return tile.getCapability(ForgeCapabilities.ITEM_HANDLER,null).orElse(null);
+            return single!=null?single:tile.getCapability(ForgeCapabilities.ITEM_HANDLER,null).orElse(null);
         }
         @Override public boolean live(){return host(()->handler()!=null);}
         @Override public int size(){return host(()->{var items=handler();return items==null?0:items.getSlots();});}

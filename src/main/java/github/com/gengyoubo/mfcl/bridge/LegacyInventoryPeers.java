@@ -7,10 +7,14 @@ import java.util.*;
  * A typed old IInventory TileEntity for a native item handler (chests, barrels, modded machines), so old machines can
  * output into host storage. Old code mutates returned stacks in place ({@code stack.stackSize += n}) and then calls
  * markDirty, so each lent stack is remembered and its difference is written back to the host on the next access.
+ * Native vanilla chests get a variant that extends the old TileEntityChest, because original generators (TC4 great trees,
+ * dungeon code) cast the looked-up tile to that class before filling it with loot.
  */
 public final class LegacyInventoryPeers {
     private static final String NAME = "github/com/gengyoubo/mfcl/legacy1710/HostInventoryTile";
-    private static final String TILE = "net/minecraft/tileentity/TileEntity", STACK = "Lnet/minecraft/item/ItemStack;";
+    private static final String CHEST_NAME = "github/com/gengyoubo/mfcl/legacy1710/HostChestTile";
+    private static final String TILE = "net/minecraft/tileentity/TileEntity", CHEST = "net/minecraft/tileentity/TileEntityChest";
+    private static final String STACK = "Lnet/minecraft/item/ItemStack;";
     private LegacyInventoryPeers() {}
     /** The state behind one peer tile; slots hold the old stack handed out and the host contents it was made from. */
     public static final class Peer {
@@ -20,11 +24,16 @@ public final class LegacyInventoryPeers {
         Peer(LegacyServices services, HostInventoryAccess endpoint) { this.services = services; this.endpoint = endpoint; }
     }
     public static Object create(LegacyServices services, Object world, int x, int y, int z, HostInventoryAccess endpoint) throws Exception {
+        return create(services, world, x, y, z, endpoint, false);
+    }
+    /** {@code chest} selects the TileEntityChest-typed view; its endpoint must expose exactly that one chest's slots. */
+    public static Object create(LegacyServices services, Object world, int x, int y, int z, HostInventoryAccess endpoint, boolean chest) throws Exception {
+        String name = chest ? CHEST_NAME : NAME;
         return services.items().inLegacy(() -> {
             var loader = services.loader(); Class<?> type;
             synchronized (loader) {
-                try { type = loader.loadClass(NAME.replace('/', '.')); }
-                catch (ClassNotFoundException missing) { type = define(loader); }
+                try { type = loader.loadClass(name.replace('/', '.')); }
+                catch (ClassNotFoundException missing) { type = define(loader, name, chest); }
             }
             Object tile = type.getConstructor(Peer.class).newInstance(new Peer(services, endpoint));
             var base = loader.loadClass(TILE.replace('/', '.'));
@@ -33,38 +42,46 @@ public final class LegacyInventoryPeers {
             return tile;
         });
     }
-    private static Class<?> define(ClassLoader loader) throws Exception {
+    private static Class<?> define(ClassLoader loader, String name, boolean chest) throws Exception {
         String peer = Type.getInternalName(Peer.class), bridge = Type.getInternalName(LegacyInventoryPeers.class);
+        String parent = chest ? CHEST : TILE;
         var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, NAME, null, TILE, new String[]{"net/minecraft/inventory/IInventory"});
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, name, null, parent, new String[]{"net/minecraft/inventory/IInventory"});
         writer.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, "peer", "L" + peer + ";", null, null).visitEnd();
         var init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(L" + peer + ";)V", null, null); init.visitCode();
-        init.visitVarInsn(Opcodes.ALOAD, 0); init.visitMethodInsn(Opcodes.INVOKESPECIAL, TILE, "<init>", "()V", false);
-        init.visitVarInsn(Opcodes.ALOAD, 0); init.visitVarInsn(Opcodes.ALOAD, 1); init.visitFieldInsn(Opcodes.PUTFIELD, NAME, "peer", "L" + peer + ";");
+        init.visitVarInsn(Opcodes.ALOAD, 0); init.visitMethodInsn(Opcodes.INVOKESPECIAL, parent, "<init>", "()V", false);
+        init.visitVarInsn(Opcodes.ALOAD, 0); init.visitVarInsn(Opcodes.ALOAD, 1); init.visitFieldInsn(Opcodes.PUTFIELD, name, "peer", "L" + peer + ";");
         init.visitInsn(Opcodes.RETURN); init.visitMaxs(0, 0); init.visitEnd();
-        delegate(writer, peer, bridge, "func_70302_i_", "()I", "size");
-        delegate(writer, peer, bridge, "func_70301_a", "(I)" + STACK, "get");
-        delegate(writer, peer, bridge, "func_70298_a", "(II)" + STACK, "decrease");
-        delegate(writer, peer, bridge, "func_70304_b", "(I)" + STACK, "closing");
-        delegate(writer, peer, bridge, "func_70299_a", "(I" + STACK + ")V", "set");
-        delegate(writer, peer, bridge, "func_145825_b", "()Ljava/lang/String;", "name");
-        delegate(writer, peer, bridge, "func_145818_k_", "()Z", "customName");
-        delegate(writer, peer, bridge, "func_70297_j_", "()I", "limit");
-        delegate(writer, peer, bridge, "func_70296_d", "()V", "flush");
-        delegate(writer, peer, bridge, "func_70300_a", "(Lnet/minecraft/entity/player/EntityPlayer;)Z", "usable");
-        delegate(writer, peer, bridge, "func_70295_k_", "()V", "open");
-        delegate(writer, peer, bridge, "func_70305_f", "()V", "flush");
-        delegate(writer, peer, bridge, "func_94041_b", "(I" + STACK + ")Z", "valid");
+        delegate(writer, name, peer, bridge, "func_70302_i_", "()I", "size");
+        delegate(writer, name, peer, bridge, "func_70301_a", "(I)" + STACK, "get");
+        delegate(writer, name, peer, bridge, "func_70298_a", "(II)" + STACK, "decrease");
+        delegate(writer, name, peer, bridge, "func_70304_b", "(I)" + STACK, "closing");
+        delegate(writer, name, peer, bridge, "func_70299_a", "(I" + STACK + ")V", "set");
+        delegate(writer, name, peer, bridge, "func_145825_b", "()Ljava/lang/String;", chest ? "chestName" : "name");
+        delegate(writer, name, peer, bridge, "func_145818_k_", "()Z", "customName");
+        delegate(writer, name, peer, bridge, "func_70297_j_", "()I", "limit");
+        delegate(writer, name, peer, bridge, "func_70296_d", "()V", "flush");
+        delegate(writer, name, peer, bridge, "func_70300_a", "(Lnet/minecraft/entity/player/EntityPlayer;)Z", "usable");
+        delegate(writer, name, peer, bridge, "func_70295_k_", "()V", "open");
+        delegate(writer, name, peer, bridge, "func_70305_f", "()V", "flush");
+        delegate(writer, name, peer, bridge, "func_94041_b", "(I" + STACK + ")Z", "valid");
+        if (chest) {
+            // The native chest owns lid animation, saving and contents; the inherited private item array stays unused.
+            var update = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_145845_h", "()V", null, null); update.visitCode();
+            update.visitInsn(Opcodes.RETURN); update.visitMaxs(0, 1); update.visitEnd();
+            var load = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_145839_a", "(Lnet/minecraft/nbt/NBTTagCompound;)V", null, null); load.visitCode();
+            load.visitInsn(Opcodes.RETURN); load.visitMaxs(0, 2); load.visitEnd();
+        }
         LegacyHostTileData.writer(writer);
         var tick = writer.visitMethod(Opcodes.ACC_PUBLIC, "canUpdate", "()Z", null, null); tick.visitCode();
         tick.visitInsn(Opcodes.ICONST_0); tick.visitInsn(Opcodes.IRETURN); tick.visitMaxs(1, 1); tick.visitEnd();
         writer.visitEnd(); byte[] bytes = writer.toByteArray();
-        return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, NAME.replace('/', '.'), bytes, 0, bytes.length);
+        return (Class<?>) loader.getClass().getMethod("defineLegacyClass", String.class, byte[].class, int.class, int.class).invoke(loader, name.replace('/', '.'), bytes, 0, bytes.length);
     }
     /** Old-typed method forwarding to the static of the same purpose here, with references passed as Object. */
-    private static void delegate(ClassWriter writer, String peer, String bridge, String method, String descriptor, String target) {
+    private static void delegate(ClassWriter writer, String owner, String peer, String bridge, String method, String descriptor, String target) {
         var code = writer.visitMethod(Opcodes.ACC_PUBLIC, method, descriptor, null, null); code.visitCode();
-        code.visitVarInsn(Opcodes.ALOAD, 0); code.visitFieldInsn(Opcodes.GETFIELD, NAME, "peer", "L" + peer + ";");
+        code.visitVarInsn(Opcodes.ALOAD, 0); code.visitFieldInsn(Opcodes.GETFIELD, owner, "peer", "L" + peer + ";");
         var arguments = new StringBuilder("(L" + peer + ";"); int slot = 1;
         for (Type argument : Type.getArgumentTypes(descriptor)) {
             code.visitVarInsn(argument.getOpcode(Opcodes.ILOAD), slot); slot += argument.getSize();
@@ -141,6 +158,7 @@ public final class LegacyInventoryPeers {
         if (target != null) put(peer, slot, target);
     }
     public static String name(Peer peer) { return "container.mfcl.host"; }
+    public static String chestName(Peer peer) { return "container.chest"; }
     public static boolean customName(Peer peer) { return false; }
     public static int limit(Peer peer) { return 64; }
     public static boolean usable(Peer peer, Object player) { return peer.endpoint.live(); }
