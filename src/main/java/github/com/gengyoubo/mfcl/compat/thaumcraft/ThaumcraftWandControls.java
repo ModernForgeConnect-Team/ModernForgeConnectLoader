@@ -8,6 +8,7 @@ import net.minecraft.client.*;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.client.event.*;
 import org.lwjgl.glfw.GLFW;
@@ -40,21 +41,38 @@ final class ThaumcraftWandControls {
     static void open(LegacyServices services) throws Exception {
         var mc=Minecraft.getInstance();var content=ModernContentBridge.active();
         if(!services.items().inLegacy(()->ThaumcraftWandFocus.supportsFocus(services.loader(),services.items().materialize(content.gameplayStack(mc.player.getMainHandItem()))))){
-            mc.player.displayClientMessage(Component.translatable("mfcl.wand.focus.sceptre"),true);return;
+            if (mc.player != null) {
+                mc.player.displayClientMessage(Component.translatable("mfcl.wand.focus.sceptre"),true);
+            }
+            return;
         }
         var choices=services.items().inLegacy(()->{
             var result=new TreeMap<String,Object>();
             for(int i=0;i<36;i++){
-                var host=mc.player.getInventory().getItem(i);if(host.isEmpty())continue;
-                try{ThaumcraftWandFocus.add(services.loader(),services.items().materialize(content.gameplayStack(host)),result);}catch(UnsupportedOperationException unmapped){}
+                ItemStack host= null;
+                if (mc.player != null) {
+                    host = mc.player.getInventory().getItem(i);
+                }
+                if (host != null && host.isEmpty()) continue;
+                try{
+                    if (host != null) {
+                        ThaumcraftWandFocus.add(services.loader(),services.items().materialize(content.gameplayStack(host)),result);
+                    }
+                }catch(UnsupportedOperationException ignored){}
             }
             var names=new LinkedHashMap<String,LegacyClientData.Stack>();for(var choice:result.entrySet())names.put(choice.getKey(),services.items().snapshot(choice.getValue()));return names;
         });
         if(choices.isEmpty())return;
         var equipped=services.items().inLegacy(()->{
-            Object stack=services.items().materialize(content.gameplayStack(mc.player.getMainHandItem()));
+            Object stack= null;
+            if (mc.player != null) {
+                stack = services.items().materialize(content.gameplayStack(mc.player.getMainHandItem()));
+            }
             Object item=LegacyObjects.item(stack);
-            Object focus=item.getClass().getMethod("getFocusItem",services.loader().loadClass("net.minecraft.item.ItemStack")).invoke(item,stack);
+            Object focus= null;
+            if (item != null) {
+                focus = item.getClass().getMethod("getFocusItem",services.loader().loadClass("net.minecraft.item.ItemStack")).invoke(item,stack);
+            }
             return focus==null?null:services.items().snapshot(focus);
         });
         mc.setScreen(new Selector(services,choices,equipped));
@@ -62,7 +80,11 @@ final class ThaumcraftWandControls {
     static void send(LegacyServices services,String focus) throws Exception {
         var mc=Minecraft.getInstance();var content=ModernContentBridge.active();
         var packet=services.items().inLegacy(()->{
-            Object world=services.worlds().bound(mc.level);Object actor=content.itemUse().clientActor(world,new LegacyTiles.Placer(mc.player.getUUID(),mc.player.getName().getString(),mc.player.getX(),mc.player.getY(),mc.player.getZ(),mc.player.getYRot(),mc.player.getXRot()),null);
+            Object world=services.worlds().bound(mc.level);
+            Object actor= null;
+            if (mc.player != null) {
+                actor = content.itemUse().clientActor(world,new LegacyTiles.Placer(mc.player.getUUID(),mc.player.getName().getString(),mc.player.getX(),mc.player.getY(),mc.player.getZ(),mc.player.getYRot(),mc.player.getXRot()),null);
+            }
             var loader=services.loader();var player=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
             Object request=focus==null?loader.loadClass("thaumcraft.common.lib.network.misc.PacketItemKeyToServer").getConstructor(player,int.class).newInstance(actor,1)
                     :loader.loadClass("thaumcraft.common.lib.network.misc.PacketFocusChangeToServer").getConstructor(player,String.class).newInstance(actor,focus);
@@ -101,7 +123,11 @@ final class ThaumcraftWandControls {
             var content=ModernContentBridge.active();var mc=Minecraft.getInstance();int cx=width/2,cy=height/2;
             var radial=net.minecraft.resources.ResourceLocation.parse(content.pack().worldResource("thaumcraft:textures/misc/radial.png"));
             var radial2=net.minecraft.resources.ResourceLocation.parse(content.pack().worldResource("thaumcraft:textures/misc/radial2.png"));
-            var pose=graphics.pose();float angle=(mc.player.tickCount+partial)/2f;
+            var pose=graphics.pose();
+            float angle= 0;
+            if (mc.player != null) {
+                angle = (mc.player.tickCount+partial)/2f;
+            }
             com.mojang.blaze3d.systems.RenderSystem.enableBlend();
             graphics.setColor(.5f,.5f,.5f,.5f);
             drawLayer(graphics,radial,cx,cy,(float)(radius()*2.75),angle);

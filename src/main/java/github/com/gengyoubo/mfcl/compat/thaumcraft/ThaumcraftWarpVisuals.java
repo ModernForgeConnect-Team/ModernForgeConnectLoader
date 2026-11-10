@@ -10,6 +10,8 @@ import net.minecraftforge.client.event.*;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 
+import java.util.Objects;
+
 /** Native rendering of TC4's original heartbeat/vignette and timed warp-fog packet state. */
 public final class ThaumcraftWarpVisuals {
     private static volatile float fog,targetBrightness;
@@ -25,7 +27,7 @@ public final class ThaumcraftWarpVisuals {
             try{services.items().inLegacy(()->{
                 if(mc.level==null||mc.player==null){vignette.setInt(null,0);fogOn.setBoolean(null,false);duration.setInt(null,0);density.setFloat(null,0);fog=targetBrightness=brightness=0;return null;}
                 if(mc.isPaused())return null;
-                var content=ModernContentBridge.active();if(content!=null&&mc.player.hasEffect(content.potions().effect("thaumcraft:deathgaze")))vignette.setInt(null,10);
+                var content=ModernContentBridge.active();if(content!=null&&mc.player.hasEffect(Objects.requireNonNull(content.potions().effect("thaumcraft:deathgaze"))))vignette.setInt(null,10);
                 int ticks=vignette.getInt(null);targetBrightness=ticks>0?1:0;if(ticks>0)vignette.setInt(null,ticks-1);
                 float value=density.getFloat(null);
                 if(fogOn.getBoolean(null)){

@@ -29,7 +29,7 @@ final class ThaumcraftScanner implements LegacyHeldScanners.Scanner {
         Object scan = null;
         for (Class<?> type = item.getClass(); type != null && scan == null; type = type.getSuperclass()) {
             try { Field field = type.getDeclaredField("startScan"); field.setAccessible(true); scan = field.get(item); }
-            catch (NoSuchFieldException absent) { }
+            catch (NoSuchFieldException ignored) { }
         }
         if (scan == null) return null;
         byte type = scan.getClass().getField("type").getByte(scan);
