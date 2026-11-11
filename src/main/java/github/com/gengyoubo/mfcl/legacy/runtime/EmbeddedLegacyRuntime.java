@@ -141,6 +141,7 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
             if (!glVerification.isEmpty()) result.put("hostOpenGlVerification", glVerification);
             if (Boolean.TRUE.equals(result.get("legacyFmlStarted"))) {
                 services = new github.com.gengyoubo.mfcl.bridge.LegacyServices(gameDirectory, legacy, earlyClient);
+                services.biomes().counterparts(key -> github.com.gengyoubo.mfcl.content.HostBiomeQueries.counterpart(key));
                 result.put("legacyRegistries", services.items().registrySummary());
                 var reports = new LinkedHashMap<String, Object>();
                 for (var adapter : adapters) {

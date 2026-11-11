@@ -44,7 +44,19 @@ public final class LegacyBiomes {
                 (int)type.getMethod("getWaterColorMultiplier").invoke(biome),
                 (int)type.getMethod("func_76731_a",float.class).invoke(biome,0f),Math.max(0,weight)));
     }
+    /** Installs the host-side lookup that names the nearest vanilla counterpart of a biome this runtime never registered. */
+    public void counterparts(java.util.function.Function<String,String> lookup){counterparts=Objects.requireNonNull(lookup);}
+    private volatile java.util.function.Function<String,String> counterparts=key->null;
+    /** World queries: biomes from other modern mods read as their nearest 1.7 counterpart, as Forge 1.7 mods expect some BiomeGenBase. */
     public Object resolve(String key) {
+        Object value=byKey.get(key);
+        if(value!=null)return value;
+        String nearest=counterparts.apply(key);
+        if(nearest!=null&&(value=byKey.get(nearest))!=null)return value;
+        throw new UnsupportedOperationException("No legacy biome mapping: "+key);
+    }
+    /** Identity-sensitive callers (spawn tables) must not treat a stand-in counterpart as the real biome. */
+    public Object exact(String key) {
         Object value=byKey.get(key);
         if(value==null)throw new UnsupportedOperationException("No legacy biome mapping: "+key);
         return value;

@@ -29,7 +29,7 @@ public final class LegacySpawnBridge {
     private static String category(MobCategory category){return switch(category){case MONSTER->"monster";case CREATURE->"creature";case AMBIENT->"ambient";case WATER_CREATURE->"waterCreature";default->"";};}
     private void spawns(LevelEvent.PotentialSpawns event){
         if(event.getLevel().isClientSide())return;String category=category(event.getMobCategory());if(category.isEmpty())return;
-        Object biome;try{var holder=event.getLevel().getBiome(event.getPos());String name=holder.unwrapKey().orElseThrow().location().toString();biome=content.services().biomes().resolve(name);}catch(UnsupportedOperationException unmapped){return;}
+        Object biome;try{var holder=event.getLevel().getBiome(event.getPos());String name=holder.unwrapKey().orElseThrow().location().toString();biome=content.services().biomes().exact(name);}catch(UnsupportedOperationException unmapped){return;}
         for(var rule:LegacyRegistrations.spawns(content.services().loader()))if(rule.category().equals(category)&&rule.biomes().contains(biome)){
             var type=entities.get(rule.entity().getName());if(type==null)continue;
             for(var old:List.copyOf(event.getSpawnerDataList()))if(old.type==type)event.removeSpawnerData(old);
