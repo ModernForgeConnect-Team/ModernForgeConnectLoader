@@ -7,7 +7,9 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,7 +19,7 @@ public final class LegacyAddonDependencies {
     private LegacyAddonDependencies() { }
 
     public static List<String> validateFile(Set<String> owners, IConfigurable config,
-                                            Map<String, LegacyModInfo> loaded, Dist dist) {
+                                            Map<String, LegacyModInfo> loaded, Dist dist, Context context) {
         var errors = new ArrayList<String>();
         try {
             Object declarations = config.getConfigElement("mfclDependencies").orElse(null);
@@ -32,7 +34,7 @@ public final class LegacyAddonDependencies {
                     String location = "mfclDependencies." + owner + "[" + index++ + "]";
                     try {
                         var requirement = Requirement.read(entry);
-                        String failure = requirement.check(loaded, dist);
+                        String failure = requirement.check(loaded, dist, context);
                         if (failure != null) errors.add(location + ": " + failure);
                     } catch (IllegalArgumentException invalid) {
                         errors.add(location + ": " + invalid.getMessage());
@@ -43,6 +45,60 @@ public final class LegacyAddonDependencies {
             errors.add("mfclDependencies for " + owners + ": " + invalid.getMessage());
         }
         return List.copyOf(errors);
+    }
+
+    /**
+     * Why an original mod may be absent. Legacy FML loads all-or-nothing, so a problem in any 1.7.10 mod makes every
+     * requirement fail; the addon-facing line says which case applies and {@link #explain} names the actual blockers once.
+     */
+    public record Context(boolean runtimeStarted, LegacyRuntimeService.State state, List<LegacyDiagnostic> blockers,
+                          Map<String, Found> discovered, String scanned, String bootReport, String runtimeReport) {
+        public record Found(String id, String name, String version, String file) { }
+        private static final int MAX_BLOCKERS = 20;
+
+        public static Context of(LegacyRuntimeService.Report report, Path gameDirectory) {
+            var found = new LinkedHashMap<String, Found>();
+            for (var archive : report.archives()) for (var mod : archive.mods())
+                found.putIfAbsent(mod.id(), new Found(mod.id(), mod.name(), mod.version(), Path.of(archive.file()).getFileName().toString()));
+            var paths = new LegacyPaths(gameDirectory);
+            return new Context(report.legacyFmlStarted(), report.state(),
+                    report.diagnostics().stream().filter(LegacyDiagnostic::error).toList(), Map.copyOf(found),
+                    paths.rootModDirectory() + " and " + paths.modDirectory(), report.reportFile(),
+                    gameDirectory.resolve("logs/mfcl/runtime-1.7.10.json").toString());
+        }
+
+        /** Mod IDs are case-sensitive; catch the common lower-case ID and name-instead-of-ID mistakes. */
+        Found similar(String id) {
+            for (var mod : discovered.values())
+                if (mod.id().equalsIgnoreCase(id) || mod.name().equalsIgnoreCase(id)) return mod;
+            return null;
+        }
+
+        /** Shared cause section appended once below every failed requirement. */
+        public String explain() {
+            var text = new StringBuilder();
+            if (!runtimeStarted) {
+                text.append("\n\n");
+                if (state == LegacyRuntimeService.State.NO_LEGACY_MODS) {
+                    text.append("MFCL found no Forge 1.7.10 mod JARs in ").append(scanned).append('.');
+                } else {
+                    text.append(state == LegacyRuntimeService.State.DEPENDENCY_ERRORS
+                            ? "MFCL did not start the 1.7.10 runtime because it found the problems below, so no 1.7.10 mod was loaded."
+                            : "The 1.7.10 runtime failed while starting, so no 1.7.10 mod was loaded. The stack trace in "
+                              + runtimeReport + " usually names the mod that crashed.");
+                    text.append("\nThese problems can come from ANY 1.7.10 mod in the folder (a missing dependency, a duplicate or a conflict),"
+                            + " not only the mod named above. Fix or remove the mods they name:");
+                    if (blockers.isEmpty()) text.append("\n  (no recorded cause; state ").append(state).append(')');
+                    blockers.stream().limit(MAX_BLOCKERS).forEach(blocker ->
+                            text.append("\n  [").append(blocker.code()).append("] ").append(blocker.message()));
+                    if (blockers.size() > MAX_BLOCKERS)
+                        text.append("\n  ... and ").append(blockers.size() - MAX_BLOCKERS).append(" more in ").append(bootReport);
+                }
+            }
+            text.append("\n\nDetails: ").append(bootReport).append(" (JARs found and dependency checks), ")
+                    .append(runtimeReport).append(" (1.7.10 boot result and stack trace).");
+            return text.toString();
+        }
     }
 
     private record Requirement(String id, String version, VersionRange range, boolean mandatory, String side) {
@@ -66,18 +122,38 @@ public final class LegacyAddonDependencies {
             return new Requirement(id, version, range, mandatory, side);
         }
 
-        String check(Map<String, LegacyModInfo> loaded, Dist dist) {
+        String check(Map<String, LegacyModInfo> loaded, Dist dist, Context context) {
             if (side.equals("CLIENT") && dist != Dist.CLIENT || side.equals("SERVER") && dist != Dist.DEDICATED_SERVER)
                 return null;
             LegacyModInfo mod = loaded.get(id);
-            if (mod == null) return mandatory ? "requires original Forge 1.7.10 mod " + id + " " + displayVersion()
-                    + ", but it was not successfully loaded. Install it and its legacy dependencies in mods/ or mods/1.7.10/; "
-                    + "check logs/mfcl/legacy-1.7.10.json and runtime-1.7.10.json for runtime failures." : null;
-            if (version.isEmpty()) return null;
-            boolean matches = !mod.version().isBlank() && (range == null ? version.equals(mod.version())
-                    : range.containsVersion(new DefaultArtifactVersion(mod.version())));
-            return matches ? null : "requires original Forge 1.7.10 mod " + id + " " + displayVersion()
-                    + ", found " + (mod.version().isBlank() ? "an unknown version" : mod.version());
+            String required = "requires original Forge 1.7.10 mod " + id + " " + displayVersion();
+            if (mod == null) return mandatory ? required + ", but it was not loaded: " + absence(context) : null;
+            if (version.isEmpty() || matches(mod.version())) return null;
+            var found = context.discovered().get(id);
+            return required + ", but the loaded one is " + (mod.version().isBlank() ? "an unknown version" : "version " + mod.version())
+                    + (found == null ? "" : " (" + found.file() + ")") + "; replace it with a matching version.";
+        }
+
+        /** Distinguishes JAR not found / wrong ID / wrong version / whole runtime blocked / disabled by legacy FML. */
+        private String absence(Context context) {
+            var found = context.discovered().get(id);
+            if (found == null) {
+                var similar = context.similar(id);
+                return "no JAR declaring mod ID " + id + " was found in " + context.scanned()
+                        + (similar == null ? "." : ". Did you mean " + similar.id() + " (" + similar.file()
+                        + ")? Mod IDs are case-sensitive, so the addon or the JAR is the wrong one.");
+            }
+            String jar = "its JAR " + found.file() + " was found";
+            if (!version.isEmpty() && !found.version().isBlank() && !matches(found.version()))
+                jar += " but declares version " + found.version() + ", which does not match " + version;
+            return context.runtimeStarted()
+                    ? jar + " and the 1.7.10 runtime started, but legacy FML did not activate " + id + "; see " + context.runtimeReport() + "."
+                    : jar + ", but the 1.7.10 runtime did not start, so no 1.7.10 mod was loaded (cause below).";
+        }
+
+        private boolean matches(String actual) {
+            if (actual.isBlank()) return false;
+            return range == null ? version.equals(actual) : range.containsVersion(new DefaultArtifactVersion(actual));
         }
 
         private String displayVersion() { return version.isEmpty() ? "(any version)" : version; }
