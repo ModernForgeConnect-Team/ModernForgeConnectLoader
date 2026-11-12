@@ -188,6 +188,13 @@ public final class LegacyWorldGraphics {
         if (cap >= 3168 && cap <= 3171) return f.generated[cap-3168];
         throw new UnsupportedOperationException("Unsupported legacy GL capability query: " + cap);
     }
+    /** The captured render state (blend switch and function, depth, cull) now in effect, or null outside a capture. */
+    public static LegacyVertexStream.RenderState currentState() {
+        Frame f = frame();
+        if (f == null) return null;
+        f.check();
+        return f.state;
+    }
     private static void state(int cap, boolean enabled) {
         if (cap == 2929) LegacyGuiGraphics.depthTest(enabled);
         Frame f = frame(); if (f == null) return; f.check(); var s = f.state;

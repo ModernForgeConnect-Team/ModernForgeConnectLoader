@@ -1,4 +1,4 @@
-# MFCL 开发 API / Legacy Accessor（实验版 v1）
+# MFCL 开发 API / Legacy Accessor（实验版 v2）
 
 对应 [issue #1](https://github.com/gengyoubo/ModernForgeConnectLoader/issues/1) 的第一阶段实现。目标是让现代附属模组访问**已经由 MFCL 启动的原始旧模组**，不修改、重打包或把旧 Minecraft 类放进现代类路径。
 
@@ -17,12 +17,17 @@
 | 附属适配库注册命名转换器 | 已实现，禁止覆盖已有转换器 |
 | 通用动态物品绘制和玩家状态钩子（宿主适配 SPI） | 已实现，TC4 实现按需安装 |
 | 诊断历史及 `/mfclapi` 命令 | 已实现 |
-| 玩家、任意实体、任意现代 NBT 的通用双向转换 | 待实现 |
-| 通用旧事件转发、现代事件同步、网络协议自动转换 | 待实现 |
+| 能力探测 `LegacyRuntime.features()` / `supports(...)` | 已实现，v2；见下文 |
+| 穿戴来源、饰品 tick 与写回 `LegacyEquipment`；持久玩家 `withPlayer` / `withClientPlayer` | 已实现，v2；javadoc 写明线程与锁 |
+| 旧数组 / JDK 集合 / `instanceof` `LegacyValues`；`Object` 形参接受 String 与装箱值 | 已实现，v2；见下文 |
+| 玩家、任意实体、任意现代 NBT 的通用双向转换 | 部分：玩家经 `withPlayer`，物品经 `LegacyMappings`；其余待实现 |
+| 宿主事件转发到旧事件总线 | 部分：`LegacyEvents.Kind` 五类玩家事件，v2；其余事件可用 MLA 自行 post |
+| 网络协议自动转换 | 待实现 |
 | Thaumcraft 等模组专属 API 适配库 | 后续独立实现，不放入 MFCL 核心 |
-| 自动 MCP/SRG 名称转换、Mixin 注入 / 重定向 | 不在本版 MLA 范围内 |
+| 调用点重定向 | 受限实现：`LegacyRedirects`（经 `LegacyRedirectProvider`，旧类加载前），v2 |
+| 自动 MCP/SRG 名称转换、Mixin 注入 | 不在本版 MLA 范围内 |
 
-本 API 仍为实验版；`API_VERSION = 1` 表示当前契约版本，不能理解为 issue 全部完成。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
+本 API 仍为实验版；`MfclApi.API_VERSION = 2` 表示当前契约版本，不能理解为 issue 全部完成。v2 新成员一律先用 `runtime.supports(LegacyFeatures.X)` 探测，不要靠捕获 `UnsupportedOperationException`。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
 
 ## TC4 专用逻辑的归属
 
@@ -109,7 +114,7 @@ stack.count(1); // 不影响 copied
 
 接口必须是 `public`，并显式声明 `@LegacyType`。抽象方法必须且只能声明一种成员注解；可使用 Java 默认方法组合调用。
 
-- `@LegacyMethod` 指定准确名称和 `isStatic`；`descriptor` 可省略，此时由 Java 签名推断：基本类型、`String`、`LegacyObject` 以及标注 `@LegacyType` 的接口和它们的数组都可以推断。含 `LegacyObject` 参数或返回值时必须显式提供 `descriptor`，否则绑定失败。返回类型也是签名的一部分。静态成员使用 `runtime.accessor(Contract.class)`。
+- `@LegacyMethod` 指定准确名称和 `isStatic`；`descriptor` 可省略，此时由 Java 签名推断：基本类型、`String`、装箱类型、`Object` 以及标注 `@LegacyType` 的接口和它们的数组（含 `Object[]`）都可以推断。含 `LegacyObject` 参数或返回值时必须显式提供 `descriptor`，否则绑定失败。返回类型也是签名的一部分。静态成员使用 `runtime.accessor(Contract.class)`。
 - `@LegacyField` 的零参数方法读取字段；单参数、返回 `void` 的方法写字段；类型必须匹配，禁止写 `final` 字段。`descriptor` 省略时使用 getter 返回类型或 setter 参数类型。
 - `@LegacyConstructor(descriptor = "(I)V")` 调用目标类构造器；描述符省略时由 Java 参数推断，末尾仍为 `V`。API 方法可以返回 `LegacyObject` 或标注 `@LegacyType` 的接口。
 - 当抽象方法的参数或返回值是标注 `@LegacyType` 的接口时，MFCL 自动在旧对象与代理之间转换：参数代理会解包成旧对象，返回的旧对象会包装成代理。代理的接收者共享原引用的线程与生命周期约束。
@@ -117,9 +122,44 @@ stack.count(1); // 不影响 copied
 
 使用**实际旧 SRG 运行时**里的名称：Minecraft 成员通常为 `func_...` / `field_...`，模组自己的成员通常保留原名。不要用现代 Mojang 映射名称，也不要把同名旧类当成现代类。`descriptor` 推断只解决 JVM 类型书写，不做 MCP/SRG 名称转换；自动名称解析仍属于独立工具，不在本版 MLA 范围内。`@LegacyType` 目标必须属于隔离旧域，不能借此访问宿主或 JDK 类型。
 
-参数和返回值允许精确匹配的基本类型、`String`、`LegacyObject`、标注 `@LegacyType` 的接口，以及这些类型的数组。任意旧类 / Java 集合用 `LegacyObject` 持有，再绑定旧域的具体 accessor；`Object`、现代 Minecraft 类和原始旧 Minecraft 类均不能直接出现在签名中。数组跨界时复制，引用元素包装成 opaque handle 或对应接口代理。
+参数和返回值允许精确匹配的基本类型、`String`、装箱类型、`Object`、`LegacyObject`、标注 `@LegacyType` 的接口，以及这些类型的数组。任意旧类 / Java 集合用 `LegacyObject` 持有，再绑定旧域的具体 accessor；现代 Minecraft 类和原始旧 Minecraft 类不能直接出现在签名中。数组跨界时复制，引用元素包装成 opaque handle 或对应接口代理。
+
+**`Object` 形参（`LegacyFeatures.MLA_OBJECT_ARGUMENTS`）**：旧形参或旧数组元素类型能接受该值时（`expected.isInstance(value)`），`String`、`Character`、`Boolean`、`Number` 装箱值原样传入；`LegacyObject` / 接口代理照旧解包成旧对象；其他宿主对象一律拒绝（`Legacy reference required`），不会被原样塞进旧域。规则对 `@LegacyMethod`、`@LegacyConstructor`、`LegacyValues.set` / `newList` / `put` 等一致。返回 `Object` 时 String / 装箱值原样返回，其余包装成 `LegacyObject`。
 
 `LegacyObject` 没有 `unwrap()`。MFCL 检查引用来自当前运行时，拒绝伪造 / 跨运行时引用。运行时关闭后，旧 accessor 的实际调用和转换都失败。MLA 不提供注入、重定向、覆盖旧方法，也不是隔离不可信附属代码的安全沙箱。
+
+## 示例：注册 TC4 奥术 / 坩埚 / 注魔配方
+
+```java
+@LegacyType("thaumcraft.api.ThaumcraftApi")
+public interface Recipes {
+    // 含 LegacyObject 参数，必须显式写 descriptor；Object[] 本身可以推断。
+    @LegacyMethod(name = "addArcaneCraftingRecipe", isStatic = true,
+        descriptor = "(Ljava/lang/String;Lnet/minecraft/item/ItemStack;Lthaumcraft/api/aspects/AspectList;[Ljava/lang/Object;)Lthaumcraft/api/crafting/ShapedArcaneRecipe;")
+    LegacyObject arcane(String research, LegacyObject result, LegacyObject aspects, Object[] recipe);
+
+    @LegacyMethod(name = "addCrucibleRecipe", isStatic = true,
+        descriptor = "(Ljava/lang/String;Lnet/minecraft/item/ItemStack;Ljava/lang/Object;Lthaumcraft/api/aspects/AspectList;)Lthaumcraft/api/crafting/CrucibleRecipe;")
+    LegacyObject crucible(String research, LegacyObject result, Object catalyst, LegacyObject aspects);
+}
+
+Recipes recipes = runtime.accessor(Recipes.class);
+// 图案行与矿物词典名是 String，键是 Character，材料是 ItemStack 引用：
+recipes.arcane("MYADDON_GLASS", result, aspects, new Object[]{"G G", " I ", "G G", 'G', "blockGlass", 'I', ironStack});
+recipes.crucible("MYADDON_COAL", result, "oreCoal", aspects); // 催化剂可以是矿物词典名，也可以是 ItemStack 引用
+```
+
+旧方法收到真正的 `Object[]`（可变参数）和原样的 `String` / `Character`，原版构造器自己展开矿物词典。注魔的 `ItemStack[]` 形参可直接传 `LegacyObject[]`。集成服务器与客户端共用同一个旧运行时，单人游戏只需注册一次。
+
+## 能力探测与旧值（v2）
+
+`runtime.features()` 返回 `LegacyFeatures` 常量；某能力被报告时对应成员保证不抛 `UnsupportedOperationException`。能力缺失可能是本版 MFCL 没有，也可能是旧前置（如 Baubles）未加载。
+
+`runtime.values()`（`LegacyValues`）补充 MLA 契约表达不了的操作：
+
+- 数组（`mla.arrays`）：`length` / `get` / `set` 原地读写；`newArray("net.minecraft.item.ItemStack", n)` 在旧域新建数组，元素类型可写基本类型名、旧域类名或 JVM 数组名；`array(type, elements...)` 新建并填充。需要把同一个旧数组交给多个旧方法、或元素类型无法从形参推出时使用。
+- 集合（`mla.collections`）：`list` / `map` / `size` 返回不可变快照；`mla.collections.mutable` 另有 `newList` / `newMap` / `add` / `remove` / `removeIf` / `put` / `removeKey` / `removeEntries` / `clear`，可用于删除原版配方。旧集合非线程安全，在拥有线程调用。
+- 类型（`mla.instance`）：`isInstance(value, "baubles.api.IBauble")`、`as(value, Contract.class)`、`same(a, b)`（引用不驻留，`==` 无法判断同一旧对象）。
 
 ## 注册表、快照与转换
 
@@ -141,6 +181,8 @@ LegacyObject old = runtime.mappings()
 ItemStack copy = runtime.mappings()
     .toHost(LegacyMappings.ITEM_STACK, old, ItemStack.class).orElseThrow();
 ```
+
+**只有宿主才有的物品**（`LegacyFeatures.HOST_REPRESENTATIONS` / `host-representations.nbt`）：`hostRepresentations().item(id)` 返回只读旧身份后，该宿主物品的每个堆进入旧代码（背包、合成格、注魔基座、`ITEM_STACK` 转换）都映射到这同一个键和 metadata，所以原版配方以该身份为材料时 `matches` 成立；数量和完整宿主 NBT 保存在保留旧标签 `mfcl_host` 中，配方产出该身份时写回宿主得到原物品（含数量、NBT）。只有要求 NBT 完全相等的原版匹配会看到 `mfcl_host`。从未请求过身份的宿主物品没有旧形式，不能出现在配方里。
 
 物品转换在两个方向复制。空堆返回空；没有等价旧物品或包含尚未映射的现代额外 NBT 时明确失败，不会用渲染占位或删除标签冒充成功。
 

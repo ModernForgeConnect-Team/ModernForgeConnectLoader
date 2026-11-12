@@ -37,6 +37,20 @@ class LegacyGuiGeometryTest {
             assertEquals(3f,frame.primitives().get(0).state().lineWidth());
         }
     }
+    @Test void texturedRectanglesKeepTheBlendStateTheyWereDrawnWith() {
+        try(var frame=github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.begin(320,240,0,0,Set.of())) {
+            github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.bind("thaumcraft:textures/gui/gui_researchbook.png");
+            github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.texture(0,0,0,0,16,16);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glEnable(3042);
+            github.com.gengyoubo.mfcl.bridge.LegacyWorldGraphics.glBlendFunc(770,1);
+            github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.texture(0,0,0,0,16,16);
+            var textures=frame.commands().stream().map(github.com.gengyoubo.mfcl.bridge.LegacyGuiGraphics.Texture.class::cast).toList();
+            assertFalse(textures.get(0).state().blend());
+            assertTrue(textures.get(1).state().blend());
+            assertEquals(770,textures.get(1).state().sourceBlend());
+            assertEquals(1,textures.get(1).state().destinationBlend());
+        }
+    }
     @Test void conversionRejectsUnsupportedModes() {
         assertThrows(UnsupportedOperationException.class,()->LegacyGuiGeometry.quads(99,4,(a,b,c,d)->fail()));
     }

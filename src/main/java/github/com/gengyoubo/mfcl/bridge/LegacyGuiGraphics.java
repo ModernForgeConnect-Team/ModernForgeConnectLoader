@@ -9,7 +9,15 @@ public final class LegacyGuiGraphics {
     public record ResearchClip(boolean enabled) implements Command {}
     public record Rect(int x1, int y1, int x2, int y2, int top, int bottom) implements Command {}
     public record Text(String text, int x, int y, int color, boolean shadow, double sx, double sy) implements Command {}
-    public record Texture(String resource, int x, int y, int u, int v, int width, int height, double sx, double sy) implements Command {}
+    /**
+     * A textured rectangle. {@code state} is the old GUI's render state when it was drawn (its blend switch and
+     * function), or null when unknown, in which case the host's current state is used.
+     */
+    public record Texture(String resource, int x, int y, int u, int v, int width, int height, double sx, double sy, LegacyVertexStream.RenderState state) implements Command {
+        public Texture(String resource, int x, int y, int u, int v, int width, int height, double sx, double sy) {
+            this(resource, x, y, u, v, width, height, sx, sy, null);
+        }
+    }
     public record Item(Object stack, int x, int y, boolean overlay, String label, double sx, double sy) implements Command {}
     public record Mesh(List<LegacyVertexStream.Primitive> primitives) implements Command {}
     private record Matrix(double x, double y, double sx, double sy) {}
@@ -70,7 +78,7 @@ public final class LegacyGuiGraphics {
         LegacyWorldGraphics.texture(resource.toString());
     }
     public static void texture(int x, int y, int u, int v, int width, int height) {
-        Frame f = frame();f.flushGeometry();f.commands.add(new Texture(Objects.requireNonNull(f.texture, "Unbound legacy texture"), f.x(x), f.y(y), u, v, width, height,f.matrix.sx,f.matrix.sy));
+        Frame f = frame();f.flushGeometry();f.commands.add(new Texture(Objects.requireNonNull(f.texture, "Unbound legacy texture"), f.x(x), f.y(y), u, v, width, height,f.matrix.sx,f.matrix.sy,LegacyWorldGraphics.currentState()));
     }
     public static int text(String text, int x, int y, int color, boolean shadow) {
         Frame f = frame();f.flushGeometry();if (text != null) f.commands.add(new Text(text, f.x(x), f.y(y), color, shadow,f.matrix.sx,f.matrix.sy)); return x + (text == null ? 0 : text.length() * 6);

@@ -52,8 +52,18 @@ final class LegacyGuiRenderer {
                     try {
                         graphics.flush();
                         if(depthTest)RenderSystem.enableDepthTest();else RenderSystem.disableDepthTest();
+                        // Blit inherits the host's blend state; replay the old GUI's own instead, so a translucent
+                        // texture does not turn opaque or transparent depending on what was drawn before it.
+                        var state=t.state();
+                        if(state!=null) {
+                            if(state.blend()){RenderSystem.enableBlend();RenderSystem.blendFunc(state.sourceBlend(),state.destinationBlend());}
+                            else RenderSystem.disableBlend();
+                        }
                         graphics.blit(texture(t.resource()).id(),0,0,t.u(),t.v(),t.width(),t.height(),256,256);
-                    } finally {graphics.pose().popPose();RenderSystem.enableDepthTest();}
+                    } finally {
+                        graphics.pose().popPose();RenderSystem.enableDepthTest();
+                        if(t.state()!=null){RenderSystem.disableBlend();RenderSystem.defaultBlendFunc();}
+                    }
                 } else if(command instanceof LegacyGuiGraphics.Item i) {
                     var stack=ModernItemMapping.renderStack(services.items().snapshot(i.stack()));
                     graphics.pose().pushPose();graphics.pose().translate(i.x(),i.y(),0);graphics.pose().scale((float)i.sx(),(float)i.sy(),1);
