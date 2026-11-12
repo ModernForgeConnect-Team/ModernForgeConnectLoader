@@ -83,7 +83,6 @@ minecraft {
         }
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
         }
         gameTestServer {
             property 'forge.enabledGameTestNamespaces', mod_id
@@ -106,6 +105,11 @@ sourceSets {
     create('preparation')
     create('legacy1710')
 }
+repositories {
+    maven {
+        url "https://cursemaven.com"
+    }
+}
 dependencies {
     implementation sourceSets.api.output
     preparationImplementation 'org.ow2.asm:asm:9.7.1'
@@ -116,6 +120,7 @@ dependencies {
     legacy1710CompileOnly 'org.ow2.asm:asm-debug-all:5.0.3'
     legacy1710CompileOnly 'com.google.guava:guava:17.0'
     legacy1710CompileOnly 'net.minecraftforge:forge:1.7.10-10.13.4.1614-1.7.10:universal'
+    implementation fg.deobf("curse.maven:spark-361579:4738952")
 }
 tasks.named('compileLegacy1710Java', JavaCompile) { options.release = 8 }
 tasks.register('legacyJar', Jar) {

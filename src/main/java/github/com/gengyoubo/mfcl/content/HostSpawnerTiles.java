@@ -22,10 +22,11 @@ final class HostSpawnerTiles {
             var loader=services.loader();var nbt=loader.loadClass("net.minecraft.nbt.NBTTagCompound");
             Object data=nbt.getConstructor().newInstance();
             var oldTile=loader.loadClass("net.minecraft.tileentity.TileEntity");oldTile.getMethod("func_145841_b",nbt).invoke(view,data);
-            String modern=tile.saveWithoutMetadata().getCompound("SpawnData").getCompound("entity").getString("id");
+            var spawn=tile.saveWithoutMetadata().getCompound("SpawnData").getCompound("entity");
+            String modern=spawn.getString("id");
             var id=ResourceLocation.tryParse(modern);
-            if(id!=null&&id.getNamespace().equals("minecraft")){
-                String old=switch(id.getPath()){
+            if(id!=null&&(id.getNamespace().equals("minecraft")||spawn.contains("LegacySpawnerName"))){
+                String old=spawn.contains("LegacySpawnerName")?spawn.getString("LegacySpawnerName"):switch(id.getPath()){
                     case "zombified_piglin"->"PigZombie";case "magma_cube"->"LavaSlime";case "horse"->"EntityHorse";
                     case "snow_golem"->"SnowMan";case "iron_golem"->"VillagerGolem";case "wither"->"WitherBoss";
                     default->{var text=new StringBuilder();for(String part:id.getPath().split("_"))if(!part.isEmpty())text.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));yield text.toString();}
@@ -49,12 +50,38 @@ final class HostSpawnerTiles {
             default->original.replaceAll("([a-z0-9])([A-Z])","$1_$2").toLowerCase(Locale.ROOT);
         };
         var key=ResourceLocation.tryParse(path.contains(":")?path:"minecraft:"+path);
-        if(key==null||!BuiltInRegistries.ENTITY_TYPE.containsKey(key))throw new UnsupportedOperationException("No host spawner entity mapping for "+original);
+        if(key==null||!BuiltInRegistries.ENTITY_TYPE.containsKey(key)) {
+            configureLegacy(tile,pos,original);
+            return;
+        }
         content.beforeMutation(level,pos);
         tile.setEntityId(BuiltInRegistries.ENTITY_TYPE.get(key),level.random);
         tile.setChanged();content.afterCommit(level,()->{
             if(level.getBlockEntity(pos)!=tile)return;
             var state=level.getBlockState(pos);level.sendBlockUpdated(pos,state,state,3);
         });
+    }
+    /** Store a normal native spawner template which creates an MFCL entity envelope with original entity NBT. */
+    private void configureLegacy(SpawnerBlockEntity tile,BlockPos pos,String name) {
+        var services=content.services();
+        try {
+            var loader=services.loader();
+            var names=(Map<?,?>)loader.loadClass("net.minecraft.entity.EntityList").getField("field_75625_b").get(null);
+            Object entry=names.get(name);
+            if(!(entry instanceof Class<?> type)||!loader.loadClass("net.minecraft.entity.Entity").isAssignableFrom(type))
+                throw new UnsupportedOperationException("No host spawner entity mapping for "+name);
+            Object world=services.worlds().bound(level);
+            Object old=services.items().inLegacy(()->type.getConstructor(loader.loadClass("net.minecraft.world.World")).newInstance(world));
+            byte[] nbt=services.entityHosting().save(old);
+            content.beforeMutation(level,pos);
+            tile.setEntityId(content.legacyEntityType(),level.random);
+            var data=tile.saveWithoutMetadata();var spawn=data.getCompound("SpawnData");var entity=spawn.getCompound("entity");
+            entity.putString("LegacyType",type.getName());entity.putByteArray("LegacyNbt",nbt);
+            entity.putString("LegacySpawnerName",name);entity.putBoolean("LegacySpawnerTemplate",true);
+            spawn.put("entity",entity);data.put("SpawnData",spawn);data.remove("SpawnPotentials");
+            tile.load(data);tile.setChanged();
+            content.afterCommit(level,()->{if(level.getBlockEntity(pos)==tile)level.sendBlockUpdated(pos,level.getBlockState(pos),level.getBlockState(pos),3);});
+        }catch(UnsupportedOperationException failure){throw failure;}
+        catch(Exception failure){throw new IllegalStateException("Cannot configure original entity spawner for "+name,failure);}
     }
 }

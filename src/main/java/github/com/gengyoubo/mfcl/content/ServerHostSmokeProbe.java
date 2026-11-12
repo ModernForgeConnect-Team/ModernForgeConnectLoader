@@ -40,6 +40,9 @@ public final class ServerHostSmokeProbe {
     private ServerHostSmokeProbe(ModernContentBridge bridge, boolean write) { this.bridge = bridge; this.write = write; }
 
     public static void install(ModernContentBridge bridge, String phase) {
+        if (phase.equals("worldgen-queue")) { WorldgenQueueHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("spawner")) { SpawnerHostSmokeProbe.install(bridge); return; }
+        if (phase.equals("biome-manager")) { BiomeManagerHostSmokeProbe.install(bridge); return; }
         if (phase.equals("leaf-harvest")) { LeafHarvestHostSmokeProbe.install(bridge); return; }
         if (phase.equals("harvest-drops")) { HarvestDropsHostSmokeProbe.install(bridge); return; }
         if (phase.equals("gameplay")) { GameplayHostSmokeProbe.install(bridge); return; }

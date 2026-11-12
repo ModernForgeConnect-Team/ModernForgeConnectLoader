@@ -105,9 +105,10 @@ public final class LegacyWorlds implements AutoCloseable {
         try {
         if (original) providerType.getMethod("func_76558_a", loader.loadClass("net.minecraft.world.World")).invoke(provider, world);
         else {
-            // Host worlds skip registerWorld's chunk-manager setup, but mods still query terrain type/sea level.
+            // Host worlds use the host biome palette, not an independently generated 1.7 biome map.
             set(providerType, provider, "field_76577_b", info.getClass().getMethod("func_76067_t").invoke(info));
             set(providerType, provider, "field_82913_c", info.getClass().getMethod("func_82571_y").invoke(info));
+            set(providerType, provider, "field_76578_c", LegacyBiomeManager.create(loader, world));
         }
         if(!host.clientSide()&&host.dimensionWorld())dimensionWorlds().put(dimension,world);
         refreshDifficulty(binding);

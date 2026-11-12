@@ -38,6 +38,10 @@ public final class LegacyEntityHosting {
     }
     public boolean isEntity(Object value) { return entity.isInstance(value); }
     public String type(Object value) { return value.getClass().getName(); }
+    /** Apply a native spawner's chosen position to a newly constructed original entity. */
+    public void position(Object value, double x, double y, double z) throws Exception {
+        services.items().inLegacy(() -> { setPosition.invoke(value, x, y, z); return null; });
+    }
     /** The host entity's identity becomes the original's, so old queries and damage sources resolve to the host entity. */
     public void adopt(Object value, Object boundWorld, UUID id, int entityId) throws Exception {
         services.items().inLegacy(() -> {

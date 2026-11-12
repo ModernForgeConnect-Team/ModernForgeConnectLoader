@@ -60,11 +60,12 @@ final class LegacyDimensionHost {
 
     // ---- population -------------------------------------------------------------------------------------------
     /** Chunks of a mirrored dimension that already ran original population. Saved with the host level. */
-    private static final class Populated extends SavedData {
+    static final class Populated extends SavedData {
         final LongOpenHashSet chunks = new LongOpenHashSet();
         final LongOpenHashSet terrain = new LongOpenHashSet();
-        static Populated load(CompoundTag tag) { var data = new Populated(); for (long chunk : tag.getLongArray("chunks")) data.chunks.add(chunk); for(long chunk:tag.getLongArray("terrain"))data.terrain.add(chunk); return data; }
-        @Override public CompoundTag save(CompoundTag tag) { tag.putLongArray("chunks", chunks.toLongArray()); tag.putLongArray("terrain",terrain.toLongArray()); return tag; }
+        final LongOpenHashSet waiting = new LongOpenHashSet();
+        static Populated load(CompoundTag tag) { var data = new Populated(); for (long chunk : tag.getLongArray("chunks")) data.chunks.add(chunk); for(long chunk:tag.getLongArray("terrain"))data.terrain.add(chunk); for(long chunk:tag.getLongArray("waiting"))data.waiting.add(chunk); return data; }
+        @Override public CompoundTag save(CompoundTag tag) { tag.putLongArray("chunks", chunks.toLongArray()); tag.putLongArray("terrain",terrain.toLongArray()); tag.putLongArray("waiting",waiting.toLongArray()); return tag; }
     }
     private static Populated populated(ServerLevel level) { return level.getDataStorage().computeIfAbsent(Populated::load, Populated::new, "mfcl_legacy_population"); }
     /** Base terrain precedes any old feature reads/writes in that chunk; never replace a previously generated palette. */
@@ -82,8 +83,19 @@ final class LegacyDimensionHost {
         finally{active.remove(key);}
     }
     private void chunkLoaded(ChunkEvent.Load event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || !mirrored(level)&&!event.isNewChunk()) return;
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
         long chunk = event.getChunk().getPos().toLong();
+        boolean isNew=event.isNewChunk();
+        if(!level.getServer().isSameThread()) { level.getServer().execute(()->enqueue(level,chunk,isNew)); return; }
+        enqueue(level,chunk,isNew);
+    }
+    private void enqueue(ServerLevel level,long chunk,boolean isNew) {
+        if(!mirrored(level)) {
+            var data=populated(level);
+            if(data.chunks.contains(chunk))return;
+            if(isNew) { if(data.waiting.add(chunk))data.setDirty(); }
+            else if(!data.waiting.contains(chunk))return;
+        }
         synchronized (pending) { pending.computeIfAbsent(level, ignored -> new LongLinkedOpenHashSet()).add(chunk); }
     }
     /** Runs original population for a loaded host chunk once; later loads of the chunk keep what it wrote. */
@@ -93,7 +105,7 @@ final class LegacyDimensionHost {
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
         if (level.getChunkSource().getChunkNow(x, z) == null) return; // Queued again when it loads.
         // Marked first: a generator that fails would otherwise be retried on every load.
-        done.chunks.add(chunk); done.setDirty();
+        done.chunks.add(chunk); done.waiting.remove(chunk); done.setDirty();
         boolean outer = generating; generating = true;
         try {
             if(mirrored(level)){terrain(level,x,z);generation.populate(level,x,z);}
@@ -131,16 +143,28 @@ final class LegacyDimensionHost {
             while (remaining-->0 && decorated<1 && System.nanoTime() < deadline) {
                 long chunk;
                 synchronized (pending) { if (queue.isEmpty()) break; chunk = queue.removeFirstLong(); }
-                if(populated(level).chunks.contains(chunk)||level.getChunkSource().getChunkNow(ChunkPos.getX(chunk),ChunkPos.getZ(chunk))==null)continue;
+                if(populated(level).chunks.contains(chunk))continue;
+                if(level.getChunkSource().getChunkNow(ChunkPos.getX(chunk),ChunkPos.getZ(chunk))==null)continue; // Saved waiting entries are re-enqueued on chunk load.
                 // Feature lookups may load neighboring chunks. Do not decorate those endlessly away from players.
                 if((!mirrored(level)||content.services().dimensions().hasTerrain(level.dimension().location().toString()))
                         &&level.getChunkSource().chunkMap.getPlayers(new ChunkPos(chunk),false).isEmpty()) {
+                    synchronized(pending){queue.add(chunk);}continue;
+                }
+                // In host dimensions old features commonly cross chunk boundaries. Never force-load the
+                // surrounding chunks on the server thread just to begin population; preserve the pending
+                // marker so an unloaded candidate is retried after a later reload or server restart.
+                if(!mirrored(level)&&!neighborsReady(ChunkPos.getX(chunk),ChunkPos.getZ(chunk),
+                        (x,z)->level.getChunkSource().getChunkNow(x,z)!=null)) {
                     synchronized(pending){queue.add(chunk);}continue;
                 }
                 populate(level, chunk);
                 decorated++;
             }
         }
+    }
+    static boolean neighborsReady(int cx,int cz,java.util.function.BiPredicate<Integer,Integer> ready) {
+        for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)if(!ready.test(cx+dx,cz+dz))return false;
+        return true;
     }
 
     // ---- travel -----------------------------------------------------------------------------------------------

@@ -29,6 +29,7 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     private Object legacy;
     private String legacyType;
     private byte[] saved, spawnData = new byte[0], watcher = new byte[0];
+    private boolean spawnerTemplate;
     private float width = 0.25f, height = 0.25f;
     private boolean collidable, failed;
     public LegacyHostedEntity(EntityType<?> type, Level level) { super(type, level); noPhysics = true; }
@@ -50,6 +51,7 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
         var world = content.services().worlds().bound(level);
         legacy = hosting(content).restore(world, legacyType, saved);
         hosting(content).adopt(legacy, world, getUUID(), getId());
+        if (spawnerTemplate) { hosting(content).position(legacy, getX(), getY(), getZ()); spawnerTemplate = false; }
         saved = null; apply(hosting(content).state(legacy), true);
         return true;
     }
@@ -142,6 +144,7 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     @Override protected void readAdditionalSaveData(CompoundTag tag) {
         legacyType = tag.contains("LegacyType") ? tag.getString("LegacyType") : null;
         saved = tag.contains("LegacyNbt") ? tag.getByteArray("LegacyNbt") : null;
+        spawnerTemplate = tag.getBoolean("LegacySpawnerTemplate");
         if (tag.contains("LegacyWidth")) { width = tag.getFloat("LegacyWidth"); height = tag.getFloat("LegacyHeight"); refreshDimensions(); }
     }
     @Override protected void addAdditionalSaveData(CompoundTag tag) {
@@ -151,6 +154,7 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
         try { if (legacy != null && content != null) data = hosting(content).save(legacy); }
         catch (Exception failure) { LogUtils.getLogger().error("MFCL cannot save hosted original entity {}", legacyType, failure); }
         if (data != null) tag.putByteArray("LegacyNbt", data);
+        if (spawnerTemplate) tag.putBoolean("LegacySpawnerTemplate", true);
         tag.putFloat("LegacyWidth", width); tag.putFloat("LegacyHeight", height);
     }
     @Override public Packet<ClientGamePacketListener> getAddEntityPacket() { return NetworkHooks.getEntitySpawningPacket(this); }

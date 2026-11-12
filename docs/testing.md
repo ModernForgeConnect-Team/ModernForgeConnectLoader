@@ -125,6 +125,12 @@ The game directory needs `eula.txt` and TC4/Baubles in `mods/1.7.10/`. Client co
 
 `-PmfclServerSmokeTest=leaf-harvest` runs the source-guided FTB Ultimine native break-loop reproduction, including initially unflagged connected leaves, isolated leaves and persistent player-placed controls. It writes `leaf-harvest-smoke.json`. This does not install or test FTB Ultimine itself; see [the tree / height record](trees-and-world-height.md) for the original TC4 metadata gates and exact coverage.
 
+`-PmfclServerSmokeTest=biome-manager` checks that the old biome manager reads the host world's actual biome, including block and quarter-scale grids, rainfall, viability and search, and executes the original scattered-feature candidate query that TC4 world generation uses. It writes `logs/mfcl/biome-manager-smoke.json`; use a disposable TC4/Baubles server world.
+
+`-PmfclServerSmokeTest=spawner` sets a native spawner through the original `Thaumcraft.Wisp` spawner API, reloads its saved data, and checks that it spawns and ticks the original Wisp at the host position. It writes `logs/mfcl/spawner-smoke.json`; use a disposable TC4/Baubles server world.
+
+`-PmfclServerSmokeTest=worldgen-queue` exercises a new deferred population entry on a real server level, checks that an unloaded chunk stays pending across serialization, checks that reloading it re-enqueues the saved entry, and verifies that a loaded candidate near a tracked player reaches population. It writes `logs/mfcl/worldgen-queue-smoke.json`. The unit suite additionally checks negative-coordinate 3×3 readiness and old saved-data compatibility.
+
 `-PmfclServerSmokeTest=melee` checks original TC4 swords and tools against a vanilla iron sword: the original attack modifier, two native attacks with Sharpness V, sweeping (swords only), which sword/digger enchantments apply and what the table rolls, and that host enchantments survive the original hit callbacks. It writes `server-1.7.10-smoke-melee.json`; use a disposable game directory.
 
 `-PmfclServerSmokeTest=bore` checks native pickaxes in the original TC4 bore, including native wear/enchantments, NBT save/load, transfers and modern Tinkers break/stop/repair. Optional `-PtinkersTestVersion` enables real Tinkers/Mantle inputs. See [Arcane Bore tools](arcane-bore-tools.md) for the command and `bore-smoke.json` coverage.
