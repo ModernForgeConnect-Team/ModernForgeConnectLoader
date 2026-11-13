@@ -28,6 +28,8 @@ final class LegacyItemTooltips {
     private void tooltip(ItemTooltipEvent event){
         var services=content.services();var mc=Minecraft.getInstance();
         try {
+            // Adapters also have a legacy render snapshot, but their native item owns its tooltip.
+            if (!content.isMirroredItem(event.getItemStack())) return;
             var source=content.renderSnapshot(event.getItemStack());if(source==null)return;
             language();
             var lines=services.items().inLegacy(()->{

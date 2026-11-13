@@ -711,6 +711,11 @@ public final class ModernContentBridge {
         // 1.7.10 SNBT uses indexed lists and cannot be read by the modern TagParser.
         return cost == null && color == null && name == null ? original : services.items().renderTags(original, cost, color, name);
     }
+
+    /** Whether MFCL registered this host item as a mirror of an original item. */
+    public boolean isMirroredItem(ItemStack stack) {
+        return reverseItems.containsKey(stack.getItem());
+    }
     public HostWorldAccess.Block legacyBlock(BlockState state) {
         var represented = hostRepresentations.block(state);
         if (represented != null) return represented;
