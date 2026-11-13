@@ -609,6 +609,8 @@ public final class ModernContentBridge {
     }
     public LegacyClientData.Stack gameplayStack(ItemStack stack) throws Exception {
         if (stack.isEmpty()) return null;
+        var adapted = github.com.gengyoubo.mfcl.api.LegacyStackAdapters.toLegacy(stack.copy());
+        if (adapted != null) return new LegacyClientData.Stack(adapted.key(), adapted.metadata(), adapted.count(), "", adapted.snbt());
         if (!reverseItems.containsKey(stack.getItem())) {
             var tool = hostTools.toLegacy(stack); if (tool != null) return tool;
         }
@@ -637,6 +639,12 @@ public final class ModernContentBridge {
     }
     public ItemStack gameplayStack(LegacyClientData.Stack stack) {
         if (stack == null || stack.count() <= 0) return ItemStack.EMPTY;
+        Object adapted = github.com.gengyoubo.mfcl.api.LegacyStackAdapters.toHost(
+                new github.com.gengyoubo.mfcl.api.LegacyStack(stack.key(), stack.metadata(), stack.count(), stack.tag()));
+        if (adapted != null) {
+            if (!(adapted instanceof ItemStack result)) throw new IllegalStateException("Stack adapter returned a non-ItemStack");
+            return result;
+        }
         if (stack.key().equals(LegacyHostStacks.ITEM)) {
             try { return hostInventoryStacks.toHost(stack); }
             catch (Exception failure) { throw new IllegalStateException("Cannot restore native inventory stack", failure); }
@@ -689,6 +697,8 @@ public final class ModernContentBridge {
     }
     /** Read-only view for old renderers/tooltips. Host-only tags must not prevent drawing an item. */
     public LegacyClientData.Stack renderSnapshot(ItemStack stack) throws Exception {
+        var adapted = github.com.gengyoubo.mfcl.api.LegacyStackAdapters.toLegacy(stack.copy());
+        if (adapted != null) return new LegacyClientData.Stack(adapted.key(), adapted.metadata(), adapted.count(), "", adapted.snbt());
         var item = reverseItems.get(stack.getItem()); if (item == null) return null;
         CompoundTag stored = stack.getTagElement(STACK_TAG);
         String snbt = stored == null ? "" : stored.getString("snbt");

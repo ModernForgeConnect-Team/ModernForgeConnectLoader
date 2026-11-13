@@ -7,6 +7,8 @@ package github.com.gengyoubo.mfcl.api;
  * (for example Baubles) is not loaded.
  */
 public final class LegacyFeatures {
+    /** Native host item adapters in {@link LegacyStackAdapters}. */
+    public static final String HOST_STACK_ADAPTERS = "host-stack-adapters";
     private LegacyFeatures() { }
     /** {@link LegacyRuntime#hostRepresentations()}. */
     public static final String HOST_REPRESENTATIONS = "host-representations";

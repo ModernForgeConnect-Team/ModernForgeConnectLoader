@@ -104,7 +104,8 @@ public final class ApiRuntimeFactory {
         }
         runtime.addFeatures(LegacyFeatures.HOST_REPRESENTATIONS, LegacyFeatures.HOST_BLOCKS, LegacyFeatures.PLAYER, LegacyFeatures.PLAYER_IDENTITY,
                 LegacyFeatures.PLAYER_SYNC, LegacyFeatures.EQUIPMENT, LegacyFeatures.EQUIPMENT_TICK, LegacyFeatures.EQUIPMENT_WRITE_BACK,
-                LegacyFeatures.EVENTS, LegacyFeatures.MAPPINGS_APPLY, LegacyFeatures.REDIRECTS, LegacyFeatures.HOST_ITEM_NBT);
+                LegacyFeatures.EVENTS, LegacyFeatures.MAPPINGS_APPLY, LegacyFeatures.REDIRECTS, LegacyFeatures.HOST_ITEM_NBT,
+                LegacyFeatures.HOST_STACK_ADAPTERS);
         if (players.baubles()) runtime.addFeatures(LegacyFeatures.EQUIPMENT_BAUBLES);
         runtime.mappings().register(LegacyMappings.WORLD, net.minecraft.world.level.Level.class, host -> {
             Object old = services.worlds().findBound(host);
