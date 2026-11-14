@@ -7,6 +7,8 @@
 
 例如 `@Mixin(Projectile.class)` 配合 `@Inject(method = "onHit", ...)`，在字符串中按 Ctrl+Space 补全，Ctrl+B 跳转。如果方法有重载，会列出同名候选；当前版本不会按 JVM 描述符筛选重载。IDEA 没有对应目标类的索引时无法补全或跳转。旧类建议先配置 `mfcl.direct` 并运行 `directDeobfMinecraft`、同步 Gradle；插件优先选用 `minecraft-forge-1.7.10-mcp.jar`，避免选中仅包含类名的 stub。对于只有字节码的依赖，IDEA 通常会显示反编译内容。
 
+例如 `@LegacyType("thaumcraft.common.items.wands.ItemWandCasting")` 下输入 `@LegacyMethod(name = "")`，把文本光标放在引号内，按 `Ctrl+Space` 可选择 `getMaxVis`。输入方法名前缀时 IDEA 也可以自动弹出候选，取决于其代码补全设置；鼠标悬停不会触发补全。旧 JAR 除了可通过 Gradle 作为库索引，也会在项目的 `build/mfcl-direct/*/`、`mods/`、`mods/1.7.10/`、`run/mods/` 和 `run/mfcl/legacy-maven/1.7.10/` 等常见位置查找。使用其他路径时请将 JAR 添加为 IDEA 项目库。依赖文件或构建产物需要实际存在，插件不会自动下载它们。
+
 这不是 Mixin 本身，也不提供 Mixin 注入、运行时转换或修改游戏的能力。暂不支持带 `Lowner;` 的 Mixin 成员选择器、转义字符串、SRG/MCP 名称互相转换、按描述符筛选重载；普通 Java 代码的补全由 IDEA 自身提供。插件不会下载或安装旧版 Forge。
 
 ## 构建与安装

@@ -6,7 +6,11 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.util.ProcessingContext;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
+import com.intellij.openapi.vfs.JarFileSystem;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
+import java.io.File;
 import java.util.*;
 
 /** References on annotation strings; the Java index supplies declarations and their navigation targets. */
@@ -31,9 +35,9 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         });
     }
 
-    private record Spec(PsiAnnotation annotation, boolean field, boolean mixin) {}
+    record Spec(PsiAnnotation annotation, boolean field, boolean mixin) {}
 
-    private static Spec spec(PsiLiteralExpression literal) {
+    static Spec spec(PsiLiteralExpression literal) {
         PsiElement current = literal;
         while (current != null && !(current instanceof PsiNameValuePair) && !(current instanceof PsiAnnotation)) current = current.getParent();
         if (!(current instanceof PsiNameValuePair pair)) return null;
@@ -67,7 +71,7 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         }
     }
 
-    private static List<PsiClass> targetClasses(Spec spec) {
+    static List<PsiClass> targetClasses(Spec spec) {
         PsiClass owner = enclosingClass(spec.annotation());
         if (owner == null) return List.of();
         PsiAnnotation target = owner.getAnnotation(spec.mixin() ? MIXIN : MLA + "LegacyType");
@@ -78,12 +82,14 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         List<PsiClass> result = new ArrayList<>();
         var facade = JavaPsiFacade.getInstance(owner.getProject());
         for (String name : names) {
-            PsiClass[] candidates = facade.findClasses(name, GlobalSearchScope.allScope(owner.getProject()));
+            List<PsiClass> candidates = new ArrayList<>(Arrays.asList(facade.findClasses(name, GlobalSearchScope.allScope(owner.getProject()))));
             if (!spec.mixin()) {
-                // MFCL generates memberless name stubs as well as a complete MCP compile JAR.
-                Arrays.sort(candidates, Comparator.comparingInt(LegacyReferenceContributor::legacyRank));
+                // Gradle can put the memberless name stub on the host classpath while the actual JAR is only
+                // present in an excluded build/ or run/ directory and therefore absent from IDEA's index.
+                candidates.addAll(localLegacyClasses(owner, name));
+                candidates.sort(Comparator.comparingInt(LegacyReferenceContributor::legacyRank));
             }
-            if (candidates.length > 0) result.add(candidates[0]);
+            if (!candidates.isEmpty()) result.add(candidates.get(0));
         }
         return result;
     }
@@ -92,9 +98,54 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         var file = type.getContainingFile();
         var virtual = file == null ? null : file.getVirtualFile();
         String path = virtual == null ? "" : virtual.getPath().replace('\\', '/');
+        if (path.contains("legacy-names-1.7.10.jar") || type.getMethods().length == 0 && type.getFields().length == 0) return 3;
         if (path.contains("minecraft-forge-1.7.10-mcp.jar")) return 0;
-        if (path.contains("legacy-names-1.7.10.jar")) return 2;
-        return 1;
+        if (path.contains("/mods/") || path.contains("/legacy-maven/") || path.contains("/legacy-dependencies/")) return 1;
+        return 2;
+    }
+
+    private static List<PsiClass> localLegacyClasses(PsiClass owner, String binaryName) {
+        String base = owner.getProject().getBasePath();
+        if (base == null) return List.of();
+        File root = new File(base);
+        List<File> jars = new ArrayList<>();
+        File direct = new File(root, "build/mfcl-direct");
+        File[] sets = direct.listFiles(File::isDirectory);
+        if (sets != null) for (File set : sets) {
+            File jar = new File(set, "minecraft-forge-1.7.10-mcp.jar");
+            if (jar.isFile()) jars.add(jar);
+        }
+        for (String directory : List.of("mods", "mods/1.7.10", "run/mods", "run/mods/1.7.10",
+                "run/mfcl/legacy-maven/1.7.10", "run/mfcl/legacy-dependencies/1.7.10")) {
+            File[] found = new File(root, directory).listFiles(f -> f.isFile() && f.getName().endsWith(".jar"));
+            if (found != null) { Arrays.sort(found); Collections.addAll(jars, found); }
+        }
+        List<PsiClass> result = new ArrayList<>();
+        String path = binaryName.replace('.', '/') + ".class";
+        for (File jar : jars) {
+            VirtualFile local = LocalFileSystem.getInstance().findFileByIoFile(jar);
+            if (local == null) local = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(jar);
+            if (local == null) continue;
+            VirtualFile archive = JarFileSystem.getInstance().getJarRootForLocalFile(local);
+            VirtualFile entry = archive == null ? null : archive.findFileByRelativePath(path);
+            PsiFile file = entry == null ? null : PsiManager.getInstance(owner.getProject()).findFile(entry);
+            if (file instanceof PsiClassOwner classFile) for (PsiClass type : classFile.getClasses())
+                if (binaryName.equals(type.getQualifiedName())) result.add(type);
+        }
+        return result;
+    }
+
+    static List<Object> variants(Spec spec) {
+        List<Object> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (PsiClass target : targetClasses(spec)) {
+            if (spec.field()) for (PsiField field : target.getAllFields()) {
+                if (seen.add(field.getName())) result.add(LookupElementBuilder.create(field, field.getName()).withTypeText(field.getType().getPresentableText()));
+            } else for (PsiMethod method : target.getAllMethods()) {
+                if (!method.isConstructor() && seen.add(method.getName())) result.add(LookupElementBuilder.create(method, method.getName()));
+            }
+        }
+        return result;
     }
 
     private static final class MemberReference extends PsiPolyVariantReferenceBase<PsiLiteralExpression> {
@@ -112,16 +163,7 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
             return result.toArray(ResolveResult.EMPTY_ARRAY);
         }
         @Override public Object @NotNull [] getVariants() {
-            List<Object> result = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
-            for (PsiClass target : targetClasses(spec)) {
-                if (spec.field()) for (PsiField field : target.getAllFields()) {
-                    if (seen.add(field.getName())) result.add(LookupElementBuilder.create(field, field.getName()).withTypeText(field.getType().getPresentableText()));
-                } else for (PsiMethod method : target.getAllMethods()) {
-                    if (!method.isConstructor() && seen.add(method.getName())) result.add(LookupElementBuilder.create(method, method.getName()));
-                }
-            }
-            return result.toArray();
+            return variants(spec).toArray();
         }
     }
 }
