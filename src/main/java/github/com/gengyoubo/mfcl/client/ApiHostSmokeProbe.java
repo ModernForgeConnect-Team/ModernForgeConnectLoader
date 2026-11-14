@@ -43,6 +43,13 @@ final class ApiHostSmokeProbe {
         int aspects = direct.aspectCount();
         if (aspects < 6) throw new IllegalStateException("Original Thaumcraft aspect registry not visible: " + aspects);
         result.put("originalAspects", aspects);
+        String forgeTypes = direct.forgeTypes();
+        String[] forgeParts = forgeTypes.split("\\|");
+        if (forgeParts.length != 4 || !forgeParts[0].equals("true") || !forgeParts[1].equals("SOUTH")
+                || !forgeParts[2].startsWith("github.com.gengyoubo.mfcl.legacy")
+                || !forgeParts[3].startsWith("github.com.gengyoubo.mfcl.legacy"))
+            throw new IllegalStateException("Original FML/Forge types resolved incorrectly: " + forgeTypes);
+        result.put("legacyForgeTypes", forgeTypes);
         int order = direct.originalCallsOverride();
         if (order >= 0) throw new IllegalStateException("Original code did not reach the reobfuscated override: " + order);
         result.put("originalCodeCallsReobfuscatedOverride", true);

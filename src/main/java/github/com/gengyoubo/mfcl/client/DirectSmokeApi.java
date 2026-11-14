@@ -13,6 +13,8 @@ public interface DirectSmokeApi {
     String loaders();
     /** Size of Thaumcraft's original aspect registry, read through its unobfuscated API. */
     int aspectCount();
+    /** Exercise FML Side and ForgeDirection through the isolated 1.7.10 runtime. */
+    String forgeTypes();
     /** Original CommandBase.compareTo over two direct subclasses ("alpha" vs "beta"): negative when overrides are reobfuscated. */
     int originalCallsOverride();
 }

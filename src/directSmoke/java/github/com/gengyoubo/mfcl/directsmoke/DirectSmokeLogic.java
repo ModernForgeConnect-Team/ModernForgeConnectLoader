@@ -5,6 +5,8 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import thaumcraft.api.aspects.Aspect;
+import cpw.mods.fml.relauncher.Side;
+import net.minecraftforge.common.util.ForgeDirection;
 
 /**
  * Direct class for the in-game API smoke test, written with MCP names exactly like a 1.7.10 mod. The directSmoke
@@ -20,6 +22,11 @@ public final class DirectSmokeLogic implements DirectSmokeApi {
         return getClass().getClassLoader().getClass().getName() + "|" + MinecraftServer.class.getClassLoader().getClass().getName();
     }
     @Override public int aspectCount() { return Aspect.aspects.size(); }
+    @Override public String forgeTypes() {
+        return Side.CLIENT.isClient() + "|" + ForgeDirection.NORTH.getOpposite().name() + "|"
+                + Side.class.getClassLoader().getClass().getName() + "|"
+                + ForgeDirection.class.getClassLoader().getClass().getName();
+    }
     /** CommandBase.compareTo is original bytecode calling getCommandName() by its SRG name: only a renamed override answers. */
     @Override public int originalCallsOverride() {
         return new DirectCommand("alpha").compareTo(new DirectCommand("beta"));

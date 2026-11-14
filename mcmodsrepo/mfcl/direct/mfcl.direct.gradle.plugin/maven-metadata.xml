@@ -3,11 +3,12 @@
   <groupId>mfcl.direct</groupId>
   <artifactId>mfcl.direct.gradle.plugin</artifactId>
   <versioning>
-    <latest>1.2.0-dev2</latest>
-    <release>1.2.0-dev2</release>
+    <latest>1.2.0-dev3</latest>
+    <release>1.2.0-dev3</release>
     <versions>
       <version>1.2.0-dev2</version>
+      <version>1.2.0-dev3</version>
     </versions>
-    <lastUpdated>20261114150807</lastUpdated>
+    <lastUpdated>20261114214153</lastUpdated>
   </versioning>
 </metadata>

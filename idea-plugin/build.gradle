@@ -1,0 +1,66 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'github.com.gengyoubo.mfcl'
+version = '1.2.0-dev3'
+
+def validIdeaHome = { File dir ->
+    dir != null && new File(dir, 'lib').isDirectory() && new File(dir, 'plugins/java/lib').isDirectory()
+            && new File(dir, 'jbr/bin/javac.exe').isFile()
+}
+def explicitHome = providers.gradleProperty('ideaHome').orElse(providers.environmentVariable('IDEA_HOME')).orNull
+def candidates = []
+if (explicitHome) candidates.add(file(explicitHome))
+else {
+    def runningIdea = System.getProperty('idea.home.path')
+    if (runningIdea) candidates.add(file(runningIdea))
+    for (def root : [System.getenv('ProgramFiles'), System.getenv('LOCALAPPDATA')]) {
+        if (!root) continue
+        for (def relative : ['JetBrains', 'Programs', 'JetBrains/Toolbox/apps']) {
+            def parent = new File(root, relative)
+            if (!parent.isDirectory()) continue
+            parent.listFiles()?.findAll { it.isDirectory() && it.name.toLowerCase(Locale.ROOT).contains('intellij idea') }
+                    ?.sort { a, b -> b.name <=> a.name }?.each { candidates.add(it) }
+        }
+    }
+}
+def home = candidates.find { validIdeaHome(it) }
+if (home == null) throw new GradleException('Cannot find IntelliJ IDEA with the Java plugin and JBR. Set -PideaHome or IDEA_HOME to its installation directory.')
+logger.lifecycle("MFCL IDEA plugin SDK: ${home}")
+dependencies {
+    compileOnly fileTree(dir: new File(home, 'lib'), include: '*.jar')
+    compileOnly fileTree(dir: new File(home, 'plugins/java/lib'), include: '*.jar')
+}
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.fork = true
+    options.forkOptions.javaHome = new File(home, 'jbr')
+}
+tasks.named('processResources') {
+    inputs.property('pluginVersion', project.version.toString())
+    filesMatching('META-INF/plugin.xml') { expand(version: project.version.toString()) }
+}
+tasks.register('buildPlugin', Zip) {
+    dependsOn jar
+    archiveFileName = "mfcl-idea-${project.version}.zip"
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    into('mfcl-idea/lib') { from tasks.jar }
+}
+
+publishing {
+    publications {
+        ideaPlugin(MavenPublication) {
+            artifactId = 'mfcl-idea'
+            artifact tasks.named('buildPlugin')
+        }
+    }
+    repositories {
+        maven {
+            name = 'mfcl'
+            url = uri('../mcmodsrepo')
+        }
+    }
+}

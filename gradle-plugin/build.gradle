@@ -29,6 +29,7 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation gradleTestKit()
+    testImplementation 'org.ow2.asm:asm-commons:9.7.1'
 }
 
 gradlePlugin {

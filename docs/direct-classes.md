@@ -60,11 +60,28 @@ String name = runtime.withPlayer(serverPlayer, player -> armor.helmetName(player
 
 `direct(...)` 每次都会新建实例；请在 `whenReady` 中创建一次并保存返回的对象。
 
+### 导入 1.7.10 Forge 和 FML
+
+直通源集也可以直接导入旧版 Forge / FML，而不只限于 Minecraft 和 Thaumcraft。下面的代码同样放在 `src/direct/java`，由现代侧接口调用：
+
+```java
+import cpw.mods.fml.relauncher.Side;
+import net.minecraftforge.common.util.ForgeDirection;
+
+public final class OldForgeLogic implements ForgeApi {
+    public String describe() {
+        return Side.CLIENT.isClient() + ":" + ForgeDirection.NORTH.getOpposite().name();
+    }
+}
+```
+
+这里的 `ForgeApi` 是现代侧声明的接口，`describe()` 返回 `String`。旧版 Forge 类由 `runtime` 指定的 MFCL 1.7.10 运行时提供，无须另外把 Forge 1.7.10 放进现代 `implementation`。用 `runtime.direct(ForgeApi.class, "完整包名.OldForgeLogic")` 获取实例；不要在 `src/main/java` 里直接运行这些旧类，跨边界签名也不要使用它们。`Side.CLIENT` 是枚举常量示例，并不表示当前线程实际处于客户端。
+
 ## Gradle：直通源集
 
 ### 插件（推荐，1.2.0 起）
 
-MFCL 发布 `mfcl.direct` Gradle 插件，附属不必再复制构建脚本。先在 `settings.gradle` 声明插件仓库（只影响插件解析，不影响项目依赖）：
+MFCL 发布 `mfcl.direct` Gradle 插件，附属不必再复制构建脚本。插件版本与 MFCL 版本一致（开发版也使用同一版本号，例如 `1.2.0-dev3`）；示例中的 `1.2.0` 在正式版发布后使用。先在 `settings.gradle` 声明插件仓库（只影响插件解析，不影响项目依赖）：
 
 ```groovy
 pluginManagement {
