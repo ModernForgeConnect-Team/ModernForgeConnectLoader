@@ -11,7 +11,7 @@
 
 ## 构建与安装
 
-当前构建针对 IntelliJ IDEA 2025.3.x、Java 插件及该 IDE 自带的 JBR 21；其余版本未验证。Windows 下会自动查找常见的 IDEA 安装目录。使用 JDK 17 或更高运行 Gradle，在仓库根目录执行：
+插件声明支持 IntelliJ IDEA 2025.3 到 2026.1（内部版本 253–261），需要 Java 插件和 JBR 21；构建使用本机 IDEA SDK。Windows 下会自动查找常见的 IDEA 安装目录。使用 JDK 17 或更高运行 Gradle，在仓库根目录执行：
 
 ```powershell
 .\gradlew.bat -p idea-plugin buildPlugin
@@ -33,4 +33,4 @@
 .\gradlew.bat -p idea-plugin publish
 ```
 
-该命令先构建插件 ZIP，再将 ZIP 和 POM 发布到项目的 `mcmodsrepo/github/com/gengyoubo/mfcl/mfcl-idea/<版本>/`，坐标为 `github.com.gengyoubo.mfcl:mfcl-idea:<版本>`（扩展名 `zip`）。版本取自插件的 `build.gradle`。它不发布到 JetBrains Marketplace；IDEA 仍可通过 **Install Plugin from Disk** 安装构建产物或发布出的 ZIP。
+该命令先构建插件 ZIP，再将 ZIP 和 POM 发布到项目的 `mcmodsrepo/github/com/gengyoubo/mfcl/mfcl-idea/<版本>/`，坐标为 `github.com.gengyoubo.mfcl:mfcl-idea:<版本>`（扩展名 `zip`）。版本统一取自仓库根目录 `gradle.properties` 的 `mod_version`。它不发布到 JetBrains Marketplace；IDEA 仍可通过 **Install Plugin from Disk** 安装构建产物或发布出的 ZIP。

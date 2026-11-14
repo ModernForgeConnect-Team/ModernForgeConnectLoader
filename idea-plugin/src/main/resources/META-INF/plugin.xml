@@ -4,7 +4,7 @@
     <vendor>MFCL</vendor>
     <description>Completion and navigation for MFCL legacy accessors and Mixin injection targets.</description>
     <version>${version}</version>
-    <idea-version since-build="253" until-build="253.*"/>
+    <idea-version since-build="253" until-build="261.*"/>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
     <extensions defaultExtensionNs="com.intellij">

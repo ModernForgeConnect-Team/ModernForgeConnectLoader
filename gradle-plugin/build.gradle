@@ -3,8 +3,11 @@ plugins {
     id 'maven-publish'
 }
 
-group = 'github.com.gengyoubo.mfcl'
-version = providers.gradleProperty('mfclPluginVersion').getOrElse('1.2.0')
+def projectProperties = new Properties()
+file('../gradle.properties').withInputStream { projectProperties.load(it) }
+group = projectProperties.getProperty('mod_group_id')
+version = projectProperties.getProperty('mod_version')
+if (!group || !version) throw new GradleException('mod_group_id and mod_version must be set in the root gradle.properties')
 
 java {
     toolchain {
