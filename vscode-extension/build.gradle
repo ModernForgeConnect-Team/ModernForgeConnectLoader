@@ -1,0 +1,65 @@
+plugins {
+    id 'base'
+    id 'maven-publish'
+}
+
+def projectProperties = new Properties()
+file('../gradle.properties').withInputStream { projectProperties.load(it) }
+group = projectProperties.getProperty('mod_group_id')
+version = projectProperties.getProperty('mod_version')
+if (!group || !version) throw new GradleException('mod_group_id and mod_version must be set in the root gradle.properties')
+if (!(version.toString() ==~ /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/)) {
+    throw new GradleException('mod_version must be a SemVer-compatible VS Code extension version')
+}
+
+def stageDir = layout.buildDirectory.dir('extension')
+def packageFile = layout.buildDirectory.file("distributions/mfcl-legacy-navigation-${version}.vsix")
+def windows = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+
+tasks.register('test', Exec) {
+    workingDir projectDir
+    commandLine 'node', '--test', 'test/parser.test.js', 'test/extension.test.js'
+}
+
+tasks.register('prepareExtension', Sync) {
+    from('src') { into 'src' }
+    from('README.md', 'LICENSE')
+    from('package.json') {
+        filter { line -> line.replaceFirst(/"version"\s*:\s*"[^"]+"/, '"version": "' + project.version + '"') }
+    }
+    into stageDir
+    inputs.property('pluginVersion', project.version.toString())
+}
+
+tasks.register('buildPlugin', Exec) {
+    dependsOn 'test', 'prepareExtension'
+    inputs.dir stageDir
+    outputs.file packageFile
+    doFirst {
+        packageFile.get().asFile.parentFile.mkdirs()
+        workingDir stageDir.get().asFile
+        def args = ['--yes', '@vscode/vsce', 'package', '--no-dependencies', '--allow-missing-repository', '--out', packageFile.get().asFile.absolutePath]
+        if (windows) commandLine(['cmd', '/c', 'npx.cmd'] + args)
+        else commandLine(['npx'] + args)
+    }
+}
+tasks.named('assemble') { dependsOn 'buildPlugin' }
+tasks.named('check') { dependsOn 'test' }
+
+publishing {
+    publications {
+        vscodePlugin(MavenPublication) {
+            artifactId = 'mfcl-vscode'
+            artifact(packageFile) {
+                extension = 'vsix'
+                builtBy tasks.named('buildPlugin')
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'mfcl'
+            url = uri(providers.gradleProperty('mfclRepo').getOrElse('../mcmodsrepo'))
+        }
+    }
+}

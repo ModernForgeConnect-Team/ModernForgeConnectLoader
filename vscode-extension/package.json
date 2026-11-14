@@ -1,0 +1,25 @@
+{
+  "name": "mfcl-legacy-navigation",
+  "displayName": "MFCL Legacy Navigation",
+  "description": "Completion and navigation for MFCL legacy accessors and Mixin injection targets.",
+  "version": "1.2.0-dev5",
+  "publisher": "mfcl",
+  "license": "MPL-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "extensionDependencies": [
+    "redhat.java"
+  ],
+  "activationEvents": [
+    "onLanguage:java"
+  ],
+  "main": "./src/extension.js",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "node scripts/package.js"
+  }
+}
