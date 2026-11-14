@@ -18,6 +18,8 @@ base {
 }
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 sourceSets.create('api')
+// API smoke test only: host MLA contracts with class literals, compiled against the legacy name stubs.
+sourceSets.create('apiSmoke')
 println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 minecraft {
     mappings channel: mapping_channel, version: mapping_version
@@ -80,6 +82,7 @@ minecraft {
                 "${mod_id}" {
                     source sourceSets.main
                     source sourceSets.api
+                    if (project.hasProperty('mfclApiSmokeTest')) source sourceSets.apiSmoke
                 }
             }
         }
@@ -119,8 +122,10 @@ ext.mfclDirect = [
         mods     : fileTree("${directSmokeGame}/mods") { include 'Thaumcraft-*.jar' },
         host     : files(sourceSets.main.java.classesDirectory),
         packaged : false,
+        names    : ['apiSmoke'], // never main: release builds must not need a prepared game directory
 ]
 apply from: 'gradle/mfcl-direct.gradle'
+dependencies { apiSmokeCompileOnly sourceSets.api.output }
 // Old Forge artifacts must never be placed on the modern Forge runtime classpath.
 configurations {
     legacyMaven {

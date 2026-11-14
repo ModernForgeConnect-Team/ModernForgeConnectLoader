@@ -14,10 +14,10 @@ final class AccessorEngine {
     AccessorEngine(LegacyApiRuntime runtime) { this.runtime = runtime; }
 
     <T> T bind(Class<T> contract, LegacyObject receiver) throws Exception {
-        var annotation = contract.getAnnotation(LegacyType.class);
-        if (!contract.isInterface() || !Modifier.isPublic(contract.getModifiers()) || annotation == null)
+        String targetName = LegacyContracts.target(contract);
+        if (!contract.isInterface() || !Modifier.isPublic(contract.getModifiers()) || targetName == null)
             throw new IllegalArgumentException("Expected a public @LegacyType interface: " + contract.getName());
-        Class<?> owner = runtime.loader().loadClass(annotation.value());
+        Class<?> owner = runtime.loader().loadClass(targetName);
         if (!runtime.owns(owner)) throw new IllegalArgumentException("Target must belong to the isolated runtime: " + owner.getName());
         Object target = receiver == null ? null : runtime.raw(receiver);
         if (target != null && !owner.isInstance(target)) throw new IllegalArgumentException("Wrong receiver for " + owner.getName());
@@ -78,24 +78,37 @@ final class AccessorEngine {
         if ((method == null ? 0 : 1) + (field == null ? 0 : 1) + (constructor == null ? 0 : 1) != 1)
             throw new IllegalArgumentException("Expected exactly one MLA member annotation: " + api);
         if (method != null) {
-            String descriptor = method.descriptor().isEmpty() ? inferMethodDescriptor(api) : method.descriptor();
-            var type = MethodType.fromMethodDescriptorString(descriptor, runtime.loader());
-            Method member = findMethod(owner, method.name(), type);
+            var names = runtime.names().methodCandidates(method.name());
+            Method member;
+            if (!method.descriptor().isEmpty())
+                member = findMethod(owner, names, MethodType.fromMethodDescriptorString(method.descriptor(), runtime.loader()));
+            else {
+                MethodType inferred = inferred(() -> inferMethodDescriptor(api));
+                Method exact = null;
+                if (inferred != null) try { exact = findMethod(owner, names, inferred); } catch (NoSuchMethodException absent) { /* search */ }
+                member = exact != null ? exact : searchMethod(owner, names, method.isStatic(), api);
+            }
             checkStatic(member.getModifiers(), method.isStatic(), target);
             if (!member.trySetAccessible()) throw new IllegalAccessException(member.toString());
-            return new Binding(type.parameterArray(), type.returnType(), args -> member.invoke(target, args));
+            return new Binding(member.getParameterTypes(), member.getReturnType(), args -> member.invoke(target, args));
         }
         if (constructor != null) {
-            String descriptor = constructor.descriptor().isEmpty() ? inferConstructorDescriptor(api) : constructor.descriptor();
-            var type = MethodType.fromMethodDescriptorString(descriptor, runtime.loader());
-            if (type.returnType() != void.class) throw new IllegalArgumentException("Constructor descriptor must end in V");
-            var member = owner.getDeclaredConstructor(type.parameterArray());
+            Constructor<?> member;
+            if (!constructor.descriptor().isEmpty()) member = exactConstructor(owner, constructor.descriptor());
+            else {
+                MethodType inferred = inferred(() -> inferConstructorDescriptor(api));
+                Constructor<?> exact = null;
+                if (inferred != null) try { exact = owner.getDeclaredConstructor(inferred.parameterArray()); } catch (NoSuchMethodException absent) { /* search */ }
+                member = exact != null ? exact : searchConstructor(owner, api);
+            }
             if (!member.trySetAccessible()) throw new IllegalAccessException(member.toString());
-            return new Binding(type.parameterArray(), owner, member::newInstance);
+            Constructor<?> bound = member;
+            return new Binding(member.getParameterTypes(), owner, bound::newInstance);
         }
-        String descriptor = field.descriptor().isEmpty() ? inferFieldDescriptor(api) : field.descriptor();
-        Class<?> type = MethodType.fromMethodDescriptorString("()" + descriptor, runtime.loader()).returnType();
-        Field member = findField(owner, field.name());
+        Field member = findField(owner, runtime.names().fieldCandidates(field.name()));
+        // Without a descriptor the field's own type is used; bind() still checks it against the contract.
+        Class<?> type = field.descriptor().isEmpty() ? member.getType()
+                : MethodType.fromMethodDescriptorString("()" + field.descriptor(), runtime.loader()).returnType();
         if (member.getType() != type) throw new NoSuchFieldException("Descriptor differs: " + member);
         checkStatic(member.getModifiers(), field.isStatic(), target);
         if (!member.trySetAccessible()) throw new IllegalAccessException(member.toString());
@@ -117,12 +130,6 @@ final class AccessorEngine {
         return descriptor.append(")V").toString();
     }
 
-    private static String inferFieldDescriptor(Method api) {
-        if (api.getParameterCount() == 0) return infer(api.getReturnType(), api);
-        if (api.getParameterCount() == 1 && api.getReturnType() == void.class) return infer(api.getParameterTypes()[0], api);
-        throw new IllegalArgumentException("Field contract must be a getter or setter: " + api);
-    }
-
     private static String infer(Class<?> type, Method api) {
         if (type == void.class) return "V";
         if (type == boolean.class) return "Z";
@@ -135,8 +142,8 @@ final class AccessorEngine {
         if (type == double.class) return "D";
         if (type == String.class || type == Object.class || boxed(type)) return "L" + type.getName().replace('.', '/') + ";";
         if (type.isArray()) return "[" + infer(type.getComponentType(), api);
-        var contract = type.getAnnotation(LegacyType.class);
-        if (type.isInterface() && contract != null) return "L" + contract.value().replace('.', '/') + ";";
+        String contract = type.isInterface() ? LegacyContracts.target(type) : null;
+        if (contract != null) return "L" + contract.replace('.', '/') + ";";
         if (type == LegacyObject.class)
             throw new IllegalArgumentException("Descriptor is required for LegacyObject in " + api);
         throw new IllegalArgumentException("Descriptor is required for " + type.getTypeName() + " in " + api);
@@ -172,33 +179,117 @@ final class AccessorEngine {
 
     private Class<?> contractTarget(Class<?> type) {
         if (!type.isInterface()) return null;
-        var annotation = type.getAnnotation(LegacyType.class);
-        if (annotation == null) return null;
+        String name = LegacyContracts.target(type);
+        if (name == null) return null;
         try {
-            Class<?> target = runtime.loader().loadClass(annotation.value());
-            if (!runtime.owns(target)) throw new IllegalArgumentException("Contract target must belong to the isolated runtime: " + annotation.value());
+            Class<?> target = runtime.loader().loadClass(name);
+            if (!runtime.owns(target)) throw new IllegalArgumentException("Contract target must belong to the isolated runtime: " + name);
             return target;
         } catch (ClassNotFoundException failure) {
-            throw new IllegalArgumentException("Unknown legacy contract target: " + annotation.value(), failure);
+            throw new IllegalArgumentException("Unknown legacy contract target: " + name, failure);
         }
     }
 
-    private static Method findMethod(Class<?> owner, String name, MethodType type) throws NoSuchMethodException {
+    /** The inferred descriptor, or null when the contract uses LegacyObject/Object/unknown types that need a search. */
+    private MethodType inferred(java.util.function.Supplier<String> descriptor) {
+        try { return MethodType.fromMethodDescriptorString(descriptor.get(), runtime.loader()); }
+        catch (IllegalArgumentException | TypeNotPresentException uninferable) { return null; }
+    }
+
+    /** {@code names}: the contract's name, then the SRG names it is the MCP name of. */
+    private static Method findMethod(Class<?> owner, Set<String> names, MethodType type) throws NoSuchMethodException {
+        Method found = exactMethod(owner, names, type);
+        if (found == null) throw new NoSuchMethodException(owner.getName() + "#" + describe(names) + type.descriptorString());
+        return found;
+    }
+    private static Method exactMethod(Class<?> owner, Set<String> names, MethodType type) {
         // The return descriptor matters too (covariant/bridge methods may share name and parameters).
         for (Class<?> current = owner; current != null; current = current.getSuperclass()) {
-            for (var member : current.getDeclaredMethods()) if (member.getName().equals(name)
+            for (var member : current.getDeclaredMethods()) if (names.contains(member.getName())
                     && member.getReturnType() == type.returnType() && Arrays.equals(member.getParameterTypes(), type.parameterArray())) return member;
             for (var face : current.getInterfaces()) {
-                try { return findMethod(face, name, type); } catch (NoSuchMethodException absent) { /* next interface */ }
+                Method found = exactMethod(face, names, type);
+                if (found != null) return found;
             }
         }
-        throw new NoSuchMethodException(owner.getName() + "#" + name + type.descriptorString());
+        return null;
     }
-    private static Field findField(Class<?> owner, String name) throws NoSuchFieldException {
-        for (Class<?> current = owner; current != null; current = current.getSuperclass()) {
-            try { return current.getDeclaredField(name); } catch (NoSuchFieldException absent) { /* next superclass */ }
+
+    /** Every non-synthetic method named in {@code names}, most derived first, one per name and parameter list. */
+    private static Collection<Method> named(Class<?> owner, Set<String> names) {
+        var result = new LinkedHashMap<String, Method>();
+        var queue = new ArrayDeque<Class<?>>(List.of(owner));
+        var seen = new HashSet<Class<?>>();
+        while (!queue.isEmpty()) {
+            Class<?> current = queue.removeFirst();
+            if (!seen.add(current)) continue;
+            for (var member : current.getDeclaredMethods()) {
+                // Vanilla generic-parameter bridges are synthetic but lost ACC_BRIDGE; the real method is always present.
+                if (member.isSynthetic() || !names.contains(member.getName())) continue;
+                result.putIfAbsent(member.getName() + MethodType.methodType(void.class, member.getParameterTypes()).descriptorString(), member);
+            }
+            if (current.getSuperclass() != null) queue.add(current.getSuperclass());
+            queue.addAll(List.of(current.getInterfaces()));
         }
-        throw new NoSuchFieldException(owner.getName() + "#" + name);
+        return result.values();
+    }
+
+    private Method searchMethod(Class<?> owner, Set<String> names, boolean isStatic, Method api) throws NoSuchMethodException {
+        var all = named(owner, names);
+        var fitting = new ArrayList<Method>();
+        for (Method member : all) {
+            if (Modifier.isStatic(member.getModifiers()) != isStatic || member.getParameterCount() != api.getParameterCount()) continue;
+            if (fits(api.getParameterTypes(), member.getParameterTypes()) && fitsReturn(api.getReturnType(), member.getReturnType())) fitting.add(member);
+        }
+        if (fitting.size() == 1) return fitting.get(0);
+        String target = owner.getName() + "#" + describe(names);
+        if (fitting.isEmpty()) throw new NoSuchMethodException(target + " has no " + (isStatic ? "static" : "instance") + " method fitting " + api
+                + (all.isEmpty() ? "" : "; candidates: " + descriptors(all)));
+        throw new IllegalArgumentException(target + " is ambiguous for " + api + "; add descriptor = one of " + descriptors(fitting));
+    }
+
+    private Constructor<?> exactConstructor(Class<?> owner, String descriptor) throws NoSuchMethodException {
+        var type = MethodType.fromMethodDescriptorString(descriptor, runtime.loader());
+        if (type.returnType() != void.class) throw new IllegalArgumentException("Constructor descriptor must end in V");
+        return owner.getDeclaredConstructor(type.parameterArray());
+    }
+
+    private Constructor<?> searchConstructor(Class<?> owner, Method api) throws NoSuchMethodException {
+        var fitting = new ArrayList<Constructor<?>>();
+        for (var member : owner.getDeclaredConstructors())
+            if (!member.isSynthetic() && member.getParameterCount() == api.getParameterCount() && fits(api.getParameterTypes(), member.getParameterTypes()))
+                fitting.add(member);
+        if (fitting.size() == 1) return fitting.get(0);
+        if (fitting.isEmpty()) throw new NoSuchMethodException(owner.getName() + " has no constructor fitting " + api);
+        var descriptors = fitting.stream().map(c -> MethodType.methodType(void.class, c.getParameterTypes()).descriptorString()).sorted().toList();
+        throw new IllegalArgumentException(owner.getName() + " constructors are ambiguous for " + api + "; add descriptor = one of " + descriptors);
+    }
+
+    private boolean fits(Class<?>[] api, Class<?>[] old) {
+        try { for (int i = 0; i < api.length; i++) compatibleParameter(api[i], old[i]); return true; }
+        catch (IllegalArgumentException unfit) { return false; }
+    }
+    private boolean fitsReturn(Class<?> api, Class<?> old) {
+        if (api == void.class || old == void.class) return api == old;
+        try { compatibleReturn(api, old); return true; }
+        catch (IllegalArgumentException unfit) { return false; }
+    }
+
+    private static String describe(Set<String> names) {
+        var all = new ArrayList<>(names);
+        return all.size() == 1 ? all.get(0) : all.get(0) + " " + all.subList(1, all.size());
+    }
+    private static List<String> descriptors(Collection<Method> methods) {
+        return methods.stream().map(m -> m.getName() + MethodType.methodType(m.getReturnType(), m.getParameterTypes()).descriptorString()).sorted().toList();
+    }
+
+    private static Field findField(Class<?> owner, Set<String> names) throws NoSuchFieldException {
+        for (Class<?> current = owner; current != null; current = current.getSuperclass()) {
+            for (String name : names) {
+                try { return current.getDeclaredField(name); } catch (NoSuchFieldException absent) { /* next name */ }
+            }
+        }
+        throw new NoSuchFieldException(owner.getName() + "#" + describe(names));
     }
     private static void checkStatic(int modifiers, boolean expected, Object target) {
         if (Modifier.isStatic(modifiers) != expected) throw new IllegalArgumentException("Static/instance declaration differs");

@@ -56,6 +56,18 @@ public final class LegacyFeatures {
     public static final String REDIRECTS = "redirects";
     /** {@link LegacyRuntime#scenes()}; only on a physical client. */
     public static final String SCENES = "scenes";
+    /**
+     * MLA member names may be MCP names ({@code @LegacyMethod(name = "getCurrentArmor")}) besides SRG names and the
+     * names of unobfuscated mod code. Absent when the runtime's MCP name tables could not be installed (for example
+     * offline on first start); SRG names always work. API v4.
+     */
+    public static final String MLA_MCP_NAMES = "mla.mcp-names";
+    /**
+     * An MLA member without {@code descriptor} binds to the one original member whose name, static-ness and parameter
+     * count match and whose types fit the contract's ({@code LegacyObject}/{@code Object} accept any reference type);
+     * several fitting overloads are reported with their descriptors. Fields use the field's own type. API v4.
+     */
+    public static final String MLA_SIGNATURE_SEARCH = "mla.signature-search";
     /** {@link LegacyRuntime#direct}: addon classes compiled against original classes. Experimental, API v4. */
     public static final String DIRECT = "direct";
     /** {@link LegacyRuntime#clientScreens()}; only on a physical client. */

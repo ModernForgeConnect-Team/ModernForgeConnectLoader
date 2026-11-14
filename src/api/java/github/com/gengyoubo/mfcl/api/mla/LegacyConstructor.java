@@ -5,6 +5,6 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface LegacyConstructor {
-    /** Empty means infer the parameter descriptor from the Java signature. */
+    /** Empty means the inferred descriptor when it exists exactly, otherwise the one constructor whose parameters fit. */
     String descriptor() default "";
 }

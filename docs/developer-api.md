@@ -25,7 +25,9 @@
 | 网络协议自动转换 | 待实现 |
 | Thaumcraft 等模组专属 API 适配库 | 后续独立实现，不放入 MFCL 核心 |
 | 调用点重定向 | 受限实现：`LegacyRedirects`（经 `LegacyRedirectProvider`，旧类加载前），v2 |
-| 自动 MCP/SRG 名称转换、Mixin 注入 | 不在本版 MLA 范围内 |
+| MLA 使用 MCP 名、省略描述符 | 已实现，v4；`MLA_MCP_NAMES` / `MLA_SIGNATURE_SEARCH`，见下文 |
+| `@LegacyType(type = EntityPlayer.class)` class 字面量 | 已实现，v4；编译期需 `gradle/mfcl-direct.gradle` 生成的类名存根 |
+| Mixin 注入 | 不在本版 MLA 范围内 |
 | 直通类：附属代码真正 `import` 旧类，经宿主接口调用 `LegacyRuntime.direct` | 实验原型，v4；见 [直通类](direct-classes.md) |
 
 本 API 仍为实验版；`MfclApi.API_VERSION = 4` 表示当前契约版本，不能理解为 issue 全部完成。可用功能应先用 `runtime.supports(LegacyFeatures.X)` 探测，不要靠捕获 `UnsupportedOperationException`。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
@@ -94,7 +96,7 @@ AutoCloseable subscription = MfclApi.whenReady(runtime -> {
 
 就绪回调不是世界事件；此时可能还没有世界或玩家。游戏修改应放到对应逻辑服务器 / 客户端拥有线程。MLA 的串行执行及上下文类加载器切换**不等于**自动切换游戏线程。
 
-## MLA：按精确旧签名访问
+## MLA：按旧签名访问
 
 ```java
 @LegacyType("net.minecraft.item.ItemStack")
@@ -117,13 +119,46 @@ stack.count(1); // 不影响 copied
 
 接口必须是 `public`，并显式声明 `@LegacyType`。抽象方法必须且只能声明一种成员注解；可使用 Java 默认方法组合调用。
 
-- `@LegacyMethod` 指定准确名称和 `isStatic`；`descriptor` 可省略，此时由 Java 签名推断：基本类型、`String`、装箱类型、`Object` 以及标注 `@LegacyType` 的接口和它们的数组（含 `Object[]`）都可以推断。含 `LegacyObject` 参数或返回值时必须显式提供 `descriptor`，否则绑定失败。返回类型也是签名的一部分。静态成员使用 `runtime.accessor(Contract.class)`。
-- `@LegacyField` 的零参数方法读取字段；单参数、返回 `void` 的方法写字段；类型必须匹配，禁止写 `final` 字段。`descriptor` 省略时使用 getter 返回类型或 setter 参数类型。
-- `@LegacyConstructor(descriptor = "(I)V")` 调用目标类构造器；描述符省略时由 Java 参数推断，末尾仍为 `V`。API 方法可以返回 `LegacyObject` 或标注 `@LegacyType` 的接口。
+- `@LegacyMethod` 指定名称和 `isStatic`；`descriptor` 可省略。省略时先按 Java 签名推断（基本类型、`String`、装箱类型、`Object`、`@LegacyType` 接口及其数组），旧类恰有该签名就用它；否则（例如含 `LegacyObject` 参数或返回值，或 `Object` 对应旧版的具体类）在继承链里找名称、静态性和参数个数一致、类型都能对上的**唯一**方法（`LegacyFeatures.MLA_SIGNATURE_SEARCH`）。`LegacyObject` / `Object` 可对应任意引用类型。有多个重载都能对上时绑定失败，错误信息列出各候选的描述符，填上其中一个即可。静态成员使用 `runtime.accessor(Contract.class)`。
+- `@LegacyField` 的零参数方法读取字段；单参数、返回 `void` 的方法写字段，禁止写 `final` 字段。`descriptor` 省略时使用字段本身的类型，再与 getter 返回类型或 setter 参数类型做同样的兼容检查。
+- `@LegacyConstructor(descriptor = "(I)V")` 调用目标类构造器；描述符省略时先按 Java 参数推断，找不到再找参数能对上的唯一构造器。API 方法可以返回 `LegacyObject` 或标注 `@LegacyType` 的接口。
+- **名称**可以写 SRG 名（`func_82169_q`）、MCP 名（`getCurrentArmor`）或未混淆模组代码的原名（`addArcaneCraftingRecipe`）。MCP 名需要 `LegacyFeatures.MLA_MCP_NAMES`：MFCL 启动时把固定哈希的 `mcp_stable-12-1.7.10` 名称表（`fields.csv` / `methods.csv`）从 Forge maven 下载到运行时目录，只下载一次，不重建已准备好的运行时；离线首次启动或 `-Dmfcl.autoPrepareRuntime=false` 时该能力缺席，SRG 名照常可用。`mcp_stable-12` 没有命名的成员仍须写 `func_` / `field_` 名。
+
+```java
+@LegacyType("net.minecraft.entity.player.EntityPlayer")
+public interface Player {
+    @LegacyMethod(name = "getCurrentArmor") LegacyObject armor(int slot); // 无需描述符
+}
+@LegacyType("net.minecraft.item.ItemStack")
+public interface Stack {
+    @LegacyMethod(name = "getDisplayName") String name();
+    @LegacyField(name = "stackSize") int count();
+}
+```
 - 当抽象方法的参数或返回值是标注 `@LegacyType` 的接口时，MFCL 自动在旧对象与代理之间转换：参数代理会解包成旧对象，返回的旧对象会包装成代理。代理的接收者共享原引用的线程与生命周期约束。
 - 可定位非公开成员、继承方法和字段。成员不存在、重载签名错误、静态/实例声明不符、接收对象类型错误、描述符无法推断，会在绑定阶段失败。
 
-使用**实际旧 SRG 运行时**里的名称：Minecraft 成员通常为 `func_...` / `field_...`，模组自己的成员通常保留原名。不要用现代 Mojang 映射名称，也不要把同名旧类当成现代类。`descriptor` 推断只解决 JVM 类型书写，不做 MCP/SRG 名称转换；自动名称解析仍属于独立工具，不在本版 MLA 范围内。`@LegacyType` 目标必须属于隔离旧域，不能借此访问宿主或 JDK 类型。
+**用 class 字面量指定目标类**：`@LegacyType(type = EntityPlayer.class)` 与 `@LegacyType("net.minecraft.entity.player.EntityPlayer")` 等价，二者必须且只能写一个。运行时只读取类名，宿主不会加载这个旧类；宿主恰好有同名类（例如 `net.minecraft.client.Minecraft`）时，名字相同，结果也一样。编译期需要旧类出现在现代源集的类路径上：`gradle/mfcl-direct.gradle` 生成**只有类名、没有任何成员**的存根 JAR（原版加 `mods` 中的模组），追加到 `names` 所列源集（默认 `['main']`）编译类路径的**末尾**，因此同名时现代类优先；宿主代码误用旧成员（如 `player.getCurrentArmor(3)`）会直接编译失败，而不是到运行时才出错。
+
+```groovy
+ext.mfclDirect = [
+        runtime: file('run/mfcl/runtime/1.7.10'),
+        mods   : fileTree('run/mods') { include 'Thaumcraft-*.jar' },
+        names  : ['main'],   // 默认值；这些源集可以写 @LegacyType(type = ...)
+]
+apply from: 'gradle/mfcl-direct.gradle'
+```
+
+```java
+import net.minecraft.entity.player.EntityPlayer;   // 只来自存根，只能用于 .class
+
+@LegacyType(type = EntityPlayer.class)
+public interface Player {
+    @LegacyMethod(name = "getCurrentArmor") LegacyObject armor(int slot);
+}
+```
+
+名称属于 1.7.10：SRG 名、1.7.10 的 MCP 名或模组自己的名称。不要用现代 Mojang 映射名称，也不要把同名旧类当成现代类。`@LegacyType` 的类名本来就是 1.7.10 的类名（`net.minecraft.entity.player.EntityPlayer`），不需要转换。`@LegacyType` 目标必须属于隔离旧域，不能借此访问宿主或 JDK 类型。
 
 参数和返回值允许精确匹配的基本类型、`String`、装箱类型、`Object`、`LegacyObject`、标注 `@LegacyType` 的接口，以及这些类型的数组。任意旧类 / Java 集合用 `LegacyObject` 持有，再绑定旧域的具体 accessor；现代 Minecraft 类和原始旧 Minecraft 类不能直接出现在签名中。数组跨界时复制，引用元素包装成 opaque handle 或对应接口代理。
 

@@ -6,8 +6,9 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface LegacyField {
+    /** SRG name ({@code field_77994_a}), MCP name ({@code stackSize}, with MLA_MCP_NAMES) or the unobfuscated name. */
     String name();
-    /** Empty means infer the field type from the getter return type or setter parameter type. */
+    /** Empty means the field's own type, checked against the getter return or setter parameter type. */
     String descriptor() default "";
     boolean isStatic() default false;
 }

@@ -33,6 +33,11 @@ public final class LegacyRuntimeService {
      */
     public void prepareRuntime(Path gameDirectory, Path runtimeDirectory, java.util.function.Consumer<String> progress) {
         autoPrepareFailure = github.com.gengyoubo.mfcl.legacy.runtime.RuntimeInstaller.prepareIfNeeded(gameDirectory, runtimeDirectory, progress);
+        // Optional MCP names for MLA contracts; a failure (for example offline) only leaves MLA on SRG names.
+        if (autoPrepareFailure == null && java.nio.file.Files.isRegularFile(runtimeDirectory.resolve(LegacyRuntimeCheck.SRG_JAR))) {
+            String names = github.com.gengyoubo.mfcl.legacy.runtime.RuntimeInstaller.ensureNames(runtimeDirectory, progress);
+            if (names != null) LOGGER.info("MLA accepts SRG member names only this startup: {}", names);
+        }
     }
 
     public Report start(Path gameDirectory, Path runtimeDirectory) {

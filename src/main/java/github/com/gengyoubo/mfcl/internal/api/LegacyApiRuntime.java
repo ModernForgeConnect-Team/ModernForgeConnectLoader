@@ -70,7 +70,7 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
 
     private final Set<String> features = Collections.synchronizedSet(new TreeSet<>(Set.of(
             LegacyFeatures.LANGUAGES, LegacyFeatures.MLA_ARRAYS, LegacyFeatures.MLA_COLLECTIONS, LegacyFeatures.MLA_COLLECTIONS_MUTABLE,
-            LegacyFeatures.MLA_INSTANCE, LegacyFeatures.MLA_OBJECT_ARGUMENTS, LegacyFeatures.DIRECT)));
+            LegacyFeatures.MLA_INSTANCE, LegacyFeatures.MLA_OBJECT_ARGUMENTS, LegacyFeatures.MLA_SIGNATURE_SEARCH, LegacyFeatures.DIRECT)));
     /** Host installation only; the set is fixed once the runtime is published. */
     public void addFeatures(String... names) { features.addAll(List.of(names)); }
     @Override public Set<String> features() { return Set.copyOf(features); }
@@ -142,6 +142,13 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     @Override public <T> T accessor(Class<T> contract, LegacyObject receiver) {
         return call("MLA_BIND", contract.getName(), () -> new AccessorEngine(this).bind(contract, receiver));
     }
+    private volatile LegacyNames names = LegacyNames.NONE;
+    /** Host installation only, before the runtime is published: MCP names MLA contracts may use. */
+    public void installNames(LegacyNames value) {
+        names = Objects.requireNonNull(value);
+        if (!value.isEmpty()) addFeatures(LegacyFeatures.MLA_MCP_NAMES);
+    }
+    LegacyNames names() { return names; }
     private final DirectEngine direct = new DirectEngine(this);
     @Override public <T> T direct(Class<T> contract, String implementation) {
         Objects.requireNonNull(contract); Objects.requireNonNull(implementation);
@@ -420,9 +427,9 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
             });
         }
         @Override public boolean isInstance(LegacyObject value, Class<?> contract) {
-            var annotation = contract.getAnnotation(github.com.gengyoubo.mfcl.api.mla.LegacyType.class);
-            if (annotation == null) throw new IllegalArgumentException("Expected a @LegacyType contract: " + contract.getName());
-            return isInstance(value, annotation.value());
+            String target = LegacyContracts.target(contract);
+            if (target == null) throw new IllegalArgumentException("Expected a @LegacyType contract: " + contract.getName());
+            return isInstance(value, target);
         }
         @Override public <T> Optional<T> as(LegacyObject value, Class<T> contract) {
             return isInstance(value, contract) ? Optional.of(accessor(contract, value)) : Optional.empty();

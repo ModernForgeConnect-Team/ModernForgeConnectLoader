@@ -23,7 +23,18 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
     }
     private github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime developerApi;
     public synchronized github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime developerApi(Set<String> loadedMods) {
-        if (developerApi == null) developerApi = github.com.gengyoubo.mfcl.internal.api.ApiRuntimeFactory.create(services(), loadedMods);
+        if (developerApi == null) {
+            developerApi = github.com.gengyoubo.mfcl.internal.api.ApiRuntimeFactory.create(services(), loadedMods);
+            Path support = forge.getParent();
+            if (RuntimeInstaller.hasNames(support)) {
+                try {
+                    developerApi.installNames(github.com.gengyoubo.mfcl.internal.api.LegacyNames.load(
+                            support.resolve(RuntimeInstaller.FIELD_NAMES), support.resolve(RuntimeInstaller.METHOD_NAMES)));
+                } catch (IOException failure) {
+                    com.mojang.logging.LogUtils.getLogger().warn("MLA accepts SRG member names only: cannot read MCP names", failure);
+                }
+            }
+        }
         return developerApi;
     }
     private github.com.gengyoubo.mfcl.bridge.LegacyOpenGl.Backend openGlBackend;

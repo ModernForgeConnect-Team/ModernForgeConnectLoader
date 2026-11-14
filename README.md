@@ -113,7 +113,7 @@ MfclApi.whenReady(runtime -> {
 });
 ```
 
-MLA uses exact legacy SRG names and JVM descriptors. Legacy references stay opaque and belong to one runtime; gameplay calls must run on the appropriate game thread. See the [compilable example](examples/legacy-accessor/) and [API guide](docs/developer-api.md) for imports, fields/constructors, conversions, lifecycle and limitations. `/mfclapi` provides operator diagnostics.
+MLA members are named by their legacy SRG name, their 1.7.10 MCP name (for example `getCurrentArmor`, once MFCL has fetched the pinned MCP name tables) or the mod's own name; the JVM descriptor is optional when exactly one overload fits the contract. Legacy references stay opaque and belong to one runtime; gameplay calls must run on the appropriate game thread. See the [compilable example](examples/legacy-accessor/) and [API guide](docs/developer-api.md) for imports, fields/constructors, conversions, lifecycle and limitations. `/mfclapi` provides operator diagnostics.
 
 Since MFCL 0.1.4, modern addons can declare original 1.7.10 prerequisites in `[[mfclDependencies.<addon-id>]]` tables in their `mods.toml`. MFCL validates actual loading and versions. `MfclApi.isModLoaded("Thaumcraft")`, `mod(...)` and `loadedMods()` expose original mod metadata; IDs retain their legacy case. See [legacy dependency declarations](docs/legacy-dependencies.md) and the [TOML example](examples/legacy-accessor/thaumcraft.mods.toml.example).
 

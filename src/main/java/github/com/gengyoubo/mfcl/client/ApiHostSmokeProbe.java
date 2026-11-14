@@ -15,6 +15,14 @@ final class ApiHostSmokeProbe {
     @LegacyType("net.minecraft.world.World") public interface World {
         @LegacyMethod(name="func_72820_D", descriptor="()J") long dayTime();
     }
+    /** MCP names and no descriptors (LegacyFeatures.MLA_MCP_NAMES / MLA_SIGNATURE_SEARCH). */
+    @LegacyType("net.minecraft.entity.player.EntityPlayer") public interface McpPlayer {
+        @LegacyMethod(name = "getCurrentArmor") LegacyObject armor(int slot);
+    }
+    @LegacyType("net.minecraft.item.ItemStack") public interface McpStack {
+        @LegacyMethod(name = "getDisplayName") String name();
+        @LegacyField(name = "stackSize") int count();
+    }
     private final Map<String,Object> proof = new LinkedHashMap<>();
     private final long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(4);
     private int stage, readyCalls;
@@ -47,7 +55,21 @@ final class ApiHostSmokeProbe {
                 if (!(direct.helmet(player) instanceof LegacyObject helmet)) throw new IllegalStateException("Original helmet did not cross as a reference");
                 String key = api.snapshot(helmet).key();
                 if (!key.equals("minecraft:iron_helmet")) throw new IllegalStateException("Direct class read the wrong helmet: " + key);
-                return direct.helmetName(player);
+                String directName = direct.helmetName(player);
+                if (!api.supports(LegacyFeatures.MLA_MCP_NAMES)) throw new IllegalStateException("MCP names for MLA were not installed");
+                var mcpHelmet = api.accessor(McpStack.class, api.accessor(McpPlayer.class, player).armor(3));
+                if (!mcpHelmet.name().equals(directName) || mcpHelmet.count() != 1)
+                    throw new IllegalStateException("MCP-named MLA contract differs: " + mcpHelmet.name() + " x" + mcpHelmet.count());
+                result.put("mlaMcpNamesWithoutDescriptors", true);
+                String literal;
+                try {
+                    @SuppressWarnings("unchecked") var probe = (java.util.function.BiFunction<LegacyRuntime, LegacyObject, String>)
+                            Class.forName("github.com.gengyoubo.mfcl.apismoke.ClassLiteralProbe").getConstructor().newInstance();
+                    literal = probe.apply(api, player);
+                } catch (ReflectiveOperationException missing) { throw new IllegalStateException("apiSmoke source set missing", missing); }
+                if (!literal.equals(directName)) throw new IllegalStateException("Class-literal contract differs: " + literal);
+                result.put("mlaClassLiteralContracts", true);
+                return directName;
             });
             if (name.isEmpty()) throw new IllegalStateException("Direct class saw no helmet on the old player");
             result.put("helmetName", name);

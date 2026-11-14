@@ -62,6 +62,16 @@ public final class RuntimeInstaller {
     static final String MCP_URL = "https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp/1.7.10/mcp-1.7.10-srg.zip";
     static final String SRG_SHA256 = "43d4376110b2638213d3096f80f8395c076eb05b58d6c0dbd22c0d999b37a357";
     static final String FORGE_UNIVERSAL = "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar";
+    /**
+     * MCP names for MLA contracts ({@code @LegacyMethod(name = "getCurrentArmor")}). Optional and separate from the
+     * verified runtime: an existing runtime gains the tables without being rebuilt. The archive is not pinned; both
+     * tables inside it are.
+     */
+    static final String MCP_NAMES_URL = "https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp_stable/12-1.7.10/mcp_stable-12-1.7.10.zip";
+    public static final String FIELD_NAMES = "mcp-stable-12-1.7.10-fields.csv", METHOD_NAMES = "mcp-stable-12-1.7.10-methods.csv";
+    static final Map<String, String> NAME_TABLES = Map.of(
+            "fields.csv", "bc15d3e0d509bd3240bff79b91816f59b527b92b02d8ea67477d2f36d0929fd8",
+            "methods.csv", "ba91c6bcd9a76ba4400729e0b3232daf0d4c47abed708c758318927540a33121");
     /** Libraries of MFCL's own patching tool, kept out of the modern game and loaded only for preparation. */
     static final List<Download> TOOLING = List.of(
             maven("org/ow2/asm/asm/9.7.1/asm-9.7.1.jar", "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281"),
@@ -284,6 +294,65 @@ public final class RuntimeInstaller {
                 Files.deleteIfExists(archive);
                 if (attempt >= ATTEMPTS) throw failure;
                 progress.accept("Retrying MCP mappings after: " + failure.getMessage());
+            }
+        }
+    }
+
+    /** True when both MCP name tables are in the runtime directory and match their pinned hashes. */
+    public static boolean hasNames(Path runtimeDirectory) {
+        try {
+            return digest(runtimeDirectory.resolve(FIELD_NAMES), "SHA-256").equals(NAME_TABLES.get("fields.csv"))
+                    && digest(runtimeDirectory.resolve(METHOD_NAMES), "SHA-256").equals(NAME_TABLES.get("methods.csv"));
+        } catch (IOException missing) { return false; }
+    }
+
+    /**
+     * Adds the pinned MCP name tables to a usable runtime when they are missing; honours
+     * {@code -Dmfcl.autoPrepareRuntime=false}. Never throws.
+     *
+     * @return null when the tables are present afterwards; otherwise why not (MLA then accepts SRG names only).
+     */
+    public static String ensureNames(Path runtimeDirectory, Consumer<String> progress) {
+        if (hasNames(runtimeDirectory)) return null;
+        if (!Files.isDirectory(runtimeDirectory)) return "no prepared runtime";
+        if (!Boolean.parseBoolean(System.getProperty(AUTO_PREPARE_PROPERTY, "true")))
+            return "automatic preparation is disabled by -D" + AUTO_PREPARE_PROPERTY + "=false";
+        try {
+            var installer = new RuntimeInstaller(runtimeDirectory, runtimeDirectory.resolveSibling(runtimeDirectory.getFileName() + ".names-downloads"),
+                    progress, RuntimeInstaller::httpFetch);
+            try { installer.installNames(); }
+            finally { deleteTree(installer.downloadDirectory); }
+            return null;
+        } catch (IOException | RuntimeException failure) {
+            progress.accept("MCP names for MLA were not installed: " + failure);
+            return failure.toString();
+        }
+    }
+
+    void installNames() throws IOException {
+        Path archive = downloadDirectory.resolve("mcp_stable-12-1.7.10.zip");
+        for (int attempt = 1; ; attempt++) {
+            try {
+                fetchVerified(new Download(archive.getFileName().toString(), MCP_NAMES_URL, null, null), archive, "MCP 1.7.10 names for MLA");
+                try (var zip = new ZipFile(archive.toFile())) {
+                    for (var table : List.of(Map.entry("fields.csv", FIELD_NAMES), Map.entry("methods.csv", METHOD_NAMES))) {
+                        var entry = zip.getEntry(table.getKey());
+                        if (entry == null) throw new IOException("MCP names archive has no " + table.getKey());
+                        Path temporary = runtimeDirectory.resolve(table.getValue() + "." + UUID.randomUUID() + ".part");
+                        try {
+                            try (var in = zip.getInputStream(entry)) { Files.copy(in, temporary); }
+                            if (!digest(temporary, "SHA-256").equals(NAME_TABLES.get(table.getKey())))
+                                throw new IOException("MCP " + table.getKey() + " differs from the pinned reference");
+                            move(temporary, runtimeDirectory.resolve(table.getValue()));
+                        } finally { Files.deleteIfExists(temporary); }
+                    }
+                }
+                progress.accept("MCP names for MLA are ready: " + runtimeDirectory);
+                return;
+            } catch (IOException failure) {
+                Files.deleteIfExists(archive);
+                if (attempt >= ATTEMPTS) throw failure;
+                progress.accept("Retrying MCP names after: " + failure.getMessage());
             }
         }
     }

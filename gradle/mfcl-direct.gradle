@@ -10,6 +10,8 @@
 //       host     : files(sourceSets.main.java.classesDirectory),    // host contracts the direct classes implement
 //       mappings : 'de.oceanlabs.mcp:mcp_stable:12-1.7.10@zip',     // default
 //       packaged : true,                                            // add to processResources (dev runs and the JAR)
+//       names    : ['main'],                                        // host source sets that get member-less class
+//                                                                   // stubs for @LegacyType(type = EntityPlayer.class)
 //   ]
 //   apply from: 'gradle/mfcl-direct.gradle'
 import org.objectweb.asm.ClassReader
@@ -198,6 +200,47 @@ def reobf = tasks.register("${setName}Reobf") {
             }
         }
     }
+}
+
+// Member-less stubs of every original class, appended after the host classpath of the source sets in `names`
+// (default ['main']): MLA contracts can write @LegacyType(type = EntityPlayer.class) while host classes of the same
+// name still win, and any accidental use of an original member in host code fails to compile.
+def legacyNames = tasks.register("${setName}LegacyNames") {
+    group = 'mfcl direct'
+    description = 'Member-less stubs of the original classes, for class literals in host MLA contracts.'
+    def output = work.map { it.file('legacy-names-1.7.10.jar') }
+    inputs.file(srgJar)
+    inputs.files(mods)
+    outputs.file(output)
+    doLast {
+        if (!srgJar.isFile()) throw new GradleException("No prepared MFCL runtime at ${srgJar}; start the game once with MFCL installed")
+        File target = output.get().asFile
+        target.parentFile.mkdirs()
+        def written = [] as Set
+        new ZipOutputStream(new FileOutputStream(target)).withCloseable { out ->
+            ([srgJar] + mods.files.toList()).each { File jar ->
+                eachClassInJar(jar) { byte[] bytes ->
+                    def writer = new ClassWriter(0)
+                    String className = null
+                    new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9, writer) {
+                        @Override void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+                            className = name
+                            super.visit(version, access, name, null, 'java/lang/Object', null)
+                        }
+                        @Override void visitSource(String source, String debug) { }
+                        @Override org.objectweb.asm.AnnotationVisitor visitAnnotation(String descriptor, boolean visible) { null }
+                        @Override FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) { null }
+                        @Override MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) { null }
+                    }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
+                    if (className == null || className == 'module-info' || className.endsWith('package-info') || !written.add(className)) return
+                    out.putNextEntry(new ZipEntry(className + '.class')); out.write(writer.toByteArray()); out.closeEntry()
+                }
+            }
+        }
+    }
+}
+(cfg.names == null ? ['main'] : cfg.names).each { String hostSet ->
+    tasks.named(sourceSets.getByName(hostSet).compileJavaTaskName, JavaCompile) { classpath = classpath + files(legacyNames) }
 }
 
 if (cfg.packaged == null || cfg.packaged) {
