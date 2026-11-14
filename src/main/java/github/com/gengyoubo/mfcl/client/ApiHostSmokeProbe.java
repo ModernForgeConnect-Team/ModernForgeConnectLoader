@@ -20,6 +20,42 @@ final class ApiHostSmokeProbe {
     private int stage, readyCalls;
     private LegacyObject clientWorld;
     private CompletableFuture<LegacyObject> pending;
+    private Map<String, Object> directProof; // written on the server thread, read after pending completes
+
+    /** Direct class from src/directSmoke: real imports of original classes, called with the real old player. */
+    private static Map<String, Object> directClasses(LegacyRuntime api, net.minecraft.server.level.ServerPlayer host) {
+        if (!api.supports(LegacyFeatures.DIRECT)) throw new IllegalStateException("Direct classes not reported");
+        var result = new LinkedHashMap<String, Object>();
+        var direct = api.direct(DirectSmokeApi.class, "github.com.gengyoubo.mfcl.directsmoke.DirectSmokeLogic");
+        String loaders = direct.loaders();
+        result.put("loaders", loaders);
+        var parts = loaders.split("\\|");
+        if (!parts[0].endsWith(".DirectLegacyLoader") || !parts[1].endsWith(".LegacyLaunchLoader"))
+            throw new IllegalStateException("Direct class or colliding original name resolved by the wrong loader: " + loaders);
+        int aspects = direct.aspectCount();
+        if (aspects < 6) throw new IllegalStateException("Original Thaumcraft aspect registry not visible: " + aspects);
+        result.put("originalAspects", aspects);
+        int order = direct.originalCallsOverride();
+        if (order >= 0) throw new IllegalStateException("Original code did not reach the reobfuscated override: " + order);
+        result.put("originalCodeCallsReobfuscatedOverride", true);
+        var previous = host.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).copy();
+        host.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        try {
+            var kept = new LegacyObject[1];
+            String name = api.withPlayer(host, player -> {
+                kept[0] = player;
+                if (!(direct.helmet(player) instanceof LegacyObject helmet)) throw new IllegalStateException("Original helmet did not cross as a reference");
+                String key = api.snapshot(helmet).key();
+                if (!key.equals("minecraft:iron_helmet")) throw new IllegalStateException("Direct class read the wrong helmet: " + key);
+                return direct.helmetName(player);
+            });
+            if (name.isEmpty()) throw new IllegalStateException("Direct class saw no helmet on the old player");
+            result.put("helmetName", name);
+            try { direct.helmetName(kept[0]); throw new IllegalStateException("Expired old player accepted by a direct class"); }
+            catch (LegacyAccessException expected) { result.put("expiredPlayerRejected", true); }
+        } finally { host.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, previous); }
+        return result;
+    }
     static void install() {
         var probe = new ApiHostSmokeProbe();
         MfclApi.whenReady(runtime -> probe.readyCalls++);
@@ -71,12 +107,14 @@ final class ApiHostSmokeProbe {
                         throw new IllegalStateException("API operator diagnostic command failed");
                     var world = api.mappings().toLegacy(LegacyMappings.WORLD, level).orElseThrow();
                     if (api.accessor(World.class, world).dayTime() != level.getDayTime()) throw new IllegalStateException("Server world mapping differs");
+                    directProof = directClasses(api, mc.getSingleplayerServer().getPlayerList().getPlayers().get(0));
                     return world;
                 }); stage = 2;
             } else if (stage == 2 && pending.isDone()) {
                 var world = pending.join(); var api = MfclApi.runtime().orElseThrow();
                 try { api.accessor(World.class, world); throw new IllegalStateException("Server world accepted on render thread"); }
                 catch (LegacyAccessException expected) { /* thread guard */ }
+                proof.put("directClasses", directProof);
                 proof.put("clientServerWorldIdentityAndThreadGuards", true);
                 proof.put("operatorDiagnosticCommand", true);
                 mc.level.disconnect(); mc.clearLevel(); stage = 3;

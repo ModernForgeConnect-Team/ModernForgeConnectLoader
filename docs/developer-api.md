@@ -26,8 +26,9 @@
 | Thaumcraft 等模组专属 API 适配库 | 后续独立实现，不放入 MFCL 核心 |
 | 调用点重定向 | 受限实现：`LegacyRedirects`（经 `LegacyRedirectProvider`，旧类加载前），v2 |
 | 自动 MCP/SRG 名称转换、Mixin 注入 | 不在本版 MLA 范围内 |
+| 直通类：附属代码真正 `import` 旧类，经宿主接口调用 `LegacyRuntime.direct` | 实验原型，v4；见 [直通类](direct-classes.md) |
 
-本 API 仍为实验版；`MfclApi.API_VERSION = 3` 表示当前契约版本，不能理解为 issue 全部完成。可用功能应先用 `runtime.supports(LegacyFeatures.X)` 探测，不要靠捕获 `UnsupportedOperationException`。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
+本 API 仍为实验版；`MfclApi.API_VERSION = 4` 表示当前契约版本，不能理解为 issue 全部完成。可用功能应先用 `runtime.supports(LegacyFeatures.X)` 探测，不要靠捕获 `UnsupportedOperationException`。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
 
 v3 的 `LegacyStackAdapters` 允许模组在宿主物品与旧版物品之间注册双向适配器，供物品映射、旧版库存和渲染快照使用。适配器必须只处理自己的物品，在旧版 NBT 中保存可识别的标记及恢复宿主物品所需的数据，且在回写时合并旧版逻辑修改。回调可能嵌套，不能再次处理自己生成的带标记结果。使用前检测 `LegacyFeatures.HOST_STACK_ADAPTERS`；客户端和服务器都要安装同一适配器。
 

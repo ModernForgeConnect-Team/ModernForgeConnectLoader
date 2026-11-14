@@ -56,6 +56,8 @@ public final class LegacyFeatures {
     public static final String REDIRECTS = "redirects";
     /** {@link LegacyRuntime#scenes()}; only on a physical client. */
     public static final String SCENES = "scenes";
+    /** {@link LegacyRuntime#direct}: addon classes compiled against original classes. Experimental, API v4. */
+    public static final String DIRECT = "direct";
     /** {@link LegacyRuntime#clientScreens()}; only on a physical client. */
     public static final String CLIENT_SCREENS = "client-screens";
 }

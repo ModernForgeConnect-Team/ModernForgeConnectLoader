@@ -13,6 +13,7 @@ Read each record's date, tested versions and stated limits. A historical experim
 | TC4 golem bodies, core task coverage and shared bridge failures | [Golem function audit](golem-function-audit.md) |
 | Java/Forge versions, private inputs, test preparation and isolated outputs | [Test environment and reproducibility](testing.md) |
 | Developer API, MLA, lifecycle, conversions and TC4 adapter boundaries | [Developer API / MLA](developer-api.md) |
+| Addon code with real imports of original classes (experimental) | [Direct classes](direct-classes.md) |
 | API and adapter regression results | [Developer API acceptance record](developer-api-progress.json) |
 | Explicit Gradle resolution, local imports, hashes and provenance | [Legacy Dependency Resolver](../tools/legacy-dependency-resolver/README.md) |
 | Initial feasibility research | [First investigation](research-forge-1710-to-1201.md), [second investigation](research-round2/README.md) |

@@ -70,7 +70,7 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
 
     private final Set<String> features = Collections.synchronizedSet(new TreeSet<>(Set.of(
             LegacyFeatures.LANGUAGES, LegacyFeatures.MLA_ARRAYS, LegacyFeatures.MLA_COLLECTIONS, LegacyFeatures.MLA_COLLECTIONS_MUTABLE,
-            LegacyFeatures.MLA_INSTANCE, LegacyFeatures.MLA_OBJECT_ARGUMENTS)));
+            LegacyFeatures.MLA_INSTANCE, LegacyFeatures.MLA_OBJECT_ARGUMENTS, LegacyFeatures.DIRECT)));
     /** Host installation only; the set is fixed once the runtime is published. */
     public void addFeatures(String... names) { features.addAll(List.of(names)); }
     @Override public Set<String> features() { return Set.copyOf(features); }
@@ -141,6 +141,11 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     @Override public <T> T accessor(Class<T> contract) { return accessor(contract, null); }
     @Override public <T> T accessor(Class<T> contract, LegacyObject receiver) {
         return call("MLA_BIND", contract.getName(), () -> new AccessorEngine(this).bind(contract, receiver));
+    }
+    private final DirectEngine direct = new DirectEngine(this);
+    @Override public <T> T direct(Class<T> contract, String implementation) {
+        Objects.requireNonNull(contract); Objects.requireNonNull(implementation);
+        return call("DIRECT_BIND", implementation, () -> direct.bind(contract, implementation));
     }
     @Override public Set<String> registryKeys(Registry registry) {
         return call("REGISTRY", registry.name(), () -> Set.copyOf(values.keys(registry)));

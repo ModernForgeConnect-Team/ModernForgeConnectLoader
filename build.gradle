@@ -110,6 +110,17 @@ sourceSets {
     create('preparation')
     create('legacy1710')
 }
+// API smoke test only: a direct class written with MCP names against the selected game's prepared 1.7.10 runtime,
+// reobfuscated to SRG and packaged under META-INF/mfcl/direct/ (release JARs carry none). Addons apply the same script.
+def directSmokeGame = file(providers.gradleProperty('mfclRunDir').getOrElse('run'))
+ext.mfclDirect = [
+        sourceSet: 'directSmoke',
+        runtime  : file("${directSmokeGame}/mfcl/runtime/1.7.10"),
+        mods     : fileTree("${directSmokeGame}/mods") { include 'Thaumcraft-*.jar' },
+        host     : files(sourceSets.main.java.classesDirectory),
+        packaged : false,
+]
+apply from: 'gradle/mfcl-direct.gradle'
 // Old Forge artifacts must never be placed on the modern Forge runtime classpath.
 configurations {
     legacyMaven {
@@ -191,6 +202,8 @@ tasks.named('processResources') {
     from(tasks.named('legacyJar')) { into 'mfcl' }
     from(tasks.named('runtimePreparationJar')) { into 'mfcl' }
     from('docs') { include 'nei-reference-inputs.json', 'legacy-language-inputs.json'; into 'mfcl/runtime-inputs' }
+    // Direct classes live under META-INF/mfcl/direct/ so the host never defines them; release JARs carry none.
+    if (project.hasProperty('mfclApiSmokeTest')) from(tasks.named('directSmokeReobf')) { into 'META-INF/mfcl/direct' }
 }
 tasks.register('installLegacyRuntime', JavaExec) {
     group = 'development'
