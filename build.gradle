@@ -8,6 +8,7 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'mfcl.direct'
 }
 
 version = mod_version
@@ -114,17 +115,16 @@ sourceSets {
     create('legacy1710')
 }
 // API smoke test only: a direct class written with MCP names against the selected game's prepared 1.7.10 runtime,
-// reobfuscated to SRG and packaged under META-INF/mfcl/direct/ (release JARs carry none). Addons apply the same script.
+// reobfuscated to SRG and packaged under META-INF/mfcl/direct/ (release JARs carry none).
 def directSmokeGame = file(providers.gradleProperty('mfclRunDir').getOrElse('run'))
-ext.mfclDirect = [
-        sourceSet: 'directSmoke',
-        runtime  : file("${directSmokeGame}/mfcl/runtime/1.7.10"),
-        mods     : fileTree("${directSmokeGame}/mods") { include 'Thaumcraft-*.jar' },
-        host     : files(sourceSets.main.java.classesDirectory),
-        packaged : false,
-        names    : ['apiSmoke'], // never main: release builds must not need a prepared game directory
-]
-apply from: 'gradle/mfcl-direct.gradle'
+mfclDirect {
+    sourceSet = 'directSmoke'
+    runtime = file("${directSmokeGame}/mfcl/runtime/1.7.10")
+    mods = fileTree("${directSmokeGame}/mods") { include 'Thaumcraft-*.jar' }
+    host = files(sourceSets.main.java.classesDirectory)
+    packaged = false
+    names = ['apiSmoke'] // never main: release builds must not need a prepared game directory
+}
 dependencies { apiSmokeCompileOnly sourceSets.api.output }
 // Old Forge artifacts must never be placed on the modern Forge runtime classpath.
 configurations {
@@ -207,8 +207,15 @@ tasks.named('processResources') {
     from(tasks.named('legacyJar')) { into 'mfcl' }
     from(tasks.named('runtimePreparationJar')) { into 'mfcl' }
     from('docs') { include 'nei-reference-inputs.json', 'legacy-language-inputs.json'; into 'mfcl/runtime-inputs' }
-    // Direct classes live under META-INF/mfcl/direct/ so the host never defines them; release JARs carry none.
-    if (project.hasProperty('mfclApiSmokeTest')) from(tasks.named('directSmokeReobf')) { into 'META-INF/mfcl/direct' }
+}
+// Direct classes live under META-INF/mfcl/direct/ so the host never defines them; release JARs carry none.
+// The plugin creates directSmokeReobf during afterEvaluate, so this must also wait for it.
+afterEvaluate {
+    if (project.hasProperty('mfclApiSmokeTest')) {
+        tasks.named('processResources') {
+            from(tasks.named('directSmokeReobf')) { into 'META-INF/mfcl/direct' }
+        }
+    }
 }
 tasks.register('installLegacyRuntime', JavaExec) {
     group = 'development'

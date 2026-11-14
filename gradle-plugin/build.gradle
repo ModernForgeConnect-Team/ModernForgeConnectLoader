@@ -1,0 +1,73 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+group = 'github.com.gengyoubo.mfcl'
+version = providers.gradleProperty('mfclPluginVersion').getOrElse('1.2.0')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    shade
+}
+
+dependencies {
+    // Shaded into the plugin JAR so consumers do not need a buildscript classpath entry.
+    compileOnly 'org.ow2.asm:asm-commons:9.7.1'
+    shade 'org.ow2.asm:asm-commons:9.7.1'
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation gradleTestKit()
+}
+
+gradlePlugin {
+    plugins {
+        mfclDirect {
+            id = 'mfcl.direct'
+            implementationClass = 'github.com.gengyoubo.mfcl.gradle.MfclDirectPlugin'
+            displayName = 'MFCL direct classes'
+            description = 'Compiles addon classes against the prepared 1.7.10 runtime and packages them under META-INF/mfcl/direct.'
+        }
+    }
+}
+
+tasks.named('jar') {
+    from { configurations.shade.collect { it.isDirectory() ? it : zipTree(it) } }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// TestKit executes task actions, so the shaded dependencies must be on the plugin-under-test classpath too.
+tasks.named('pluginUnderTestMetadata') {
+    pluginClasspath.from(configurations.shade)
+}
+
+processResources {
+    filesMatching('mfcl-direct.properties') {
+        expand(version: project.version)
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            name = 'mfcl'
+            url = uri('../mcmodsrepo')
+        }
+    }
+}

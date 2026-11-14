@@ -62,7 +62,56 @@ String name = runtime.withPlayer(serverPlayer, player -> armor.helmetName(player
 
 ## Gradle：直通源集
 
-[`gradle/mfcl-direct.gradle`](../gradle/mfcl-direct.gradle) 是一个独立的脚本插件，附属复制这一个文件即可使用：
+### 插件（推荐，1.2.0 起）
+
+MFCL 发布 `mfcl.direct` Gradle 插件，附属不必再复制构建脚本。先在 `settings.gradle` 声明插件仓库（只影响插件解析，不影响项目依赖）：
+
+```groovy
+pluginManagement {
+    repositories {
+        maven { url = uri('https://.../mcmodsrepo') } // 替换为 MFCL 的仓库地址
+        gradlePluginPortal()
+    }
+}
+```
+
+```groovy
+// build.gradle（附属）
+plugins {
+    id 'mfcl.direct' version '1.2.0'
+}
+
+mfclDirect {
+    sourceSet = 'direct'                                              // 默认 'direct' → src/direct/java
+    runtime   = file('run/mfcl/runtime/1.7.10')                       // 装有 MFCL 的游戏启动一次后生成
+    mods      = fileTree('run/mods') { include 'Thaumcraft-*.jar' }   // 直通类 import 的原始模组
+    host      = files(sourceSets.main.java.classesDirectory)          // 可选；默认 main 的 classes
+}
+```
+
+它会创建 `<sourceSet>DeobfMinecraft`、`<sourceSet>Reobf`、`<sourceSet>LegacyNames`，接线方式与脚本版一致：
+
+| 任务 | 作用 |
+| --- | --- |
+| `<sourceSet>DeobfMinecraft` | 把已准备好的 `minecraft-forge-1.7.10-srg.jar` 按 `mcp_stable-12-1.7.10`（`fields.csv` / `methods.csv`，首次从 Forge maven 下载）改成 MCP 成员名，作为编译类路径；不分发 |
+| `compile<SourceSet>Java` | `--release 8`；类路径依次为 MCP 版运行时、运行时库、`mods`、`host`。同名类旧版优先，与运行时一致 |
+| `<sourceSet>Reobf` | 把编译结果中的 MCP 成员名改回 SRG 名：按 owner + 名称 + 描述符沿继承链（原版、`mods`、直通类自身）查找，因此对 `getCurrentArmor` 的调用和 `extends CommandBase` 时对 `getCommandName` 的覆写都会被改名；未混淆的旧模组 API（如 `Aspect.aspects`）保持不变 |
+| `processResources` | 默认把 reobf 结果放进 `META-INF/mfcl/direct/`，开发运行和最终 JAR 都包含；设 `packaged = false` 可自行处理 |
+| `<sourceSet>LegacyNames` | 原版和 `mods` 中所有类的**无成员存根**，追加到 `names` 所列宿主源集编译类路径末尾，供 MLA 契约写 `@LegacyType(type = EntityPlayer.class)`；见 [开发 API](developer-api.md) |
+
+可选项：`mappings`（默认 `'de.oceanlabs.mcp:mcp_stable:12-1.7.10@zip'`）、`packaged`（默认 `true`）、`names`（默认 `['main']`，`[]` 表示不加存根）。
+
+每次 reobf 还会写入 `manifest.json`（插件版本、源集、mappings 坐标和 runtime 的 SHA-256），随直通类一起进入 `META-INF/mfcl/direct/`，便于 `/mfclapi` 和问题报告核对构建来源。插件在 `afterEvaluate` 中注册任务；如果构建脚本需要在配置期引用这些任务名，请放进 `afterEvaluate { ... }`。运行 Gradle 的 JVM 需要 17 或更高（1.20.1 开发环境本来如此）。
+
+仓库内开发时通过 `settings.gradle` 的 `pluginManagement { includeBuild('gradle-plugin') }` 直接使用插件源码；发布到 `mcmodsrepo` 用：
+
+```powershell
+.\gradlew -p gradle-plugin publish
+```
+
+### 脚本（兼容旧附属）
+
+[`gradle/mfcl-direct.gradle`](../gradle/mfcl-direct.gradle) 继续保留，适合不引入插件仓库或需要完全自包含的附属。配置键与插件相同：
 
 ```groovy
 // build.gradle（附属）
@@ -74,19 +123,6 @@ ext.mfclDirect = [
 ]
 apply from: 'gradle/mfcl-direct.gradle'
 ```
-
-它会创建：
-
-| 任务 | 作用 |
-| --- | --- |
-| `<sourceSet>DeobfMinecraft` | 把已准备好的 `minecraft-forge-1.7.10-srg.jar` 按 `mcp_stable-12-1.7.10`（`fields.csv` / `methods.csv`，首次从 Forge maven 下载）改成 MCP 成员名，作为编译类路径；不分发 |
-| `compile<SourceSet>Java` | `--release 8`；类路径依次为 MCP 版运行时、运行时库、`mods`、`host`。同名类旧版优先，与运行时一致 |
-| `<sourceSet>Reobf` | 把编译结果中的 MCP 成员名改回 SRG 名：按 owner + 名称 + 描述符沿继承链（原版、`mods`、直通类自身）查找，因此对 `getCurrentArmor` 的调用和 `extends CommandBase` 时对 `getCommandName` 的覆写都会被改名；未混淆的旧模组 API（如 `Aspect.aspects`）保持不变 |
-| `processResources` | 默认把 reobf 结果放进 `META-INF/mfcl/direct/`，开发运行和最终 JAR 都包含；设 `packaged: false` 可自行处理 |
-
-| `<sourceSet>LegacyNames` | 原版和 `mods` 中所有类的**无成员存根**，追加到 `names` 所列宿主源集编译类路径末尾，供 MLA 契约写 `@LegacyType(type = EntityPlayer.class)`；见 [开发 API](developer-api.md) |
-
-可选项：`mappings`（默认 `'de.oceanlabs.mcp:mcp_stable:12-1.7.10@zip'`）、`packaged`（默认 `true`）、`names`（默认 `['main']`，`[]` 表示不加存根）。
 
 编译用的 MCP 版运行时还有一处调整：原版只把泛型参数覆写（例如 `CommandBase.compareTo(Object)`）保留为 synthetic 方法，javac 会忽略它们，导致继承这些类时报“未覆盖抽象方法”。脚本把同名同参数下没有其他方法的 synthetic 方法设为可见，效果与当年从 MCP 源码重新编译时一样；协变返回值的桥接方法保持 synthetic，不会造成调用歧义。
 

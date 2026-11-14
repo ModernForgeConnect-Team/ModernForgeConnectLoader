@@ -26,7 +26,7 @@
 | Thaumcraft 等模组专属 API 适配库 | 后续独立实现，不放入 MFCL 核心 |
 | 调用点重定向 | 受限实现：`LegacyRedirects`（经 `LegacyRedirectProvider`，旧类加载前），v2 |
 | MLA 使用 MCP 名、省略描述符 | 已实现，v4；`MLA_MCP_NAMES` / `MLA_SIGNATURE_SEARCH`，见下文 |
-| `@LegacyType(type = EntityPlayer.class)` class 字面量 | 已实现，v4；编译期需 `gradle/mfcl-direct.gradle` 生成的类名存根 |
+| `@LegacyType(type = EntityPlayer.class)` class 字面量 | 已实现，v4；编译期需 `mfcl.direct` 插件（或同名脚本）生成的类名存根 |
 | Mixin 注入 | 不在本版 MLA 范围内 |
 | 直通类：附属代码真正 `import` 旧类，经宿主接口调用 `LegacyRuntime.direct` | 实验原型，v4；见 [直通类](direct-classes.md) |
 
@@ -138,16 +138,20 @@ public interface Stack {
 - 当抽象方法的参数或返回值是标注 `@LegacyType` 的接口时，MFCL 自动在旧对象与代理之间转换：参数代理会解包成旧对象，返回的旧对象会包装成代理。代理的接收者共享原引用的线程与生命周期约束。
 - 可定位非公开成员、继承方法和字段。成员不存在、重载签名错误、静态/实例声明不符、接收对象类型错误、描述符无法推断，会在绑定阶段失败。
 
-**用 class 字面量指定目标类**：`@LegacyType(type = EntityPlayer.class)` 与 `@LegacyType("net.minecraft.entity.player.EntityPlayer")` 等价，二者必须且只能写一个。运行时只读取类名，宿主不会加载这个旧类；宿主恰好有同名类（例如 `net.minecraft.client.Minecraft`）时，名字相同，结果也一样。编译期需要旧类出现在现代源集的类路径上：`gradle/mfcl-direct.gradle` 生成**只有类名、没有任何成员**的存根 JAR（原版加 `mods` 中的模组），追加到 `names` 所列源集（默认 `['main']`）编译类路径的**末尾**，因此同名时现代类优先；宿主代码误用旧成员（如 `player.getCurrentArmor(3)`）会直接编译失败，而不是到运行时才出错。
+**用 class 字面量指定目标类**：`@LegacyType(type = EntityPlayer.class)` 与 `@LegacyType("net.minecraft.entity.player.EntityPlayer")` 等价，二者必须且只能写一个。运行时只读取类名，宿主不会加载这个旧类；宿主恰好有同名类（例如 `net.minecraft.client.Minecraft`）时，名字相同，结果也一样。编译期需要旧类出现在现代源集的类路径上：`mfcl.direct` 插件生成**只有类名、没有任何成员**的存根 JAR（原版加 `mods` 中的模组），追加到 `names` 所列源集（默认 `['main']`）编译类路径的**末尾**，因此同名时现代类优先；宿主代码误用旧成员（如 `player.getCurrentArmor(3)`）会直接编译失败，而不是到运行时才出错。
 
 ```groovy
-ext.mfclDirect = [
-        runtime: file('run/mfcl/runtime/1.7.10'),
-        mods   : fileTree('run/mods') { include 'Thaumcraft-*.jar' },
-        names  : ['main'],   // 默认值；这些源集可以写 @LegacyType(type = ...)
-]
-apply from: 'gradle/mfcl-direct.gradle'
+plugins {
+    id 'mfcl.direct' version '1.2.0'
+}
+mfclDirect {
+    runtime = file('run/mfcl/runtime/1.7.10')
+    mods    = fileTree('run/mods') { include 'Thaumcraft-*.jar' }
+    names   = ['main']   // 默认值；这些源集可以写 @LegacyType(type = ...)
+}
 ```
+
+不能引入插件仓库时，仍可 `apply from: 'gradle/mfcl-direct.gradle'`，用同样的 `ext.mfclDirect` 配置键；见 [直通类](direct-classes.md)。
 
 ```java
 import net.minecraft.entity.player.EntityPlayer;   // 只来自存根，只能用于 .class

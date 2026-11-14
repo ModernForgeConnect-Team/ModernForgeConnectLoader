@@ -3,6 +3,11 @@
 // the prepared MFCL runtime and reobfuscated to SRG names, then packaged under META-INF/mfcl/direct/.
 // See docs/direct-classes.md. Self-contained: copy this file into an addon and apply it.
 //
+// Prefer the published plugin when possible:
+//   plugins { id 'mfcl.direct' version '1.2.0' }
+//   mfclDirect { sourceSet = 'direct'; runtime = file('run/mfcl/runtime/1.7.10') }
+// This script remains for addons that cannot resolve the plugin from a repository.
+//
 //   ext.mfclDirect = [
 //       sourceSet: 'direct',                                        // default 'direct' (src/direct/java)
 //       runtime  : file('run/mfcl/runtime/1.7.10'),                 // prepared MFCL runtime (run the game once with MFCL)
