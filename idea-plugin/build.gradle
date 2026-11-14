@@ -52,6 +52,13 @@ tasks.register('buildPlugin', Zip) {
     destinationDirectory = layout.buildDirectory.dir('distributions')
     into('mfcl-idea/lib') { from tasks.jar }
 }
+tasks.register('verifyDescriptor', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.idea.JvmDescriptorTest'
+    executable = new File(home, 'jbr/bin/java.exe').absolutePath
+}
+tasks.named('check') { dependsOn tasks.named('verifyDescriptor') }
 
 publishing {
     publications {

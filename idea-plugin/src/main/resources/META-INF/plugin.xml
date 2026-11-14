@@ -10,5 +10,6 @@
     <extensions defaultExtensionNs="com.intellij">
         <psi.referenceContributor language="JAVA" implementation="github.com.gengyoubo.mfcl.idea.LegacyReferenceContributor"/>
         <completion.contributor language="JAVA" implementationClass="github.com.gengyoubo.mfcl.idea.LegacyCompletionContributor"/>
+        <annotator language="JAVA" implementationClass="github.com.gengyoubo.mfcl.idea.LegacyAnnotator"/>
     </extensions>
 </idea-plugin>
