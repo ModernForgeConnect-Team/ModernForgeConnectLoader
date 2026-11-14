@@ -119,9 +119,20 @@ Since MFCL 0.1.4, modern addons can declare original 1.7.10 prerequisites in `[[
 
 ## Legacy Dependency Resolver
 
+For this project's Gradle development runs, declare old artifacts in the dedicated configuration (do not wrap them in `fg.deobf`):
+
+```groovy
+dependencies {
+    legacyMaven 'curse.maven:thaumcraft-223628:2227552'
+    // Declare required 1.7.10 mod dependencies here as well.
+}
+```
+
+`runClient` and `runServer` run `prepareLegacyMaven` automatically, which resolves those JARs and supplies them to MFCL's isolated 1.7.10 runtime. The configured repositories are used; transitive dependencies are disabled. `mfclRunDir` controls the game directory. To try one coordinate without editing the build file, use `./gradlew runClient '-PmfclLegacyMaven=curse.maven:thaumcraft-223628:2227552'` (in PowerShell, quote the whole property). A successful Maven download does not guarantee that the mod is compatible or that its required mods are present; inspect `logs/mfcl/legacy-1.7.10.json` for diagnostics.
+
 The [standalone Gradle plugin](tools/legacy-dependency-resolver/) reuses Gradle dependency resolution and accepts explicit local JAR imports. Inputs require pinned SHA-256 hashes, origin records and license/distribution notes. It does not add remote repositories, resolve transitive dependencies or install old JARs on the modern runtime classpath.
 
-It produces content-addressed JARs and a provenance manifest. Configuration, failure behavior and tests are described in its [README](tools/legacy-dependency-resolver/README.md).
+It produces content-addressed JARs and a provenance manifest. Place the output in the game instance's `mfcl/legacy-dependencies/1.7.10/` directory; MFCL verifies the manifest and loads its entries into the isolated 1.7.10 runtime at startup. Declare each dependency explicitly. Configuration, failure behavior and tests are described in its [README](tools/legacy-dependency-resolver/README.md).
 
 ## Build, test and contribute
 

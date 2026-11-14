@@ -10,5 +10,7 @@ public record LegacyPaths(Path gameDirectory) {
     public Path modDirectory() { return rootModDirectory().resolve("1.7.10"); }
     /** The modern mods folder; legacy JARs a launcher installs here are recognized too (see {@link LegacyDiscovery}). */
     public Path rootModDirectory() { return gameDirectory.resolve("mods"); }
+    public Path mavenDirectory() { return gameDirectory.resolve("mfcl/legacy-dependencies/1.7.10"); }
+    public Path gradleMavenDirectory() { return gameDirectory.resolve("mfcl/legacy-maven/1.7.10"); }
     public Path reportFile() { return gameDirectory.resolve("logs").resolve("mfcl").resolve("legacy-1.7.10.json"); }
 }

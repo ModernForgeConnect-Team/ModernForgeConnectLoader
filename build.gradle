@@ -1,3 +1,8 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+import java.util.jar.JarFile
+
 plugins {
     id 'eclipse'
     id 'idea'
@@ -105,12 +110,23 @@ sourceSets {
     create('preparation')
     create('legacy1710')
 }
+// Old Forge artifacts must never be placed on the modern Forge runtime classpath.
+configurations {
+    legacyMaven {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
 repositories {
     maven {
         url "https://cursemaven.com"
     }
 }
 dependencies {
+    legacyMaven 'curse.maven:thaumcraft-223628:2227552'
+    legacyMaven 'curse.maven:baubles-227083:2224857'
+    if (project.hasProperty('mfclLegacyMaven')) legacyMaven project.property('mfclLegacyMaven').toString()
     implementation sourceSets.api.output
     preparationImplementation 'org.ow2.asm:asm:9.7.1'
     preparationImplementation 'org.ow2.asm:asm-commons:9.7.1'
@@ -121,6 +137,41 @@ dependencies {
     legacy1710CompileOnly 'com.google.guava:guava:17.0'
     legacy1710CompileOnly 'net.minecraftforge:forge:1.7.10-10.13.4.1614-1.7.10:universal'
     implementation fg.deobf("curse.maven:spark-361579:4738952")
+}
+def legacyMavenOutput = file("${providers.gradleProperty('mfclRunDir').getOrElse('run')}/mfcl/legacy-maven/1.7.10")
+tasks.register('prepareLegacyMaven') {
+    group = 'development'
+    description = 'Resolve declared 1.7.10 Maven JARs for the isolated MFCL runtime.'
+    inputs.files(configurations.legacyMaven)
+    outputs.dir(legacyMavenOutput)
+    doLast {
+        legacyMavenOutput.mkdirs()
+        def artifacts = []
+        configurations.legacyMaven.files.sort { it.name }.each { jar ->
+            if (!jar.name.toLowerCase(Locale.ROOT).endsWith('.jar')) throw new GradleException("Legacy Maven artifact is not a JAR: ${jar}")
+            new JarFile(jar).withCloseable { archive ->
+                if (!archive.entries().hasMoreElements()) throw new GradleException("Empty legacy Maven JAR: ${jar}")
+            }
+            def digest = MessageDigest.getInstance('SHA-256')
+            jar.withInputStream { stream ->
+                byte[] buffer = new byte[32768]
+                int count
+                while ((count = stream.read(buffer)) != -1) digest.update(buffer, 0, count)
+            }
+            def hash = digest.digest().encodeHex().toString()
+            def target = new File(legacyMavenOutput, "${hash}.jar")
+            Files.copy(jar.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            if (!artifacts.any { it.sha256 == hash }) artifacts.add([sha256: hash, file: target.name])
+        }
+        def temporary = Files.createTempFile(legacyMavenOutput.toPath(), '.manifest-', '.tmp')
+        try {
+            temporary.toFile().setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([format: 1, artifacts: artifacts])), 'UTF-8')
+            Files.move(temporary, new File(legacyMavenOutput, 'legacy-dependencies.json').toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } finally { Files.deleteIfExists(temporary) }
+    }
+}
+tasks.matching { it.name in ['runClient', 'runServer', 'runGameTestServer'] }.configureEach {
+    dependsOn tasks.named('prepareLegacyMaven')
 }
 tasks.named('compileLegacy1710Java', JavaCompile) { options.release = 8 }
 tasks.register('legacyJar', Jar) {

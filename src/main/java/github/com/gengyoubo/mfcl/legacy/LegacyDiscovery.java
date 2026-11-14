@@ -66,7 +66,44 @@ public final class LegacyDiscovery {
         var root = rootArchives(paths);
         archives.addAll(root.archives());
         diagnostics.addAll(root.diagnostics());
+        try { addMavenArchives(archives, mavenArchives(paths.mavenDirectory())); }
+        catch (IOException | RuntimeException failure) {
+            diagnostics.add(LegacyDiagnostic.error("INVALID_LEGACY_MAVEN", paths.mavenDirectory() + ": " + failure.getMessage()));
+        }
+        try { addMavenArchives(archives, mavenArchives(paths.gradleMavenDirectory())); }
+        catch (IOException | RuntimeException failure) {
+            diagnostics.add(LegacyDiagnostic.error("INVALID_LEGACY_MAVEN", paths.gradleMavenDirectory() + ": " + failure.getMessage()));
+        }
         return new Result(archives, diagnostics);
+    }
+
+    private static void addMavenArchives(List<LegacyArchive> archives, List<LegacyArchive> candidates) {
+        Set<String> hashes = new LinkedHashSet<>();
+        for (var archive : archives) hashes.add(archive.sha256());
+        for (var archive : candidates) if (hashes.add(archive.sha256())) archives.add(archive);
+    }
+
+    /** Consume only the resolver's manifest entries, never stale JARs left in its output directory. */
+    private List<LegacyArchive> mavenArchives(Path directory) throws IOException {
+        Path manifest = directory.resolve("legacy-dependencies.json");
+        if (!Files.exists(manifest)) return List.of();
+        var root = JsonParser.parseString(Files.readString(manifest, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (!root.has("format") || root.get("format").getAsInt() != 1 || !root.has("artifacts") || !root.get("artifacts").isJsonArray())
+            throw new IOException("unsupported or invalid legacy-dependencies.json");
+        var result = new ArrayList<LegacyArchive>();
+        var names = new LinkedHashSet<String>();
+        for (var element : root.getAsJsonArray("artifacts")) {
+            var entry = element.getAsJsonObject();
+            String hash = string(entry, "sha256"), name = string(entry, "file");
+            if (!hash.matches("[0-9a-f]{64}") || !name.equals(hash + ".jar") || !names.add(name))
+                throw new IOException("invalid or duplicate Maven artifact: " + name);
+            Path jar = directory.resolve(name);
+            if (!Files.isRegularFile(jar) || !sha256(jar).equals(hash)) throw new IOException("missing or corrupt Maven artifact: " + name);
+            LegacyArchive archive = inspect(jar);
+            if (!archive.sha256().equals(hash)) throw new IOException("Maven artifact changed during discovery: " + name);
+            result.add(archive);
+        }
+        return result;
     }
 
     /**

@@ -33,7 +33,8 @@ legacyDependencies {
 }
 
 tasks.named('resolveLegacyDependencies') {
-    outputDirectory = layout.buildDirectory.dir('mfcl/legacy-dependencies')
+    // 指向目标游戏实例目录（也可以先输出到 build/，再复制整个目录）。
+    outputDirectory = file('/path/to/game/mfcl/legacy-dependencies/1.7.10')
 }
 ```
 
@@ -41,7 +42,9 @@ tasks.named('resolveLegacyDependencies') {
 
 执行 `gradlew resolveLegacyDependencies`。已缓存的 Gradle 依赖及本地导入可使用 `--offline`。使用 Gradle 自身的仓库、认证、代理和缓存机制；版本需固定，支持 Gradle 坐标中的 classifier。每条依赖独立解析，关闭传递依赖，其他旧前置需单独声明和锁定。
 
-本工具不自动探测 / 下载旧 Forge 或模组，不扫描任意镜像，不执行原 JAR，不修改原文件，不把旧文件加入现代 `compileClasspath` 或 `runtimeClasspath`，也不自动安装到游戏目录。输出是受控输入，仍需按 MFCL 的运行时准备流程处理；它不能代替旧 Forge 二进制补丁和 SRG 准备步骤。
+将输出目录设置为游戏实例的 `mfcl/legacy-dependencies/1.7.10/`，执行任务后重启游戏。也可以把默认输出目录中的 `legacy-dependencies.json` 和对应的 `<sha256>.jar` 一起复制到该位置。MFCL 启动时读取清单、重新校验哈希，将列出的 JAR 加入隔离的 1.7.10 类加载器和 Forge 模组发现流程；普通类库和包含旧模组的 JAR 均可使用。未列入清单的旧文件会被忽略，损坏或缺失的文件会产生错误并阻止旧运行时启动。不要在多个位置重复放置同一 JAR。MFCL 不会在游戏启动时解析 Maven 或下载传递依赖；需要的每个前置都应单独声明。仅支持与 MFCL 的 1.7.10 运行时兼容的制品，Maven 坐标本身不保证兼容。
+
+本工具不自动探测 / 下载旧 Forge 或模组，不扫描任意镜像，不执行原 JAR，不修改原文件，也不把旧文件加入现代 `compileClasspath` 或 `runtimeClasspath`。它不能代替旧 Forge 二进制补丁和 SRG 准备步骤。
 
 ## 输出和失败行为
 
@@ -66,4 +69,4 @@ build/mfcl/legacy-dependencies/
 
 TestKit 使用本地 Maven 夹具与本地 JAR，实际解析阶段加 `--offline`，验证固定版本、禁止传递解析、来源与哈希记录、重复执行、错误哈希保留清单、重复标识和无效 JAR 拒绝。测试框架依赖首次需要由 Gradle 获取。
 
-当前工具不承诺 Gradle configuration cache 支持，也不内置依赖许可识别或旧运行时安装逻辑。
+当前工具不承诺 Gradle configuration cache 支持，也不内置依赖许可识别。

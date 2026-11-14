@@ -110,7 +110,8 @@ public final class RuntimeInstaller {
      * @return null when the runtime is usable afterwards or not needed; otherwise why it was not prepared.
      */
     public static String prepareIfNeeded(Path gameDirectory, Path runtimeDirectory, Consumer<String> progress) {
-        if (!hasLegacyJars(gameDirectory.resolve("mods/1.7.10")) && !hasRootLegacyMods(gameDirectory)) return null;
+        if (!hasLegacyJars(gameDirectory.resolve("mods/1.7.10")) && !hasRootLegacyMods(gameDirectory)
+                && !hasMavenArchives(gameDirectory)) return null;
         List<LegacyDiagnostic> errors = LegacyRuntimeCheck.errors(runtimeDirectory);
         if (errors.isEmpty()) return null;
         if (!Boolean.parseBoolean(System.getProperty(AUTO_PREPARE_PROPERTY, "true"))) {
@@ -130,6 +131,15 @@ public final class RuntimeInstaller {
     private static boolean hasRootLegacyMods(Path gameDirectory) {
         try { return !new github.com.gengyoubo.mfcl.legacy.LegacyDiscovery().rootArchives(new github.com.gengyoubo.mfcl.legacy.LegacyPaths(gameDirectory)).archives().isEmpty(); }
         catch (IOException failure) { return false; }
+    }
+
+    private static boolean hasMavenArchives(Path gameDirectory) {
+        try {
+            var paths = new github.com.gengyoubo.mfcl.legacy.LegacyPaths(gameDirectory);
+            if (!Files.isRegularFile(paths.mavenDirectory().resolve("legacy-dependencies.json"))
+                    && !Files.isRegularFile(paths.gradleMavenDirectory().resolve("legacy-dependencies.json"))) return false;
+            return !new github.com.gengyoubo.mfcl.legacy.LegacyDiscovery().scan(paths).archives().isEmpty();
+        } catch (IOException | RuntimeException failure) { return false; }
     }
 
     static boolean hasLegacyJars(Path modDirectory) {
