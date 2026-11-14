@@ -1225,6 +1225,16 @@ public final class ModernContentBridge {
     private net.minecraftforge.client.extensions.common.IClientItemExtensions customRenderer(java.util.function.Supplier<String> key) {
         return new net.minecraftforge.client.extensions.common.IClientItemExtensions() {
             private github.com.gengyoubo.mfcl.client.LegacyItemRenderer renderer;
+            @Override public boolean applyForgeHandTransform(com.mojang.blaze3d.vertex.PoseStack pose, net.minecraft.client.player.LocalPlayer player,
+                    net.minecraft.world.entity.HumanoidArm arm, ItemStack stack, float partialTick, float equipProgress, float swingProgress) {
+                var hand = arm == player.getMainArm() ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;
+                if (!player.isUsingItem() || player.getUsedItemHand() != hand || !ItemStack.isSameItemSameTags(stack, player.getUseItem())
+                        || stack.getUseAnimation() != net.minecraft.world.item.UseAnim.NONE) return false;
+                // Minecraft resets the equip animation after every successful right-click. Old items with NONE
+                // entered their held pose immediately; keep the normal idle grip without the extra dip.
+                pose.translate(arm == net.minecraft.world.entity.HumanoidArm.RIGHT ? 0.56F : -0.56F, -0.52F, -0.72F);
+                return true;
+            }
             @Override public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getCustomRenderer() {
                 String value = key.get();
                 if (value == null || !declarations.customItems().contains(value)) return null;

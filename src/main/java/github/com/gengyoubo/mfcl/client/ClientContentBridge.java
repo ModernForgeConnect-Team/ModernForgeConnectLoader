@@ -56,7 +56,12 @@ public final class ClientContentBridge {
         }));
         bus.addListener((net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) -> {
             for (var entry : bridge.declarations().items()) event.register((stack, tint) -> {
-                try { return bridge.services().items().itemColor(bridge.renderSnapshot(stack), tint); }
+                try {
+                    var original = bridge.renderSnapshot(stack);
+                    if ("Thaumcraft:blockMagicalLeaves".equals(entry.blockKey()) && tint == 0)
+                        return (original.metadata() & 1) == 0 ? 0x48b518 : 0x8899aa;
+                    return bridge.services().items().itemColor(original, tint);
+                }
                 catch (Exception failure) { throw new IllegalStateException("Cannot evaluate original item tint: " + entry.key(), failure); }
             }, bridge.hostItems(entry.key()).toArray(net.minecraft.world.item.Item[]::new));
         });

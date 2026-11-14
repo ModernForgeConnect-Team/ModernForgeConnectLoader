@@ -249,9 +249,18 @@ final class ScannerHostSmokeProbe {
         mc.player.setYRot(0);mc.player.setXRot(0);mc.player.yRotO=0;mc.player.xRotO=0;mc.options.keyUse.setDown(true);
         var hit=mc.player.pick(4.5,0,false);
         if(!(hit instanceof net.minecraft.world.phys.BlockHitResult block)||hit.getType()!=net.minecraft.world.phys.HitResult.Type.BLOCK)throw new IllegalStateException("Scanner test is not looking at a block");
-        if(mc.gameMode.useItemOn(mc.player,InteractionHand.MAIN_HAND,block).consumesAction())throw new IllegalStateException("Block interaction swallowed scanner held use");
-        mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);
+        mc.hitResult=block;
+        try {var click=Minecraft.class.getDeclaredMethod("startUseItem");click.setAccessible(true);click.invoke(mc);}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot exercise the real right-click path",failure);}
         if(!mc.player.isUsingItem())throw new IllegalStateException("Scanner did not enter held-use state");
+        var pose=new com.mojang.blaze3d.vertex.PoseStack();var held=mc.player.getMainHandItem();
+        if(!net.minecraftforge.client.extensions.common.IClientItemExtensions.of(held).applyForgeHandTransform(pose,mc.player,mc.player.getMainArm(),held,0,1,0))
+            throw new IllegalStateException("Held scanner did not suppress the right-click equip dip");
+        var position=pose.last().pose();
+        float expectedX=mc.player.getMainArm()==net.minecraft.world.entity.HumanoidArm.RIGHT?.56f:-.56f;
+        if(Math.abs(position.m30()-expectedX)>.0001f||Math.abs(position.m31()+.52f)>.0001f||Math.abs(position.m32()+.72f)>.0001f)
+            throw new IllegalStateException("Held scanner grip moved with equip progress");
+        proof.put("heldUseSkipsEquipDip",true);
         proof.put("rightClickBlockStartsHeldUse",true);
     }
     private void release(Minecraft mc) {mc.options.keyUse.setDown(false);mc.gameMode.releaseUsingItem(mc.player);}

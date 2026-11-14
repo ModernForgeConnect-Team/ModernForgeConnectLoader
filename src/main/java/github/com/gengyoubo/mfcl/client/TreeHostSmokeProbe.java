@@ -67,7 +67,16 @@ final class TreeHostSmokeProbe {
                 check(model.getQuads(leaf,side,net.minecraft.util.RandomSource.create()).stream().allMatch(quad->quad.getTintIndex()==0)
                         && !model.getQuads(leaf,side,net.minecraft.util.RandomSource.create()).isEmpty(),"Leaf face lacks tint: "+meta+" "+side);
         }
+        for(int meta=0;meta<2;meta++){
+            var stack=content.stack("Thaumcraft:blockMagicalLeaves",meta,1,"");
+            check(!stack.isEmpty(),"Missing leaf item: "+meta);
+            check((mc.getItemColors().getColor(stack,0)&0xffffff)==(meta==0?0x48b518:0x8899aa),"Wrong leaf item tint: "+meta);
+            var model=mc.getItemRenderer().getModel(stack,level,mc.player,0);
+            for(var side:net.minecraft.core.Direction.values())
+                check(model.getQuads(null,side,net.minecraft.util.RandomSource.create()).stream().anyMatch(quad->quad.getTintIndex()==0),"Leaf item face lacks tint: "+meta+" "+side);
+        }
         proof.put("leafBiomeTint",true);
+        proof.put("leafItemTint",true);
     }
     private void platform(ServerLevel level,BlockPos base){for(int x=-6;x<=6;x++)for(int z=-6;z<=6;z++)level.setBlock(base.offset(x,-1,z),Blocks.DIRT.defaultBlockState(),2);}
     private void setup(Minecraft mc)throws Exception {
