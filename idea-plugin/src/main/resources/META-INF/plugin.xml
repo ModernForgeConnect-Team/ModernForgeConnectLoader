@@ -11,5 +11,6 @@
         <psi.referenceContributor language="JAVA" implementation="github.com.gengyoubo.mfcl.idea.LegacyReferenceContributor"/>
         <completion.contributor language="JAVA" implementationClass="github.com.gengyoubo.mfcl.idea.LegacyCompletionContributor"/>
         <annotator language="JAVA" implementationClass="github.com.gengyoubo.mfcl.idea.LegacyAnnotator"/>
+        <codeInsight.unresolvedReferenceQuickFixProvider implementation="github.com.gengyoubo.mfcl.idea.LegacyJarQuickFixProvider"/>
     </extensions>
 </idea-plugin>

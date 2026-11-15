@@ -32,9 +32,19 @@ else {
 def home = candidates.find { validIdeaHome(it) }
 if (home == null) throw new GradleException('Cannot find IntelliJ IDEA with the Java plugin and JBR. Set -PideaHome or IDEA_HOME to its installation directory.')
 logger.lifecycle("MFCL IDEA plugin SDK: ${home}")
+repositories { mavenCentral() }
+configurations { shade }
 dependencies {
     compileOnly fileTree(dir: new File(home, 'lib'), include: '*.jar')
     compileOnly fileTree(dir: new File(home, 'plugins/java/lib'), include: '*.jar')
+    compileOnly 'org.ow2.asm:asm:9.7.1'
+    shade 'org.ow2.asm:asm:9.7.1'
+    testImplementation 'org.ow2.asm:asm:9.7.1'
+}
+tasks.named('jar') {
+    from { configurations.shade.collect { zipTree(it) } }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
 }
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -58,7 +68,13 @@ tasks.register('verifyDescriptor', JavaExec) {
     mainClass = 'github.com.gengyoubo.mfcl.idea.JvmDescriptorTest'
     executable = new File(home, 'jbr/bin/java.exe').absolutePath
 }
-tasks.named('check') { dependsOn tasks.named('verifyDescriptor') }
+tasks.register('verifyLegacyStubJar', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.idea.LegacyStubJarTest'
+    executable = new File(home, 'jbr/bin/java.exe').absolutePath
+}
+tasks.named('check') { dependsOn tasks.named('verifyDescriptor'), tasks.named('verifyLegacyStubJar') }
 
 publishing {
     publications {

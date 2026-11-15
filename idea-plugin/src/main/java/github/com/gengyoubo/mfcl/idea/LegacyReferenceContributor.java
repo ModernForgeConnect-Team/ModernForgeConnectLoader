@@ -11,6 +11,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import java.io.File;
+import java.nio.file.Files;
 import java.util.*;
 
 /** References on annotation strings; the Java index supplies declarations and their navigation targets. */
@@ -119,6 +120,13 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
                 "run/mfcl/legacy-maven/1.7.10", "run/mfcl/legacy-dependencies/1.7.10")) {
             File[] found = new File(root, directory).listFiles(f -> f.isFile() && f.getName().endsWith(".jar"));
             if (found != null) { Arrays.sort(found); Collections.addAll(jars, found); }
+        }
+        File[] origins = new File(root, ".idea/mfcl/legacy-stubs").listFiles(f -> f.isFile() && f.getName().endsWith(".origin"));
+        if (origins != null) for (File origin : origins) {
+            try {
+                File jar = new File(Files.readString(origin.toPath()));
+                if (jar.isFile() && jar.getName().toLowerCase(Locale.ROOT).endsWith(".jar")) jars.add(jar);
+            } catch (java.io.IOException | RuntimeException ignored) { /* An unavailable original provides no completion. */ }
         }
         List<PsiClass> result = new ArrayList<>();
         String path = binaryName.replace('.', '/') + ".class";

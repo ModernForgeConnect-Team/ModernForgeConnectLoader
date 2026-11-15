@@ -13,6 +13,8 @@
 
 IDEA 还会对 MLA 注解标红：`@LegacyType` 必须且只能填写一个非空类名或非 `void.class` 类型；成员名不能为空；方法、构造器与字段的 `descriptor` 必须符合 JVM 描述符语法。能定位到完整旧类时，还会检查方法或字段名称是否存在。只有类名存根、未找到旧类或无法确认映射时不会推断成员不存在。此检查只影响 IDEA 编辑器，不会阻止 Gradle 编译；重载、访问权限、静态性、描述符与实际成员是否匹配仍由 MFCL 运行时验证。
 
+如果 `@LegacyType(type = ForgeDirection.class)` 中的旧类未解析，可以将光标放在类名上按 `Alt+Enter`，选择 **Add existing legacy JAR to IDEA (MFCL class names)**，然后选择本机已有的 1.7.10 JAR。插件会生成只包含类名的 JAR，放入项目的 `.idea/mfcl/legacy-stubs/`，并作为当前 IDEA 模块的 `PROVIDED` 依赖添加。选择的 JAR 必须包含该类；同名类有多个时需选择目标。此快捷操作只修改 IDEA 模块依赖，不修改 `build.gradle`、下载 Maven 或安装游戏前置；Gradle 重新导入可能移除该依赖。要让命令行编译和其他开发者的环境也生效，仍需将旧 JAR 配入 `mfcl.direct.mods` 并执行对应的 `LegacyNames` 任务；游戏运行时也需要通过 MFCL 原有方式准备旧 JAR。
+
 ## 构建与安装
 
 插件声明支持 IntelliJ IDEA 2025.3 到 2026.1（内部版本 253–261），需要 Java 插件和 JBR 21；构建使用本机 IDEA SDK。Windows 下会自动查找常见的 IDEA 安装目录。使用 JDK 17 或更高运行 Gradle，在仓库根目录执行：
