@@ -116,6 +116,8 @@ mfclDirect {
 | `processResources` | 默认把 reobf 结果放进 `META-INF/mfcl/direct/`，开发运行和最终 JAR 都包含；设 `packaged = false` 可自行处理 |
 | `<sourceSet>LegacyNames` | 原版和 `mods` 中所有类的**无成员存根**，追加到 `names` 所列宿主源集编译类路径末尾，供 MLA 契约写 `@LegacyType(type = EntityPlayer.class)`；见 [开发 API](developer-api.md) |
 
+例如，在 `src/main/java` 的 MLA 契约中使用旧版 Forge 类型时，添加 `import net.minecraftforge.common.util.ForgeDirection;`，然后写 `@LegacyType(type = ForgeDirection.class)`。IDEA 需要先看到生成的类名存根：配置 `mfcl.direct` 后运行 `./gradlew directLegacyNames`（自定义 `sourceSet` 时使用对应任务名），再重新同步 Gradle。`names` 默认包括 `main`；契约在其他源集时也须把该源集加入 `names`。存根只用于 class 字面量，不包含旧类字段；`@LegacyField(name = "offsetX", descriptor = "I")` 由旧运行时解析。
+
 可选项：`mappings`（默认 `'de.oceanlabs.mcp:mcp_stable:12-1.7.10@zip'`）、`packaged`（默认 `true`）、`names`（默认 `['main']`，`[]` 表示不加存根）。
 
 每次 reobf 还会写入 `manifest.json`（插件版本、源集、mappings 坐标和 runtime 的 SHA-256），随直通类一起进入 `META-INF/mfcl/direct/`，便于 `/mfclapi` 和问题报告核对构建来源。插件在 `afterEvaluate` 中注册任务；如果构建脚本需要在配置期引用这些任务名，请放进 `afterEvaluate { ... }`。运行 Gradle 的 JVM 需要 17 或更高（1.20.1 开发环境本来如此）。

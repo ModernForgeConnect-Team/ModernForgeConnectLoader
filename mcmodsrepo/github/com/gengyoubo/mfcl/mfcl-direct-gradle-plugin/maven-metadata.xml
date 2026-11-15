@@ -3,12 +3,13 @@
   <groupId>github.com.gengyoubo.mfcl</groupId>
   <artifactId>mfcl-direct-gradle-plugin</artifactId>
   <versioning>
-    <latest>1.2.0-dev3</latest>
-    <release>1.2.0-dev3</release>
+    <latest>1.2.0-dev7</latest>
+    <release>1.2.0-dev7</release>
     <versions>
       <version>1.2.0-dev2</version>
       <version>1.2.0-dev3</version>
+      <version>1.2.0-dev7</version>
     </versions>
-    <lastUpdated>20261114214153</lastUpdated>
+    <lastUpdated>20261115024821</lastUpdated>
   </versioning>
 </metadata>

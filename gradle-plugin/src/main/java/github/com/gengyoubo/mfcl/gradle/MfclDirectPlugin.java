@@ -118,8 +118,12 @@ public final class MfclDirectPlugin implements Plugin<Project> {
             SourceSet hostSet = sourceSets.findByName(hostName);
             if (hostSet == null)
                 throw new GradleException("mfclDirect.names contains unknown source set '" + hostName + "'");
+            // Expose this as an actual source-set dependency, not just a compile task classpath mutation:
+            // IDE Gradle importers build their model from configurations and otherwise cannot see the stubs.
+            var nameFiles = project.files(names.flatMap(LegacyNamesTask::getOutput));
+            project.getDependencies().add(hostSet.getCompileOnlyConfigurationName(), nameFiles);
             project.getTasks().named(hostSet.getCompileJavaTaskName(), JavaCompile.class).configure(task ->
-                    task.setClasspath(task.getClasspath().plus(project.files(names.flatMap(LegacyNamesTask::getOutput)))));
+                    task.setClasspath(task.getClasspath().minus(nameFiles).plus(nameFiles)));
         }
 
         if (extension.getPackaged().get()) {

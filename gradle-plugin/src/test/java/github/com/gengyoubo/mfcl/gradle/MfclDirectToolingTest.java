@@ -65,6 +65,35 @@ class MfclDirectToolingTest {
         assertTrue(Files.isRegularFile(project.resolve("build/mfcl-direct/direct/reobf/manifest.json")));
     }
 
+    @Test
+    void hostSourceSetExposesLegacyForgeClassLiteralAsCompileOnlyDependency() throws Exception {
+        Path runtime = Files.createDirectories(project.resolve("runtime"));
+        writeOldJar(runtime.resolve("minecraft-forge-1.7.10-srg.jar"));
+        Files.writeString(project.resolve("settings.gradle"), "rootProject.name = 'fixture'\n");
+        Files.writeString(project.resolve("build.gradle"), """
+                plugins { id 'mfcl.direct' }
+                mfclDirect { runtime = file('runtime'); packaged = false }
+                tasks.register('verifyModel') {
+                    doLast {
+                        assert configurations.compileClasspath.files.any { it.name == 'legacy-names-1.7.10.jar' }
+                        assert !configurations.runtimeClasspath.files.any { it.name == 'legacy-names-1.7.10.jar' }
+                    }
+                }
+                """);
+        Path source = project.resolve("src/main/java/fixture/Contract.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+                package fixture;
+                import net.minecraftforge.common.util.ForgeDirection;
+                @interface LegacyType { Class<?> type(); }
+                @LegacyType(type = ForgeDirection.class) public interface Contract {}
+                """);
+        BuildResult result = GradleRunner.create().withProjectDir(project.toFile()).withPluginClasspath()
+                .withArguments("compileJava", "verifyModel", "--offline", "--stacktrace").build();
+        assertTrue(result.getOutput().contains("BUILD SUCCESSFUL"));
+        assertTrue(Files.isRegularFile(project.resolve("build/mfcl-direct/direct/legacy-names-1.7.10.jar")));
+    }
+
     private static void writeOldJar(Path target) throws IOException {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "fixture/Old", null, "java/lang/Object", null);
@@ -86,6 +115,13 @@ class MfclDirectToolingTest {
         try (ZipOutputStream output = new ZipOutputStream(new FileOutputStream(target.toFile()))) {
             output.putNextEntry(new ZipEntry("fixture/Old.class"));
             output.write(writer.toByteArray());
+            output.closeEntry();
+            ClassWriter direction = new ClassWriter(0);
+            direction.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER,
+                    "net/minecraftforge/common/util/ForgeDirection", null, "java/lang/Object", null);
+            direction.visitEnd();
+            output.putNextEntry(new ZipEntry("net/minecraftforge/common/util/ForgeDirection.class"));
+            output.write(direction.toByteArray());
             output.closeEntry();
         }
     }

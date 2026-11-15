@@ -245,7 +245,10 @@ def legacyNames = tasks.register("${setName}LegacyNames") {
     }
 }
 (cfg.names == null ? ['main'] : cfg.names).each { String hostSet ->
-    tasks.named(sourceSets.getByName(hostSet).compileJavaTaskName, JavaCompile) { classpath = classpath + files(legacyNames) }
+    def source = sourceSets.getByName(hostSet)
+    def nameFiles = files(legacyNames)
+    dependencies.add(source.compileOnlyConfigurationName, nameFiles)
+    tasks.named(source.compileJavaTaskName, JavaCompile) { classpath = classpath - nameFiles + nameFiles }
 }
 
 if (cfg.packaged == null || cfg.packaged) {
