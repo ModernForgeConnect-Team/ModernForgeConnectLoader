@@ -40,7 +40,7 @@ public final class LegacyJarQuickFixProvider extends UnresolvedReferenceQuickFix
         AddLegacyJarFix(PsiJavaCodeReferenceElement element, String name) {
             reference = SmartPointerManager.createPointer(element); this.name = name;
         }
-        @Override public @NotNull String getText() { return "Add existing legacy JAR to IDEA (MFCL class names)"; }
+        @Override public @NotNull String getText() { return "Resolve legacy type using MFCL"; }
         @Override public @NotNull String getFamilyName() { return "MFCL legacy dependencies"; }
         @Override public boolean startInWriteAction() { return false; }
         @Override public boolean isAvailable(@NotNull Project project, Editor editor, PsiFile file) {
@@ -53,6 +53,30 @@ public final class LegacyJarQuickFixProvider extends UnresolvedReferenceQuickFix
             if (element == null || project.getBasePath() == null) return;
             Module module = ModuleUtilCore.findModuleForPsiElement(element);
             if (module == null) return;
+            var candidates = LegacyProjectJars.find(Path.of(project.getBasePath()), name);
+            if (!candidates.isEmpty()) {
+                int selectedIndex = 0;
+                if (candidates.size() > 1) {
+                    String[] names = candidates.stream().map(LegacyProjectJars.Candidate::qualifiedName).toArray(String[]::new);
+                    selectedIndex = Messages.showChooseDialog(project, "Select the class to use:", "MFCL Legacy Classes",
+                            Messages.getQuestionIcon(), names, names[0]);
+                    if (selectedIndex < 0) return;
+                }
+                var candidate = candidates.get(selectedIndex);
+                VirtualFile local = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(candidate.jar());
+                VirtualFile jarRoot = local == null ? null : JarFileSystem.getInstance().getJarRootForLocalFile(local);
+                if (jarRoot == null) { Messages.showErrorDialog(project, "Cannot open generated name-only JAR", "MFCL Legacy Classes"); return; }
+                WriteCommandAction.runWriteCommandAction(project, () -> {
+                    LegacyNamesAutoAttach.attachToModule(module, jarRoot, candidate.jar().getParent().getFileName().toString());
+                    PsiJavaCodeReferenceElement current = reference.getElement();
+                    if (current != null && current.isValid()) {
+                        var replacement = JavaPsiFacade.getElementFactory(project).createReferenceFromText(candidate.qualifiedName(), current);
+                        PsiElement inserted = current.replace(replacement);
+                        JavaCodeStyleManager.getInstance(project).shortenClassReferences(inserted);
+                    }
+                });
+                return;
+            }
             VirtualFile selected = FileChooser.chooseFile(FileChooserDescriptorFactory.createSingleFileDescriptor("jar")
                     .withTitle("Select an existing 1.7.10 JAR"), project, null);
             if (selected == null) return;

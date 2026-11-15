@@ -59,24 +59,31 @@ public final class LegacyNamesAutoAttach implements StartupActivity {
                     boolean belongs = java.util.Arrays.stream(current.getContentRoots())
                             .anyMatch(content -> VfsUtilCore.isAncestor(projectRoot, content, false));
                     if (!belongs || current.getSourceRoots().length == 0 || contains(current, root)) continue;
-                    ModifiableRootModel model = current.getModifiableModel();
-                    try {
-                        String name = "MFCL generated names " + directory.getName();
-                        var table = model.getModuleLibraryTable();
-                        var library = table.getLibraryByName(name);
-                        if (library == null) {
-                            library = table.createLibrary(name);
-                            var libraryModel = library.getModifiableModel();
-                            libraryModel.addRoot(root, OrderRootType.CLASSES);
-                            libraryModel.commit();
-                            var entry = model.findLibraryOrderEntry(library);
-                            if (entry != null) entry.setScope(DependencyScope.PROVIDED);
-                        }
-                        model.commit();
-                    } finally { if (!model.isDisposed()) model.dispose(); }
+                    attachToModule(module, root, directory.getName());
                 }
             });
         }
+    }
+
+    /** Call on the EDT inside a write action. */
+    static void attachToModule(Module module, VirtualFile root, String sourceSet) {
+        ModuleRootManager current = ModuleRootManager.getInstance(module);
+        if (contains(current, root)) return;
+        ModifiableRootModel model = current.getModifiableModel();
+        try {
+            String name = "MFCL generated names " + sourceSet;
+            var table = model.getModuleLibraryTable();
+            var library = table.getLibraryByName(name);
+            if (library == null) {
+                library = table.createLibrary(name);
+                var libraryModel = library.getModifiableModel();
+                libraryModel.addRoot(root, OrderRootType.CLASSES);
+                libraryModel.commit();
+                var entry = model.findLibraryOrderEntry(library);
+                if (entry != null) entry.setScope(DependencyScope.PROVIDED);
+            }
+            model.commit();
+        } finally { if (!model.isDisposed()) model.dispose(); }
     }
 
     private static boolean contains(ModuleRootManager model, VirtualFile root) {

@@ -15,7 +15,7 @@
 
 IDEA 还会对 MLA 注解标红：`@LegacyType` 必须且只能填写一个非空类名或非 `void.class` 类型；成员名不能为空；方法、构造器与字段的 `descriptor` 必须符合 JVM 描述符语法。能定位到完整旧类时，还会检查方法或字段名称是否存在。只有类名存根、未找到旧类或无法确认映射时不会推断成员不存在。此检查只影响 IDEA 编辑器，不会阻止 Gradle 编译；重载、访问权限、静态性、描述符与实际成员是否匹配仍由 MFCL 运行时验证。
 
-如果 `@LegacyType(type = ForgeDirection.class)` 中的旧类未解析，可以将光标放在类名上按 `Alt+Enter`，选择 **Add existing legacy JAR to IDEA (MFCL class names)**，然后选择本机已有的 1.7.10 JAR。插件会生成只包含类名的 JAR，放入项目的 `.idea/mfcl/legacy-stubs/`，并作为当前 IDEA 模块的 `PROVIDED` 依赖添加。选择的 JAR 必须包含该类；同名类有多个时需选择目标。此快捷操作只修改 IDEA 模块依赖，不修改 `build.gradle`、下载 Maven 或安装游戏前置；Gradle 重新导入可能移除该依赖。要让命令行编译和其他开发者的环境也生效，仍需将旧 JAR 配入 `mfcl.direct.mods` 并执行对应的 `LegacyNames` 任务；游戏运行时也需要通过 MFCL 原有方式准备旧 JAR。
+如果 `@LegacyType(type = ForgeDirection.class)` 中的旧类未解析，插件会先查找项目已生成的存根；类名唯一时不需要选择文件。如果仍需手动触发，可将光标放在类名上按 `Alt+Enter`，选择 **Resolve legacy type using MFCL**；当找不到现成存根时，才会提示选择本机已有的 1.7.10 JAR。插件生成的备用存根位于 `.idea/mfcl/legacy-stubs/`，作为当前 IDEA 模块的 `PROVIDED` 依赖添加。同名类有多个时需选择目标。IDEA 侧操作不修改 `build.gradle`、下载 Maven 或安装游戏前置；Gradle 重新导入可能移除手动添加的依赖。命令行构建和游戏运行时应使用 `legacyMaven` 或 `mfcl.direct.mods` 按 [直通类说明](../docs/direct-classes.md) 配置。
 
 ## 构建与安装
 

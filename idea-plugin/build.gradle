@@ -74,7 +74,13 @@ tasks.register('verifyLegacyStubJar', JavaExec) {
     mainClass = 'github.com.gengyoubo.mfcl.idea.LegacyStubJarTest'
     executable = new File(home, 'jbr/bin/java.exe').absolutePath
 }
-tasks.named('check') { dependsOn tasks.named('verifyDescriptor'), tasks.named('verifyLegacyStubJar') }
+tasks.register('verifyLegacyProjectJars', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'github.com.gengyoubo.mfcl.idea.LegacyProjectJarsTest'
+    executable = new File(home, 'jbr/bin/java.exe').absolutePath
+}
+tasks.named('check') { dependsOn tasks.named('verifyDescriptor'), tasks.named('verifyLegacyStubJar'), tasks.named('verifyLegacyProjectJars') }
 
 publishing {
     publications {
