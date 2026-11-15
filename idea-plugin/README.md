@@ -9,6 +9,8 @@
 
 例如 `@LegacyType("thaumcraft.common.items.wands.ItemWandCasting")` 下输入 `@LegacyMethod(name = "")`，把文本光标放在引号内，按 `Ctrl+Space` 可选择 `getMaxVis`。输入方法名前缀时 IDEA 也可以自动弹出候选，取决于其代码补全设置；鼠标悬停不会触发补全。旧 JAR 除了可通过 Gradle 作为库索引，也会在项目的 `build/mfcl-direct/*/`、`mods/`、`mods/1.7.10/`、`run/mods/` 和 `run/mfcl/legacy-maven/1.7.10/` 等常见位置查找。使用其他路径时请将 JAR 添加为 IDEA 项目库。依赖文件或构建产物需要实际存在，插件不会自动下载它们。
 
+例如在 `@LegacyType(type = ForgeDirection.class)` 的类名上 Ctrl+B，或者在 `@LegacyField(name = "offsetX")` 的字段名上 Ctrl+B，插件会尝试跳到完整的旧版 Forge 定义，而不是只含类名的存根。优先使用构建出的 MCP JAR；没有该文件时会使用 `run/mfcl/runtime/1.7.10/` 下的 SRG JAR，也会检查 `gradle-local.properties` 中的 `legacyRuntimeDir`。没有关联源码时 IDEA 显示反编译结果；SRG JAR 中 Minecraft 成员可能显示 `func_` / `field_` 名。普通 Java `import` 的跳转仍由 IDEA 处理，可能进入编译期存根；从完整旧类做反向查找用例也不保证能找到指向存根的 Java 引用。
+
 项目打开、Gradle 项目同步完成，或已有存根 JAR 发生变化时，插件会检查根项目 `build/mfcl-direct/*/legacy-names-1.7.10.jar` 是否已在当前项目各模块的类路径中；若未添加，就以 `PROVIDED` 作用域附加这个仅含类名的 JAR。它不会把原始旧 JAR 加入现代运行时，也不会代替 Gradle 生成存根。对 `@LegacyType(type = ...class)` 中未解析的类名，插件会尝试从已索引的 MFCL 存根中自动添加 Java 导入；同名类有多个候选或已有冲突导入时不自动选择。其他 Java 导入仍遵循 IDEA 的设置。
 
 这不是 Mixin 本身，也不提供 Mixin 注入、运行时转换或修改游戏的能力。暂不支持带 `Lowner;` 的 Mixin 成员选择器、转义字符串、SRG/MCP 名称互相转换、按描述符筛选重载；普通 Java 代码的补全由 IDEA 自身提供。插件不会下载或安装旧版 Forge。

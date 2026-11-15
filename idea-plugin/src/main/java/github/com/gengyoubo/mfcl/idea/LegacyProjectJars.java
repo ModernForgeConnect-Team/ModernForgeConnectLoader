@@ -12,6 +12,38 @@ final class LegacyProjectJars {
     private record Cached(long size, long modified, Map<String, List<String>> names) {}
     private static final Map<Path, Cached> CACHE = new ConcurrentHashMap<>();
 
+    static List<Path> runtimeJars(Path project) {
+        if (project == null) return List.of();
+        var result = new LinkedHashSet<Path>();
+        Path sets = project.resolve("build/mfcl-direct");
+        if (Files.isDirectory(sets)) {
+            try (var dirs = Files.list(sets)) {
+                for (Path dir : dirs.filter(Files::isDirectory).sorted().toList())
+                    addIfFile(result, dir.resolve("minecraft-forge-1.7.10-mcp.jar"));
+            } catch (IOException ignored) { }
+        }
+        addIfFile(result, project.resolve("run/mfcl/runtime/1.7.10/minecraft-forge-1.7.10-srg.jar"));
+        for (String file : List.of("gradle.properties", "gradle-local.properties")) {
+            Path propertiesPath = project.resolve(file);
+            if (!Files.isRegularFile(propertiesPath)) continue;
+            Properties properties = new Properties();
+            try (var input = Files.newBufferedReader(propertiesPath)) {
+                properties.load(input);
+                String runtime = properties.getProperty("legacyRuntimeDir");
+                if (runtime != null && !runtime.isBlank())
+                    addIfFile(result, project.resolve(runtime).resolve("minecraft-forge-1.7.10-srg.jar"));
+                String run = properties.getProperty("mfclRunDir");
+                if (run != null && !run.isBlank())
+                    addIfFile(result, project.resolve(run).resolve("mfcl/runtime/1.7.10/minecraft-forge-1.7.10-srg.jar"));
+            } catch (IOException | RuntimeException ignored) { }
+        }
+        return List.copyOf(result);
+    }
+
+    private static void addIfFile(Set<Path> paths, Path path) {
+        if (Files.isRegularFile(path)) paths.add(path.toAbsolutePath().normalize());
+    }
+
     static List<Candidate> find(Path project, String simpleName) {
         if (project == null || simpleName == null || simpleName.isBlank()) return List.of();
         Path sets = project.resolve("build/mfcl-direct");

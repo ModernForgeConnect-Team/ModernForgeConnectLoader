@@ -19,5 +19,12 @@ public final class LegacyProjectJarsTest {
         var tube = LegacyProjectJars.find(project, "TileTube");
         if (tube.size() != 1 || !tube.get(0).qualifiedName().equals("thaumcraft.common.tiles.TileTube")) throw new AssertionError(tube);
         if (!LegacyProjectJars.find(project, "Missing").isEmpty()) throw new AssertionError("Unknown class accepted");
+        Path runtime = Files.createDirectories(project.resolve("run/mfcl/runtime/1.7.10"));
+        Path forge = Files.write(runtime.resolve("minecraft-forge-1.7.10-srg.jar"), new byte[]{0});
+        Path custom = Files.createDirectories(project.resolve("custom-runtime"));
+        Path customForge = Files.write(custom.resolve("minecraft-forge-1.7.10-srg.jar"), new byte[]{0});
+        Files.writeString(project.resolve("gradle-local.properties"), "legacyRuntimeDir=custom-runtime\n");
+        var found = LegacyProjectJars.runtimeJars(project);
+        if (!found.contains(forge) || !found.contains(customForge)) throw new AssertionError("Forge runtime not found: " + found);
     }
 }

@@ -77,14 +77,20 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         if (owner == null) return List.of();
         PsiAnnotation target = owner.getAnnotation(spec.mixin() ? MIXIN : MLA + "LegacyType");
         if (target == null) return List.of();
+        return targetClasses(target, spec.mixin());
+    }
+
+    static List<PsiClass> targetClasses(PsiAnnotation target, boolean mixin) {
+        PsiClass owner = enclosingClass(target);
+        if (owner == null) return List.of();
         List<String> names = new ArrayList<>();
         collectTargets(target.findDeclaredAttributeValue("value"), names);
-        collectTargets(target.findDeclaredAttributeValue(spec.mixin() ? "targets" : "type"), names);
+        collectTargets(target.findDeclaredAttributeValue(mixin ? "targets" : "type"), names);
         List<PsiClass> result = new ArrayList<>();
         var facade = JavaPsiFacade.getInstance(owner.getProject());
         for (String name : names) {
             List<PsiClass> candidates = new ArrayList<>(Arrays.asList(facade.findClasses(name, GlobalSearchScope.allScope(owner.getProject()))));
-            if (!spec.mixin()) {
+            if (!mixin) {
                 // Gradle can put the memberless name stub on the host classpath while the actual JAR is only
                 // present in an excluded build/ or run/ directory and therefore absent from IDEA's index.
                 candidates.addAll(localLegacyClasses(owner, name));
@@ -101,6 +107,7 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         String path = virtual == null ? "" : virtual.getPath().replace('\\', '/');
         if (path.contains("legacy-names-1.7.10.jar") || type.getMethods().length == 0 && type.getFields().length == 0) return 3;
         if (path.contains("minecraft-forge-1.7.10-mcp.jar")) return 0;
+        if (path.contains("minecraft-forge-1.7.10-srg.jar")) return 1;
         if (path.contains("/mods/") || path.contains("/legacy-maven/") || path.contains("/legacy-dependencies/")) return 1;
         return 2;
     }
@@ -110,12 +117,7 @@ public final class LegacyReferenceContributor extends PsiReferenceContributor {
         if (base == null) return List.of();
         File root = new File(base);
         List<File> jars = new ArrayList<>();
-        File direct = new File(root, "build/mfcl-direct");
-        File[] sets = direct.listFiles(File::isDirectory);
-        if (sets != null) for (File set : sets) {
-            File jar = new File(set, "minecraft-forge-1.7.10-mcp.jar");
-            if (jar.isFile()) jars.add(jar);
-        }
+        for (var jar : LegacyProjectJars.runtimeJars(root.toPath())) jars.add(jar.toFile());
         for (String directory : List.of("mods", "mods/1.7.10", "run/mods", "run/mods/1.7.10",
                 "run/mfcl/legacy-maven/1.7.10", "run/mfcl/legacy-dependencies/1.7.10")) {
             File[] found = new File(root, directory).listFiles(f -> f.isFile() && f.getName().endsWith(".jar"));

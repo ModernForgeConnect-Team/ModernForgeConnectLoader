@@ -14,5 +14,6 @@
         <codeInsight.unresolvedReferenceQuickFixProvider implementation="github.com.gengyoubo.mfcl.idea.LegacyJarQuickFixProvider"/>
         <postStartupActivity implementation="github.com.gengyoubo.mfcl.idea.LegacyNamesAutoAttach"/>
         <referenceImporter implementation="github.com.gengyoubo.mfcl.idea.LegacyTypeAutoImport"/>
+        <gotoDeclarationHandler implementation="github.com.gengyoubo.mfcl.idea.LegacyTypeGotoDeclaration" order="first"/>
     </extensions>
 </idea-plugin>
