@@ -108,6 +108,8 @@ dependencies {
 
 `-PmfclRunDir=<游戏目录>` 可以同时调整默认游戏目录和旧运行时位置。已有本地 JAR 或自定义源集仍可配置 `mfclDirect { mods = files('...'); sourceSet = '...' }`；这些本地 JAR 参与编译与存根，但要自行放入游戏的旧模组目录。
 
+多模块项目可以只在根项目应用 `mfcl.direct` 并声明 `legacyMaven`。根项目生成的类名存根会自动作为 `compileOnly` 依赖提供给 Java 子项目的 `main` 源集；子项目的 `runClient` / `runServer` 也会先准备根项目声明的旧 Maven JAR。子项目的其他源集需要自行配置。`@LegacyType` 的无参数名写法仅用于字符串，例如 `@LegacyType("net.minecraftforge.common.util.ForgeDirection")`；使用类字面量必须写 `@LegacyType(type = ForgeDirection.class)`。
+
 它会创建 `<sourceSet>DeobfMinecraft`、`<sourceSet>Reobf`、`<sourceSet>LegacyNames`，接线方式与脚本版一致：
 
 | 任务 | 作用 |

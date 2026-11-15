@@ -145,6 +145,48 @@ class MfclDirectToolingTest {
         }
     }
 
+    @Test
+    void rootPluginSuppliesLegacyNamesToJavaSubprojects() throws Exception {
+        Path runtime = Files.createDirectories(project.resolve("run/mfcl/runtime/1.7.10"));
+        writeOldJar(runtime.resolve("minecraft-forge-1.7.10-srg.jar"));
+        Path mod = project.resolve("old-mod.jar");
+        ClassWriter library = new ClassWriter(0);
+        library.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "oldmod/TileTube", null, "java/lang/Object", null);
+        library.visitEnd();
+        try (ZipOutputStream jar = new ZipOutputStream(new FileOutputStream(mod.toFile()))) {
+            jar.putNextEntry(new ZipEntry("oldmod/TileTube.class")); jar.write(library.toByteArray()); jar.closeEntry();
+        }
+        Files.writeString(project.resolve("settings.gradle"), "rootProject.name = 'fixture'\ninclude 'addon'\n");
+        Files.writeString(project.resolve("build.gradle"), """
+                plugins { id 'mfcl.direct' }
+                dependencies { legacyMaven files('old-mod.jar') }
+                mfclDirect { packaged = false }
+                """);
+        Path addon = Files.createDirectories(project.resolve("addon"));
+        Files.writeString(addon.resolve("build.gradle"), """
+                plugins { id 'java' }
+                tasks.register('runClient')
+                tasks.register('verifyIsolation') {
+                    doLast { assert !configurations.runtimeClasspath.files.any { it.name.endsWith('.jar') } }
+                }
+                """);
+        Path source = addon.resolve("src/main/java/fixture/Contract.java"); Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+                package fixture;
+                import net.minecraftforge.common.util.ForgeDirection;
+                import oldmod.TileTube;
+                @interface LegacyType { Class<?> type(); }
+                @LegacyType(type = ForgeDirection.class) interface Direction {}
+                @LegacyType(type = TileTube.class) public interface Contract {}
+                """);
+        BuildResult result = GradleRunner.create().withProjectDir(project.toFile()).withPluginClasspath()
+                .withArguments(":addon:compileJava", ":addon:runClient", ":addon:verifyIsolation", "--offline", "--stacktrace").build();
+        assertTrue(result.getOutput().contains("BUILD SUCCESSFUL"));
+        assertTrue(Files.exists(project.resolve("build/mfcl-direct/direct/legacy-names-1.7.10.jar")));
+        assertTrue(Files.readString(project.resolve("run/mfcl/legacy-maven/1.7.10/legacy-dependencies.json"))
+                .contains(MfclDirectTooling.sha256(mod.toFile())));
+    }
+
     private static void writeOldJar(Path target) throws IOException {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "fixture/Old", null, "java/lang/Object", null);

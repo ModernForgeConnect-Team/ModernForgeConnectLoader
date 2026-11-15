@@ -3,15 +3,16 @@
   <groupId>github.com.gengyoubo.mfcl</groupId>
   <artifactId>mfcl-idea</artifactId>
   <versioning>
-    <latest>1.2.0-dev7</latest>
-    <release>1.2.0-dev7</release>
+    <latest>1.2.0-dev10</latest>
+    <release>1.2.0-dev10</release>
     <versions>
       <version>1.2.0-dev3</version>
       <version>1.2.0-dev4</version>
       <version>1.2.0-dev5</version>
       <version>1.2.0-dev6</version>
       <version>1.2.0-dev7</version>
+      <version>1.2.0-dev10</version>
     </versions>
-    <lastUpdated>20261115030334</lastUpdated>
+    <lastUpdated>20261115035035</lastUpdated>
   </versioning>
 </metadata>

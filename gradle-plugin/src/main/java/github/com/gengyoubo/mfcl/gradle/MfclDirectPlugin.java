@@ -50,6 +50,11 @@ public final class MfclDirectPlugin implements Plugin<Project> {
         });
         project.getTasks().matching(task -> java.util.Set.of("runClient", "runServer", "runGameTestServer").contains(task.getName()))
                 .configureEach(task -> task.dependsOn(prepare));
+        if (project == project.getRootProject()) {
+            project.getSubprojects().forEach(child -> child.getTasks()
+                    .matching(task -> java.util.Set.of("runClient", "runServer", "runGameTestServer").contains(task.getName()))
+                    .configureEach(task -> task.dependsOn(prepare)));
+        }
 
         SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
         extension.getHost().from(sourceSets.named(SourceSet.MAIN_SOURCE_SET_NAME)
@@ -149,6 +154,19 @@ public final class MfclDirectPlugin implements Plugin<Project> {
             project.getDependencies().add(hostSet.getCompileOnlyConfigurationName(), nameFiles);
             project.getTasks().named(hostSet.getCompileJavaTaskName(), JavaCompile.class).configure(task ->
                     task.setClasspath(task.getClasspath().minus(nameFiles).plus(nameFiles)));
+        }
+
+        // Root-applied plugins should also supply the shared name-only JAR to Java subprojects. A dependency on
+        // the producing task keeps compilation ordered without adding the legacy implementations to runtime.
+        if (project == project.getRootProject() && extension.getNames().get().contains("main")) {
+            project.getSubprojects().forEach(child -> child.getPluginManager().withPlugin("java", ignored -> {
+                SourceSetContainer childSets = child.getExtensions().getByType(SourceSetContainer.class);
+                SourceSet main = childSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+                var sharedNames = child.files(names.flatMap(LegacyNamesTask::getOutput));
+                child.getDependencies().add(main.getCompileOnlyConfigurationName(), sharedNames);
+                child.getTasks().named(main.getCompileJavaTaskName(), JavaCompile.class).configure(task ->
+                        task.setClasspath(task.getClasspath().minus(sharedNames).plus(sharedNames)));
+            }));
         }
 
         if (extension.getPackaged().get()) {

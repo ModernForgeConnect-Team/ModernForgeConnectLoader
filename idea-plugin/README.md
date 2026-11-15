@@ -9,6 +9,8 @@
 
 例如 `@LegacyType("thaumcraft.common.items.wands.ItemWandCasting")` 下输入 `@LegacyMethod(name = "")`，把文本光标放在引号内，按 `Ctrl+Space` 可选择 `getMaxVis`。输入方法名前缀时 IDEA 也可以自动弹出候选，取决于其代码补全设置；鼠标悬停不会触发补全。旧 JAR 除了可通过 Gradle 作为库索引，也会在项目的 `build/mfcl-direct/*/`、`mods/`、`mods/1.7.10/`、`run/mods/` 和 `run/mfcl/legacy-maven/1.7.10/` 等常见位置查找。使用其他路径时请将 JAR 添加为 IDEA 项目库。依赖文件或构建产物需要实际存在，插件不会自动下载它们。
 
+项目打开、Gradle 项目同步完成，或已有存根 JAR 发生变化时，插件会检查根项目 `build/mfcl-direct/*/legacy-names-1.7.10.jar` 是否已在当前项目各模块的类路径中；若未添加，就以 `PROVIDED` 作用域附加这个仅含类名的 JAR。它不会把原始旧 JAR 加入现代运行时，也不会代替 Gradle 生成存根。对 `@LegacyType(type = ...class)` 中未解析的类名，插件会尝试从已索引的 MFCL 存根中自动添加 Java 导入；同名类有多个候选或已有冲突导入时不自动选择。其他 Java 导入仍遵循 IDEA 的设置。
+
 这不是 Mixin 本身，也不提供 Mixin 注入、运行时转换或修改游戏的能力。暂不支持带 `Lowner;` 的 Mixin 成员选择器、转义字符串、SRG/MCP 名称互相转换、按描述符筛选重载；普通 Java 代码的补全由 IDEA 自身提供。插件不会下载或安装旧版 Forge。
 
 IDEA 还会对 MLA 注解标红：`@LegacyType` 必须且只能填写一个非空类名或非 `void.class` 类型；成员名不能为空；方法、构造器与字段的 `descriptor` 必须符合 JVM 描述符语法。能定位到完整旧类时，还会检查方法或字段名称是否存在。只有类名存根、未找到旧类或无法确认映射时不会推断成员不存在。此检查只影响 IDEA 编辑器，不会阻止 Gradle 编译；重载、访问权限、静态性、描述符与实际成员是否匹配仍由 MFCL 运行时验证。
