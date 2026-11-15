@@ -104,7 +104,7 @@ dependencies {
 }
 ```
 
-插件默认从 `run/mfcl/runtime/1.7.10` 使用已准备好的旧版 Minecraft、Forge 和 FML，默认直通源集为 `src/direct/java`，默认对 `main` 提供类名存根。`legacyMaven` 的 JAR 会自动参与直通编译、重映射、旧类名存根，以及 `runClient` / `runServer` 前的旧运行时准备；不进入现代运行时类路径。插件只为 `curse.maven` 添加 CurseMaven 仓库，其他坐标需要在项目中自行配置仓库。传递依赖不自动解析：例如上面显式声明 Baubles。首次使用仍需先让装有 MFCL 的游戏准备好 1.7.10 运行时；编译和生成存根不会自行安装 Forge。IDEA 如果尚未索引生成的存根，可运行 `directLegacyNames` 后重新同步 Gradle。
+插件默认使用 `run/mfcl/runtime/1.7.10` 中的旧版 Minecraft、Forge 和 FML，默认直通源集为 `src/direct/java`，默认对 `main` 提供类名存根。如果运行时缺失，生成存根或编译直通代码时会自动下载、校验并准备运行时；第一次需要网络，后续会复用现有文件。`--offline` 下缺失运行时时会报错，不会下载。`legacyMaven` 的 JAR 会自动参与直通编译、重映射、旧类名存根，以及 `runClient` / `runServer` 前的旧运行时准备；不进入现代运行时类路径。插件只为 `curse.maven` 添加 CurseMaven 仓库，其他坐标需要在项目中自行配置仓库。传递依赖不自动解析：例如上面显式声明 Baubles。IDEA 如果尚未索引生成的存根，可运行 `directLegacyNames` 后重新同步 Gradle。
 
 `-PmfclRunDir=<游戏目录>` 可以同时调整默认游戏目录和旧运行时位置。已有本地 JAR 或自定义源集仍可配置 `mfclDirect { mods = files('...'); sourceSet = '...' }`；这些本地 JAR 参与编译与存根，但要自行放入游戏的旧模组目录。
 
@@ -112,6 +112,7 @@ dependencies {
 
 | 任务 | 作用 |
 | --- | --- |
+| `<sourceSet>PrepareLegacyRuntime` | 缺少运行时时从官方来源下载并校验输入、准备旧版 Forge 运行时；已有运行时直接复用 |
 | `<sourceSet>DeobfMinecraft` | 把已准备好的 `minecraft-forge-1.7.10-srg.jar` 按 `mcp_stable-12-1.7.10`（`fields.csv` / `methods.csv`，首次从 Forge maven 下载）改成 MCP 成员名，作为编译类路径；不分发 |
 | `compile<SourceSet>Java` | `--release 8`；类路径依次为 MCP 版运行时、运行时库、`mods`、`host`。同名类旧版优先，与运行时一致 |
 | `<sourceSet>Reobf` | 把编译结果中的 MCP 成员名改回 SRG 名：按 owner + 名称 + 描述符沿继承链（原版、`mods`、直通类自身）查找，因此对 `getCurrentArmor` 的调用和 `extends CommandBase` 时对 `getCommandName` 的覆写都会被改名；未混淆的旧模组 API（如 `Aspect.aspects`）保持不变 |

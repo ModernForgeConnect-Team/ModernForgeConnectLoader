@@ -44,4 +44,15 @@ class MfclDirectPluginTest {
 
         assertTrue(result.getOutput().contains("BUILD SUCCESSFUL"));
     }
+
+    @Test
+    void missingRuntimeReportsOfflineInsteadOfGradleInputValidation() throws Exception {
+        Files.writeString(project.resolve("settings.gradle"), "rootProject.name = 'fixture'\n");
+        Files.writeString(project.resolve("build.gradle"), "plugins { id 'mfcl.direct' }\n");
+        BuildResult result = GradleRunner.create().withProjectDir(project.toFile()).withPluginClasspath()
+                .withArguments("directLegacyNames", "--offline", "--stacktrace").buildAndFail();
+        assertTrue(result.getOutput().contains("MFCL 1.7.10 runtime is missing"));
+        assertTrue(result.getOutput().contains("run again without --offline"));
+        assertTrue(!result.getOutput().contains("property 'srgJar' specifies file"));
+    }
 }

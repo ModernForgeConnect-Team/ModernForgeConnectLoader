@@ -15,6 +15,23 @@ java {
     }
 }
 
+sourceSets {
+    main {
+        java {
+            srcDir '../src/main/java'
+            include 'github/com/gengyoubo/mfcl/gradle/**'
+            include 'github/com/gengyoubo/mfcl/legacy/runtime/RuntimeInstaller.java'
+            include 'github/com/gengyoubo/mfcl/legacy/LegacyDiagnostic.java'
+            include 'github/com/gengyoubo/mfcl/legacy/LegacyDiscovery.java'
+            include 'github/com/gengyoubo/mfcl/legacy/LegacyRuntimeCheck.java'
+            include 'github/com/gengyoubo/mfcl/legacy/LegacyArchive.java'
+            include 'github/com/gengyoubo/mfcl/legacy/LegacyMod.java'
+            include 'github/com/gengyoubo/mfcl/legacy/LegacyPaths.java'
+        }
+    }
+    runtimePreparation { java.srcDir '../src/preparation/java' }
+}
+
 repositories {
     mavenCentral()
 }
@@ -27,6 +44,13 @@ dependencies {
     // Shaded into the plugin JAR so consumers do not need a buildscript classpath entry.
     compileOnly 'org.ow2.asm:asm-commons:9.7.1'
     shade 'org.ow2.asm:asm-commons:9.7.1'
+    compileOnly 'org.ow2.asm:asm-tree:9.7.1'
+    shade 'org.ow2.asm:asm-tree:9.7.1'
+    compileOnly 'com.google.code.gson:gson:2.10.1'
+    shade 'com.google.code.gson:gson:2.10.1'
+    runtimePreparationImplementation 'org.ow2.asm:asm-commons:9.7.1'
+    runtimePreparationImplementation 'org.glavo:pack200:0.3.0'
+    runtimePreparationImplementation 'org.tukaani:xz:1.10'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -61,7 +85,16 @@ tasks.named('pluginUnderTestMetadata') {
     pluginClasspath.from(configurations.shade)
 }
 
+tasks.register('runtimePreparationJar', Jar) {
+    archiveFileName = 'mfcl-runtime-preparation.jar'
+    destinationDirectory = layout.buildDirectory.dir('runtime-preparation')
+    from sourceSets.runtimePreparation.output
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
 processResources {
+    from(tasks.named('runtimePreparationJar')) { into 'mfcl' }
+    from('../docs') { include 'nei-reference-inputs.json', 'legacy-language-inputs.json'; into 'mfcl/runtime-inputs' }
     filesMatching('mfcl-direct.properties') {
         expand(version: project.version)
     }

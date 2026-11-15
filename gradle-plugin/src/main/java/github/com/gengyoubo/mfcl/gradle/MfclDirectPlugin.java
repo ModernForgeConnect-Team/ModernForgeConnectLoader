@@ -78,6 +78,12 @@ public final class MfclDirectPlugin implements Plugin<Project> {
         File srgJar = new File(runtime, "minecraft-forge-1.7.10-srg.jar");
         SourceSet sourceSet = sourceSets.maybeCreate(setName);
         var legacyMods = project.files(extension.getMods(), legacyMaven);
+        TaskProvider<PrepareLegacyRuntimeTask> prepareRuntime = project.getTasks().register(setName + "PrepareLegacyRuntime", PrepareLegacyRuntimeTask.class, task -> {
+            task.setGroup("mfcl direct");
+            task.setDescription("Prepare the 1.7.10 runtime if it is missing.");
+            task.getSrgJar().set(srgJar);
+            task.getOffline().set(project.getGradle().getStartParameter().isOffline());
+        });
 
         Configuration mappings = project.getConfigurations().maybeCreate(setName + "McpMappings");
         mappings.setCanBeConsumed(false);
@@ -95,7 +101,7 @@ public final class MfclDirectPlugin implements Plugin<Project> {
         TaskProvider<DeobfMinecraftTask> deobf = project.getTasks().register(setName + "DeobfMinecraft", DeobfMinecraftTask.class, task -> {
             task.setGroup("mfcl direct");
             task.setDescription("Copy the prepared SRG runtime with MCP member names as the direct source set compile classpath.");
-            task.getSrgJar().set(srgJar);
+            task.getSrgJar().set(prepareRuntime.flatMap(PrepareLegacyRuntimeTask::getSrgJar));
             task.getMappings().from(mappings);
             task.getOutput().set(deobfOutput);
         });
@@ -114,7 +120,7 @@ public final class MfclDirectPlugin implements Plugin<Project> {
             task.setGroup("mfcl direct");
             task.setDescription("Rename MCP member references and overrides in the direct classes to the original SRG names.");
             task.getClasses().from(sourceSet.getOutput().getClassesDirs());
-            task.getSrgJar().set(srgJar);
+            task.getSrgJar().set(prepareRuntime.flatMap(PrepareLegacyRuntimeTask::getSrgJar));
             task.getMappings().from(mappings);
             task.getMods().from(legacyMods);
             task.getOutput().set(reobfOutput);
@@ -128,7 +134,7 @@ public final class MfclDirectPlugin implements Plugin<Project> {
         TaskProvider<LegacyNamesTask> names = project.getTasks().register(setName + "LegacyNames", LegacyNamesTask.class, task -> {
             task.setGroup("mfcl direct");
             task.setDescription("Member-less stubs of the original classes, for class literals in host MLA contracts.");
-            task.getSrgJar().set(srgJar);
+            task.getSrgJar().set(prepareRuntime.flatMap(PrepareLegacyRuntimeTask::getSrgJar));
             task.getMods().from(legacyMods);
             task.getOutput().set(namesOutput);
         });
