@@ -29,7 +29,8 @@ public class MfclDirectExtension {
     public MfclDirectExtension(Project project, ObjectFactory objects) {
         this.project = project;
         this.sourceSet = objects.property(String.class).convention(DEFAULT_SOURCE_SET);
-        this.runtime = objects.directoryProperty();
+        this.runtime = objects.directoryProperty().convention(project.getLayout().dir(project.provider(() ->
+                project.file(project.getProviders().gradleProperty("mfclRunDir").getOrElse("run") + "/mfcl/runtime/1.7.10"))));
         this.mods = objects.fileCollection();
         this.host = objects.fileCollection();
         this.mappings = objects.property(String.class).convention(DEFAULT_MAPPINGS);

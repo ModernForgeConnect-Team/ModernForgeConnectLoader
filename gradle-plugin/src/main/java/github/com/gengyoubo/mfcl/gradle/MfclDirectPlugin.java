@@ -37,6 +37,19 @@ public final class MfclDirectPlugin implements Plugin<Project> {
         project.getPluginManager().apply(JavaPlugin.class);
         MfclDirectExtension extension = new MfclDirectExtension(project, project.getObjects());
         project.getExtensions().add(EXTENSION_NAME, extension);
+        Configuration legacyMaven = project.getConfigurations().maybeCreate("legacyMaven");
+        legacyMaven.setCanBeConsumed(false);
+        legacyMaven.setCanBeResolved(true);
+        legacyMaven.setTransitive(false);
+        var gameDir = project.provider(() -> project.file(project.getProviders().gradleProperty("mfclRunDir").getOrElse("run")));
+        var prepare = project.getTasks().register("prepareLegacyMaven", PrepareLegacyMavenTask.class, task -> {
+            task.setGroup("mfcl direct");
+            task.setDescription("Prepare legacy Maven artifacts for MFCL's isolated 1.7.10 runtime.");
+            task.getArtifacts().from(legacyMaven);
+            task.getOutputDirectory().set(project.getLayout().dir(gameDir.map(dir -> new File(dir, "mfcl/legacy-maven/1.7.10"))));
+        });
+        project.getTasks().matching(task -> java.util.Set.of("runClient", "runServer", "runGameTestServer").contains(task.getName()))
+                .configureEach(task -> task.dependsOn(prepare));
 
         SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
         extension.getHost().from(sourceSets.named(SourceSet.MAIN_SOURCE_SET_NAME)
@@ -47,18 +60,24 @@ public final class MfclDirectPlugin implements Plugin<Project> {
             repository.setUrl("https://maven.minecraftforge.net/");
             repository.content(content -> content.includeGroup("de.oceanlabs.mcp"));
         });
+        project.getRepositories().maven(repository -> {
+            repository.setName("MFCLCurseMaven");
+            repository.setUrl("https://cursemaven.com");
+            repository.content(content -> content.includeGroup("curse.maven"));
+        });
 
         // The source set name and most file collections are configured by the build script after apply.
-        project.afterEvaluate(evaluated -> configure(evaluated, extension, sourceSets));
+        project.afterEvaluate(evaluated -> configure(evaluated, extension, sourceSets, legacyMaven));
     }
 
-    private void configure(Project project, MfclDirectExtension extension, SourceSetContainer sourceSets) {
+    private void configure(Project project, MfclDirectExtension extension, SourceSetContainer sourceSets, Configuration legacyMaven) {
         if (!extension.getRuntime().isPresent())
             throw new GradleException("mfclDirect.runtime is required: point it at <game>/mfcl/runtime/1.7.10 after starting the game once with MFCL");
         String setName = extension.getSourceSet().get();
         File runtime = extension.getRuntime().get().getAsFile();
         File srgJar = new File(runtime, "minecraft-forge-1.7.10-srg.jar");
         SourceSet sourceSet = sourceSets.maybeCreate(setName);
+        var legacyMods = project.files(extension.getMods(), legacyMaven);
 
         Configuration mappings = project.getConfigurations().maybeCreate(setName + "McpMappings");
         mappings.setCanBeConsumed(false);
@@ -84,7 +103,7 @@ public final class MfclDirectPlugin implements Plugin<Project> {
         // Original classes first: names that collide with host classes resolve to the originals, as at runtime.
         project.getDependencies().add(sourceSet.getCompileOnlyConfigurationName(), project.files(deobf.flatMap(DeobfMinecraftTask::getOutput)));
         project.getDependencies().add(sourceSet.getCompileOnlyConfigurationName(), libraries);
-        project.getDependencies().add(sourceSet.getCompileOnlyConfigurationName(), extension.getMods());
+        project.getDependencies().add(sourceSet.getCompileOnlyConfigurationName(), legacyMods);
         project.getDependencies().add(sourceSet.getCompileOnlyConfigurationName(), extension.getHost());
         project.getTasks().named(sourceSet.getCompileJavaTaskName(), JavaCompile.class)
                 .configure(task -> task.getOptions().getRelease().set(8));
@@ -97,7 +116,7 @@ public final class MfclDirectPlugin implements Plugin<Project> {
             task.getClasses().from(sourceSet.getOutput().getClassesDirs());
             task.getSrgJar().set(srgJar);
             task.getMappings().from(mappings);
-            task.getMods().from(extension.getMods());
+            task.getMods().from(legacyMods);
             task.getOutput().set(reobfOutput);
             task.getSourceSetName().set(setName);
             task.getMappingsCoordinate().set(extension.getMappings());
@@ -110,7 +129,7 @@ public final class MfclDirectPlugin implements Plugin<Project> {
             task.setGroup("mfcl direct");
             task.setDescription("Member-less stubs of the original classes, for class literals in host MLA contracts.");
             task.getSrgJar().set(srgJar);
-            task.getMods().from(extension.getMods());
+            task.getMods().from(legacyMods);
             task.getOutput().set(namesOutput);
         });
 

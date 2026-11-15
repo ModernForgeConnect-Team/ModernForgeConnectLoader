@@ -94,6 +94,57 @@ class MfclDirectToolingTest {
         assertTrue(Files.isRegularFile(project.resolve("build/mfcl-direct/direct/legacy-names-1.7.10.jar")));
     }
 
+    @Test
+    void legacyMavenFeedsStubsDirectCompilationAndGameWithoutModernRuntimeLeak() throws Exception {
+        Path runtime = Files.createDirectories(project.resolve("run/mfcl/runtime/1.7.10"));
+        writeOldJar(runtime.resolve("minecraft-forge-1.7.10-srg.jar"));
+        writeMappings(project.resolve("repo"));
+        Path repository = Files.createDirectories(project.resolve("repo/test/legacy/1.0"));
+        Files.writeString(repository.resolve("legacy-1.0.pom"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+                <groupId>test</groupId><artifactId>legacy</artifactId><version>1.0</version>
+                <dependencies><dependency><groupId>missing</groupId><artifactId>transitive</artifactId><version>1.0</version></dependency></dependencies>
+                </project>
+                """);
+        ClassWriter library = new ClassWriter(0);
+        library.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "fixture/LegacyLibrary", null, "java/lang/Object", null);
+        MethodVisitor method = library.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "value", "()Ljava/lang/String;", null, null);
+        method.visitCode(); method.visitLdcInsn("legacy"); method.visitInsn(Opcodes.ARETURN); method.visitMaxs(1, 0); method.visitEnd();
+        library.visitEnd();
+        try (ZipOutputStream jar = new ZipOutputStream(new FileOutputStream(repository.resolve("legacy-1.0.jar").toFile()))) {
+            jar.putNextEntry(new ZipEntry("fixture/LegacyLibrary.class")); jar.write(library.toByteArray()); jar.closeEntry();
+        }
+        Files.writeString(project.resolve("settings.gradle"), "rootProject.name = 'fixture'\n");
+        Files.writeString(project.resolve("build.gradle"), """
+                plugins { id 'mfcl.direct' }
+                repositories { maven { url = uri('repo') } }
+                dependencies { legacyMaven 'test:legacy:1.0' }
+                mfclDirect { mappings = 'test.mappings:mcp_stable:12-1.7.10@zip'; packaged = false }
+                tasks.register('runClient')
+                tasks.register('verifyIsolation') {
+                    doLast {
+                        assert !configurations.runtimeClasspath.files.any { it.name == 'legacy-1.0.jar' }
+                        assert configurations.directCompileClasspath.files.any { it.name == 'legacy-1.0.jar' }
+                    }
+                }
+                """);
+        Path main = project.resolve("src/main/java/fixture/Api.java"); Files.createDirectories(main.getParent());
+        Files.writeString(main, "package fixture; @interface LegacyType { Class<?> type(); } @LegacyType(type=LegacyLibrary.class) public interface Api { String value(); }\n");
+        Path direct = project.resolve("src/direct/java/fixture/Logic.java"); Files.createDirectories(direct.getParent());
+        Files.writeString(direct, "package fixture; public final class Logic implements Api { public String value(){return LegacyLibrary.value();} }\n");
+        BuildResult result = GradleRunner.create().withProjectDir(project.toFile()).withPluginClasspath()
+                .withArguments("compileJava", "directReobf", "runClient", "verifyIsolation", "--offline", "--stacktrace").build();
+        assertTrue(result.getOutput().contains("BUILD SUCCESSFUL"));
+        Path manifest = project.resolve("run/mfcl/legacy-maven/1.7.10/legacy-dependencies.json");
+        String hash = MfclDirectTooling.sha256(repository.resolve("legacy-1.0.jar").toFile());
+        assertTrue(Files.readString(manifest).contains(hash));
+        assertTrue(Files.isRegularFile(manifest.getParent().resolve(hash + ".jar")));
+        try (var jar = new java.util.jar.JarFile(project.resolve("build/mfcl-direct/direct/legacy-names-1.7.10.jar").toFile())) {
+            assertTrue(jar.getEntry("fixture/LegacyLibrary.class") != null);
+            assertTrue(jar.getEntry("net/minecraftforge/common/util/ForgeDirection.class") != null);
+        }
+    }
+
     private static void writeOldJar(Path target) throws IOException {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "fixture/Old", null, "java/lang/Object", null);

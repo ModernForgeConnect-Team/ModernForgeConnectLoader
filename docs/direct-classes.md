@@ -98,13 +98,15 @@ plugins {
     id 'mfcl.direct' version '1.2.0'
 }
 
-mfclDirect {
-    sourceSet = 'direct'                                              // 默认 'direct' → src/direct/java
-    runtime   = file('run/mfcl/runtime/1.7.10')                       // 装有 MFCL 的游戏启动一次后生成
-    mods      = fileTree('run/mods') { include 'Thaumcraft-*.jar' }   // 直通类 import 的原始模组
-    host      = files(sourceSets.main.java.classesDirectory)          // 可选；默认 main 的 classes
+dependencies {
+    legacyMaven 'curse.maven:thaumcraft-223628:2227552'
+    legacyMaven 'curse.maven:baubles-227083:2224857'
 }
 ```
+
+插件默认从 `run/mfcl/runtime/1.7.10` 使用已准备好的旧版 Minecraft、Forge 和 FML，默认直通源集为 `src/direct/java`，默认对 `main` 提供类名存根。`legacyMaven` 的 JAR 会自动参与直通编译、重映射、旧类名存根，以及 `runClient` / `runServer` 前的旧运行时准备；不进入现代运行时类路径。插件只为 `curse.maven` 添加 CurseMaven 仓库，其他坐标需要在项目中自行配置仓库。传递依赖不自动解析：例如上面显式声明 Baubles。首次使用仍需先让装有 MFCL 的游戏准备好 1.7.10 运行时；编译和生成存根不会自行安装 Forge。IDEA 如果尚未索引生成的存根，可运行 `directLegacyNames` 后重新同步 Gradle。
+
+`-PmfclRunDir=<游戏目录>` 可以同时调整默认游戏目录和旧运行时位置。已有本地 JAR 或自定义源集仍可配置 `mfclDirect { mods = files('...'); sourceSet = '...' }`；这些本地 JAR 参与编译与存根，但要自行放入游戏的旧模组目录。
 
 它会创建 `<sourceSet>DeobfMinecraft`、`<sourceSet>Reobf`、`<sourceSet>LegacyNames`，接线方式与脚本版一致：
 
