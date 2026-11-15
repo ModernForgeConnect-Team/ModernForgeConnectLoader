@@ -27,8 +27,9 @@ import net.minecraftforge.common.MinecraftForge;
 final class ThaumcraftGoggles {
     private record Tag(ResourceLocation icon, int color, int amount) {}
     private static final ResourceLocation UNKNOWN = ResourceLocation.parse("thaumcraft:textures/aspects/_unknown.png");
-    private static final int PER_ROW = 5, CELL = 18, LIGHT = 0xF000F0;
+    private static final int PER_ROW = 5, LIGHT = 0xF000F0;
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
+    private static float tagScale;
     private ThaumcraftGoggles() {}
 
     static void install(LegacyServices services) {
@@ -38,22 +39,30 @@ final class ThaumcraftGoggles {
     }
 
     private static void render(LegacyServices services, RenderLevelStageEvent event) {
+        // TC4 decreases this shared value once per rendered frame, even when no container is targeted.
+        if (tagScale > 0) tagScale -= 0.005f;
         var mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || !(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
+        if (mc.player == null || mc.level == null) return;
+        BlockHitResult hit = mc.hitResult instanceof BlockHitResult block && block.getType() == HitResult.Type.BLOCK ? block : null;
+        try { if (!goggles(services)) return; hit = nodeHit(services, mc, hit); }
+        catch (Exception | LinkageError failure) { ThaumcraftReflection.reportOnce(REPORTED, "MFCL TC4 goggles overlay unavailable", failure); return; }
+        if (hit == null) return;
         var hostState = mc.level.getBlockState(hit.getBlockPos());
         var hostTile = mc.level.getBlockEntity(hit.getBlockPos());
         boolean note = hostState.getBlock() instanceof net.minecraft.world.level.block.NoteBlock;
         if (!note && !(hostTile instanceof LegacyBlockEntity)) return;
-        List<Tag> tags = List.of(); String text = null;
+        List<Tag> tags = List.of(); String text = null; boolean pedestal = false;
         try {
-            if (!goggles(services)) return;
             // The vanilla note block is a host block here; its pitch is the same 0..24 TileEntityNote.note.
             if (note) text = "Note: " + hostState.getValue(net.minecraft.world.level.block.NoteBlock.NOTE);
             else {
                 var tile = (LegacyBlockEntity) hostTile;
                 Integer sensor = sensorNote(services, tile);
                 if (sensor != null) text = "Note: " + sensor;
-                else tags = tags(services, tile, mc.player.getGameProfile().getName());
+                else {
+                    tags = tags(services, tile, mc.player.getGameProfile().getName());
+                    pedestal = services.items().inLegacy(() -> services.loader().loadClass("thaumcraft.common.tiles.TileWandPedestal").isInstance(tile.legacyOrNull()));
+                }
             }
         } catch (Exception | LinkageError failure) {
             ThaumcraftReflection.reportOnce(REPORTED, "MFCL TC4 goggles overlay unavailable", failure);
@@ -62,30 +71,77 @@ final class ThaumcraftGoggles {
         if (tags.isEmpty() && text == null) return;
         var pos = hit.getBlockPos(); var face = hit.getDirection(); var camera = event.getCamera().getPosition();
         PoseStack pose = event.getPoseStack();
-        pose.pushPose();
-        // Float just outside the looked-at face, raised a little, always facing the viewer.
-        pose.translate(pos.getX() + 0.5 + face.getStepX() * 0.6 - camera.x, pos.getY() + 0.5 + face.getStepY() * 0.6 + (face.getStepY() == 0 ? 0.3 : 0) - camera.y,
-                pos.getZ() + 0.5 + face.getStepZ() * 0.6 - camera.z);
-        pose.mulPose(event.getCamera().rotation());
-        pose.scale(-0.025f, -0.025f, 0.025f);
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         Font font = mc.font;
-        if (text != null) font.drawInBatch(text, -font.width(text) / 2f, -font.lineHeight, 0xFFFFFF, true, pose.last().pose(), buffers, Font.DisplayMode.NORMAL, 0x40000000, LIGHT);
-        int rows = (tags.size() + PER_ROW - 1) / PER_ROW;
+        if (text != null) {
+            pose.pushPose();
+            pose.translate(pos.getX() + 0.5 - camera.x, pos.getY() + 1.2 - camera.y, pos.getZ() + 0.5 - camera.z);
+            pose.mulPose(event.getCamera().rotation());
+            pose.scale(-0.025f, -0.025f, 0.025f);
+            font.drawInBatch(text, -font.width(text) / 2f, -font.lineHeight, 0xFFFFFF, true, pose.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0x40000000, LIGHT);
+            pose.popPose();
+        }
+        if (!tags.isEmpty() && tagScale < 0.3f) tagScale += 0.031f - tagScale / 10f;
+        boolean airAbove = mc.level.isEmptyBlock(pos.above());
+        var side = airAbove ? net.minecraft.core.Direction.UP : face;
+        var playerPos = mc.player.getPosition(event.getPartialTick());
+        float yaw = (float)Math.toDegrees(Math.atan2(playerPos.x - pos.getX() - 0.5, playerPos.z - pos.getZ() - 0.5)) + 180f;
         for (int index = 0; index < tags.size(); index++) {
             var tag = tags.get(index);
             int row = index / PER_ROW, inRow = Math.min(PER_ROW, tags.size() - row * PER_ROW);
-            float x = -inRow * CELL / 2f + (index % PER_ROW) * CELL, y = (row - rows) * CELL;
-            quad(pose, buffers.getBuffer(RenderType.text(tag.icon())), x, y, 16, tag.color());
-            String amount = Integer.toString(tag.amount());
             pose.pushPose();
-            pose.translate(x + 16, y + 11, -0.5f);
-            pose.scale(0.5f, 0.5f, 1);
-            font.drawInBatch(amount, -font.width(amount), 0, 0xFFFFFF, true, pose.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, LIGHT);
+            pose.translate(pos.getX() + .5 + 2 * tagScale * side.getStepX() - camera.x,
+                    pos.getY() + .5 + (airAbove ? .4 : 0) + (pedestal ? .6 : 0) + row * tagScale * 1.05 + 2 * tagScale * side.getStepY() - camera.y,
+                    pos.getZ() + .5 + 2 * tagScale * side.getStepZ() - camera.z);
+            pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(yaw));
+            pose.translate((index % PER_ROW - inRow / 2f + .5f) * 4 * tagScale * tagScale, 0, 0);
+            pose.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(180));
+            pose.scale(tagScale, tagScale, tagScale);
+            quad(pose, buffers.getBuffer(RenderType.textSeeThrough(tag.icon())), -.5f, -.5f, 1, tag.color());
+            if (tag.amount() >= 0) {
+                String amount = Integer.toString(tag.amount());
+                pose.pushPose();
+                pose.scale(.04f, .04f, .04f);
+                pose.translate(0, 6, -.1f);
+                font.drawInBatch(amount, 14 - font.width(amount), 1, 0x111111, false, pose.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0, LIGHT);
+                pose.translate(0, 0, -.1f);
+                font.drawInBatch(amount, 13 - font.width(amount), 0, 0xFFFFFF, false, pose.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0, LIGHT);
+                pose.popPose();
+            }
             pose.popPose();
         }
         buffers.endBatch();
-        pose.popPose();
+    }
+
+    /** Floating TC nodes have an empty selected bounding box, so the host ray can pass through them. */
+    private static BlockHitResult nodeHit(LegacyServices services, Minecraft mc, BlockHitResult obstruction) throws Exception {
+        var start = mc.player.getEyePosition();
+        var direction = mc.player.getViewVector(1f);
+        double reach = mc.gameMode == null ? 4.5 : mc.gameMode.getPickRange();
+        if (obstruction != null) reach = Math.min(reach, start.distanceTo(obstruction.getLocation()));
+        final double limit = reach;
+        var end = start.add(direction.scale(limit));
+        var min = net.minecraft.core.BlockPos.containing(Math.min(start.x,end.x),Math.min(start.y,end.y),Math.min(start.z,end.z));
+        var max = net.minecraft.core.BlockPos.containing(Math.max(start.x,end.x),Math.max(start.y,end.y),Math.max(start.z,end.z));
+        var candidates = new ArrayList<net.minecraft.core.BlockPos>();
+        for (var pos : net.minecraft.core.BlockPos.betweenClosed(min,max))
+            if (mc.level.getBlockEntity(pos) instanceof LegacyBlockEntity) candidates.add(pos.immutable());
+        return services.items().inLegacy(() -> {
+            Class<?> node = services.loader().loadClass("thaumcraft.api.nodes.INode");
+            BlockHitResult nearest = obstruction;
+            double distance = limit;
+            for (var pos : candidates) {
+                var tile = (LegacyBlockEntity) mc.level.getBlockEntity(pos);
+                if (tile == null || !node.isInstance(tile.legacyOrNull())) continue;
+                var intersection = new net.minecraft.world.phys.AABB(pos).clip(start,end);
+                if (intersection.isEmpty()) continue;
+                double candidate = start.distanceTo(intersection.get());
+                if (candidate > distance) continue;
+                distance = candidate;
+                nearest = new BlockHitResult(intersection.get(), net.minecraft.core.Direction.getNearest(-direction.x,-direction.y,-direction.z),pos,false);
+            }
+            return nearest;
+        });
     }
 
     /** Both windings: the billboard's facing flips with the negative name-tag scale. */
@@ -93,8 +149,8 @@ final class ThaumcraftGoggles {
         var matrix = pose.last().pose();
         int r = rgb >> 16 & 255, g = rgb >> 8 & 255, b = rgb & 255;
         float[][] corners = {{x, y, 0, 0}, {x, y + size, 0, 1}, {x + size, y + size, 1, 1}, {x + size, y, 1, 0}};
-        for (int i = 0; i < 4; i++) { var c = corners[i]; out.vertex(matrix, c[0], c[1], 0).color(r, g, b, 255).uv(c[2], c[3]).uv2(LIGHT).endVertex(); }
-        for (int i = 3; i >= 0; i--) { var c = corners[i]; out.vertex(matrix, c[0], c[1], 0).color(r, g, b, 255).uv(c[2], c[3]).uv2(LIGHT).endVertex(); }
+        for (int i = 0; i < 4; i++) { var c = corners[i]; out.vertex(matrix, c[0], c[1], 0).color(r, g, b, 191).uv(c[2], c[3]).uv2(LIGHT).endVertex(); }
+        for (int i = 3; i >= 0; i--) { var c = corners[i]; out.vertex(matrix, c[0], c[1], 0).color(r, g, b, 191).uv(c[2], c[3]).uv2(LIGHT).endVertex(); }
     }
 
     /** Original check: the head-slot item is IGoggles and its showIngamePopups agrees. */
@@ -141,12 +197,11 @@ final class ThaumcraftGoggles {
                 if (aspect == null) continue;
                 int amount = (int) amountOf.invoke(list, aspect);
                 ResourceLocation icon;
-                int color;
+                int color = (int) colorOf.invoke(aspect);
                 if (discovered == null || (boolean) discovered.invoke(knowledge, viewer, aspect)) {
                     Object location = image.invoke(aspect);
                     icon = ResourceLocation.tryParse(domain.invoke(location) + ":" + path.invoke(location));
-                    color = (int) colorOf.invoke(aspect);
-                } else { icon = UNKNOWN; color = 0xAAAAAA; }
+                } else { icon = UNKNOWN; }
                 if (icon != null) result.add(new Tag(icon, color, amount));
             }
             return List.copyOf(result);

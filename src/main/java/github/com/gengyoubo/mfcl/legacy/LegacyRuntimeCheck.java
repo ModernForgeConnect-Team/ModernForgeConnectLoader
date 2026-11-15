@@ -20,7 +20,8 @@ import java.util.stream.Collectors;
  */
 public final class LegacyRuntimeCheck {
     public static final String SRG_JAR = "minecraft-forge-1.7.10-srg.jar";
-    static final String MINECRAFT = "1.7.10", FORGE = "10.13.4.1614";
+    static final String MINECRAFT = "1.7.10";
+    public static final String FORGE = "10.13.4.1614";
     private static final int SUMMARY_LIMIT = 5;
 
     private final Path gameDirectory, runtimeDirectory;

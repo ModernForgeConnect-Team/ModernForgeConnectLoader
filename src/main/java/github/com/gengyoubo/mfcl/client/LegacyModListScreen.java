@@ -353,6 +353,10 @@ public final class LegacyModListScreen extends ModListScreen {
             var lines = new ArrayList<String>();
             net.minecraftforge.internal.BrandingControl.forEachLine(true, false, (index, line) -> lines.add(line));
             require(lines.stream().filter(label::equals).count() == 1, "Title did not count loaded legacy mods exactly once");
+            String mfcl = "MFCL " + net.minecraftforge.fml.ModList.get().getModContainerById("mfcl").orElseThrow().getModInfo().getVersion();
+            String legacyForge = "Forge " + catalog.sourceMinecraft() + " " + github.com.gengyoubo.mfcl.legacy.LegacyRuntimeCheck.FORGE;
+            require(lines.size() >= 3 && lines.get(0).equals(legacyForge) && lines.get(1).equals(mfcl), "Version branding is missing or out of order: " + lines);
+            require(lines.stream().filter(mfcl::equals).count() == 1 && lines.stream().filter(legacyForge::equals).count() == 1, "Version branding duplicated after reload: " + lines);
             var shortLines = new ArrayList<String>();
             net.minecraftforge.internal.BrandingControl.forEachLine(false, true, (index, line) -> shortLines.add(line));
             require(shortLines.contains(label), "Alternate branding still used the native-only count");

@@ -248,8 +248,11 @@ public final class LegacyClientData {
         return inLegacy(()->(int)stackType.getMethod("func_77976_d").invoke(materialize(value)));
     }
     public List<String> tooltip(Stack value,Object player,boolean advanced) throws Exception {
+        return inLegacy(()->tooltipLegacyStack(materialize(value),player,advanced));
+    }
+    public List<String> tooltipLegacyStack(Object stack,Object player,boolean advanced) throws Exception {
         return inLegacy(()->{
-            @SuppressWarnings("unchecked") var lines=(List<String>)stackType.getMethod("func_82840_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),boolean.class).invoke(materialize(value),player,advanced);
+            @SuppressWarnings("unchecked") var lines=(List<String>)stackType.getMethod("func_82840_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),boolean.class).invoke(stack,player,advanced);
             return List.copyOf(lines);
         });
     }

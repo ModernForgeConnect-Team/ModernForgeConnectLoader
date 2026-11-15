@@ -15,6 +15,8 @@ import java.util.*;
 final class LegacyItemTooltips {
     private final ModernContentBridge content;
     private final Set<String> failures=new HashSet<>();
+    private record CachedStack(LegacyClientData.Stack snapshot,Object legacy) {}
+    private final Map<net.minecraft.world.item.ItemStack,CachedStack> stacks=new WeakHashMap<>();
     private LegacyItemTooltips(ModernContentBridge content){this.content=content;}
     static void install(ModernContentBridge content){
         var bridge=new LegacyItemTooltips(content);
@@ -36,7 +38,14 @@ final class LegacyItemTooltips {
                 services.containers().preparePlayer();
                 if(mc.player!=null&&mc.level!=null)content.itemUse().clientActor(ClientWorldBridge.world(services),new LegacyTiles.Placer(mc.player.getUUID(),mc.player.getName().getString(),mc.player.getX(),mc.player.getY(),mc.player.getZ(),mc.player.getYRot(),mc.player.getXRot(),mc.player.getAbilities().instabuild,mc.player.isShiftKeyDown()),null);
                 var type=services.loader().loadClass("net.minecraft.client.Minecraft");Object client=type.getMethod("func_71410_x").invoke(null);
-                return services.items().tooltip(source,type.getField("field_71439_g").get(client),event.getFlags().isAdvanced());
+                Object player=type.getField("field_71439_g").get(client);
+                if(mc.player!=null)services.loader().loadClass("net.minecraft.entity.Entity").getField("field_70173_aa").setInt(player,mc.player.tickCount);
+                var cached=stacks.get(event.getItemStack());
+                if(cached==null||!cached.snapshot().equals(source)) {
+                    cached=new CachedStack(source,services.items().materialize(source));
+                    stacks.put(event.getItemStack(),cached);
+                }
+                return services.items().tooltipLegacyStack(cached.legacy(),player,event.getFlags().isAdvanced());
             });
             var warnings=event.getToolTip().stream().filter(line->line.getContents() instanceof TranslatableContents translated&&translated.getKey().startsWith("mfcl.content.")).toList();
             event.getToolTip().clear();lines.forEach(line->event.getToolTip().add(Component.literal(line)));event.getToolTip().addAll(warnings);
