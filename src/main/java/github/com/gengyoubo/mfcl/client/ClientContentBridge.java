@@ -36,6 +36,7 @@ public final class ClientContentBridge {
         bus.addListener((net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(bridge.tileType(), context -> new LegacyBlockEntityRenderer(bridge));
             event.registerEntityRenderer(bridge.legacyEntityType(), context -> new LegacyHostedEntityRenderer(context, bridge));
+            event.registerEntityRenderer(bridge.brainyZombieType(), context -> new ModernBrainyZombieRenderer(context, bridge));
         });
         bus.addListener((net.minecraftforge.client.event.ModelEvent.ModifyBakingResult event) -> {
             for (var declaration : bridge.declarations().blocks()) for (var state : bridge.blocks().get(declaration.key()).getStateDefinition().getPossibleStates()) {

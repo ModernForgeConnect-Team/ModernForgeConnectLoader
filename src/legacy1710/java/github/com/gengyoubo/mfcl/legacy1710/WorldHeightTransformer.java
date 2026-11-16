@@ -13,11 +13,23 @@ public final class WorldHeightTransformer implements IClassTransformer {
     @Override public byte[] transform(String name,String transformedName,byte[] bytes) {
         if(bytes==null||name.startsWith("github.com.gengyoubo.mfcl."))return bytes;
         if(name.equals("net.minecraft.pathfinding.PathFinder"))return pathFinder(bytes);
+        if(name.equals("net.minecraft.pathfinding.PathNavigate"))return pathNavigate(bytes);
         String text=new String(bytes,java.nio.charset.StandardCharsets.ISO_8859_1);
         if(!text.contains("Lnet/minecraft/world/World;")&&!text.contains("Lnet/minecraft/world/IBlockAccess;"))return bytes;
         ClassNode type=new ClassNode(Opcodes.ASM5);new ClassReader(bytes).accept(type,0);boolean changed=false;
         for(MethodNode method:type.methods){Scope scope=scope(method);if(scope!=null)changed|=rewrite(type.name,method,scope);}
         if(!changed)return bytes;
+        ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);type.accept(writer);return writer.toByteArray();
+    }
+    /** Navigation's D2I rounds negative world Y toward zero, leaving it one block above the path nodes. */
+    private static byte[] pathNavigate(byte[] bytes) {
+        ClassNode type=new ClassNode(Opcodes.ASM5);new ClassReader(bytes).accept(type,0);int changed=0;
+        for(MethodNode method:type.methods)if(method.name.equals("func_75503_j")&&method.desc.equals("()I")) {
+            for(AbstractInsnNode instruction:method.instructions.toArray())if(instruction.getOpcode()==Opcodes.D2I) {
+                method.instructions.set(instruction,new MethodInsnNode(Opcodes.INVOKESTATIC,"net/minecraft/util/MathHelper","func_76128_c","(D)I",false));changed++;
+            }
+        }
+        if(changed!=3)throw new IllegalStateException("Unexpected legacy navigation Y conversions: "+changed);
         ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);type.accept(writer);return writer.toByteArray();
     }
     /** The original safe-point search stops descending at Y=0, even in a host world extending below it. */

@@ -33,6 +33,16 @@ class WorldHeightTransformerTest {
             assertEquals(2,Arrays.stream(method.instructions.toArray()).filter(i->i.getOpcode()==Opcodes.IF_ICMPLE).count());
         }
     }
+    @Test void navigationFloorsNegativeYInBothLandAndWater() throws Exception {
+        try(var loader=loader()) {
+            String name="net.minecraft.pathfinding.PathNavigate";
+            byte[] before;try(var input=loader.getResourceAsStream(name.replace('.','/')+".class")){assertNotNull(input);before=input.readAllBytes();}
+            var parsed=new ClassNode();new ClassReader(transform(loader,name,before)).accept(parsed,0);
+            var method=parsed.methods.stream().filter(m->m.name.equals("func_75503_j")&&m.desc.equals("()I")).findFirst().orElseThrow();
+            assertEquals(3,Arrays.stream(method.instructions.toArray()).filter(i->i instanceof MethodInsnNode call&&call.name.equals("func_76128_c")&&call.desc.equals("(D)I")).count());
+            assertEquals(0,Arrays.stream(method.instructions.toArray()).filter(i->i.getOpcode()==Opcodes.D2I).count());
+        }
+    }
     @Test void sharedGeneratorBoundsDoNotRewriteHorizontalLimitsOrArraySizes()throws Exception {
         try(var loader=loader()){
             var writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);writer.visit(Opcodes.V1_6,Opcodes.ACC_PUBLIC,"fixture/Height",null,"java/lang/Object",null);

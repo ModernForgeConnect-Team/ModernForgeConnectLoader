@@ -245,11 +245,17 @@ public final class LevelWorldBridge {
                         if(drop!=null)content.afterCommit(level,()->level.addFreshEntity(drop));return drop!=null;
                     }
                 } catch(Exception failure){throw new IllegalStateException("Cannot translate original dropped item",failure);}
-                try { if(content.villagers().spawn(entity,level))return true;var hosted = LegacyHostedEntity.host(content, level, entity); content.afterCommit(level, () -> level.addFreshEntity(hosted)); return true; }
+                try {
+                    if(entity.getClass().getName().equals("thaumcraft.common.entities.monster.EntityBrainyZombie")) {
+                        var hosted=ModernBrainyZombie.host(content,level,entity);
+                        content.afterCommit(level,()->level.addFreshEntity(hosted));return true;
+                    }
+                    if(content.villagers().spawn(entity,level))return true;var hosted = LegacyHostedEntity.host(content, level, entity); content.afterCommit(level, () -> level.addFreshEntity(hosted)); return true; }
                 catch (Exception failure) { throw new IllegalStateException("Cannot host original entity " + entity.getClass().getName(), failure); }
             }
             @Override public Object hostedLegacyEntity(java.util.UUID id) {
-                check(); return level.getEntity(id) instanceof LegacyHostedEntity hosted ? hosted.legacyOrNull() : null;
+                check(); var entity=level.getEntity(id);
+                return entity instanceof LegacyHostedEntity hosted ? hosted.legacyOrNull() : entity instanceof ModernBrainyZombie brainy ? brainy.legacyOrNull() : null;
             }
             @Override public boolean damage(Damage damage) {
                 check(); var target = level.getEntity(damage.target());

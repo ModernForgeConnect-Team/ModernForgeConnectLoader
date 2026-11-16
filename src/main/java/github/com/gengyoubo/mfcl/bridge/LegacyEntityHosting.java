@@ -42,6 +42,22 @@ public final class LegacyEntityHosting {
     public void position(Object value, double x, double y, double z) throws Exception {
         services.items().inLegacy(() -> { setPosition.invoke(value, x, y, z); return null; });
     }
+    /** Synchronize the original counterpart of a native living host without running a second AI. */
+    public void nativeLivingState(Object value,double x,double y,double z,double mx,double my,double mz,float yRot,float xRot,float health) throws Exception {
+        services.items().inLegacy(()->{
+            setPosition.invoke(value,x,y,z);yaw.setFloat(value,yRot);pitch.setFloat(value,xRot);
+            motionX.setDouble(value,mx);motionY.setDouble(value,my);motionZ.setDouble(value,mz);
+            services.loader().loadClass("net.minecraft.entity.EntityLivingBase").getMethod("func_70606_j",float.class).invoke(value,health);
+            return null;
+        });
+    }
+    public void nativeMirror(Object value) { LegacyEntityHooks.mirrored(value); }
+    public void brainyDrops(Object value,boolean recentlyHit,int looting) throws Exception {
+        services.items().inLegacy(()->{
+            var method=value.getClass().getDeclaredMethod("func_70628_a",boolean.class,int.class);method.setAccessible(true);
+            method.invoke(value,recentlyHit,looting);return null;
+        });
+    }
     /** The host entity's identity becomes the original's, so old queries and damage sources resolve to the host entity. */
     public void adopt(Object value, Object boundWorld, UUID id, int entityId) throws Exception {
         services.items().inLegacy(() -> {

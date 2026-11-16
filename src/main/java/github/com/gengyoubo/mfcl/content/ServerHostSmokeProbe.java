@@ -40,6 +40,7 @@ public final class ServerHostSmokeProbe {
     private ServerHostSmokeProbe(ModernContentBridge bridge, boolean write) { this.bridge = bridge; this.write = write; }
 
     public static void install(ModernContentBridge bridge, String phase) {
+        if (phase.equals("zombie-saved-audit")) { SavedZombieAudit.install(bridge); return; }
         if (phase.equals("worldgen-queue")) { WorldgenQueueHostSmokeProbe.install(bridge); return; }
         if (phase.equals("spawner")) { SpawnerHostSmokeProbe.install(bridge); return; }
         if (phase.equals("biome-manager")) { BiomeManagerHostSmokeProbe.install(bridge); return; }
