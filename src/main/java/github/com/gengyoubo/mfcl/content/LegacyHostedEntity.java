@@ -26,6 +26,7 @@ import java.util.*;
 public final class LegacyHostedEntity extends Entity implements IEntityAdditionalSpawnData {
     /** The original DataWatcher as a complete snapshot, refreshed whenever the original changes a value. */
     private static final EntityDataAccessor<CompoundTag> WATCHER = SynchedEntityData.defineId(LegacyHostedEntity.class, EntityDataSerializers.COMPOUND_TAG);
+    private static final EntityDataAccessor<CompoundTag> LOOK = SynchedEntityData.defineId(LegacyHostedEntity.class, EntityDataSerializers.COMPOUND_TAG);
     private static final Set<String> FAILURES = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private Object legacy;
     private String legacyType;
@@ -34,6 +35,7 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     private float width = 0.25f, height = 0.25f;
     private boolean collidable, failed;
     private int hurtFlashTicks;
+    private final List<Byte> pendingEvents=new ArrayList<>();
     private int interpolationSteps;
     private double targetX, targetY, targetZ;
     private float targetYaw, targetPitch;
@@ -48,7 +50,18 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
         return hosted;
     }
     public Object legacyOrNull() { return legacy; }
-    @Override protected void defineSynchedData() { entityData.define(WATCHER, new CompoundTag()); }
+    @Override public net.minecraft.network.chat.Component getName() {
+        if (hasCustomName() || legacy == null) return super.getName();
+        var content = ModernContentBridge.active();
+        if (content != null) try {
+            String name = hosting(content).name(legacy);
+            if (name != null && !name.isBlank()) return net.minecraft.network.chat.Component.literal(name);
+        } catch (Exception failure) {
+            LogUtils.getLogger().debug("Cannot read original entity name for {}", legacyType, failure);
+        }
+        return super.getName();
+    }
+    @Override protected void defineSynchedData() { entityData.define(WATCHER, new CompoundTag()); entityData.define(LOOK,new CompoundTag()); }
     private static LegacyEntityHosting hosting(ModernContentBridge content) { return content.services().entityHosting(); }
     private boolean ensureServerLegacy(ModernContentBridge content, ServerLevel level) throws Exception {
         if (legacy != null) return true;
@@ -91,8 +104,8 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     }
     public boolean hurtFlash() { return hurtFlashTicks > 0; }
     @Override public void handleEntityEvent(byte event) {
-        if (event == 2) { hurtFlashTicks = 10; return; }
-        super.handleEntityEvent(event);
+        if(event==2)hurtFlashTicks=10;
+        pendingEvents.add(event);
     }
     private void clientTick(ModernContentBridge content) {
         try {
@@ -106,7 +119,13 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
                 hosting(content).watcher(legacy, watcher);
                 saved = null;
             }
+            if(!pendingEvents.isEmpty()){
+                for(byte event:pendingEvents)hosting(content).status(legacy,event);
+                pendingEvents.clear();
+            }
             hosting(content).follow(world, legacy, getX(), getY(), getZ(), getYRot(), getXRot());
+            var look=entityData.get(LOOK);
+            if(look.contains("head")&&look.contains("body"))hosting(content).look(legacy,look.getFloat("head"),look.getFloat("body"));
         } catch (Exception | LinkageError failure) { fail(failure); }
     }
     private void fail(Throwable failure) {
@@ -121,6 +140,10 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
         setDeltaMovement(state.motionX(), state.motionY(), state.motionZ());
         setYRot(state.yaw()); setXRot(state.pitch());
         collidable = state.collidable();
+        if(!level().isClientSide) {
+            setSharedFlagOnFire(state.burning());
+            if(state.headYaw()!=null&&state.bodyYaw()!=null){var look=new CompoundTag();look.putFloat("head",state.headYaw());look.putFloat("body",state.bodyYaw());entityData.set(LOOK,look);}
+        }
         if (state.width() != width || state.height() != height) { width = state.width(); height = state.height(); refreshDimensions(); }
     }
     @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
@@ -136,6 +159,7 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     private static CompoundTag wrap(byte[] bytes) { var tag = new CompoundTag(); tag.putByteArray("d", bytes); return tag; }
     @Override public EntityDimensions getDimensions(Pose pose) { return EntityDimensions.scalable(width, height); }
     @Override public boolean isPickable() { return collidable && !isRemoved(); }
+    @Override public boolean displayFireAnimation() { return level().isClientSide && getSharedFlag(0); }
     @Override public boolean isPushable() { return false; }
     /** The host envelope is not a LivingEntity, so Minecraft never calls Item.interactLivingEntity for it. */
     @Override public InteractionResult interact(Player player,InteractionHand hand) {
@@ -163,7 +187,6 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
             Object actor = source.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
                     ? content.itemUse().clientActor(world, ModernContentBridge.placer(player), null) : null;
             boolean hurt=content.logicTransaction(level, blockPosition(), () -> hosting(content).hurt(legacy, actor, amount), true);
-            if(hurt)level.broadcastEntityEvent(this,(byte)2);
             return hurt;
         } catch (Exception failure) { fail(failure); return false; }
     }

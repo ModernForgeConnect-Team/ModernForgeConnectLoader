@@ -162,10 +162,18 @@ public final class LegacyTiles {
         Object capabilities = loader.loadClass("net.minecraft.entity.player.PlayerCapabilities").getConstructor().newInstance();
         capabilities.getClass().getField("field_75098_d").setBoolean(capabilities, placer.creative());
         player.getField("field_71075_bZ").set(actor, capabilities);
+        LegacyEntityAccess.playerGameMode(loader,actor,placer.creative());
         Object watcher = loader.loadClass("net.minecraft.entity.DataWatcher").getConstructor(entity).newInstance(actor);
         var data = entity.getDeclaredField("field_70180_af"); data.setAccessible(true); data.set(actor,watcher);
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)(placer.sneaking()?2:0));
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,1,(short)300);
         watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,7,0);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,8,(byte)0);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,9,(byte)0);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,16,(byte)0);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,17,0f);
+        watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,18,0);
         entity.getField("field_70170_p").set(actor, world);
         LegacyPlayerAttributes.initialize(actor);
         LegacyPlayerFood.initialize(actor);

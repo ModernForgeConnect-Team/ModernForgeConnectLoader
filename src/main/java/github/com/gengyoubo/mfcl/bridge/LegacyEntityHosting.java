@@ -11,7 +11,7 @@ import java.util.*;
 public final class LegacyEntityHosting {
     /** What the host entity mirrors after an original update. */
     public record State(double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch,
-                        float width, float height, boolean dead, boolean collidable) {}
+                        float width, float height, boolean dead, boolean collidable, boolean burning, Float headYaw, Float bodyYaw) {}
     private final LegacyServices services;
     private final Class<?> entity, world, nbt, packet, spawnData;
     private final Field posX, posY, posZ, lastX, lastY, lastZ, prevX, prevY, prevZ, motionX, motionY, motionZ, yaw, pitch, prevYaw, prevPitch,
@@ -38,6 +38,13 @@ public final class LegacyEntityHosting {
     }
     public boolean isEntity(Object value) { return entity.isInstance(value); }
     public String type(Object value) { return value.getClass().getName(); }
+    public String name(Object value) throws Exception {
+        return services.items().inLegacy(() -> {
+            var living=services.loader().loadClass("net.minecraft.entity.EntityLiving");
+            if(!living.isInstance(value)||!(boolean)living.getMethod("func_94056_bM").invoke(value))return null;
+            return (String)living.getMethod("func_94057_bL").invoke(value);
+        });
+    }
     /** Apply a native spawner's chosen position to a newly constructed original entity. */
     public void position(Object value, double x, double y, double z) throws Exception {
         services.items().inLegacy(() -> { setPosition.invoke(value, x, y, z); return null; });
@@ -65,9 +72,25 @@ public final class LegacyEntityHosting {
         });
     }
     public State state(Object value) throws Exception {
-        return services.items().inLegacy(() -> new State(posX.getDouble(value), posY.getDouble(value), posZ.getDouble(value),
+        return services.items().inLegacy(() -> {
+            var living=services.loader().loadClass("net.minecraft.entity.EntityLivingBase");
+            boolean isLiving=living.isInstance(value);
+            return new State(posX.getDouble(value), posY.getDouble(value), posZ.getDouble(value),
                 motionX.getDouble(value), motionY.getDouble(value), motionZ.getDouble(value), yaw.getFloat(value), pitch.getFloat(value),
-                width.getFloat(value), height.getFloat(value), dead.getBoolean(value), (boolean) collidable.invoke(value)));
+                width.getFloat(value), height.getFloat(value), dead.getBoolean(value), (boolean) collidable.invoke(value),
+                (boolean)entity.getMethod("func_70027_ad").invoke(value),
+                isLiving?living.getField("field_70759_as").getFloat(value):null,
+                isLiving?living.getField("field_70761_aq").getFloat(value):null);
+        });
+    }
+    public void look(Object value,float head,float body) throws Exception {
+        services.items().inLegacy(()->{
+            var living=services.loader().loadClass("net.minecraft.entity.EntityLivingBase");if(!living.isInstance(value))return null;
+            var headField=living.getField("field_70759_as");var bodyField=living.getField("field_70761_aq");
+            living.getField("field_70758_at").setFloat(value,headField.getFloat(value));
+            living.getField("field_70760_ar").setFloat(value,bodyField.getFloat(value));
+            headField.setFloat(value,head);bodyField.setFloat(value,body);return null;
+        });
     }
     /** World.updateEntityWithOptionalForce: last-tick position and rotation, ticksExisted, then the original onUpdate. */
     public State tick(Object boundWorld, Object value) throws Exception {
@@ -100,6 +123,7 @@ public final class LegacyEntityHosting {
             prevX.setDouble(value, posX.getDouble(value)); prevY.setDouble(value, posY.getDouble(value)); prevZ.setDouble(value, posZ.getDouble(value));
             ticks.setInt(value, ticks.getInt(value) + 1);
             if (!clientUpdateFailures.contains(value.getClass())) {
+                LegacyWorlds.beginClientEntityUpdate();
                 try {
                     // LivingEntity's client tick applies this interpolation after recording the previous position;
                     // its original movement and body animation code then observes the actual host displacement.
@@ -112,10 +136,18 @@ public final class LegacyEntityHosting {
                     clientUpdateFailures.add(value.getClass());
                     LogUtils.getLogger().warn("MFCL original client update of {} failed; it is only positioned from now on", value.getClass().getName(), failure.getCause());
                 }
+                finally { LegacyWorlds.endClientEntityUpdate(); }
             }
             setPosition.invoke(value, x, y, z); yaw.setFloat(value, yawValue); pitch.setFloat(value, pitchValue);
             dead.setBoolean(value, false);
             return null;
+        });
+    }
+    /** Apply original entity status packets, including hurt, death and mod-specific animation events. */
+    public void status(Object value,byte event) throws Exception {
+        services.items().inLegacy(()->{
+            LegacyWorlds.beginClientEntityUpdate();try{entity.getMethod("func_70103_a",byte.class).invoke(value,event);}
+            finally{LegacyWorlds.endClientEntityUpdate();}return null;
         });
     }
     public byte[] save(Object value) throws Exception {

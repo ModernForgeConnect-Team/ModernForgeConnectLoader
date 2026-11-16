@@ -257,6 +257,10 @@ public final class LevelWorldBridge {
                 check(); var entity=level.getEntity(id);
                 return entity instanceof LegacyHostedEntity hosted ? hosted.legacyOrNull() : entity instanceof ModernBrainyZombie brainy ? brainy.legacyOrNull() : null;
             }
+            @Override public void legacyEntityState(java.util.UUID id,byte state) {
+                check();var entity=level.getEntity(id);
+                if(entity instanceof LegacyHostedEntity)content.afterCommit(level,()->level.broadcastEntityEvent(entity,state));
+            }
             @Override public boolean damage(Damage damage) {
                 check(); var target = level.getEntity(damage.target());
                 if (target == null || !target.isAlive()) return false;
@@ -304,6 +308,7 @@ public final class LevelWorldBridge {
                 check();if(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity target)content.afterCommit(level,target::removeAllEffects);
             }
             @Override public long dayTime() { check(); return level.getDayTime(); }
+            @Override public int skyDarken() { check(); return level.getSkyDarken(); }
             @Override public void setDayTime(long time) { check(); level.setDayTime(time); }
             @Override public boolean powered(int x, int y, int z) { check(); return level.hasNeighborSignal(new BlockPos(x,y,z)); }
             @Override public int power(int x, int y, int z, int side) { check(); return level.getSignal(new BlockPos(x,y,z),net.minecraft.core.Direction.from3DDataValue(side)); }

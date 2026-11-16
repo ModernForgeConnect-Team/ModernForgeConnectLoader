@@ -18,6 +18,8 @@ public final class LegacySounds {
             Map.entry("random.door_open","block.wooden_door.open"),Map.entry("random.door_close","block.wooden_door.close"),
             Map.entry("mob.zombie.say","entity.zombie.ambient"),Map.entry("mob.zombie.hurt","entity.zombie.hurt"),
             Map.entry("mob.zombie.death","entity.zombie.death"),Map.entry("mob.zombie.step","entity.zombie.step"),
+            Map.entry("mob.chicken.say","entity.chicken.ambient"),Map.entry("mob.chicken.hurt","entity.chicken.hurt"),
+            Map.entry("mob.chicken.plop","entity.chicken.egg"),Map.entry("mob.chicken.step","entity.chicken.step"),
             Map.entry("game.neutral.swim","entity.generic.swim"));
     private LegacySounds() {}
     public static String placementId(String name) {

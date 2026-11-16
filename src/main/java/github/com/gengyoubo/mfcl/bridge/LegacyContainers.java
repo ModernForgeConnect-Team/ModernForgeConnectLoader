@@ -101,6 +101,13 @@ public final class LegacyContainers {
             var field=loader.loadClass("net.minecraft.entity.Entity").getDeclaredField("field_70180_af");field.setAccessible(true);field.set(player,watcher);
             watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,6,20f);
               watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,0,(byte)0);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,1,(short)300);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,7,0);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,8,(byte)0);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,9,(byte)0);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,16,(byte)0);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,17,0f);
+            watcher.getClass().getMethod("func_75682_a",int.class,Object.class).invoke(watcher,18,0);
             mc.getField("field_71439_g").set(client,player);
             mc.getField("field_71442_b").set(client,loader.loadClass("net.minecraft.client.multiplayer.PlayerControllerMP").getConstructor(mc,loader.loadClass("net.minecraft.client.network.NetHandlerPlayClient")).newInstance(client,null));
         }

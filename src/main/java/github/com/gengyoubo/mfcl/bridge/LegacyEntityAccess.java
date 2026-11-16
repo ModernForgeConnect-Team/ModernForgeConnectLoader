@@ -57,6 +57,8 @@ final class LegacyEntityAccess {
             Class<?> playerType=loader.loadClass("net.minecraft.entity.player.EntityPlayer");
             if(playerType.isAssignableFrom(type)) {
                 watch(watcher,add,exists,16,(byte)0);watch(watcher,add,exists,17,0f);watch(watcher,add,exists,18,0);
+                // Player query mirrors also need an inventory: original entity effects inspect nearby hotbars.
+                playerType.getField("field_71071_by").set(entity,loader.loadClass("net.minecraft.entity.player.InventoryPlayer").getConstructor(playerType).newInstance(entity));
                 var profile=playerType.getDeclaredField("field_146106_i");profile.setAccessible(true);
                 profile.set(entity,loader.loadClass("com.mojang.authlib.GameProfile").getConstructor(UUID.class,String.class).newInstance(snapshot.id(),snapshot.name()));
                 LegacyPlayerFood.initialize(entity);
@@ -73,6 +75,7 @@ final class LegacyEntityAccess {
                 abilitiesType.getField("field_75102_a").setBoolean(abilities,snapshot.abilities().invulnerable());
             }
             playerType.getField("field_71075_bZ").set(entity,abilities);
+            playerGameMode(loader,entity,snapshot.abilities()!=null&&snapshot.abilities().creative());
             var clientPlayer=loader.loadClass("net.minecraft.client.entity.EntityPlayerSP");
             if(clientPlayer.isInstance(entity)) {
                 // Client isSneaking reads MovementInput rather than Entity's watched flags.
@@ -117,6 +120,14 @@ final class LegacyEntityAccess {
         LegacyPotions.refresh(entity,world,snapshot.id());
         LegacyEntityHooks.mirrored(entity);
         return entity;
+    }
+    /** Old target continuation checks ItemInWorldManager, not just PlayerCapabilities. */
+    static void playerGameMode(ClassLoader loader,Object actor,boolean creative) throws Exception {
+        Class<?> serverPlayer=loader.loadClass("net.minecraft.entity.player.EntityPlayerMP");
+        if(!serverPlayer.isInstance(actor))return;
+        Object manager=serverPlayer.getField("field_71134_c").get(actor);if(manager==null)return;
+        var field=loader.loadClass("net.minecraft.server.management.ItemInWorldManager").getDeclaredField("field_73091_c");field.setAccessible(true);
+        field.set(manager,loader.loadClass("net.minecraft.world.WorldSettings$GameType").getField(creative?"CREATIVE":"SURVIVAL").get(null));
     }
     /** Forge's Entity constructor part that Unsafe allocation skips: the extended-properties map plus the
      * EntityConstructing event, so mods find their registered properties (getExtendedProperties) on mirrors. */

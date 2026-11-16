@@ -14,6 +14,7 @@ import java.util.*;
 public final class CreativeTabBridge {
     private final ModernContentBridge content;
     private final Map<String, CreativeModeTab> customTabs = new LinkedHashMap<>();
+    private final Map<Item,Boolean> spawnEggs = new IdentityHashMap<>();
     private final List<LegacyCreativeTabs.Tab> fallback;
     private static final Map<String, ResourceKey<CreativeModeTab>> VANILLA = Map.ofEntries(
             Map.entry("buildingBlocks", CreativeModeTabs.BUILDING_BLOCKS), Map.entry("decorations", CreativeModeTabs.FUNCTIONAL_BLOCKS),
@@ -69,8 +70,23 @@ public final class CreativeTabBridge {
                 .displayItems((parameters, output) -> { for (var tab : fallback) stacks(tab).forEach(output::accept); }).build());
     }
     void buildVanillaContents(BuildCreativeModeTabContentsEvent event) {
-        for (var tab : content.declarations().tabs()) if (tab.builtin() && event.getTabKey().equals(VANILLA.get(tab.label())))
-            stacks(tab).forEach(event::accept);
+        Set<ItemStack> entries=ItemStackLinkedSet.createTypeAndTagSet();
+        for (var tab : content.declarations().tabs()) if (tab.builtin()
+                &&(event.getTabKey().equals(CreativeModeTabs.SPAWN_EGGS)||event.getTabKey().equals(VANILLA.get(tab.label())))) for(var stack:stacks(tab)) {
+            var key=isSpawnEgg(stack)?CreativeModeTabs.SPAWN_EGGS:VANILLA.get(tab.label());
+            if(event.getTabKey().equals(key))entries.add(stack);
+        }
+        entries.forEach(event::accept);
+    }
+    private boolean isSpawnEgg(ItemStack stack) {
+        return spawnEggs.computeIfAbsent(stack.getItem(),item->{
+            try {var original=content.renderSnapshot(stack);return original!=null&&content.services().items().isSpawnEgg(original);}
+            catch(Exception failure){throw new IllegalStateException("Cannot classify original creative item "+item,failure);}
+        });
+    }
+    public CreativeModeTab target(LegacyCreativeTabs.Tab tab,ItemStack stack) {
+        if(tab.builtin()&&isSpawnEgg(stack))return BuiltInRegistries.CREATIVE_MODE_TAB.get(CreativeModeTabs.SPAWN_EGGS.location());
+        return target(tab);
     }
     public CreativeModeTab target(LegacyCreativeTabs.Tab tab) {
         if (!tab.builtin()) return Objects.requireNonNull(customTabs.get(tab.key()));

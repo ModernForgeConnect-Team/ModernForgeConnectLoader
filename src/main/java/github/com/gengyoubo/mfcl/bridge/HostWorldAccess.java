@@ -63,6 +63,7 @@ public interface HostWorldAccess {
     int legacyDimensionId();
     boolean clientSide();
     default int difficulty() { return 2; }
+    default int skyDarken() { return 0; }
     /** Server tracking distance in chunks, used by original packet range checks. */
     default int viewDistance() { return 10; }
     long gameTime();
@@ -92,6 +93,8 @@ public interface HostWorldAccess {
     default boolean spawnLegacyEntity(Object entity) { return false; }
     /** The original object behind a host entity that hosts an old entity, so old queries see the real thing. */
     default Object hostedLegacyEntity(java.util.UUID id) { return null; }
+    /** Deliver a legacy status byte to the corresponding hosted entity's clients. */
+    default void legacyEntityState(java.util.UUID id,byte state) { }
     /**
      * Old attackEntityFrom on a mirrored host entity. {@code type} is the old damageType; {@code direct} and
      * {@code attacker} are host entity ids (old getSourceOfDamage / getEntity). Returns whether the hit is expected to land.

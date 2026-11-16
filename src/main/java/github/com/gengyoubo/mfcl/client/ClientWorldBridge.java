@@ -42,10 +42,12 @@ public final class ClientWorldBridge {
                 String dimension = next.dimension().location().toString();
                 int oldDimension = services.dimensions().legacyId(dimension);
                 oldWorld = services.worlds().bind(next, new HostWorldAccess() {
+                    private long mirroredInventoryAt=Long.MIN_VALUE;
                     @Override public String dimensionKey() { return dimension; }
                     @Override public int legacyDimensionId() { return oldDimension; }
                     @Override public boolean clientSide() { return true; }
                     @Override public int difficulty() { return next.getDifficulty().getId(); }
+                    @Override public int skyDarken() { return next.getSkyDarken(); }
                     @Override public Food food(java.util.UUID id) {
                         var player=next.getPlayerByUUID(id);if(player==null)return null;
                         var food=player.getFoodData();return new Food(food.getFoodLevel(),food.getSaturationLevel());
@@ -92,6 +94,22 @@ public final class ClientWorldBridge {
                     @Override public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new LegacyClientMutationException("Client world cannot change authoritative blocks"); }
                     @Override public java.util.List<HostWorldAccess.Entity> players() {
                         return next.players().stream().map(player -> github.com.gengyoubo.mfcl.content.HostEntityQueries.snapshot(next, player)).filter(java.util.Objects::nonNull).toList();
+                    }
+                    @Override public Object existingEntity(java.util.UUID id) {
+                        var player=Minecraft.getInstance().player;
+                        var content=github.com.gengyoubo.mfcl.content.ModernContentBridge.active();
+                        if(player==null||content==null||!id.equals(player.getUUID()))return null;
+                        try {
+                            var placer=new LegacyTiles.Placer(id,player.getName().getString(),player.getX(),player.getY(),player.getZ(),player.getYRot(),player.getXRot(),player.getAbilities().instabuild,player.isShiftKeyDown());
+                            Object actor=content.itemUse().clientActor(services.worlds().bound(next),placer,null);
+                            if(mirroredInventoryAt!=next.getGameTime()) {
+                                var inventory=new java.util.ArrayList<LegacyClientData.Stack>();
+                                for(var stack:player.getInventory().items)inventory.add(stack.isEmpty()?null:content.containerStack(stack));
+                                services.playerInventory().write(actor,inventory);mirroredInventoryAt=next.getGameTime();
+                            }
+                            services.playerInventory().select(actor,player.getInventory().selected);
+                            return actor;
+                        }catch(Exception failure){throw new IllegalStateException("Cannot mirror client player inventory",failure);}
                     }
                     @Override public int light(int x, int y, int z) { return next.getMaxLocalRawBrightness(new BlockPos(x,y,z)); }
                     @Override public int height(int x, int z) { return next.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z); }

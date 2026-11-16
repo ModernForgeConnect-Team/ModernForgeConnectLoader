@@ -68,6 +68,8 @@ minecraft {
             if (project.hasProperty('mfclApiSmokeTest')) property 'mfcl.test.api', 'true'
             if (project.hasProperty('mfclOuterSmokeTest')) property 'mfcl.test.outer', 'true'
             if (project.hasProperty('mfclServerSmokeTest')) property 'mfcl.test.server', project.property('mfclServerSmokeTest')
+            if (project.hasProperty('mfclZombieAuditChunkX')) property 'mfcl.test.zombieAuditChunkX', project.property('mfclZombieAuditChunkX')
+            if (project.hasProperty('mfclZombieAuditChunkZ')) property 'mfcl.test.zombieAuditChunkZ', project.property('mfclZombieAuditChunkZ')
             if (project.hasProperty('mfclSmokePrefix')) property 'mfcl.test.smokePrefix', project.property('mfclSmokePrefix')
             if (project.hasProperty('mfclLegacyGui')) property 'mfcl.legacyGui', 'true'
             if (project.hasProperty('mfclLegacyBrowser')) property 'mfcl.legacyGui', 'false'

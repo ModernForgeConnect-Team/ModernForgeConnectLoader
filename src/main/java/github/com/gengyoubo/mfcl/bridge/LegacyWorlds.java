@@ -7,6 +7,10 @@ import java.util.*;
 
 /** Maintains typed old World/WorldProvider objects, stable identity, direct fields and synchronous forwarding. */
 public final class LegacyWorlds implements AutoCloseable {
+    private static final ThreadLocal<Integer> CLIENT_ENTITY_UPDATE=ThreadLocal.withInitial(()->0);
+    static void beginClientEntityUpdate(){CLIENT_ENTITY_UPDATE.set(CLIENT_ENTITY_UPDATE.get()+1);}
+    static void endClientEntityUpdate(){int depth=CLIENT_ENTITY_UPDATE.get()-1;if(depth==0)CLIENT_ENTITY_UPDATE.remove();else CLIENT_ENTITY_UPDATE.set(depth);}
+    private static boolean clientEntityPrediction(Binding binding){return binding.host.clientSide()&&CLIENT_ENTITY_UPDATE.get()>0;}
     public static java.util.List<Object> serverWorlds(ClassLoader loader){synchronized(DISPATCH){return DISPATCH.values().stream().filter(binding->binding.loader==loader&&binding.owner==Thread.currentThread()&&!binding.host.clientSide()&&binding.host.dimensionWorld()).map(binding->binding.world).toList();}}
     private static final Map<Object, Binding> DISPATCH = Collections.synchronizedMap(new IdentityHashMap<>());
     private final Map<Object, Binding> worlds = new IdentityHashMap<>();
@@ -117,6 +121,8 @@ public final class LegacyWorlds implements AutoCloseable {
             set(providerType, provider, "field_76577_b", info.getClass().getMethod("func_76067_t").invoke(info));
             set(providerType, provider, "field_82913_c", info.getClass().getMethod("func_82571_y").invoke(info));
             set(providerType, provider, "field_76578_c", LegacyBiomeManager.create(loader, world));
+            // registerWorld normally builds the provider's light table, but host biome setup skips it.
+            var lightTable=providerType.getDeclaredMethod("func_76556_a");lightTable.setAccessible(true);lightTable.invoke(provider);
         }
         if(!host.clientSide()&&host.dimensionWorld())dimensionWorlds().put(dimension,world);
         refreshDifficulty(binding);
@@ -129,6 +135,7 @@ public final class LegacyWorlds implements AutoCloseable {
             var type=binding.loader.loadClass("net.minecraft.world.EnumDifficulty");
             Object difficulty=type.getEnumConstants()[Math.max(0,Math.min(3,binding.host.difficulty()))];
             binding.loader.loadClass("net.minecraft.world.World").getField("field_73013_u").set(binding.world,difficulty);
+            binding.loader.loadClass("net.minecraft.world.World").getField("field_73008_k").setInt(binding.world,binding.host.skyDarken());
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot refresh old world difficulty",failure);}
     }
     public synchronized void unbind(Object hostIdentity) {
@@ -336,7 +343,8 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     public static int metadata(Object world, int x, int y, int z) { return binding(world).host.block(x, y, z).metadata(); }
     public static boolean metadata(Object world, int x, int y, int z, int metadata, int flags) {
-        var host = binding(world).host; var old = host.block(x, y, z);
+        var bound=binding(world);if(clientEntityPrediction(bound))return false;
+        var host = bound.host; var old = host.block(x, y, z);
         // 1.7.10 stored metadata on air invisibly (orphan door halves write to the missing half); the host has no such state.
         if (old.legacyKey().equals("minecraft:air")) return false;
         return host.setBlock(x, y, z, new HostWorldAccess.Block(old.legacyKey(), metadata), flags);
@@ -564,8 +572,13 @@ public final class LegacyWorlds implements AutoCloseable {
             binding.host.neighborsChanged(x,y,z);
         } catch (ReflectiveOperationException error) { throw new IllegalStateException("Cannot notify original neighbours", error); }
     }
-    /** Entity status bytes (hearts, hurt flashes) on mirrors: the host entity broadcasts its own when changes are committed. */
-    public static void entityState(Object world, Object entity, byte state) { }
+    /** Forward status bytes from hosted originals; native mirrors produce their own host status events. */
+    public static void entityState(Object world, Object entity, byte state) {
+        var bound=binding(world);if(bound.host.clientSide())return;
+        try {var base=bound.loader.loadClass("net.minecraft.entity.Entity");
+            bound.host.legacyEntityState((UUID)base.getMethod("func_110124_au").invoke(entity),state);
+        } catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot forward legacy entity status",failure);}
+    }
     public static void comparators(Object world, int x, int y, int z, Object block) { binding(world).host.updateComparators(x,y,z); }
     private static String blockKey(Binding binding, Object block) {
         try {
@@ -613,7 +626,7 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     /** chunkExists(chunkX, chunkZ) for checkChunksExist and friends. */
     public static boolean chunkLoaded(Object world, int chunkX, int chunkZ) { return binding(world).host.loaded(chunkX<<4,64,chunkZ<<4); }
-    public static boolean removeBlock(Object world, int x, int y, int z) { return binding(world).host.setBlock(x,y,z,new HostWorldAccess.Block("minecraft:air",0),3); }
+    public static boolean removeBlock(Object world, int x, int y, int z) { var bound=binding(world);return !clientEntityPrediction(bound)&&bound.host.setBlock(x,y,z,new HostWorldAccess.Block("minecraft:air",0),3); }
     public static boolean solid(Object world, int x, int y, int z, Object direction, boolean fallback) {
         var binding = binding(world);
         try { return (boolean)binding.loader.loadClass("net.minecraft.block.Block").getMethod("isSideSolid",binding.loader.loadClass("net.minecraft.world.IBlockAccess"),int.class,int.class,int.class,binding.loader.loadClass("net.minecraftforge.common.util.ForgeDirection"))
@@ -622,6 +635,7 @@ public final class LegacyWorlds implements AutoCloseable {
     }
     public static boolean setBlock(Object world, int x, int y, int z, Object oldBlock, int metadata, int flags) {
         Binding binding = binding(world);
+        if(clientEntityPrediction(binding))return false;
         try {
             Class<?> type = binding.loader.loadClass("net.minecraft.block.Block");
             if (!type.isInstance(oldBlock)) throw new IllegalArgumentException("Block belongs to another runtime");

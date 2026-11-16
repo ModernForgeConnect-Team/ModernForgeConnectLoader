@@ -297,6 +297,10 @@ public final class LegacyContentPack {
                 }
             }
         }
+        if (content.loader().getResource("assets/thaumcraft/lang/en_US.lang") != null) {
+            languages.computeIfAbsent("zh_cn", ignored -> new TreeMap<>()).putAll(github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftAdapter.CHINESE_ENTITY_NAMES);
+            languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftAdapter.ENGLISH_EGG_NAMES);
+        }
         languages.computeIfAbsent("en_us", ignored -> new TreeMap<>()).putAll(Map.of("itemGroup.mfcl.unclassified_1_7_10", "Other 1.7.10 items",
                 "mfcl.content.special_block_pending", "This block needs special rendering or placement support, which is not available yet.",
                 "mfcl.content.machine_logic_pending", "The original logic of this block failed in this session and was paused. Details are in the game log.",

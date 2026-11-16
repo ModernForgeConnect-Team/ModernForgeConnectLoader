@@ -242,10 +242,35 @@ public final class LegacyClientData {
     public void close() throws java.io.IOException { LegacyHostTools.close(loader); LegacyHostRegistry.close(loader); if (resourceContext != null) resourceContext.close(); }
     public Object copyLegacyStack(Object value) throws Exception { return copyStack.invoke(value); }
     public String displayName(Stack value) throws Exception {
-        return inLegacy(()->(String)stackType.getMethod("func_82833_r").invoke(materialize(value)));
+        return inLegacy(()->{Object stack=materialize(value);return eggName(stack,(String)stackType.getMethod("func_82833_r").invoke(stack));});
+    }
+    /** A spawn egg has no individual name or champion modifier to fill an entity name template. */
+    private String eggName(Object stack,String name) throws Exception {
+        if(!name.contains("%")||(boolean)stackType.getMethod("func_82837_s").invoke(stack))return name;
+        Object item=itemOfStack.invoke(stack);Class<?> type=item.getClass();
+        if(!type.getName().equals("thaumcraft.common.entities.ItemSpawnerEgg"))return name;
+        var list=type.getDeclaredField("spawnList");list.setAccessible(true);var entries=(List<?>)list.get(null);
+        int meta=(int)stackType.getMethod("func_77960_j").invoke(stack);if(meta<0||meta>=entries.size())return name;
+        Object entry=entries.get(meta);var entityName=entry.getClass().getDeclaredField("name");entityName.setAccessible(true);
+        String id=(String)entityName.get(entry);
+        if(!Set.of("Thaumcraft.CultistLeader","Thaumcraft.EldritchWarden","Thaumcraft.EldritchGolem").contains(id))return name;
+        String shortId=id.substring(id.indexOf('.')+1);
+        var translate=loader.loadClass("net.minecraft.util.StatCollector").getMethod("func_74838_a",String.class);
+        String template=(String)translate.invoke(null,"entity."+id+".name");
+        String baseKey="mfcl.thaumcraft.egg."+shortId;
+        String base=(String)translate.invoke(null,baseKey);
+        if(base.equals(baseKey))base=switch(shortId){case "CultistLeader"->"Crimson Praetor";case "EldritchWarden"->"Eldritch Warden";default->"Eldritch Construct";};
+        return name.contains(template)?name.replace(template,base):name;
     }
     public int stackLimit(Stack value) throws Exception {
         return inLegacy(()->(int)stackType.getMethod("func_77976_d").invoke(materialize(value)));
+    }
+    public boolean isSpawnEgg(Stack value) throws Exception {
+        return inLegacy(()->{
+            Object item=itemOfStack.invoke(materialize(value));
+            return loader.loadClass("net.minecraft.item.ItemMonsterPlacer").isInstance(item)
+                    || item.getClass().getName().equals("thaumcraft.common.entities.ItemSpawnerEgg");
+        });
     }
     public List<String> tooltip(Stack value,Object player,boolean advanced) throws Exception {
         return inLegacy(()->tooltipLegacyStack(materialize(value),player,advanced));
@@ -253,6 +278,7 @@ public final class LegacyClientData {
     public List<String> tooltipLegacyStack(Object stack,Object player,boolean advanced) throws Exception {
         return inLegacy(()->{
             @SuppressWarnings("unchecked") var lines=(List<String>)stackType.getMethod("func_82840_a",loader.loadClass("net.minecraft.entity.player.EntityPlayer"),boolean.class).invoke(stack,player,advanced);
+            if(!lines.isEmpty()){String corrected=eggName(stack,lines.get(0));if(!corrected.equals(lines.get(0))){lines=new ArrayList<>(lines);lines.set(0,corrected);}}
             return List.copyOf(lines);
         });
     }

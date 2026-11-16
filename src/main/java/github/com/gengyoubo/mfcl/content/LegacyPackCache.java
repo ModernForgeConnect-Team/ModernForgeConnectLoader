@@ -20,7 +20,7 @@ final class LegacyPackCache {
         try(var sink=new DigestOutputStream(OutputStream.nullOutputStream(),hash);var writer=new OutputStreamWriter(sink,StandardCharsets.UTF_8)) {
             put(writer,"mfcl-resource-base-v1");
             // Include the actual generator bytecode so development and updated builds never share an incompatible cache.
-            for(Class<?> type:List.of(LegacyPackCache.class,LegacyContentPack.class,LegacyRegistryIds.class,ModernContentBridge.class)) {
+            for(Class<?> type:List.of(LegacyPackCache.class,LegacyContentPack.class,LegacyRegistryIds.class,ModernContentBridge.class,github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftAdapter.class)) {
                 String resource="/"+type.getName().replace('.','/')+".class";
                 try(var in=type.getResourceAsStream(resource)){if(in==null)throw new IOException("Cannot fingerprint "+resource);put(writer,HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(in.readAllBytes())));}
             }

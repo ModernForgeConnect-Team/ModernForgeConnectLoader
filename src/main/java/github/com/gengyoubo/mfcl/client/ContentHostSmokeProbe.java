@@ -105,7 +105,7 @@ final class ContentHostSmokeProbe {
                         if (target.showTitle() != original.showTitle() || target.canScroll() != original.scroll() || target.hasSearchBar() != original.searchBar())
                             throw new IllegalStateException("Original tab settings changed: " + original.key());
                     }
-                    for (var stack : expected) if (!target.contains(stack) || !CreativeModeTabs.searchTab().contains(stack))
+                    for (var stack : expected) if (!bridge.creative().target(original,stack).contains(stack) || !CreativeModeTabs.searchTab().contains(stack))
                         throw new IllegalStateException("Original tab/search lost entry: " + original.key());
                     tabProof.add(Map.of("originalKey", original.key(), "label", original.label(), "nameKey", original.nameKey(),
                             "displayName", target.getDisplayName().getString(), "icon", original.icon(), "entries", expected.size(), "builtin", original.builtin()));

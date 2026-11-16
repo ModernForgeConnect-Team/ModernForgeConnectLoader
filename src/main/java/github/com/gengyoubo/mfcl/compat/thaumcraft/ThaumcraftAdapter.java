@@ -5,6 +5,17 @@ import java.util.*;
 
 /** TC4-owned compatibility implementation; the core depends only on generic extension points. */
 public final class ThaumcraftAdapter implements LegacyModAdapter {
+    public static final Map<String,String> CHINESE_ENTITY_NAMES=Map.of(
+            "entity.Thaumcraft.CultistLeader.name","血腥主教 %1$s，%2$s",
+            "entity.Thaumcraft.EldritchWarden.name","远古守卫 %1$s，%2$s",
+            "entity.Thaumcraft.EldritchGolem.name","%1$s远古构装体",
+            "mfcl.thaumcraft.egg.CultistLeader","血腥主教",
+            "mfcl.thaumcraft.egg.EldritchWarden","远古守卫",
+            "mfcl.thaumcraft.egg.EldritchGolem","远古构装体");
+    public static final Map<String,String> ENGLISH_EGG_NAMES=Map.of(
+            "mfcl.thaumcraft.egg.CultistLeader","Crimson Praetor",
+            "mfcl.thaumcraft.egg.EldritchWarden","Eldritch Warden",
+            "mfcl.thaumcraft.egg.EldritchGolem","Eldritch Construct");
     private LegacyServices services;
     @Override public String id() { return "thaumcraft4"; }
     @Override public boolean supports(Set<String> mods) { return mods.contains("Thaumcraft"); }
@@ -25,6 +36,10 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
     }
     @Override public Map<String,Object> initialize(LegacyServices services) throws Exception {
         this.services = services;
+        // TC creates champion names on the server too, before any client language is selected.
+        services.items().initializeContext(services.gameDirectory(),List.of("assets/thaumcraft/lang/en_US.lang"));
+        services.items().override("zh_cn",CHINESE_ENTITY_NAMES);
+        services.items().supplement("en_us",ENGLISH_EGG_NAMES);
         services.items().supplement("zh_cn",Map.of("item.ItemResource.18.name","金币","tile.blockMagicalLog.silverwoodknot.name","银树树瘤"));
         services.items().supplement("en_us",Map.of("tile.blockMagicalLog.silverwoodknot.name","Silverwood Knot"));
         var loader = services.loader();

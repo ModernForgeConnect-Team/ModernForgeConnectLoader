@@ -482,6 +482,7 @@ public final class LegacyItemUse {
         entity.getField("field_70126_B").setFloat(actor,placer.yaw());entity.getField("field_70127_C").setFloat(actor,placer.pitch());
         Object capabilities=playerType.getField("field_71075_bZ").get(actor);
         capabilities.getClass().getField("field_75098_d").setBoolean(capabilities,placer.creative());
+        LegacyEntityAccess.playerGameMode(services.loader(),actor,placer.creative());
         LegacyPlayerFlight.refresh(actor);
         LegacyPlayerAttributes.pull(actor);
         LegacyPlayerBody.pull(actor, client);

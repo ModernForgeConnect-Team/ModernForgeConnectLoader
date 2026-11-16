@@ -39,7 +39,10 @@ class WorldHeightTransformerTest {
             byte[] before;try(var input=loader.getResourceAsStream(name.replace('.','/')+".class")){assertNotNull(input);before=input.readAllBytes();}
             var parsed=new ClassNode();new ClassReader(transform(loader,name,before)).accept(parsed,0);
             var method=parsed.methods.stream().filter(m->m.name.equals("func_75503_j")&&m.desc.equals("()I")).findFirst().orElseThrow();
-            assertEquals(3,Arrays.stream(method.instructions.toArray()).filter(i->i instanceof MethodInsnNode call&&call.name.equals("func_76128_c")&&call.desc.equals("(D)I")).count());
+            var original=new ClassNode();new ClassReader(before).accept(original,0);
+            var beforeMethod=original.methods.stream().filter(m->m.name.equals("func_75503_j")&&m.desc.equals("()I")).findFirst().orElseThrow();
+            long previous=Arrays.stream(beforeMethod.instructions.toArray()).filter(i->i instanceof MethodInsnNode call&&call.name.equals("func_76128_c")&&call.desc.equals("(D)I")).count();
+            assertEquals(previous+3,Arrays.stream(method.instructions.toArray()).filter(i->i instanceof MethodInsnNode call&&call.name.equals("func_76128_c")&&call.desc.equals("(D)I")).count());
             assertEquals(0,Arrays.stream(method.instructions.toArray()).filter(i->i.getOpcode()==Opcodes.D2I).count());
         }
     }
