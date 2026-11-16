@@ -39,6 +39,13 @@ public final class LegacyApiRuntime implements LegacyRuntime, AutoCloseable {
     public interface PlayerAccess { <T> T run(Object player, Function<LegacyObject, T> operation); }
     private PlayerAccess playerAccess;
     private LegacyHostRepresentations hostRepresentations;
+    private LegacyEntityHosts entityHosts;
+    public void installEntityHosts(LegacyEntityHosts value) { entityHosts = Objects.requireNonNull(value); }
+    @Override public LegacyEntityHosts entityHosts() {
+        checkOpen();
+        if (entityHosts == null) throw new UnsupportedOperationException("Entity hosts are unavailable");
+        return entityHosts;
+    }
 
     public void installHostRepresentations(LegacyHostRepresentations representations) {
         this.hostRepresentations = Objects.requireNonNull(representations);

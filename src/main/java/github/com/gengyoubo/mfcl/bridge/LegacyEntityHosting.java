@@ -58,13 +58,13 @@ public final class LegacyEntityHosting {
             return null;
         });
     }
-    public void nativeMirror(Object value) { LegacyEntityHooks.mirrored(value); }
-    public void brainyDrops(Object value,boolean recentlyHit,int looting) throws Exception {
+    public void nativeState(Object value,double x,double y,double z,double mx,double my,double mz,float yRot,float xRot) throws Exception {
         services.items().inLegacy(()->{
-            var method=value.getClass().getDeclaredMethod("func_70628_a",boolean.class,int.class);method.setAccessible(true);
-            method.invoke(value,recentlyHit,looting);return null;
+            setPosition.invoke(value,x,y,z);yaw.setFloat(value,yRot);pitch.setFloat(value,xRot);
+            motionX.setDouble(value,mx);motionY.setDouble(value,my);motionZ.setDouble(value,mz);return null;
         });
     }
+    public void nativeMirror(Object value) { LegacyEntityHooks.mirrored(value); }
     /** The host entity's identity becomes the original's, so old queries and damage sources resolve to the host entity. */
     public void adopt(Object value, Object boundWorld, UUID id, int entityId) throws Exception {
         services.items().inLegacy(() -> {

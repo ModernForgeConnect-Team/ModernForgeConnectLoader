@@ -11,9 +11,10 @@ public final class MfclApi {
     /**
      * 2: features(), equipment, events, client player, values (arrays, collections, type tests), applyTo, redirects,
      * String/boxed values for Object parameters, host item NBT. 3: native host stack adapters. 4: direct classes.
+     * 5: specialized entity hosts.
      * Probe {@link LegacyRuntime#features()} for each.
      */
-    public static final int API_VERSION = 4;
+    public static final int API_VERSION = 5;
     private MfclApi() { }
     private static final class Provider {
         static final Optional<RuntimeProvider> INSTANCE = load();

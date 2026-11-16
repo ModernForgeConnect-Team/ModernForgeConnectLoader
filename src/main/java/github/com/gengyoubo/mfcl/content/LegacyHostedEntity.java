@@ -89,7 +89,15 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
         }
         var level = (ServerLevel) level();
         try {
+            boolean fromSpawner=spawnerTemplate;
             if (!ensureServerLegacy(content, level)) { discard(); return; }
+            if(fromSpawner&&content.entityHosts()!=null) {
+                var replacement=content.entityHosts().create(level,legacy);
+                if(replacement!=null){
+                    content.afterCommit(level,()->{if(level.addFreshEntity(replacement))discard();});
+                    return;
+                }
+            }
             var world = content.services().worlds().bound(level);
             var state = content.logicTransaction(level, blockPosition(), () -> hosting(content).tick(world, legacy), true);
             apply(state, false);
@@ -192,6 +200,8 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     }
     @Override protected void readAdditionalSaveData(CompoundTag tag) {
         legacyType = tag.contains("LegacyType") ? tag.getString("LegacyType") : null;
+        if(legacyType==null&&tag.contains("LegacyNbt")&&"mfcl:brainy_zombie".equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(getType()).toString()))
+            legacyType="thaumcraft.common.entities.monster.EntityBrainyZombie";
         saved = tag.contains("LegacyNbt") ? tag.getByteArray("LegacyNbt") : null;
         spawnerTemplate = tag.getBoolean("LegacySpawnerTemplate");
         if (tag.contains("LegacyWidth")) { width = tag.getFloat("LegacyWidth"); height = tag.getFloat("LegacyHeight"); refreshDimensions(); }

@@ -67,8 +67,11 @@ public final class ModernContentBridge {
     private BlockEntityType<LegacyBlockEntity> tileType;
     private net.minecraft.world.inventory.MenuType<LegacyDeviceMenu> deviceMenuType;
     private net.minecraft.world.entity.EntityType<LegacyHostedEntity> legacyEntityType;
-    private net.minecraft.world.entity.EntityType<ModernBrainyZombie> brainyZombieType;
-    public net.minecraft.world.entity.EntityType<ModernBrainyZombie> brainyZombieType(){return Objects.requireNonNull(brainyZombieType,"Brainy zombie registry window");}
+    private net.minecraft.world.entity.EntityType<LegacyHostedEntity> oldBrainyZombieType;
+    private ApiEntityHosts entityHosts;
+    public void entityHosts(ApiEntityHosts hosts){entityHosts=Objects.requireNonNull(hosts);}
+    public ApiEntityHosts entityHosts(){return entityHosts;}
+    public net.minecraft.world.entity.EntityType<LegacyHostedEntity> oldBrainyZombieType(){return Objects.requireNonNull(oldBrainyZombieType,"Brainy zombie registry window");}
     public net.minecraft.world.entity.EntityType<LegacyHostedEntity> legacyEntityType(){return Objects.requireNonNull(legacyEntityType,"Legacy entity registry window");}
     public net.minecraft.world.inventory.MenuType<LegacyDeviceMenu> deviceMenuType(){return Objects.requireNonNull(deviceMenuType,"Legacy device menu registry window");}
 
@@ -145,7 +148,6 @@ public final class ModernContentBridge {
             bus.addListener(bridge::register); bus.addListener(bridge.pack::findPacks);
             bus.addListener(bridge.creative::buildVanillaContents);
             bus.addListener(bridge.attributes::players);
-            bus.addListener((net.minecraftforge.event.entity.EntityAttributeCreationEvent event)->event.put(bridge.brainyZombieType(),ModernBrainyZombie.attributes().build()));
             LevelWorldBridge.install(bridge);
             bridge.droppedItems = new HostDroppedItems(bridge);
             LegacyCommands.install(bridge);
@@ -489,9 +491,10 @@ public final class ModernContentBridge {
             legacyEntityType = net.minecraft.world.entity.EntityType.Builder.<LegacyHostedEntity>of(LegacyHostedEntity::new, net.minecraft.world.entity.MobCategory.MISC)
                     .sized(0.25f, 0.25f).clientTrackingRange(8).updateInterval(1).setShouldReceiveVelocityUpdates(true).fireImmune().build("mfcl:legacy_entity");
             registry.register(ResourceLocation.fromNamespaceAndPath("mfcl", "legacy_entity"), legacyEntityType);
-            brainyZombieType=net.minecraft.world.entity.EntityType.Builder.<ModernBrainyZombie>of(ModernBrainyZombie::new,net.minecraft.world.entity.MobCategory.MONSTER)
-                    .sized(0.6f,1.95f).clientTrackingRange(8).updateInterval(1).build("mfcl:brainy_zombie");
-            registry.register(ResourceLocation.fromNamespaceAndPath("mfcl","brainy_zombie"),brainyZombieType);
+            // Read old experimental saves under their previous ID, using the normal original-logic host.
+            oldBrainyZombieType=net.minecraft.world.entity.EntityType.Builder.<LegacyHostedEntity>of(LegacyHostedEntity::new,net.minecraft.world.entity.MobCategory.MISC)
+                    .sized(0.25f,0.25f).clientTrackingRange(8).updateInterval(1).setShouldReceiveVelocityUpdates(true).fireImmune().build("mfcl:brainy_zombie");
+            registry.register(ResourceLocation.fromNamespaceAndPath("mfcl","brainy_zombie"),oldBrainyZombieType);
         });
         event.register(Registries.BLOCK_ENTITY_TYPE, registry -> {
             var supported = declarations.blocks().stream().filter(LegacyContent.Block::tileEntity).map(entry -> blocks.get(entry.key())).toArray(Block[]::new);

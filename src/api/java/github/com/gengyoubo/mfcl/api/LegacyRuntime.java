@@ -44,6 +44,10 @@ public interface LegacyRuntime {
     default LegacyHostRepresentations hostRepresentations() {
         throw new UnsupportedOperationException("This MFCL build does not provide host registry representations");
     }
+    /** {@link LegacyFeatures#ENTITY_HOSTS}. Register modern hosts for original entity classes. */
+    default LegacyEntityHosts entityHosts() {
+        throw new UnsupportedOperationException("This MFCL build does not provide entity host registration");
+    }
     /**
      * {@link LegacyFeatures#HOST_BLOCKS}. Host block state that mirrors an original block at a metadata value, for
      * example to place original ores from host world generation. Empty when the original block has no host

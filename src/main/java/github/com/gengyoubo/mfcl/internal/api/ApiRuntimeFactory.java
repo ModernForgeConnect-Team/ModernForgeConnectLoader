@@ -51,6 +51,8 @@ public final class ApiRuntimeFactory {
     }
     public static void installHostMappings(LegacyApiRuntime runtime, ModernContentBridge content) {
         var services = content.services();
+        var entityHosts=new github.com.gengyoubo.mfcl.content.ApiEntityHosts(content,runtime);
+        content.entityHosts(entityHosts);runtime.installEntityHosts(entityHosts);runtime.addFeatures(LegacyFeatures.ENTITY_HOSTS);
         var representations = content.hostRepresentations();
         runtime.installHostRepresentations(new LegacyHostRepresentations() {
             public LegacyStack item(String id) { return runtime.call("HOST_REPRESENTATION", id, () -> representations.item(id)); }

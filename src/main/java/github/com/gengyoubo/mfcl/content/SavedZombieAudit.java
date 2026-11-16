@@ -43,9 +43,46 @@ final class SavedZombieAudit {
             report.put("creativeTransition",creativeTransition(level));
             report.put("combat",combat(level));
             report.put("spawnEggAndOrb",spawnEggAndOrb(level));
+            report.put("entityHosts",entityHosts(level));
             var path=FMLPaths.GAMEDIR.get().resolve("logs/mfcl/saved-zombie-audit.json");Files.createDirectories(path.getParent());Files.writeString(path,new GsonBuilder().setPrettyPrinting().create().toJson(report));
             LogUtils.getLogger().info("MFCL_SAVED_ZOMBIE_AUDIT: {}",report);done=true;server.halt(false);
         }catch(Throwable failure){done=true;LogUtils.getLogger().error("MFCL_SAVED_ZOMBIE_AUDIT failed",failure);server.halt(false);}
+    }
+    private Map<String,Object> entityHosts(ServerLevel level) throws Exception {
+        var api=content.entityHosts();var loader=content.services().loader();String type="thaumcraft.common.entities.monster.EntityBrainyZombie";
+        Object old=content.services().items().inLegacy(()->loader.loadClass(type).getConstructor(loader.loadClass("net.minecraft.world.World")).newInstance(content.services().worlds().bound(level)));
+        content.services().entityHosting().position(old,-11.5,-59,23.5);
+        var captured=new github.com.gengyoubo.mfcl.api.LegacyObject[1];var created=new Entity[1];
+        var registration=api.register(type,(world,original)->{captured[0]=original;return created[0]=EntityType.ZOMBIE.create((ServerLevel)world);});
+        try {
+            try{api.register(type,(world,original)->null);throw new IllegalStateException("Duplicate host registration accepted");}catch(IllegalStateException expected){if(expected.getMessage().equals("Duplicate host registration accepted"))throw expected;}
+            Entity host=api.create(level,old);
+            if(host==null||api.original(host).isEmpty()||api.raw(host)!=old||Math.abs(host.getX()+11.5)>0.001)throw new IllegalStateException("Custom host creation or binding failed");
+            host.moveTo(-10,-58,24);api.sync(host);var state=content.services().entityHosting().state(old);
+            if(Math.abs(state.x()+10)>0.001)throw new IllegalStateException("Host position did not reach original");
+            byte[] saved=api.save(host);Entity restored=EntityType.ZOMBIE.create(level);api.restore(restored,type,saved);
+            if(api.original(restored).isEmpty()||api.save(restored).length==0)throw new IllegalStateException("Custom host restoration failed");
+            try{content.services().items().inLegacy(()->{var runtime=(github.com.gengyoubo.mfcl.internal.api.LegacyApiRuntime)github.com.gengyoubo.mfcl.api.MfclApi.runtime().orElseThrow();runtime.raw(captured[0]);return null;});throw new IllegalStateException("Factory reference escaped callback");}
+            catch(IllegalStateException expected){if(expected.getMessage().equals("Factory reference escaped callback"))throw expected;}
+            Object world=content.services().worlds().bound(level);
+            Object spawned=content.services().items().inLegacy(()->loader.loadClass(type).getConstructor(loader.loadClass("net.minecraft.world.World")).newInstance(world));
+            content.services().entityHosting().position(spawned,-10,-58,24);
+            boolean accepted=content.logicTransaction(level,new net.minecraft.core.BlockPos(-10,-58,24),()->content.services().items().inLegacy(()->
+                    (boolean)loader.loadClass("net.minecraft.world.World").getMethod("func_72838_d",loader.loadClass("net.minecraft.entity.Entity")).invoke(world,spawned)),true);
+            if(!accepted||created[0]==null||level.getEntity(created[0].getUUID())!=created[0]||api.raw(created[0])!=spawned)throw new IllegalStateException("Original world spawn did not use registered host");
+            created[0].discard();
+            var spawnerTag=new net.minecraft.nbt.CompoundTag();spawnerTag.putString("LegacyType",type);spawnerTag.putByteArray("LegacyNbt",saved);spawnerTag.putBoolean("LegacySpawnerTemplate",true);
+            var spawnerHost=new LegacyHostedEntity(content.legacyEntityType(),level);spawnerHost.readAdditionalSaveData(spawnerTag);spawnerHost.moveTo(-10,-58,24,0,0);
+            if(!level.addFreshEntity(spawnerHost))throw new IllegalStateException("Cannot spawn old spawner template");
+            created[0]=null;spawnerHost.tick();
+            if(created[0]==null||level.getEntity(created[0].getUUID())!=created[0]||!spawnerHost.isRemoved())throw new IllegalStateException("Spawner template did not use registered host");
+            created[0].discard();
+            var oldTag=new net.minecraft.nbt.CompoundTag();oldTag.putByteArray("LegacyNbt",saved);
+            var migrated=new LegacyHostedEntity(content.oldBrainyZombieType(),level);migrated.readAdditionalSaveData(oldTag);
+            var written=new net.minecraft.nbt.CompoundTag();migrated.addAdditionalSaveData(written);
+            if(!type.equals(written.getString("LegacyType")))throw new IllegalStateException("Old experimental zombie save was not migrated");
+            return Map.of("factory",true,"worldSpawn",true,"spawner",true,"sync",true,"saveRestore",true,"expiredReference",true,"oldSave",true);
+        } finally { registration.close(); }
     }
     private Map<String,Object> spawnEggAndOrb(ServerLevel level)throws Exception {
         return content.services().items().inLegacy(()->{

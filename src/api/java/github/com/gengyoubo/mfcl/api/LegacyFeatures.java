@@ -12,6 +12,8 @@ public final class LegacyFeatures {
     private LegacyFeatures() { }
     /** {@link LegacyRuntime#hostRepresentations()}. */
     public static final String HOST_REPRESENTATIONS = "host-representations";
+    /** {@link LegacyRuntime#entityHosts()}. */
+    public static final String ENTITY_HOSTS = "entity-hosts";
     /** {@link LegacyRuntime#hostBlock}. */
     public static final String HOST_BLOCKS = "host-blocks";
     /** {@link LegacyRuntime#languages()}. */

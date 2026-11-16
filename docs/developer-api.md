@@ -30,7 +30,7 @@
 | Mixin 注入 | 不在本版 MLA 范围内 |
 | 直通类：附属代码真正 `import` 旧类，经宿主接口调用 `LegacyRuntime.direct` | 实验原型，v4；见 [直通类](direct-classes.md) |
 
-本 API 仍为实验版；`MfclApi.API_VERSION = 4` 表示当前契约版本，不能理解为 issue 全部完成。可用功能应先用 `runtime.supports(LegacyFeatures.X)` 探测，不要靠捕获 `UnsupportedOperationException`。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
+本 API 仍为实验版；`MfclApi.API_VERSION = 5` 表示当前契约版本，不能理解为 issue 全部完成。可用功能应先用 `runtime.supports(LegacyFeatures.X)` 探测，不要靠捕获 `UnsupportedOperationException`。当前宿主验收使用 Forge 1.20.1 客户端及其集成服务器，不代表所有旧模组或独立专用服务器均已兼容。
 
 v3 的 `LegacyStackAdapters` 允许模组在宿主物品与旧版物品之间注册双向适配器，供物品映射、旧版库存和渲染快照使用。适配器必须只处理自己的物品，在旧版 NBT 中保存可识别的标记及恢复宿主物品所需的数据，且在回写时合并旧版逻辑修改。回调可能嵌套，不能再次处理自己生成的带标记结果。使用前检测 `LegacyFeatures.HOST_STACK_ADAPTERS`；客户端和服务器都要安装同一适配器。
 
@@ -266,3 +266,22 @@ scene.render(poseStack, bufferSource, partialTick, yaw, pitch);
 测试覆盖隔离域同名类、重载 / 继承 / 私有成员、final 保护、数组、错误描述符、跨运行时 / 伪造引用、线程和生命周期、就绪回调、诊断容量，以及真实 1.7.10 ItemStack / 注册表 / 原始 NBT。客户端 `-PmfclApiSmokeTest` 验收独立 API ServiceLoader、真实现代堆转换、客户端和集成服务器世界身份、跨线程拒绝及卸载失效，报告写入游戏目录 `logs/mfcl/api-smoke.json`。
 
 并行运行游戏时，应使用独立的 Gradle 输出及 project cache，避免覆盖正在运行的开发类。独立依赖工具的配置、验证和来源记录见 [Legacy Dependency Resolver](../tools/legacy-dependency-resolver/README.md)。
+# 专用实体宿主
+
+`LegacyRuntime.entityHosts()` 提供 `LegacyEntityHosts`（先检查 `LegacyFeatures.ENTITY_HOSTS`）。扩展模组应在 `MfclApi.whenReady` 注册精确的旧版实体二进制类名；工厂只在服务端运行，返回尚未加入世界的现代 `Entity`，也可以返回 `null` 使用 MFCL 的普通旧版实体宿主。
+
+```java
+MfclApi.whenReady(runtime -> {
+    if (!runtime.supports(LegacyFeatures.ENTITY_HOSTS)) return;
+    runtime.entityHosts().register("example.old.EntityCreature", (world, original) -> {
+        // MY_ENTITY 是扩展模组自己注册、带属性和渲染器的现代 EntityType。
+        return MY_ENTITY.get().create((ServerLevel) world);
+    });
+});
+```
+
+MFCL 将旧实体的位置、朝向和速度复制给新宿主，并建立双方的身份和查询关系。工厂中的 `original` 仅在回调内有效；之后可以在宿主所在服务端线程上调用 `original(host)` 获取当前绑定。调用 `sync(host)` 将宿主的位置、速度、朝向及生命值写回旧实体，适合由现代实体负责 AI 的情况。旧实体的 AI 不会自动执行。
+
+扩展模组负责注册现代实体类型、属性和渲染器，以及实现自己的 AI、伤害、掉落和网络同步。要跨存档保留旧实体，宿主保存时存储 `save(host)` 返回的字节数组和原始类名，重新加载后在服务端世界可用时调用 `restore(host, className, bytes)`。客户端渲染需要旧实体时，由扩展模组自行同步并恢复客户端所需的数据；这个 API 目前不提供客户端旧实体绑定。工厂在旧实体生成及 MFCL 旧实体刷怪笼模板生成时调用；已有的普通宿主不会自动替换。
+
+关闭注册句柄只影响后续生成；对相同类的重复注册会失败。不要在工厂中添加实体到世界、保留工厂借用的 `LegacyObject`，或从其他线程访问游戏实体。
