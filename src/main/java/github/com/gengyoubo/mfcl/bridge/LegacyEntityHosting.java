@@ -84,7 +84,14 @@ public final class LegacyEntityHosting {
             prevX.setDouble(value, posX.getDouble(value)); prevY.setDouble(value, posY.getDouble(value)); prevZ.setDouble(value, posZ.getDouble(value));
             ticks.setInt(value, ticks.getInt(value) + 1);
             if (!clientUpdateFailures.contains(value.getClass())) {
-                try { update.invoke(value); }
+                try {
+                    // LivingEntity's client tick applies this interpolation after recording the previous position;
+                    // its original movement and body animation code then observes the actual host displacement.
+                    if (services.loader().loadClass("net.minecraft.entity.EntityLivingBase").isInstance(value))
+                        entity.getMethod("func_70056_a", double.class, double.class, double.class, float.class, float.class, int.class)
+                                .invoke(value, x, y, z, yawValue, pitchValue, 1);
+                    update.invoke(value);
+                }
                 catch (InvocationTargetException failure) {
                     clientUpdateFailures.add(value.getClass());
                     LogUtils.getLogger().warn("MFCL original client update of {} failed; it is only positioned from now on", value.getClass().getName(), failure.getCause());

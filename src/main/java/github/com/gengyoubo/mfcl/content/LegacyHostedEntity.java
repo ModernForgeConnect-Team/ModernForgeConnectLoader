@@ -8,6 +8,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.*;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -32,6 +33,10 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
     private boolean spawnerTemplate;
     private float width = 0.25f, height = 0.25f;
     private boolean collidable, failed;
+    private int hurtFlashTicks;
+    private int interpolationSteps;
+    private double targetX, targetY, targetZ;
+    private float targetYaw, targetPitch;
     public LegacyHostedEntity(EntityType<?> type, Level level) { super(type, level); noPhysics = true; }
     /** Wraps an original entity spawned by old server logic; the caller adds it to the level. */
     static LegacyHostedEntity host(ModernContentBridge content, ServerLevel level, Object original) throws Exception {
@@ -56,9 +61,19 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
         return true;
     }
     @Override public void tick() {
+        super.tick();
+        if (hurtFlashTicks > 0) hurtFlashTicks--;
         var content = ModernContentBridge.active();
         if (content == null || failed) { if (!level().isClientSide) discard(); return; }
-        if (level().isClientSide) { clientTick(content); return; }
+        if (level().isClientSide) {
+            if (interpolationSteps > 0) {
+                double steps = interpolationSteps--;
+                setPos(getX() + (targetX - getX()) / steps, getY() + (targetY - getY()) / steps, getZ() + (targetZ - getZ()) / steps);
+                setYRot(getYRot() + Mth.wrapDegrees(targetYaw - getYRot()) / (float) steps);
+                setXRot(getXRot() + (targetPitch - getXRot()) / (float) steps);
+            }
+            clientTick(content); return;
+        }
         var level = (ServerLevel) level();
         try {
             if (!ensureServerLegacy(content, level)) { discard(); return; }
@@ -69,6 +84,15 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
             if (changes != null) entityData.set(WATCHER, wrap(changes));
             if (state.dead()) discard();
         } catch (Exception | LinkageError failure) { fail(failure); }
+    }
+    @Override public void lerpTo(double x, double y, double z, float yaw, float pitch, int steps, boolean teleport) {
+        targetX=x; targetY=y; targetZ=z; targetYaw=yaw; targetPitch=pitch;
+        interpolationSteps=Math.max(1, steps);
+    }
+    public boolean hurtFlash() { return hurtFlashTicks > 0; }
+    @Override public void handleEntityEvent(byte event) {
+        if (event == 2) { hurtFlashTicks = 10; return; }
+        super.handleEntityEvent(event);
     }
     private void clientTick(ModernContentBridge content) {
         try {
@@ -138,7 +162,9 @@ public final class LegacyHostedEntity extends Entity implements IEntityAdditiona
             var level = (ServerLevel) level(); var world = content.services().worlds().bound(level);
             Object actor = source.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
                     ? content.itemUse().clientActor(world, ModernContentBridge.placer(player), null) : null;
-            return content.logicTransaction(level, blockPosition(), () -> hosting(content).hurt(legacy, actor, amount), true);
+            boolean hurt=content.logicTransaction(level, blockPosition(), () -> hosting(content).hurt(legacy, actor, amount), true);
+            if(hurt)level.broadcastEntityEvent(this,(byte)2);
+            return hurt;
         } catch (Exception failure) { fail(failure); return false; }
     }
     @Override protected void readAdditionalSaveData(CompoundTag tag) {

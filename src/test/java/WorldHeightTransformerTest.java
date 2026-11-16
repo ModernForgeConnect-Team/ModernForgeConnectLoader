@@ -23,6 +23,16 @@ class WorldHeightTransformerTest {
         Class<?> type=loader.loadClass("github.com.gengyoubo.mfcl.legacy1710.WorldHeightTransformer");
         return (byte[])type.getMethod("transform",String.class,String.class,byte[].class).invoke(type.getConstructor().newInstance(),name,name,bytes);
     }
+    @Test void pathFinderUsesWorldMinimumForBothSafePointChecks() throws Exception {
+        try(var loader=loader()) {
+            String name="net.minecraft.pathfinding.PathFinder";
+            byte[] before;try(var input=loader.getResourceAsStream(name.replace('.','/')+".class")){assertNotNull(input);before=input.readAllBytes();}
+            var parsed=new ClassNode();new ClassReader(transform(loader,name,before)).accept(parsed,0);
+            assertEquals(2,calls(parsed,"minBuildHeight"));
+            var method=parsed.methods.stream().filter(m->m.name.equals("func_75858_a")).findFirst().orElseThrow();
+            assertEquals(2,Arrays.stream(method.instructions.toArray()).filter(i->i.getOpcode()==Opcodes.IF_ICMPLE).count());
+        }
+    }
     @Test void sharedGeneratorBoundsDoNotRewriteHorizontalLimitsOrArraySizes()throws Exception {
         try(var loader=loader()){
             var writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);writer.visit(Opcodes.V1_6,Opcodes.ACC_PUBLIC,"fixture/Height",null,"java/lang/Object",null);

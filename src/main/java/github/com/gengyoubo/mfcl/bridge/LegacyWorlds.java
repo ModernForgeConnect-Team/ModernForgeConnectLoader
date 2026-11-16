@@ -66,6 +66,14 @@ public final class LegacyWorlds implements AutoCloseable {
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73011_w", provider);
         set(loader.loadClass("net.minecraft.world.World"), world, "field_72995_K", host.clientSide());
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73012_v", new Random());
+        // World.getCurrentDate returns this constructor-initialized calendar between refreshes.
+        // Zombie spawn initialization reads it even when the host world is not on a refresh tick.
+        set(loader.loadClass("net.minecraft.world.World"), world, "field_83016_L", Calendar.getInstance());
+        // Legacy mob AI queries the world's village collection on every tick. Host villages
+        // are not represented as 1.7 villages, so provide an empty, world-bound collection.
+        Class<?> worldType = loader.loadClass("net.minecraft.world.World");
+        Object villages = loader.loadClass("net.minecraft.village.VillageCollection").getConstructor(worldType).newInstance(world);
+        set(worldType, world, "field_72982_D", villages);
         // worldAccesses: allocated worlds skip field initializers, and spawnParticle/playSound iterate this list.
         set(loader.loadClass("net.minecraft.world.World"), world, "field_73021_x", new ArrayList<>());
         // capturedBlockSnapshots: ForgeHooks.onPlaceItemIntoWorld clones it after every ItemStack.tryPlaceItemIntoWorld (builder's wand...).
@@ -363,6 +371,24 @@ public final class LegacyWorlds implements AutoCloseable {
     public static boolean powered(Object world, int x, int y, int z) { return binding(world).host.powered(x,y,z); }
     public static int power(Object world, int x, int y, int z, int side) { return binding(world).host.power(x,y,z,side); }
     public static boolean loaded(Object world, int x, int y, int z) { return binding(world).host.loaded(x,y,z); }
+    /** The old ChunkCache clamps Y to 0..255; pathfind against the bound world directly instead. */
+    public static Object pathToEntity(Object world, Object source, Object target, float range, boolean open, boolean closed, boolean avoidWater, boolean swim) {
+        return path(world, source, target, 0, 0, 0, range, open, closed, avoidWater, swim);
+    }
+    public static Object pathToPosition(Object world, Object source, int x, int y, int z, float range, boolean open, boolean closed, boolean avoidWater, boolean swim) {
+        return path(world, source, null, x, y, z, range, open, closed, avoidWater, swim);
+    }
+    private static Object path(Object world, Object source, Object target, int x, int y, int z, float range, boolean open, boolean closed, boolean avoidWater, boolean swim) {
+        try {
+            var loader = binding(world).loader;
+            var entity = loader.loadClass("net.minecraft.entity.Entity");
+            var finder = loader.loadClass("net.minecraft.pathfinding.PathFinder");
+            Object instance = finder.getConstructor(loader.loadClass("net.minecraft.world.IBlockAccess"), boolean.class, boolean.class, boolean.class, boolean.class)
+                    .newInstance(world, open, closed, avoidWater, swim);
+            return target != null ? finder.getMethod("func_75856_a", entity, entity, float.class).invoke(instance, source, target, range)
+                    : finder.getMethod("func_75859_a", entity, int.class, int.class, int.class, float.class).invoke(instance, source, x, y, z, range);
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException("Cannot find legacy entity path", error); }
+    }
     /** Original library height guards use native bounds for bound worlds; unrelated old worlds retain 1.7 limits. */
     public static boolean validPosition(Object world,int x,int y,int z) {
         var host=hostOrNull(world);return host==null?y>=0&&y<256:host.loaded(x,y,z);
@@ -681,6 +707,8 @@ public final class LegacyWorlds implements AutoCloseable {
         forward(writer,bridge,"func_72937_j","(III)Z","canSeeSky","(Ljava/lang/Object;III)Z",null);
         forward(writer,bridge,"func_72977_a","(DDDD)Lnet/minecraft/entity/player/EntityPlayer;","closestPlayer","(Ljava/lang/Object;DDDD)Ljava/lang/Object;","net/minecraft/entity/player/EntityPlayer");
         forward(writer,bridge,"func_72890_a","(Lnet/minecraft/entity/Entity;D)Lnet/minecraft/entity/player/EntityPlayer;","closestPlayerTo","(Ljava/lang/Object;Ljava/lang/Object;D)Ljava/lang/Object;","net/minecraft/entity/player/EntityPlayer");
+        forward(writer,bridge,"func_72865_a","(Lnet/minecraft/entity/Entity;Lnet/minecraft/entity/Entity;FZZZZ)Lnet/minecraft/pathfinding/PathEntity;","pathToEntity","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;FZZZZ)Ljava/lang/Object;","net/minecraft/pathfinding/PathEntity");
+        forward(writer,bridge,"func_72844_a","(Lnet/minecraft/entity/Entity;IIIFZZZZ)Lnet/minecraft/pathfinding/PathEntity;","pathToPosition","(Ljava/lang/Object;Ljava/lang/Object;IIIFZZZZ)Ljava/lang/Object;","net/minecraft/pathfinding/PathEntity");
         for (String method : List.of("func_147459_d", "func_147444_c")) forward(writer,bridge,method,"(IIILnet/minecraft/block/Block;)V","neighbors","(Ljava/lang/Object;IIILjava/lang/Object;)V",null);
         // Light is recomputed by the host from the block's light value; old relight requests have nothing to do.
         constant(writer, "func_147463_c", "(Lnet/minecraft/world/EnumSkyBlock;III)Z", 1);

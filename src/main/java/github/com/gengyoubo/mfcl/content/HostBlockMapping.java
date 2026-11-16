@@ -69,6 +69,8 @@ public final class HostBlockMapping {
             if(state.getValue(BlockStateProperties.HALF)==Half.TOP)meta|=4;
         } else if(state.getBlock() instanceof FenceGateBlock) {
             meta=horizontal(state);if(state.getValue(BlockStateProperties.OPEN))meta|=4;
+        } else if(state.getBlock() instanceof LadderBlock) {
+            meta=switch(state.getValue(BlockStateProperties.HORIZONTAL_FACING)){case NORTH->2;case SOUTH->3;case WEST->4;default->5;};
         } else if(state.getBlock() instanceof LeavesBlock) {
             if(state.getValue(BlockStateProperties.PERSISTENT))meta|=4;
         } else if(state.getBlock() instanceof LiquidBlock)meta=state.getValue(LiquidBlock.LEVEL);
@@ -81,6 +83,15 @@ public final class HostBlockMapping {
     /** Null leaves unsupported states to the caller's explicit mapping error. */
     public BlockState write(HostWorldAccess.Block old) {
         String key=old.legacyKey();int meta=old.metadata();
+        if(key.equals("minecraft:ladder")) {
+            if(meta<2||meta>5)return null;
+            return Blocks.LADDER.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING,switch(meta){case 2->Direction.NORTH;case 3->Direction.SOUTH;case 4->Direction.WEST;default->Direction.EAST;});
+        }
+        var stair=variants.get(new HostWorldAccess.Block(key,0));
+        if(stair instanceof StairBlock && meta>=0 && meta<=7) {
+            return stair.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING,switch(meta&3){case 0->Direction.EAST;case 1->Direction.WEST;case 2->Direction.SOUTH;default->Direction.NORTH;})
+                    .setValue(BlockStateProperties.HALF,(meta&4)==0?Half.BOTTOM:Half.TOP);
+        }
         if(key.equals("minecraft:leaves")||key.equals("minecraft:leaves2")) {
             if(meta<0||meta>15)return null;
             var leaf=variants.get(new HostWorldAccess.Block(key,meta&3));

@@ -12,11 +12,28 @@ public final class WorldHeightTransformer implements IClassTransformer {
     private static final String PREFIX="(Lnet/minecraft/world/World;Ljava/util/Random;III";
     @Override public byte[] transform(String name,String transformedName,byte[] bytes) {
         if(bytes==null||name.startsWith("github.com.gengyoubo.mfcl."))return bytes;
+        if(name.equals("net.minecraft.pathfinding.PathFinder"))return pathFinder(bytes);
         String text=new String(bytes,java.nio.charset.StandardCharsets.ISO_8859_1);
         if(!text.contains("Lnet/minecraft/world/World;")&&!text.contains("Lnet/minecraft/world/IBlockAccess;"))return bytes;
         ClassNode type=new ClassNode(Opcodes.ASM5);new ClassReader(bytes).accept(type,0);boolean changed=false;
         for(MethodNode method:type.methods){Scope scope=scope(method);if(scope!=null)changed|=rewrite(type.name,method,scope);}
         if(!changed)return bytes;
+        ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);type.accept(writer);return writer.toByteArray();
+    }
+    /** The original safe-point search stops descending at Y=0, even in a host world extending below it. */
+    private static byte[] pathFinder(byte[] bytes) {
+        ClassNode type=new ClassNode(Opcodes.ASM5);new ClassReader(bytes).accept(type,0);int changed=0;
+        for(MethodNode method:type.methods)if(method.name.equals("func_75858_a")&&method.desc.equals("(Lnet/minecraft/entity/Entity;IIILnet/minecraft/pathfinding/PathPoint;I)Lnet/minecraft/pathfinding/PathPoint;")) {
+            for(AbstractInsnNode instruction:method.instructions.toArray())if(instruction.getOpcode()==Opcodes.IFLE
+                    && instruction.getPrevious() instanceof VarInsnNode && instruction.getPrevious().getOpcode()==Opcodes.ILOAD
+                    && ((VarInsnNode)instruction.getPrevious()).var==3) {
+                InsnList bound=new InsnList();bound.add(new VarInsnNode(Opcodes.ALOAD,1));
+                bound.add(new FieldInsnNode(Opcodes.GETFIELD,"net/minecraft/entity/Entity","field_70170_p","Lnet/minecraft/world/World;"));
+                bound.add(new MethodInsnNode(Opcodes.INVOKESTATIC,BRIDGE,"minBuildHeight","(Ljava/lang/Object;)I",false));
+                method.instructions.insertBefore(instruction,bound);((JumpInsnNode)instruction).setOpcode(Opcodes.IF_ICMPLE);changed++;
+            }
+        }
+        if(changed!=2)throw new IllegalStateException("Unexpected legacy PathFinder safe-point bounds: "+changed);
         ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);type.accept(writer);return writer.toByteArray();
     }
     private static final class Scope {

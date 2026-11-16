@@ -29,7 +29,7 @@ public final class LegacyHostedEntityRenderer extends EntityRenderer<LegacyHoste
             bridge.blockRendering().tiles().view(world, eye.x, eye.y, eye.z, camera.getYRot(), camera.getXRot(), mc.player == null ? 0 : mc.player.tickCount);
             double x = Mth.lerp(partial, entity.xo, entity.getX()) - eye.x, y = Mth.lerp(partial, entity.yo, entity.getY()) - eye.y, z = Mth.lerp(partial, entity.zo, entity.getZ()) - eye.z;
             var primitives = bridge.services().entityHosting().render(original, x, y, z, Mth.lerp(partial, entity.yRotO, entity.getYRot()), partial);
-            replay.render(primitives, pose, buffers, light, OverlayTexture.NO_OVERLAY);
+            replay.render(primitives, pose, buffers, light, entity.hurtFlash() ? OverlayTexture.pack(OverlayTexture.u(0.0f), OverlayTexture.v(true)) : OverlayTexture.NO_OVERLAY);
         } catch (Exception | LinkageError failure) {
             // One incompatible original renderer must not stop the frame; retry later like placed tile models.
             retryAfter.put(original.getClass(), System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5));
