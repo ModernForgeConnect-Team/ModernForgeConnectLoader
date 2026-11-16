@@ -11,12 +11,14 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import java.util.*;
 
+import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+
 /** {@code /debug thaumcraft resetresearch [player]}: original TC4 research reset, run against the bridged old player. */
 final class ThaumcraftResearchCommand {
     private ThaumcraftResearchCommand() {}
     static void register(RegisterCommandsEvent event) {
         // Merges into vanilla /debug; its root keeps the vanilla permission requirement.
-        event.getDispatcher().register(Commands.literal("debug").then(Commands.literal("thaumcraft").requires(source -> source.hasPermission(2))
+        event.getDispatcher().register(Commands.literal("debug").then(Commands.literal(TC).requires(source -> source.hasPermission(2))
                 .then(Commands.literal("resetresearch").executes(context -> reset(context, context.getSource().getPlayerOrException()))
                         .then(Commands.argument("player", EntityArgument.player()).executes(context -> reset(context, EntityArgument.getPlayer(context, "player")))))));
     }

@@ -3,6 +3,7 @@ package github.com.gengyoubo.mfcl.compat.thaumcraft;
 import github.com.gengyoubo.mfcl.bridge.*;
 import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declared;
 import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declaredField;
+import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
 
 /** Validation for TC4's original wand-control, research-table and Thaumonomicon packets. */
 final class ThaumcraftDevicePackets {
@@ -72,7 +73,7 @@ final class ThaumcraftDevicePackets {
         }
     }
     private static Object target(Object packet,Object player,LegacyDeviceContainers.Descriptor device) throws Exception {
-        LegacyPacketTargets.requireDevice(packet,device,"Thaumcraft",10,"x","y","z","Research action");
+        LegacyPacketTargets.requireDevice(packet,device,TC,10,"x","y","z","Research action");
         LegacyPacketTargets.bindPlayer(packet,player,"dim","playerid","Research action");
         Object world=LegacyObjects.world(player);
         Object tile=world.getClass().getClassLoader().loadClass("net.minecraft.world.World").getMethod("func_147438_o",int.class,int.class,int.class).invoke(world,device.x(),device.y(),device.z());

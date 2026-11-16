@@ -19,6 +19,8 @@ import net.minecraftforge.event.TickEvent;
 import java.util.*;
 import java.util.concurrent.*;
 
+import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+
 /** Disposable real registry, command, menu, numeric NBT and original effect acceptance. */
 final class EnchantmentHostSmokeProbe {
     private final ModernContentBridge content;
@@ -47,7 +49,7 @@ final class EnchantmentHostSmokeProbe {
                 pending=mc.getSingleplayerServer().submit(()->{try{audit(mc.getSingleplayerServer().getPlayerList().getPlayers().get(0));}catch(Exception failure){throw new IllegalStateException(failure);}});
             }else if(stage==2){
                 movement(mc);
-                pending=mc.getSingleplayerServer().submit(()->{var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var stack=pick();stack.enchant(repair,2);player.getInventory().selected=0;player.setItemInHand(InteractionHand.MAIN_HAND,stack);player.inventoryMenu.broadcastChanges();check(player.server.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE).containsKey(new ResourceLocation("thaumcraft","outer_lands")),"TC4 adapter failed to register Outer Lands");});
+                pending=mc.getSingleplayerServer().submit(()->{var player=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var stack=pick();stack.enchant(repair,2);player.getInventory().selected=0;player.setItemInHand(InteractionHand.MAIN_HAND,stack);player.inventoryMenu.broadcastChanges();check(player.server.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE).containsKey(new ResourceLocation(TC,"outer_lands")),"TC4 adapter failed to register Outer Lands");});
             }else if(stage==3){mc.level.disconnect();mc.clearLevel();mc.setScreen(new TitleScreen());
             }else if(stage==4){if(mc.getSingleplayerServer()!=null)return;mc.createWorldOpenFlows().loadLevel(mc.screen,world);
             }else if(stage==5){
