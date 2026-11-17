@@ -203,7 +203,12 @@ public final class LegacyContentPack {
         for (int pass = 0; pass < variant.layers().size(); pass++) layers.put("layer" + pass, texture(variant.layers().get(pass).icon(), "items"));
         // Original full-3D items (swords, tools, wands) are held upright, as host handheld items are.
         String parent = !item.full3D() ? "minecraft:item/generated" : item.rodRotation() ? "minecraft:item/handheld_rod" : "minecraft:item/handheld";
-        return new LinkedHashMap<>(Map.of("parent", parent, "textures", layers));
+        var model = new LinkedHashMap<String, Object>(Map.of("parent", parent, "textures", layers));
+        // TC4's gas and goo sprites have identical colors. The item render layer must blend their different alpha values.
+        if ("Thaumcraft:blockFluxGas".equals(item.blockKey()) || "Thaumcraft:blockFluxGoo".equals(item.blockKey())) {
+            model.put("render_type", "minecraft:translucent");
+        }
+        return model;
     }
     private Map<String,Object> cuboidModel(LegacyContent.Block block,int meta,LegacyBlockRendering.Cuboid bounds) throws Exception {
         String[] names={"down","up","north","south","west","east"};

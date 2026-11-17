@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 @Mod(ModernForgeConnectLoader.MOD_ID)
 public final class ModernForgeConnectLoader {
     public static final String MOD_ID = "mfcl";
+    public static final String TC="thaumcraft";
     private static final Logger LOGGER = LogUtils.getLogger();
     private final LegacyRuntimeService runtimeService = new LegacyRuntimeService();
 

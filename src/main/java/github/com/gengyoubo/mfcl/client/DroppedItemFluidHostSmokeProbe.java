@@ -4,6 +4,7 @@ import github.com.gengyoubo.mfcl.content.ModernContentBridge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -11,6 +12,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraftforge.client.ForgeRenderTypes;
 import net.minecraftforge.event.TickEvent;
 import java.util.*;
 import java.util.concurrent.*;
@@ -46,6 +48,7 @@ final class DroppedItemFluidHostSmokeProbe {
             if (pending != null) { if (!pending.isDone()) return; pending.join(); pending = null; }
             if (stage == 0) {
                 if (!(mc.screen instanceof TitleScreen) || mc.getOverlay() != null) return;
+                verifyFluxItemModels(mc);
                 org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow()); mc.options.pauseOnLostFocus = false; mc.options.renderDistance().set(2);
                 mc.createWorldOpenFlows().createFreshLevel("mfcl-dropped-items-" + System.currentTimeMillis(),
                         new LevelSettings("MFCL dropped-item fluids", GameType.SURVIVAL, false, net.minecraft.world.Difficulty.PEACEFUL, true, new GameRules(), WorldDataConfiguration.DEFAULT),
@@ -62,6 +65,22 @@ final class DroppedItemFluidHostSmokeProbe {
                 net.minecraft.client.Screenshot.grab(mc.gameDirectory,"mfcl-fluid-visual.png",mc.getMainRenderTarget(),message->screenshotSaved=true);stage=4;
             } else if(stage==4&&screenshotSaved){mc.options.hideGui=false;finish(mc,null);}
         } catch (Throwable failure) { finish(mc, failure); }
+    }
+    private void verifyFluxItemModels(Minecraft mc) throws Exception {
+        var expectedIcons = Map.of("Thaumcraft:blockFluxGas", "thaumcraft:fluxgas", "Thaumcraft:blockFluxGoo", "thaumcraft:fluxgoo");
+        Set<ResourceLocation> sprites = new HashSet<>();
+        for (var entry : expectedIcons.entrySet()) {
+            var stack = content.stack(entry.getKey(), 0, 1, "");
+            var model = mc.getItemRenderer().getModel(stack, null, null, 0);
+            var sprite = model.getParticleIcon().contents().name();
+            require(sprite.equals(ResourceLocation.parse(content.pack().worldTexture(entry.getValue()))),
+                    "Unexpected flux item sprite for " + entry.getKey() + ": " + sprite);
+            require(model.getRenderTypes(stack, true).contains(ForgeRenderTypes.ITEM_LAYERED_TRANSLUCENT.get()),
+                    "Flux item model does not blend sprite alpha: " + entry.getKey());
+            sprites.add(sprite);
+        }
+        require(sprites.size() == expectedIcons.size(), "Flux gas and goo share an item sprite");
+        proof.put("fluxItemSpritesBlendAlpha", true);
     }
     private void prepareVisual(Minecraft mc) throws Exception {
         var center=new BlockPos(0,208,3);var fluid=content.blocks().get("Thaumcraft:blockFluidPure");

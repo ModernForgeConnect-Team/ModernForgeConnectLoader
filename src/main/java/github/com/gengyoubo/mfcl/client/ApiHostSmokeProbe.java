@@ -10,7 +10,7 @@ import net.minecraftforge.event.TickEvent;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
 
 /** Acceptance through the exact API-only addon entry point inside a real Forge client/integrated server. */
 final class ApiHostSmokeProbe {

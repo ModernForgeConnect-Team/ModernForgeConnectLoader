@@ -31,7 +31,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.jar.JarFile;
 
-import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
 
 /** Adds display entries to Forge's screen, without registering legacy containers in modern FML. */
 public final class LegacyModListScreen extends ModListScreen {

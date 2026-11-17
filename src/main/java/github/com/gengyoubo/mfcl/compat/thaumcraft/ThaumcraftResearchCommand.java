@@ -11,7 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import java.util.*;
 
-import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
 
 /** {@code /debug thaumcraft resetresearch [player]}: original TC4 research reset, run against the bridged old player. */
 final class ThaumcraftResearchCommand {

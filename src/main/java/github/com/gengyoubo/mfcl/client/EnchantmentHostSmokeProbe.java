@@ -14,12 +14,14 @@ import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.enchantment.*;
 import net.minecraft.world.level.*;
+import net.minecraft.world.level.GameRules;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
+
 
 /** Disposable real registry, command, menu, numeric NBT and original effect acceptance. */
 final class EnchantmentHostSmokeProbe {
@@ -43,7 +45,7 @@ final class EnchantmentHostSmokeProbe {
             if(stage==0){
                 if(!(mc.screen instanceof TitleScreen)||mc.getOverlay()!=null)return;
                 org.lwjgl.glfw.GLFW.glfwHideWindow(mc.getWindow().getWindow());mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(2);
-                world="mfcl-enchantments-"+System.currentTimeMillis();mc.createWorldOpenFlows().createFreshLevel(world,new LevelSettings("MFCL enchantment acceptance",GameType.SURVIVAL,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),new net.minecraft.world.level.levelgen.WorldOptions(42,false,false),access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
+                world="mfcl-enchantments-"+System.currentTimeMillis();mc.createWorldOpenFlows().createFreshLevel(world,new LevelSettings("MFCL enchantment acceptance",GameType.SURVIVAL,false,net.minecraft.world.Difficulty.PEACEFUL,true,new GameRules(),WorldDataConfiguration.DEFAULT),new net.minecraft.world.level.levelgen.WorldOptions(42,false,false), access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET).getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
             }else if(stage==1){
                 if(mc.player==null||mc.screen!=null)return;
                 pending=mc.getSingleplayerServer().submit(()->{try{audit(mc.getSingleplayerServer().getPlayerList().getPlayers().get(0));}catch(Exception failure){throw new IllegalStateException(failure);}});

@@ -3,7 +3,7 @@ package github.com.gengyoubo.mfcl.compat.thaumcraft;
 import github.com.gengyoubo.mfcl.bridge.*;
 import java.util.*;
 
-import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
 
 /** TC4-owned compatibility implementation; the core depends only on generic extension points. */
 public final class ThaumcraftAdapter implements LegacyModAdapter {

@@ -1,9 +1,10 @@
 package github.com.gengyoubo.mfcl.compat.thaumcraft;
 
 import github.com.gengyoubo.mfcl.bridge.*;
+
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
 import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declared;
 import static github.com.gengyoubo.mfcl.bridge.LegacyObjects.declaredField;
-import static github.com.gengyoubo.tcmodern.tc4.Tc4Modern.TC;
 
 /** Validation for TC4's original wand-control, research-table and Thaumonomicon packets. */
 final class ThaumcraftDevicePackets {
