@@ -88,6 +88,14 @@ final class BiomeHostSmokeProbe {
         var plain=registry.getHolderOrThrow(Biomes.PLAINS);
         var disabled=new ThaumcraftBiomeSource(new FixedBiomeSource(plain),registry.getHolderOrThrow(ResourceKey.create(Registries.BIOME,ResourceLocation.parse("thaumcraft:magical_forest"))),registry.getHolderOrThrow(ResourceKey.create(Registries.BIOME,ResourceLocation.parse("thaumcraft:tainted_land"))),0,0);
         if(disabled.possibleBiomes().size()!=1||disabled.getNoiseBiome(40,16,-20,sampler)!=plain)throw new IllegalStateException("Zero weights still generated TC4 biomes");
+        var missing=new BiomeSource(){
+            @Override protected com.mojang.serialization.Codec<? extends BiomeSource> codec(){return FixedBiomeSource.CODEC;}
+            @Override protected java.util.stream.Stream<Holder<Biome>> collectPossibleBiomes(){return java.util.stream.Stream.of(plain);}
+            @Override public Holder<Biome> getNoiseBiome(int x,int y,int z,Climate.Sampler climate){return null;}
+        };
+        var fallback=new ThaumcraftBiomeSource(missing,registry.getHolderOrThrow(ResourceKey.create(Registries.BIOME,ResourceLocation.parse("thaumcraft:magical_forest"))),registry.getHolderOrThrow(ResourceKey.create(Registries.BIOME,ResourceLocation.parse("thaumcraft:tainted_land"))),1,1);
+        if(fallback.getNoiseBiome(40,16,-20,sampler)!=plain)throw new IllegalStateException("Missing wrapped biome did not fall back to plains");
+        proof.put("missingWrappedBiomeFallback",true);
         var flat=level.registryAccess().registryOrThrow(Registries.WORLD_PRESET).getHolderOrThrow(WorldPresets.FLAT).value().overworld().orElseThrow().generator().getBiomeSource();
         if(flat instanceof ThaumcraftBiomeSource)throw new IllegalStateException("Flat preset was changed");
         proof.put("zeroWeightsAndFlatPresetPreserved",true);

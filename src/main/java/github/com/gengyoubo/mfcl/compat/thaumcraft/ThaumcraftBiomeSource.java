@@ -6,6 +6,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.*;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Comparator;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 /** Seeded modern climate selection around the unmodified vanilla source. No old GenLayer runs on worker threads. */
@@ -21,6 +23,7 @@ public final class ThaumcraftBiomeSource extends BiomeSource {
     private final BiomeSource source;
     private final Holder<Biome> forest,taint;
     private final int forestWeight,taintWeight;
+    private final AtomicBoolean warnedMissingBiome=new AtomicBoolean();
     /** Half-widths of the weirdness bands around -0.45 (forest) and +0.45 (taint), fixed per source. */
     private final double forestBand,taintBand;
     public ThaumcraftBiomeSource(BiomeSource source,Holder<Biome> forest,Holder<Biome> taint,int forestWeight,int taintWeight){
@@ -33,7 +36,16 @@ public final class ThaumcraftBiomeSource extends BiomeSource {
     }
     @Override public Holder<Biome> getNoiseBiome(int x,int y,int z,Climate.Sampler sampler){
         var base=source.getNoiseBiome(x,y,z,sampler);
-        var id=base.unwrapKey().orElseThrow().location();
+        if(base==null){
+            // Some modified biome sources can fail to resolve a climate point. Never put a null
+            // into a chunk palette; prefer plains, then a stable biome from the wrapped source.
+            if(warnedMissingBiome.compareAndSet(false,true))com.mojang.logging.LogUtils.getLogger().warn("Wrapped biome source {} returned null; using a fallback biome",source.getClass().getName());
+            return source.possibleBiomes().stream().filter(b->b.is(Biomes.PLAINS)).findFirst().orElseGet(()->source.possibleBiomes().stream()
+                    .min(Comparator.comparing(b->b.unwrapKey().map(k->k.location().toString()).orElse(""))).orElse(forest));
+        }
+        var key=base.unwrapKey();
+        if(key.isEmpty())return base;
+        var id=key.get().location();
         if(!id.getNamespace().equals("minecraft")||!LAND.contains(id.getPath()))return base;
         // Climate noise depends on the world's seed and is continuous across chunk boundaries.
         double noise=Climate.unquantizeCoord(sampler.sample(x,y,z).weirdness());
