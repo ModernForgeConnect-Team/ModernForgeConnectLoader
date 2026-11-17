@@ -19,8 +19,22 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             "glVertexPointer(IILjava/nio/FloatBuffer;)V", "glVertexPointer(IILjava/nio/DoubleBuffer;)V",
             "glTexCoordPointer(IILjava/nio/FloatBuffer;)V", "glTexCoordPointer(IILjava/nio/ShortBuffer;)V",
             "glColorPointer(IZILjava/nio/ByteBuffer;)V", "glColorPointer(IILjava/nio/FloatBuffer;)V",
-            "glNormalPointer(ILjava/nio/ByteBuffer;)V", "glDrawArrays(III)V"));
+            "glNormalPointer(ILjava/nio/ByteBuffer;)V", "glNormalPointer(ILjava/nio/FloatBuffer;)V", "glDrawArrays(III)V"));
+    private static final String BUFFERS = "github/com/gengyoubo/mfcl/bridge/LegacyBufferObjects";
+    private static final String GL15 = "org/lwjgl/opengl/GL15";
+    /** GL11 pointer overloads whose last argument is a byte offset into the bound GL_ARRAY_BUFFER. */
+    private static final java.util.Set<String> OFFSET_POINTERS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "glVertexPointer(IIIJ)V", "glTexCoordPointer(IIIJ)V", "glNormalPointer(IIJ)V", "glColorPointer(IIIJ)V"));
+    /** CPU-side buffer objects; anything else in GL15 (queries, mapping) fails explicitly. */
+    private static final java.util.Set<String> BUFFER_METHODS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "glGenBuffers()I", "glGenBuffers(Ljava/nio/IntBuffer;)V", "glBindBuffer(II)V", "glIsBuffer(I)Z",
+            "glDeleteBuffers(I)V", "glDeleteBuffers(Ljava/nio/IntBuffer;)V", "glGetBufferParameteri(II)I", "glBufferData(IJI)V",
+            "glBufferData(ILjava/nio/ByteBuffer;I)V", "glBufferData(ILjava/nio/ShortBuffer;I)V", "glBufferData(ILjava/nio/IntBuffer;I)V",
+            "glBufferData(ILjava/nio/FloatBuffer;I)V", "glBufferData(ILjava/nio/DoubleBuffer;I)V",
+            "glBufferSubData(IJLjava/nio/ByteBuffer;)V", "glBufferSubData(IJLjava/nio/ShortBuffer;)V", "glBufferSubData(IJLjava/nio/IntBuffer;)V",
+            "glBufferSubData(IJLjava/nio/FloatBuffer;)V", "glBufferSubData(IJLjava/nio/DoubleBuffer;)V"));
     public boolean targets(String name) { return name.equals("org.lwjgl.opengl.GL11") || name.equals("org.lwjgl.opengl.GL20") || name.equals("org.lwjgl.opengl.GL30")
+            || name.equals("org.lwjgl.opengl.GL15")
             || name.equals("org.lwjgl.Sys") || name.equals("org.lwjgl.input.Keyboard") || name.equals("org.lwjgl.input.Mouse"); }
     public byte[] adapt(String name, byte[] bytes) {
         ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0);
@@ -42,8 +56,14 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
                 continue;
             }
             if (nativeGlMethod(name, m)) continue;
+            if (name.endsWith("GL15")) {
+                if (BUFFER_METHODS.contains(method + desc)) routeBuffers(m);
+                else unsupported(m, name + "." + method + desc);
+                continue;
+            }
             if (name.endsWith("GL11")) {
                 if (displayListMethod(m)) continue;
+                if (OFFSET_POINTERS.contains(method + desc)) { routeBuffers(m); continue; }
                 if (method.matches("gl(Begin|End|Vertex[234][fd]|TexCoord[234][fd]|Color[34][fd]|Normal3[fd]|Enable|Disable|BlendFunc|DepthMask|DepthFunc|ColorMask|ShadeModel|AlphaFunc|LineWidth|PushAttrib|PopAttrib|PushMatrix|PopMatrix|Translate[fd]|Scale[fd]|Rotate[fd])")) recordDisplayList(m);
                 if (method.equals("glPushMatrix")) call(m,DISPATCH,"push","()V");
                 else if (method.equals("glPopMatrix")) call(m,DISPATCH,"pop","()V");
@@ -79,6 +99,9 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             else if (method.equals("isCreated")) m.instructions.add(new InsnNode(Opcodes.ICONST_1));
             else if (name.endsWith("Keyboard") && (method.equals("getKeyName") || method.equals("getKeyIndex"))) { keyNames(node,m);continue; }
             else if (method.equals("getDWheel") || method.equals("next") || method.equals("isButtonDown")) m.instructions.add(new InsnNode(Opcodes.ICONST_0));
+            // Relative motion is never delivered to old code; MouseEvent's constructor reads these to build its fields.
+            else if (name.endsWith("Mouse") && desc.equals("()I") && (method.equals("getDX") || method.equals("getDY")
+                    || method.equals("getEventDX") || method.equals("getEventDY"))) m.instructions.add(new InsnNode(Opcodes.ICONST_0));
             else if (method.equals("enableRepeatEvents") || method.equals("setGrabbed")) { }
             else { unsupported(m,name+"."+method+desc); continue; }
             m.instructions.add(new InsnNode(Type.getReturnType(desc).getOpcode(Opcodes.IRETURN)));
@@ -194,6 +217,23 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
         for (Type argument : arguments) { code.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), local)); local += argument.getSize(); }
         code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, WORLD, m.name, m.desc, false));
         code.add(new InsnNode(Type.getReturnType(m.desc).getOpcode(Opcodes.IRETURN)));
+    }
+    /** Calls LegacyBufferObjects.name(GL15.class, args...); typed NIO data arguments widen to java.nio.Buffer. */
+    private static void routeBuffers(MethodNode m) {
+        Type[] arguments = Type.getArgumentTypes(m.desc);
+        boolean data = m.name.equals("glBufferData") || m.name.equals("glBufferSubData");
+        InsnList code = m.instructions;
+        code.add(new LdcInsnNode(Type.getObjectType(GL15)));
+        StringBuilder desc = new StringBuilder("(Ljava/lang/Class;");
+        int local = 0;
+        for (Type argument : arguments) {
+            code.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), local)); local += argument.getSize();
+            desc.append(data && argument.getSort() == Type.OBJECT ? "Ljava/nio/Buffer;" : argument.getDescriptor());
+        }
+        Type result = Type.getReturnType(m.desc);
+        desc.append(')').append(result.getDescriptor());
+        code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, BUFFERS, m.name, desc.toString(), false));
+        code.add(new InsnNode(result.getOpcode(Opcodes.IRETURN)));
     }
     private static void unsupported(MethodNode m,String name) {
         m.instructions.add(new LdcInsnNode(name)); call(m,"unsupported","(Ljava/lang/String;)V");

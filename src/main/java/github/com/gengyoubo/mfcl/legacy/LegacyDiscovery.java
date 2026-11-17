@@ -129,7 +129,8 @@ public final class LegacyDiscovery {
             catch (IOException | RuntimeException notLegacy) { continue; }
             if (archive.mods().isEmpty() && archive.corePlugin().isEmpty()) continue;
             String name = candidate.getFileName().toString();
-            if (name.contains(SOURCE_MINECRAFT) || archive.mods().stream().anyMatch(mod -> mod.minecraftVersion().contains(SOURCE_MINECRAFT))) {
+            if (name.contains(SOURCE_MINECRAFT) || archive.mods().stream().anyMatch(mod -> mod.minecraftVersion().contains(SOURCE_MINECRAFT))
+                    || metadataMentionsSource(candidate)) {
                 archives.add(archive);
             } else {
                 diagnostics.add(LegacyDiagnostic.notice("LEGACY_ROOT_SKIPPED", "mods/" + name
@@ -137,6 +138,25 @@ public final class LegacyDiscovery {
             }
         }
         return new Result(archives, diagnostics);
+    }
+
+    /**
+     * Some mcmod.info files omit mcversion and only name the game in another field, e.g. {@code "version": "1.3 (MC 1.7.10)"},
+     * while the {@code @Mod} annotation's own version ("Beta 1.3") replaces it in the inspected record.
+     */
+    private static boolean metadataMentionsSource(Path jar) {
+        try (JarFile file = new JarFile(jar.toFile(), false)) {
+            var entries = file.entries();
+            while (entries.hasMoreElements()) {
+                var entry = entries.nextElement();
+                String name = entry.getName();
+                if (entry.isDirectory() || name.contains("/") || !name.endsWith(".info") || name.equals("dependencies.info")) continue;
+                if (new String(read(file, entry), StandardCharsets.UTF_8).contains(SOURCE_MINECRAFT)) return true;
+            }
+            return false;
+        } catch (IOException | RuntimeException unreadable) {
+            return false;
+        }
     }
 
     /** Cheap pre-filter so the JARs of a large modern pack are not fully inspected on every launch. */
@@ -211,21 +231,33 @@ public final class LegacyDiscovery {
                                 String candidate;
                                 boolean simple = true;
                                 int constantCount;
+                                String classLiteral;
                                 @Override public void visitLdcInsn(Object constant) {
                                     if (constant instanceof String s) {
                                         candidate = s;
                                         constantCount++;
                                         if (method.equals("getRequirements") && s.contains("@") && MOD_REFERENCE.matcher(s).matches()) requirements.add(s);
+                                    } else if (constant instanceof org.objectweb.asm.Type type && type.getSort() == org.objectweb.asm.Type.OBJECT
+                                            && classLiteral == null && constantCount == 0) {
+                                        classLiteral = type.getClassName();
                                     } else simple = false;
                                 }
                                 @Override public void visitVarInsn(int opcode, int var) { simple = false; }
-                                @Override public void visitMethodInsn(int opcode, String owner, String n, String d, boolean itf) { simple = false; }
+                                @Override public void visitMethodInsn(int opcode, String owner, String n, String d, boolean itf) {
+                                    // Foo.class.getName() is the common non-literal spelling of a container class name.
+                                    if (classLiteral != null && opcode == Opcodes.INVOKEVIRTUAL && owner.equals("java/lang/Class")
+                                            && n.equals("getName") && d.equals("()Ljava/lang/String;")) {
+                                        candidate = classLiteral;
+                                        classLiteral = null;
+                                        constantCount++;
+                                    } else simple = false;
+                                }
                                 @Override public void visitFieldInsn(int opcode, String owner, String n, String d) { simple = false; }
                                 @Override public void visitJumpInsn(int opcode, org.objectweb.asm.Label label) { simple = false; }
                                 @Override public void visitInsn(int opcode) { if (opcode != Opcodes.ARETURN) simple = false; }
                                 @Override public void visitEnd() {
                                     if (method.equals("getModContainerClass") && descriptor.equals("()Ljava/lang/String;")
-                                            && simple && constantCount == 1 && candidate != null) constantContainers.put(className, candidate);
+                                            && simple && classLiteral == null && constantCount == 1 && candidate != null) constantContainers.put(className, candidate);
                                 }
                             };
                         }
@@ -269,13 +301,16 @@ public final class LegacyDiscovery {
                 corePlugin, constantContainers.getOrDefault(corePlugin, ""), ats, classes, List.copyOf(requirements), List.copyOf(requiredClasses));
     }
 
-    /** Recognize literal ModMetadata factories in DummyModContainers without defining the plugin. */
+    /** Recognize literal ModMetadata in DummyModContainers (factory or constructor) without defining the plugin. */
     private static LegacyMod readContainerMetadata(byte[] bytes, String container) {
         var node = new org.objectweb.asm.tree.ClassNode(Opcodes.ASM9);
         new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         if (!node.superName.equals("cpw/mods/fml/common/DummyModContainer")) return null;
         for (var method : node.methods) {
-            if (!method.desc.equals("()Lcpw/mods/fml/common/ModMetadata;")) continue;
+            // Either a ModMetadata factory, or the no-arg constructor that fills getMetadata() after super(new ModMetadata()).
+            boolean factory = method.desc.equals("()Lcpw/mods/fml/common/ModMetadata;");
+            boolean constructor = method.name.equals("<init>") && method.desc.equals("()V");
+            if (!factory && !constructor) continue;
             Map<String, String> fields = new LinkedHashMap<>();
             boolean straightLine = true;
             int allocations = 0;

@@ -227,6 +227,7 @@ public final class LegacyWorldGraphics {
     public static void glColorPointer(int size, boolean normalized, int stride, ByteBuffer buffer) { Frame f = frame(); if (f == null) return; f.check(); f.colorBuffer = buffer; f.colorSize = size; f.colorStride = stride; f.colorNormalized = normalized; f.colorPosition = buffer == null ? 0 : buffer.position(); }
     public static void glColorPointer(int size, int stride, FloatBuffer buffer) { Frame f = frame(); if (f == null) return; f.check(); f.colorBuffer = buffer; f.colorSize = size; f.colorStride = stride; f.colorNormalized = false; f.colorPosition = buffer == null ? 0 : buffer.position(); }
     public static void glNormalPointer(int stride, ByteBuffer buffer) { Frame f = frame(); if (f == null) return; f.check(); f.normalBuffer = buffer; f.normalStride = stride; f.normalPosition = buffer == null ? 0 : buffer.position(); }
+    public static void glNormalPointer(int stride, FloatBuffer buffer) { Frame f = frame(); if (f == null) return; f.check(); f.normalBuffer = buffer; f.normalStride = stride; f.normalPosition = buffer == null ? 0 : buffer.position(); }
 
     public static void glBegin(int mode) {
         Frame f = frame(); if (f == null) return; f.check();
@@ -284,6 +285,9 @@ public final class LegacyWorldGraphics {
                 if (f.normalEnabled && f.normalBuffer instanceof ByteBuffer normalBuffer) {
                     int base = f.normalPosition + vertexIndex * (f.normalStride == 0 ? 3 : f.normalStride);
                     nx = normalBuffer.get(base) / 127f; ny = normalBuffer.get(base + 1) / 127f; nz = normalBuffer.get(base + 2) / 127f;
+                } else if (f.normalEnabled && f.normalBuffer instanceof FloatBuffer normalBuffer) {
+                    int base = f.normalPosition + vertexIndex * (f.normalStride == 0 ? 3 : f.normalStride / 4);
+                    nx = normalBuffer.get(base); ny = normalBuffer.get(base + 1); nz = normalBuffer.get(base + 2);
                 }
                 f.pending.add(new LegacyVertexStream.Vertex(x, y, z, u, v, nx, ny, nz, argb));
             }

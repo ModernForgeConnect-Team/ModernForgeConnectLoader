@@ -8,7 +8,8 @@ public final class LegacyReflectionTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null) return null;
         String constants = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        if (!constants.contains("getDeclaredField") && !constants.contains("setAccessible") && !constants.contains("java/lang/reflect/Method")) return bytes;
+        if (!constants.contains("getDeclaredField") && !constants.contains("setAccessible") && !constants.contains("java/lang/reflect/Method")
+                && !constants.contains("cpw/mods/fml/relauncher/ReflectionHelper")) return bytes;
         final boolean[] changed = {false};
         ClassWriter writer = new ClassWriter(0);
         new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM5, writer) {
@@ -24,6 +25,10 @@ public final class LegacyReflectionTransformer implements IClassTransformer {
                                 || owner.equals("java/lang/reflect/Constructor") || owner.equals("java/lang/reflect/AccessibleObject"))) {
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, "github/com/gengyoubo/mfcl/legacy1710/LegacyReflection", "accessible",
                                     "(Ljava/lang/reflect/AccessibleObject;Z)V", false); changed[0] = true;
+                        } else if (opcode == Opcodes.INVOKESTATIC && owner.equals("cpw/mods/fml/relauncher/ReflectionHelper") && method.equals("findField")
+                                && descriptor.equals("(Ljava/lang/Class;[Ljava/lang/String;)Ljava/lang/reflect/Field;")) {
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, "github/com/gengyoubo/mfcl/legacy1710/LegacyReflection", "findField",
+                                    descriptor, false); changed[0] = true;
                         } else if(opcode==Opcodes.INVOKEVIRTUAL && owner.equals("java/lang/reflect/Method") && method.equals("invoke")
                                 && descriptor.equals("(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")) {
                             super.visitMethodInsn(Opcodes.INVOKESTATIC,"github/com/gengyoubo/mfcl/legacy1710/LegacyReflection","invoke",

@@ -17,6 +17,13 @@ public final class RuntimeDriver {
         return boot(gameDir, forgeJar, mods, new Runnable() { public void run() { } });
     }
     public Map<String, Object> boot(File gameDir, File forgeJar, List<File> mods, Runnable initializeClient) {
+        return boot(gameDir, forgeJar, mods, initializeClient, new Runnable() { public void run() { } });
+    }
+    /**
+     * {@code registerIcons} runs between pre-init and init, where 1.7.10's first resource reload stitches the block
+     * and item atlases. Mods such as TFC+ read icons that only {@code registerBlockIcons} assigns during init.
+     */
+    public Map<String, Object> boot(File gameDir, File forgeJar, List<File> mods, Runnable initializeClient, Runnable registerIcons) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         List<String> completed = new ArrayList<String>(); result.put("completed", completed);
         String stage = "COREMODS";
@@ -114,6 +121,7 @@ public final class RuntimeDriver {
             for (File mod : mods) ModListHelper.additionalMods.put(mod.getAbsolutePath(), mod);
             Loader.instance().loadMods(); completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "PREINITIALIZATION";
             Loader.instance().preinitializeMods(); completed.add(stage); timings.put(stage,(System.nanoTime()-phaseStart)/1_000_000.0);phaseStart=System.nanoTime(); stage = "INITIALIZATION_POSTINITIALIZATION";
+            registerIcons.run();
             // Test-only: exercise TC4's real postInit expansion even when another coremod already enlarged the array.
             Field potionRegistry = null; Object[] beforeExpansion = null;
             if (Boolean.getBoolean("mfcl.test.potionExpansion")) {

@@ -107,6 +107,15 @@ public final class LegacyClientData {
             setField(mcType, client, "field_71412_D", gameDir.toFile());
             resourceContext = LegacyClientResources.create(loader, resourcePacks);
             setField(mcType, client, "field_110451_am", resourceContext.manager());
+            // Mods such as HBM enumerate the selected resource packs during pre-init. Old packs are never applied
+            // here, so an empty repository is accurate; it is allocated without the constructor's directory scan.
+            Class<?> packRepositoryType = loader.loadClass("net.minecraft.client.resources.ResourcePackRepository");
+            Object packRepository = unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, packRepositoryType);
+            setField(packRepositoryType, packRepository, "field_110618_d", gameDir.resolve("resourcepacks").toFile());
+            setField(packRepositoryType, packRepository, "field_148534_e", gameDir.resolve("server-resource-packs").toFile());
+            setField(packRepositoryType, packRepository, "field_110619_e", new java.util.ArrayList<>());
+            setField(packRepositoryType, packRepository, "field_110617_f", new java.util.ArrayList<>());
+            setField(mcType, client, "field_110448_aq", packRepository);
             Class<?> fmlClient = loader.loadClass("cpw.mods.fml.client.FMLClientHandler");
             setField(fmlClient, fmlClient.getMethod("instance").invoke(null), "client", client);
             setField(mcType, client, "field_71474_y", loader.loadClass("net.minecraft.client.settings.GameSettings").getConstructor().newInstance());
@@ -164,6 +173,7 @@ public final class LegacyClientData {
             setField(mcType, client, "field_147127_av", soundHandler);
             setField(mcType, client, "field_135017_as", loader.loadClass("net.minecraft.client.resources.LanguageManager")
                     .getConstructor(loader.loadClass("net.minecraft.client.resources.data.IMetadataSerializer"), String.class).newInstance(null, "en_US"));
+            selectLanguage(client, "en_US");
             Class<?> localeType = loader.loadClass("net.minecraft.client.resources.Locale"); Object locale = localeType.getConstructor().newInstance();
             Method loadLanguage = localeType.getDeclaredMethod("func_135021_a", java.io.InputStream.class); loadLanguage.setAccessible(true);
             for (String resource : languageResources) {
@@ -356,11 +366,31 @@ public final class LegacyClientData {
             Object client = minecraft.getMethod("func_71410_x").invoke(null);
             Object settings = minecraft.getField("field_71474_y").get(client);
             setField(settings.getClass(), settings, "field_74363_ab", oldCode);
+            selectLanguage(client, oldCode);
             currentLanguage = code;
             hostLanguageRevision = revision;
             appliedSupplementRevision = supplementRevision;
             return null;
         });
+    }
+    /**
+     * The embedded LanguageManager never parses pack metadata, so its language map starts empty and
+     * getCurrentLanguage() returns null. Mods such as HBM read the code from it while naming items.
+     */
+    private void selectLanguage(Object client, String oldCode) throws Exception {
+        Class<?> managerType = loader.loadClass("net.minecraft.client.resources.LanguageManager");
+        Class<?> languageType = loader.loadClass("net.minecraft.client.resources.Language");
+        Field managerField = loader.loadClass("net.minecraft.client.Minecraft").getDeclaredField("field_135017_as");
+        managerField.setAccessible(true);
+        Object manager = managerField.get(client);
+        Field mapField = managerType.getDeclaredField("field_135046_d"); mapField.setAccessible(true);
+        @SuppressWarnings("unchecked") var languages = (Map<Object, Object>) mapField.get(manager);
+        var constructor = languageType.getConstructor(String.class, String.class, String.class, boolean.class);
+        for (String code : List.of("en_US", oldCode)) {
+            String[] parts = code.split("_", 2);
+            languages.putIfAbsent(code, constructor.newInstance(code, parts.length > 1 ? parts[1] : "", code, false));
+        }
+        setField(managerType, manager, "field_135048_c", oldCode);
     }
     private void prepareIconMetadata() throws Exception {
         Class<?> register = loader.loadClass("net.minecraft.client.renderer.texture.IIconRegister");

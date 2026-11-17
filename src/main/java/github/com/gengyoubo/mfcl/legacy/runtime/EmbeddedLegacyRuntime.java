@@ -145,8 +145,12 @@ public final class EmbeddedLegacyRuntime implements AutoCloseable {
                     earlyClient.initializeContext(gameDirectory, List.of("assets/minecraft/lang/en_US.lang"), clientSession);
                 } catch (Exception failure) { throw new IllegalStateException("Cannot initialize legacy client services", failure); }
             };
-            Map<String, Object> result = (Map<String, Object>) driver.getMethod("boot", File.class, File.class, List.class, Runnable.class)
-                    .invoke(driver.getConstructor().newInstance(), gameDirectory.toFile(), forge.toFile(), mods, initializeClient);
+            Runnable registerIcons = () -> {
+                try { if (earlyClient != null) earlyClient.refreshIconMetadata(); }
+                catch (Exception failure) { throw new IllegalStateException("Cannot register legacy block and item icons", failure); }
+            };
+            Map<String, Object> result = (Map<String, Object>) driver.getMethod("boot", File.class, File.class, List.class, Runnable.class, Runnable.class)
+                    .invoke(driver.getConstructor().newInstance(), gameDirectory.toFile(), forge.toFile(), mods, initializeClient, registerIcons);
             result.put("retainedDisplayLists", github.com.gengyoubo.mfcl.bridge.LegacyDisplayLists.statistics(legacy.loadClass("org.lwjgl.opengl.GL11")));
             if (openGlBackend != null) result.put("hostOpenGl", openGlBackend.statistics());
             if (!glVerification.isEmpty()) result.put("hostOpenGlVerification", glVerification);

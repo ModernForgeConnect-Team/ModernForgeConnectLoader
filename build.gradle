@@ -126,8 +126,8 @@ repositories {
     }
 }
 dependencies {
-    legacyMaven 'curse.maven:thaumcraft-223628:2227552'
-    legacyMaven 'curse.maven:baubles-227083:2224857'
+    //legacyMaven 'curse.maven:thaumcraft-223628:2227552'
+    //legacyMaven 'curse.maven:baubles-227083:2224857'
     if (project.hasProperty('mfclLegacyMaven')) legacyMaven project.property('mfclLegacyMaven').toString()
     implementation sourceSets.api.output
     preparationImplementation 'org.ow2.asm:asm:9.7.1'

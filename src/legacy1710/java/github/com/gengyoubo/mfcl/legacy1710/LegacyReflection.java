@@ -22,6 +22,19 @@ public final class LegacyReflection {
             throw missing;
         }
     }
+    /** FML's ReflectionHelper.findField, except that the old Field.modifiers lookup resolves as above. */
+    public static Field findField(Class<?> type, String... names) {
+        if (type == Field.class && java.util.Arrays.asList(names).contains("modifiers")) {
+            try {
+                Field modifiers = declaredField(Field.class, "modifiers");
+                accessible(modifiers, true);
+                return modifiers;
+            } catch (NoSuchFieldException missing) {
+                throw new cpw.mods.fml.relauncher.ReflectionHelper.UnableToFindFieldException(names, missing);
+            }
+        }
+        return cpw.mods.fml.relauncher.ReflectionHelper.findField(type, names);
+    }
     public static void accessible(AccessibleObject object, boolean value) {
         // Generated old helpers define classes only in their own private LaunchClassLoader.
         if (object instanceof Method && legacyDefineClass((Method)object)) return;

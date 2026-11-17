@@ -115,10 +115,12 @@ public final class LegacyGuiGraphics {
             LegacyAudio.play(sound);
         } catch(Exception failure){throw new IllegalArgumentException("Cannot play legacy sound",failure);}
     }
-    public static int mouseX() { return frame().mouseX; }
+    // Outside a GUI frame there is no pointer to report; LWJGL 2 reads 0 then. FML's EventBus.register builds a
+    // MouseEvent (which reads Mouse.getEventX/Y) just to resolve its listener list, so this must not throw.
+    public static int mouseX() { Frame f = CURRENT.get(); return f == null ? 0 : f.mouseX; }
     /** Host wheel movement delivered to the old GUI's handleMouseInput; LWJGL's event wheel reads it once. */
     public static void wheel(int delta) { frame().wheel = delta; }
     public static int eventWheel() { Frame f = CURRENT.get(); if (f == null) return 0; int delta = f.wheel; f.wheel = 0; return delta; }
-    public static int mouseY() { Frame f = frame(); return f.height - f.mouseY - 1; }
+    public static int mouseY() { Frame f = CURRENT.get(); return f == null ? 0 : f.height - f.mouseY - 1; }
     public static void unsupported(String name) { throw new UnsupportedOperationException("Legacy rendering backend does not support " + name); }
 }
