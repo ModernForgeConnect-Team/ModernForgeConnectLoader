@@ -3,7 +3,7 @@ package github.com.gengyoubo.mfcl.compat.thaumcraft;
 import github.com.gengyoubo.mfcl.bridge.*;
 import java.util.*;
 
-import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.LEGACY_TC;
 
 /** TC4-owned compatibility implementation; the core depends only on generic extension points. */
 public final class ThaumcraftAdapter implements LegacyModAdapter {
@@ -20,7 +20,7 @@ public final class ThaumcraftAdapter implements LegacyModAdapter {
             "mfcl.thaumcraft.egg.EldritchGolem","Eldritch Construct");
     private LegacyServices services;
     @Override public String id() { return "thaumcraft4"; }
-    @Override public boolean supports(Set<String> mods) { return mods.contains(TC); }
+    @Override public boolean supports(Set<String> mods) { return mods.contains(LEGACY_TC); }
     @Override public void beforeBoot(ClassLoader loader) throws Exception {
         LegacyModAdapter.registerBytecodeAdapters(loader,
                 "github.com.gengyoubo.mfcl.legacy1710.compat.thaumcraft.ThaumcraftNoteAspectsAdapter",

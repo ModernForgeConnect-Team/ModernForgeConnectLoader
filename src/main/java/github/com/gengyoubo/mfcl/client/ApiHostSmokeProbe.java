@@ -10,7 +10,7 @@ import net.minecraftforge.event.TickEvent;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.LEGACY_TC;
 
 /** Acceptance through the exact API-only addon entry point inside a real Forge client/integrated server. */
 final class ApiHostSmokeProbe {
@@ -102,7 +102,7 @@ final class ApiHostSmokeProbe {
                 mc.options.pauseOnLostFocus = false; mc.options.renderDistance().set(2);
                 if (readyCalls != 1) throw new IllegalStateException("API ready callback did not fire exactly once");
                 var api = MfclApi.runtime().orElseThrow();
-                if (!api.loadedMods().contains(TC)) throw new IllegalStateException("Actual loaded mod ids missing");
+                if (!api.loadedMods().contains(LEGACY_TC)) throw new IllegalStateException("Actual loaded mod ids missing");
                 proof.put("readyCallbackAndPublicServiceLoader", true);
                 mc.createWorldOpenFlows().createFreshLevel("mfcl-api-smoke-" + System.currentTimeMillis(),
                         new LevelSettings("MFCL API", net.minecraft.world.level.GameType.CREATIVE, false,

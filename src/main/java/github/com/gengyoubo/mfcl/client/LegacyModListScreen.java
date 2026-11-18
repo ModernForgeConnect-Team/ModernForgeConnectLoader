@@ -31,7 +31,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.jar.JarFile;
 
-import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.TC;
+import static github.com.gengyoubo.mfcl.ModernForgeConnectLoader.LEGACY_TC;
 
 /** Adds display entries to Forge's screen, without registering legacy containers in modern FML. */
 public final class LegacyModListScreen extends ModListScreen {
@@ -55,7 +55,7 @@ public final class LegacyModListScreen extends ModListScreen {
                 event.setNewScreen(new LegacyModListScreen(event.getCurrentScreen(), entries));
         });
         if (Boolean.getBoolean("mfcl.test.modListSmoke")) ModListSmokeProbe.install(catalog,
-                entries.stream().filter(info -> info.mod.id().equals(TC)).findFirst().orElse(entries.get(0)));
+                entries.stream().filter(info -> info.mod.id().equals(LEGACY_TC)).findFirst().orElse(entries.get(0)));
     }
 
     private LegacyModListScreen(Screen parent, List<LegacyInfo> entries) {
