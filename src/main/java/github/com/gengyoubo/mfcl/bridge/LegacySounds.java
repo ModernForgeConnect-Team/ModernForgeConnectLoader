@@ -58,5 +58,16 @@ public final class LegacySounds {
         }
         return result;
     }
-    private static String qualified(String namespace,String name) {return (name.contains(":")?name:namespace+":"+name).toLowerCase(Locale.ROOT);}
+    private static String qualified(String namespace,String name) {
+        String id=(name.contains(":")?name:namespace+":"+name).toLowerCase(Locale.ROOT);
+        int colon=id.indexOf(':');
+        return id.substring(0,colon+1)+filePath(id.substring(colon+1));
+    }
+    /**
+     * Old sound files may use characters modern resource paths reject ("don'tfollowthewhisps", "branch snap"); one
+     * such reference invalidates a pack's whole sounds.json. The copied .ogg and its reference use the same mapping.
+     */
+    public static String filePath(String path) {
+        return path.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]","_");
+    }
 }

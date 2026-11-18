@@ -70,7 +70,7 @@ public final class LegacyContentPack {
                     boolean definition=path.matches("assets/(?!minecraft/)[^/]+/sounds\\.json");
                     boolean audio=path.matches("assets/(?!minecraft/)[^/]+/sounds/.*\\.ogg");
                     if (entry.isDirectory() || !definition&&!audio&&!path.matches("assets/(?!minecraft/)[^/]+/textures/.*\\.(png|mcmeta)")) continue;
-                    Path target = directory.resolve(path.toLowerCase(Locale.ROOT)).normalize();
+                    Path target = directory.resolve(audio ? github.com.gengyoubo.mfcl.bridge.LegacySounds.filePath(path) : path.toLowerCase(Locale.ROOT)).normalize();
                     if (!target.startsWith(directory)) throw new IllegalArgumentException(path);
                     Files.createDirectories(target.getParent()); try (var input = jar.getInputStream(entry)) {
                         if(definition) {
@@ -329,10 +329,28 @@ public final class LegacyContentPack {
         if ((!source.startsWith(directory)&&!source.startsWith(baseDirectory)) || !target.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + split);
         Files.createDirectories(target.getParent()); Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
     }
+    /**
+     * Old blocks may report non-finite numbers (an unbreakable block's explosion resistance can be Infinity).
+     * Standard JSON has no such literal, so they are written as strings ("Infinity", "-Infinity", "NaN").
+     */
+    private static final com.google.gson.Gson JSON;
+    static {
+        var finite = new com.google.gson.TypeAdapter<Number>() {
+            @Override public void write(com.google.gson.stream.JsonWriter out, Number value) throws IOException {
+                if (value == null) out.nullValue();
+                else if (Double.isFinite(value.doubleValue())) out.value(value);
+                else out.value(value.toString());
+            }
+            @Override public Number read(com.google.gson.stream.JsonReader in) { throw new UnsupportedOperationException("write-only"); }
+        };
+        JSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping()
+                .registerTypeAdapter(double.class, finite).registerTypeAdapter(Double.class, finite)
+                .registerTypeAdapter(float.class, finite).registerTypeAdapter(Float.class, finite).create();
+    }
     void json(String resource, Object value) throws IOException {
         Path file = directory.resolve(resource).normalize();
         if (!file.startsWith(directory)) throw new IllegalArgumentException("Generated resource escapes pack: " + resource);
-        Files.createDirectories(file.getParent()); Files.writeString(file, new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(value), StandardCharsets.UTF_8);
+        Files.createDirectories(file.getParent()); Files.writeString(file, JSON.toJson(value), StandardCharsets.UTF_8);
     }
     public Map<String, List<LegacyVertexStream.Primitive>> geometry() { return geometry; }
     public Map<String, List<LegacyVertexStream.Primitive>> contextGeometry() { return contextGeometry; }

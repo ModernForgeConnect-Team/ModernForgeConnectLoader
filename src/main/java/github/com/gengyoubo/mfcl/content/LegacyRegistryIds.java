@@ -8,7 +8,15 @@ import java.util.*;
 /** Readable modern names, with migration from MFCL's original hexadecimal names. */
 public final class LegacyRegistryIds {
     private LegacyRegistryIds() {}
+    private static final org.slf4j.Logger LOGGER=com.mojang.logging.LogUtils.getLogger();
+    /** Keys whose readable name collides with another key's (1.7.10 names are case-sensitive, modern ones are not). */
+    private static final Map<String,ResourceLocation> DISAMBIGUATED=new java.util.concurrent.ConcurrentHashMap<>();
     public static ResourceLocation id(String key) {
+        var assigned=DISAMBIGUATED.get(key);
+        if(assigned!=null)return assigned;
+        return baseId(key);
+    }
+    private static ResourceLocation baseId(String key) {
         var parsed=ResourceLocation.tryParse(key);
         if(parsed!=null)return parsed;
         int colon=key.indexOf(':');
@@ -33,11 +41,25 @@ public final class LegacyRegistryIds {
         var parsed=ResourceLocation.tryParse(key);
         return parsed!=null?parsed:ResourceLocation.fromNamespaceAndPath("mfcl","legacy/"+HexFormat.of().formatHex(key.getBytes(StandardCharsets.UTF_8)));
     }
-    static void validate(Collection<String> keys) {
+    /**
+     * Gives every key a distinct ID. Keys that only differ by case or separators (TFC+ registers both
+     * {@code Branch2_X_Z} and {@code Branch2_X_z}) would share one readable name, so in sorted key order the first
+     * keeps it and later ones get {@code _2}, {@code _3}, ... The order depends only on the keys, so the same pack
+     * gets the same IDs every launch, and blocks and their item forms (same keys) get the same suffix.
+     */
+    static synchronized void validate(Collection<String> keys) {
         Map<ResourceLocation,String> names=new HashMap<>();
-        for(String key:keys) {
-            String previous=names.putIfAbsent(id(key),key);
-            if(previous!=null)throw new IllegalArgumentException("Legacy registry ID collision: "+previous+" and "+key+" -> "+id(key));
+        for(String key:new TreeSet<>(keys)) {
+            var id=id(key);
+            String previous=names.putIfAbsent(id,key);
+            if(previous==null)continue;
+            int suffix=2;
+            ResourceLocation candidate;
+            do candidate=ResourceLocation.fromNamespaceAndPath(id.getNamespace(),id.getPath()+"_"+suffix++);
+            while(names.containsKey(candidate)||keys.contains(candidate.toString()));
+            DISAMBIGUATED.put(key,candidate);
+            names.put(candidate,key);
+            LOGGER.warn("MFCL: legacy names {} and {} both map to {}; using {} for {}",previous,key,id,candidate,key);
         }
     }
     static <T> void remap(List<MissingMappingsEvent.Mapping<T>> missing,Map<String,T> entries) {

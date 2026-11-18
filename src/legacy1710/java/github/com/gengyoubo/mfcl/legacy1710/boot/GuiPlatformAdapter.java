@@ -102,6 +102,8 @@ public final class GuiPlatformAdapter implements LegacyBytecodeAdapter {
             // Relative motion is never delivered to old code; MouseEvent's constructor reads these to build its fields.
             else if (name.endsWith("Mouse") && desc.equals("()I") && (method.equals("getDX") || method.equals("getDY")
                     || method.equals("getEventDX") || method.equals("getEventDY"))) m.instructions.add(new InsnNode(Opcodes.ICONST_0));
+            else if (name.endsWith("Mouse") && method.equals("getEventNanoseconds") && desc.equals("()J"))
+                m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/System", "nanoTime", "()J", false));
             else if (method.equals("enableRepeatEvents") || method.equals("setGrabbed")) { }
             else { unsupported(m,name+"."+method+desc); continue; }
             m.instructions.add(new InsnNode(Type.getReturnType(desc).getOpcode(Opcodes.IRETURN)));

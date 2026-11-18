@@ -20,7 +20,9 @@ public final class LegacyBlockScene implements AutoCloseable {
             public Block block(int x, int y, int z) { return view.block(x,y,z); }
             public Object tileEntity(int x, int y, int z) { return tile(view, x,y,z); }
             public void setDayTime(long time) { throw new UnsupportedOperationException("Read-only block scene"); }
-            public boolean setBlock(int x, int y, int z, Block block, int flags) { throw new UnsupportedOperationException("Read-only block scene"); }
+            // Some blocks edit the world while answering a query (TFC+ mud structures remove themselves from their
+            // collision-box method when unsupported). A preview never changes the host world: report "unchanged".
+            public boolean setBlock(int x, int y, int z, Block block, int flags) { return false; }
             public void markTileDirty(int x, int y, int z, Object tile) { }
             public void blockUpdated(int x, int y, int z) { }
         });

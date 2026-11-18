@@ -13,14 +13,16 @@ import java.util.*;
 /** Fingerprints the actual captured inputs of the immutable base pack, not just mod file names. */
 final class LegacyPackCache {
     private static final String MARKER="mfcl-cache-complete.json";
-    private static final Gson GSON=new Gson();
+    // Only hashed, never parsed: non-finite block values (Infinity resistance) just need a stable spelling.
+    private static final Gson GSON=new com.google.gson.GsonBuilder().serializeSpecialFloatingPointValues().create();
     record State(Map<String,String> textures,Set<String> missing) {}
     static String fingerprint(LegacyContent content,LegacyBlockRendering rendering) throws Exception {
         MessageDigest hash=MessageDigest.getInstance("SHA-256");
         try(var sink=new DigestOutputStream(OutputStream.nullOutputStream(),hash);var writer=new OutputStreamWriter(sink,StandardCharsets.UTF_8)) {
             put(writer,"mfcl-resource-base-v1");
             // Include the actual generator bytecode so development and updated builds never share an incompatible cache.
-            for(Class<?> type:List.of(LegacyPackCache.class,LegacyContentPack.class,LegacyRegistryIds.class,ModernContentBridge.class,github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftAdapter.class)) {
+            for(Class<?> type:List.of(LegacyPackCache.class,LegacyContentPack.class,LegacyRegistryIds.class,ModernContentBridge.class,
+                    github.com.gengyoubo.mfcl.bridge.LegacySounds.class,github.com.gengyoubo.mfcl.compat.thaumcraft.ThaumcraftAdapter.class)) {
                 String resource="/"+type.getName().replace('.','/')+".class";
                 try(var in=type.getResourceAsStream(resource)){if(in==null)throw new IOException("Cannot fingerprint "+resource);put(writer,HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(in.readAllBytes())));}
             }
